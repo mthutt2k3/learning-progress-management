@@ -1,0 +1,59 @@
+spring:
+  application:
+    name: learning-progress-management
+
+  datasource:
+    url: jdbc:postgresql://13.229.140.9:5432/learning_progress_alpha
+    username: adminlp
+    password: G7vwL43qZf6!Kr2
+    driver-class-name: org.postgresql.Driver
+    jpa:
+      properties:
+        hibernate:
+          dialect: org.hibernate.dialect.PostgreSQLDialect
+          show_sql: true
+          format_sql: true
+          generate_statistics: false
+          jdbc.batch_size: 500
+          order_inserts: true
+          order_updates: true
+  liquibase:
+    enabled: false
+  jackson:
+    date-format: "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"
+    time-zone: GMT+7
+  zipkin:
+    enabled: false
+
+
+
+
+server:
+  port: 8080
+  shutdown: graceful
+  tomcat:
+    threads:
+      max: 500
+      min-spare: 20
+    max-connections: 500
+    accept-count: 200
+    max-http-form-post-size: 10MB
+  servlet:
+    context-path: /ewallet3/ewallet-business-adapter
+
+auth:
+  secret: ewallet-business-adapter
+
+
+logging:
+  level:
+    ROOT: INFO
+    com.apus.base: INFO
+    org.hibernate.sql: WARN
+    org.hibernate.type: WARN
+    org.springframework.orm.jpa: WARN
+    org.springframework.transaction: WARN
+    org.hibernate.engine.transaction.internal.TransactionImpl: WARN
+
+mapping:
+  max-message-per-sub-batch: 1000
