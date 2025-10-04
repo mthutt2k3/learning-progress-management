@@ -3,13 +3,13 @@ spring:
     name: learning-progress-management
 
   datasource:
-    url: jdbc:postgresql://13.229.140.9:5432/learning_progress
-    username: adminlp
-    password: G7vwL43qZf6!Kr2
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
     driver-class-name: org.postgresql.Driver
     jpa:
       hibernate:
-        ddl-auto: none   # hoặc update/create theo nhu cầu
+        ddl-auto: none
       properties:
         hibernate:
           dialect: org.hibernate.dialect.PostgreSQLDialect
@@ -27,7 +27,18 @@ spring:
     time-zone: GMT+7
   zipkin:
     enabled: false
-
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: ${MAIL_USERNAME}
+    password: ${MAIL_PASSWORD}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
 
 server:
   port: 8080
@@ -45,8 +56,8 @@ server:
 application-context-name: /learning-progress-management
 
 jwt:
-  secret: secret-key-1234567890abcdef
-  expiration: 86400000
+  secret: ${JWT_SECRET}
+  expiration: 3600000
 
 logging:
   level:
