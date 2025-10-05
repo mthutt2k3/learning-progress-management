@@ -21,7 +21,7 @@ import static java.rmi.server.LogStream.log;
 
 @Log4j2
 @RestController
-@RequestMapping("${application-context-name}/api/v1/auth")
+@RequestMapping("/api/v1/auth")
 @Tag(name = "Authentication", description = "User Authentication APIs")
 public class AuthController {
 

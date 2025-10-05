@@ -46,7 +46,7 @@ public class SecurityConfig {
                                 "/learning-progress-management/swagger-ui/**",
                                 "/v3/api-docs/**",
                                 "/webjars/**",
-                                "/learning-progress-management/api/v1/auth/**",
+                                "/api/v1/auth/**",
                                 "/learning-progress-management/health/**",
                                 "/login",
                                 "/favicon.ico"
