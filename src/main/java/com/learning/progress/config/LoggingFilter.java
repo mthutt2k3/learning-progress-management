@@ -15,15 +15,10 @@ import org.springframework.web.util.ContentCachingResponseWrapper;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.Collections;
+import java.util.Enumeration;
+import java.util.stream.Collectors;
 
-/**
- * LoggingFilter — Ghi log toàn bộ request/response cho mỗi request đến hệ thống.
- * Bao gồm:
- *  - traceId (duy nhất cho từng request, sinh theo Snowflake)
- *  - method, uri, status, duration
- *  - preview body (request + response)
- *  - log exception nếu có lỗi
- */
 @Component
 public class LoggingFilter extends OncePerRequestFilter {
 
@@ -36,101 +31,88 @@ public class LoggingFilter extends OncePerRequestFilter {
                                     FilterChain filterChain)
             throws ServletException, IOException {
 
-        // ✅ Sinh traceId bằng Snowflake ID
         String traceId = snowflake.nextId();
         MDC.put("traceId", traceId);
 
-        // ✅ Bọc lại request/response để đọc body nhiều lần
+        // Bọc request/response để đọc body nhiều lần
         ContentCachingRequestWrapper req = new ContentCachingRequestWrapper(request);
         ContentCachingResponseWrapper res = new ContentCachingResponseWrapper(response);
-
-        // ✅ Log ngay khi request vừa vào
-        logInboundRequest(req, traceId);
 
         long start = System.currentTimeMillis();
 
         try {
+            // ✅ Cho request đi qua controller
             filterChain.doFilter(req, res);
         } catch (Exception e) {
-            // Log lỗi chi tiết nếu có exception
             log.error("[traceId={}] Exception in {} {}: {}", traceId, req.getMethod(), req.getRequestURI(), e.getMessage(), e);
-            throw e; // không nuốt exception
+            throw e;
         } finally {
             long duration = System.currentTimeMillis() - start;
 
-            // ✅ Log chi tiết request/response sau khi xử lý xong
-            logRequestResponse(req, res, traceId, duration);
+            logFullRequestResponse(req, res, traceId, duration);
 
-            // Nếu có lỗi (status 4xx hoặc 5xx) thì log chi tiết body lỗi
-            if (res.getStatus() >= 400) {
-                String errorBody = getPreview(res.getContentAsByteArray());
-                if (!errorBody.isEmpty()) {
-                    log.error("[traceId={}] Error Response Body: {}", traceId, errorBody);
-                }
-            }
-
-            // ✅ Trả lại body response thật cho client
+            // ✅ Ghi body thật trả lại client
             res.copyBodyToResponse();
-
-            // ✅ Clear traceId để tránh rò rỉ sang thread khác
             MDC.clear();
         }
     }
 
     /**
-     * ✅ Ghi log thông tin request ngay khi vừa nhận
+     * ✅ Log chi tiết request + response sau khi xử lý
      */
-    private void logInboundRequest(ContentCachingRequestWrapper req, String traceId) {
+    private void logFullRequestResponse(ContentCachingRequestWrapper req,
+                                        ContentCachingResponseWrapper res,
+                                        String traceId,
+                                        long duration) {
+
         String method = req.getMethod();
         String uri = req.getRequestURI();
         String query = req.getQueryString() != null ? "?" + req.getQueryString() : "";
         String ip = req.getRemoteAddr();
-
-        log.info("[traceId={}] Incoming request: {} {}{} | from IP={}", traceId, method, uri, query, ip);
-
-        String body = getPreview(req.getContentAsByteArray());
-        if (!body.isEmpty()) {
-            log.debug("[traceId={}] Request Body: {}", traceId, body);
-        }
-    }
-
-    /**
-     * ✅ Ghi log thông tin request/response sau khi xử lý xong
-     */
-    private void logRequestResponse(ContentCachingRequestWrapper req,
-                                    ContentCachingResponseWrapper res,
-                                    String traceId,
-                                    long duration) {
-
-        String method = req.getMethod();
-        String uri = req.getRequestURI();
-        String query = req.getQueryString() != null ? "?" + req.getQueryString() : "";
         int status = res.getStatus();
 
-        log.info("[traceId={}] Completed {} {}{} | status={} | duration={}ms",
-                traceId, method, uri, query, status, duration
-        );
+        // 🧠 Log request meta
+        log.info("[traceId={}] {} {}{} | status={} | duration={}ms | ip={}",
+                traceId, method, uri, query, status, duration, ip);
 
-        // Preview body response
-        String responseBody = getPreview(res.getContentAsByteArray());
-        if (!responseBody.isEmpty()) {
-            log.debug("[traceId={}] Response Body: {}", traceId, responseBody);
+        // 🧠 Log headers
+        String headers = getAllHeaders(req);
+        log.debug("[traceId={}] Request Headers: {}", traceId, headers);
+
+        // 🧠 Log request body
+        String requestBody = getFullBody(req.getContentAsByteArray());
+        if (!requestBody.isEmpty()) {
+            log.debug("[traceId={}] Request Body: {}", traceId, requestBody);
         }
 
+        // 🧠 Log response body
+        String responseBody = getFullBody(res.getContentAsByteArray());
+        if (!responseBody.isEmpty()) {
+            if (status >= 400) {
+                log.error("[traceId={}] Error Response Body: {}", traceId, responseBody);
+            } else {
+                log.debug("[traceId={}] Response Body: {}", traceId, responseBody);
+            }
+        }
+
+        // 🧠 Log size
         log.trace("[traceId={}] reqSize={}B, resSize={}B",
                 traceId,
                 req.getContentAsByteArray().length,
-                res.getContentAsByteArray().length
-        );
+                res.getContentAsByteArray().length);
     }
 
-    /**
-     * ✅ Hàm rút gọn nội dung body cho log (giới hạn 300 ký tự)
-     */
-    private String getPreview(byte[] content) {
+    private String getAllHeaders(HttpServletRequest request) {
+        Enumeration<String> headerNames = request.getHeaderNames();
+        if (headerNames == null) return "{}";
+
+        return Collections.list(headerNames).stream()
+                .map(name -> name + ": " + request.getHeader(name))
+                .collect(Collectors.joining(", ", "{", "}"));
+    }
+
+    private String getFullBody(byte[] content) {
         if (content == null || content.length == 0) return "";
-        String text = new String(content, StandardCharsets.UTF_8).trim();
-        if (text.length() > 300) text = text.substring(0, 300) + "...";
-        return text.replaceAll("\\s+", " ");
+        return new String(content, StandardCharsets.UTF_8).trim();
     }
 }
