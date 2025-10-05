@@ -32,6 +32,12 @@ public class SecurityConfig {
     @Autowired
     private CustomUserDetailsService userDetailsService;
 
+    @Autowired
+    private LoggingFilter loggingFilter;
+
+    @Autowired
+    private JwtRequestFilter jwtRequestFilter;
+
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
@@ -46,15 +52,15 @@ public class SecurityConfig {
                                 "/learning-progress-management/swagger-ui/**",
                                 "/v3/api-docs/**",
                                 "/webjars/**",
-                                "/learning-progress-management/api/v1/auth/**",
+                                "/api/v1/auth/**",
                                 "/learning-progress-management/health/**",
                                 "/login",
                                 "/favicon.ico"
-                        ).permitAll() // Cho phép truy cập không cần xác thực
-                        .anyRequest().authenticated() // Các request khác cần xác thực
+                        ).permitAll()
+                        .anyRequest().authenticated()
                 )
-                .addFilterBefore(new JwtRequestFilter(jwtUtil, userDetailsService), UsernamePasswordAuthenticationFilter.class);
-
+                .addFilterBefore(loggingFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterBefore(jwtRequestFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }
 

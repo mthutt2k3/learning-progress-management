@@ -2,7 +2,7 @@ package com.learning.progress.controller;
 import com.learning.progress.dto.request.ChangePasswordRequest;
 import com.learning.progress.dto.request.LoginRequest;
 import com.learning.progress.dto.request.ResetPasswordRequest;
-import com.learning.progress.dto.response.LoginResponse;
+import com.learning.progress.dto.response.DataResponse;
 import com.learning.progress.dto.response.ResetPasswordByTeacherResponse;
 import com.learning.progress.service.AuthService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -10,18 +10,15 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
-import lombok.extern.log4j.Log4j2;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDateTime;
 import java.util.Map;
 
-import static java.rmi.server.LogStream.log;
-
-@Log4j2
 @RestController
-@RequestMapping("${application-context-name}/api/v1/auth")
+@RequestMapping("/api/v1/auth")
 @Tag(name = "Authentication", description = "User Authentication APIs")
 public class AuthController {
 
@@ -33,33 +30,66 @@ public class AuthController {
 
     @PostMapping("/login/student")
     @Operation(summary = "Login student", description = "Authenticate user and return JWT token")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Login successful"),
+            @ApiResponse(responseCode = "400", description = "Invalid input data"),
+            @ApiResponse(responseCode = "401", description = "Invalid credentials")
+    })
     public ResponseEntity<?> loginStudent(@Valid @RequestBody LoginRequest loginRequest) {
-        log.info("[LOGIN-STUDENT] Request received: {}", loginRequest);
-
         try {
-            LoginResponse response = authService.loginStudent(loginRequest);
-            log.info("[LOGIN-STUDENT] Success for user: {}", response.getUsername());
-            return ResponseEntity.ok(response);
+            var response = authService.loginStudent(loginRequest);
+            return ResponseEntity.ok(
+                    DataResponse.builder()
+                            .success(true)
+                            .message("Login successful")
+                            .data(response)
+                            .status(HttpStatus.OK.value())
+                            .timestamp(LocalDateTime.now())
+                            .build()
+            );
         } catch (RuntimeException e) {
-            log.warn("[LOGIN-STUDENT] Failed for user: {} - Reason: {}", loginRequest.getUsername(), e.getMessage());
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(Map.of("error", e.getMessage()));
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(
+                    DataResponse.builder()
+                            .success(false)
+                            .message("Login failed")
+                            .error(e.getMessage())
+                            .status(HttpStatus.UNAUTHORIZED.value())
+                            .timestamp(LocalDateTime.now())
+                            .build()
+            );
         }
     }
 
+
     @PostMapping("/login/teacher")
     @Operation(summary = "Login teacher", description = "Authenticate user and return JWT token")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Login successful"),
+            @ApiResponse(responseCode = "400", description = "Invalid input data"),
+            @ApiResponse(responseCode = "401", description = "Invalid credentials")
+    })
     public ResponseEntity<?> loginTeacher(@Valid @RequestBody LoginRequest loginRequest) {
-        log.info("[LOGIN-TEACHER] Request received: {}", loginRequest);
-
         try {
-            LoginResponse response = authService.loginTeacher(loginRequest);
-            log.info("[LOGIN-TEACHER] Success for user: {}", response.getUsername());
-            return ResponseEntity.ok(response);
+            var response = authService.loginTeacher(loginRequest);
+            return ResponseEntity.ok(
+                    DataResponse.builder()
+                            .success(true)
+                            .message("Login successful")
+                            .data(response)
+                            .status(HttpStatus.OK.value())
+                            .timestamp(LocalDateTime.now())
+                            .build()
+            );
         } catch (RuntimeException e) {
-            log.warn("[LOGIN-TEACHER] Failed for user: {} - Reason: {}", loginRequest.getUsername(), e.getMessage());
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(Map.of("error", e.getMessage()));
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(
+                    DataResponse.builder()
+                            .success(false)
+                            .message("Login failed")
+                            .error(e.getMessage())
+                            .status(HttpStatus.UNAUTHORIZED.value())
+                            .timestamp(LocalDateTime.now())
+                            .build()
+            );
         }
     }
 
@@ -67,9 +97,25 @@ public class AuthController {
     public ResponseEntity<?> refreshToken(@RequestParam String refreshToken) {
         try {
             Map<String, String> response = authService.refreshAccessToken(refreshToken);
-            return ResponseEntity.ok(response);
+            return ResponseEntity.ok(
+                    DataResponse.builder()
+                            .success(true)
+                            .message("Token refreshed successfully")
+                            .data(response)
+                            .status(HttpStatus.OK.value())
+                            .timestamp(LocalDateTime.now())
+                            .build()
+            );
         } catch (RuntimeException e) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", e.getMessage()));
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(
+                    DataResponse.builder()
+                            .success(false)
+                            .message("Failed to refresh token")
+                            .error(e.getMessage())
+                            .status(HttpStatus.UNAUTHORIZED.value())
+                            .timestamp(LocalDateTime.now())
+                            .build()
+            );
         }
     }
 
@@ -77,9 +123,24 @@ public class AuthController {
     public ResponseEntity<?> logout(@RequestParam String refreshToken) {
         try {
             authService.logout(refreshToken);
-            return ResponseEntity.ok(Map.of("message", "Logged out successfully"));
+            return ResponseEntity.ok(
+                    DataResponse.builder()
+                            .success(true)
+                            .message("Logged out successfully")
+                            .status(HttpStatus.OK.value())
+                            .timestamp(LocalDateTime.now())
+                            .build()
+            );
         } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+            return ResponseEntity.badRequest().body(
+                    DataResponse.builder()
+                            .success(false)
+                            .message("Logout failed")
+                            .error(e.getMessage())
+                            .status(HttpStatus.BAD_REQUEST.value())
+                            .timestamp(LocalDateTime.now())
+                            .build()
+            );
         }
     }
 
@@ -94,9 +155,24 @@ public class AuthController {
     public ResponseEntity<?> resetPassword(@RequestBody ResetPasswordRequest request) {
         try {
             authService.resetPasswordByEmail(request.getEmail());
-            return ResponseEntity.ok(Map.of("message", "Email has been sent successfully"));
+            return ResponseEntity.ok(
+                    DataResponse.builder()
+                            .success(true)
+                            .message("Email has been sent successfully")
+                            .status(HttpStatus.OK.value())
+                            .timestamp(LocalDateTime.now())
+                            .build()
+            );
         } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+            return ResponseEntity.badRequest().body(
+                    DataResponse.builder()
+                            .success(false)
+                            .message("Failed to reset password")
+                            .error(e.getMessage())
+                            .status(HttpStatus.BAD_REQUEST.value())
+                            .timestamp(LocalDateTime.now())
+                            .build()
+            );
         }
     }
 
@@ -114,9 +190,24 @@ public class AuthController {
     public ResponseEntity<?> changePassword(@RequestBody ChangePasswordRequest request) {
         try {
             authService.changePassword(request);
-            return ResponseEntity.ok(Map.of("message", "Password has been changed successfully"));
+            return ResponseEntity.ok(
+                    DataResponse.builder()
+                            .success(true)
+                            .message("Password has been changed successfully")
+                            .status(HttpStatus.OK.value())
+                            .timestamp(LocalDateTime.now())
+                            .build()
+            );
         } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+            return ResponseEntity.badRequest().body(
+                    DataResponse.builder()
+                            .success(false)
+                            .message("Failed to change password")
+                            .error(e.getMessage())
+                            .status(HttpStatus.BAD_REQUEST.value())
+                            .timestamp(LocalDateTime.now())
+                            .build()
+            );
         }
     }
 
@@ -134,9 +225,25 @@ public class AuthController {
     public ResponseEntity<?> resetPasswordByTeacher(@RequestParam String username) {
         try {
             ResetPasswordByTeacherResponse response = authService.resetPasswordByTeacher(username);
-            return ResponseEntity.ok(response);
+            return ResponseEntity.ok(
+                    DataResponse.builder()
+                            .success(true)
+                            .message("Password has been reset successfully by teacher")
+                            .data(response)
+                            .status(HttpStatus.OK.value())
+                            .timestamp(LocalDateTime.now())
+                            .build()
+            );
         } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+            return ResponseEntity.badRequest().body(
+                    DataResponse.builder()
+                            .success(false)
+                            .message("Failed to reset password by teacher")
+                            .error(e.getMessage())
+                            .status(HttpStatus.BAD_REQUEST.value())
+                            .timestamp(LocalDateTime.now())
+                            .build()
+            );
         }
     }
 
