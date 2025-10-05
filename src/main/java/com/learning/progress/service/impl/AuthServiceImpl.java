@@ -14,6 +14,7 @@ import com.learning.progress.service.AuthService;
 import com.learning.progress.service.TokenService;
 import com.learning.progress.util.JwtUtil;
 import jakarta.servlet.http.HttpServletRequest;
+import lombok.extern.log4j.Log4j2;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
@@ -26,6 +27,7 @@ import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.Map;
 
+@Log4j2
 @Service
 public class AuthServiceImpl implements AuthService {
 
@@ -50,27 +52,40 @@ public class AuthServiceImpl implements AuthService {
     @Autowired
     private RefreshTokenRepository refreshTokenRepository;
 
+    @Override
     public LoginResponse loginStudent(LoginRequest loginRequest) {
+        log.info("[AUTH-STUDENT] Start login for user: {}", loginRequest.getUsername());
+
         User user = userRepository.findByUserName(loginRequest.getUsername())
-                .orElseThrow(() -> new RuntimeException("Invalid username or password"));
+                .orElseThrow(() -> {
+                    log.warn("[AUTH-STUDENT] Username not found: {}", loginRequest.getUsername());
+                    return new RuntimeException("Invalid username or password");
+                });
+
+        log.info("[AUTH-STUDENT] Found user: {}", user.getUserName());
 
         if (!passwordEncoder.matches(loginRequest.getPassword(), user.getPassword())) {
+            log.warn("[AUTH-STUDENT] Invalid password for user: {}", user.getUserName());
             throw new RuntimeException("Invalid username or password");
         }
 
         if (user.getStatus() != UserStatus.ACTIVE) {
+            log.warn("[AUTH-STUDENT] Inactive user: {}", user.getUserName());
             throw new RuntimeException("User account is not active");
         }
 
         boolean hasPermission = permissionRepository.existsByUsernameAndPermissionId(user.getUserName(), 2L);
+        log.info("[AUTH-STUDENT] Permission check (id=2) for {}: {}", user.getUserName(), hasPermission);
 
         if (!hasPermission) {
             throw new RuntimeException("User does not have permission to login as student");
         }
 
         String accessToken = jwtUtil.generateToken(user.getUserName(), user.getRole().getName());
+        log.info("[AUTH-STUDENT] JWT generated for user: {}", user.getUserName());
 
         RefreshToken refreshToken = tokenService.createRefreshToken(user);
+        log.info("[AUTH-STUDENT] Refresh token created: {}", refreshToken.getToken());
 
         LoginResponse response = new LoginResponse();
         response.setAccessToken(accessToken);
@@ -78,31 +93,44 @@ public class AuthServiceImpl implements AuthService {
         response.setUsername(user.getUserName());
         response.setRole(user.getRole().getName());
 
+        log.info("[AUTH-STUDENT] Login success for user: {}", user.getUserName());
         return response;
     }
 
-
+    @Override
     public LoginResponse loginTeacher(LoginRequest loginRequest) {
+        log.info("[AUTH-TEACHER] Start login for user: {}", loginRequest.getUsername());
+
         User user = userRepository.findByUserName(loginRequest.getUsername())
-                .orElseThrow(() -> new RuntimeException("Invalid username or password"));
+                .orElseThrow(() -> {
+                    log.warn("[AUTH-TEACHER] Username not found: {}", loginRequest.getUsername());
+                    return new RuntimeException("Invalid username or password");
+                });
+
+        log.info("[AUTH-TEACHER] Found user: {}", user.getUserName());
 
         if (!passwordEncoder.matches(loginRequest.getPassword(), user.getPassword())) {
+            log.warn("[AUTH-TEACHER] Invalid password for user: {}", user.getUserName());
             throw new RuntimeException("Invalid username or password");
         }
 
         if (user.getStatus() != UserStatus.ACTIVE) {
+            log.warn("[AUTH-TEACHER] Inactive user: {}", user.getUserName());
             throw new RuntimeException("User account is not active");
         }
 
         boolean hasPermission = permissionRepository.existsByUsernameAndPermissionId(user.getUserName(), 3L);
+        log.info("[AUTH-TEACHER] Permission check (id=3) for {}: {}", user.getUserName(), hasPermission);
 
         if (!hasPermission) {
             throw new RuntimeException("User does not have permission to login as teacher");
         }
 
         String accessToken = jwtUtil.generateToken(user.getUserName(), user.getRole().getName());
+        log.info("[AUTH-TEACHER] JWT generated for user: {}", user.getUserName());
 
         RefreshToken refreshToken = tokenService.createRefreshToken(user);
+        log.info("[AUTH-TEACHER] Refresh token created: {}", refreshToken.getToken());
 
         LoginResponse response = new LoginResponse();
         response.setAccessToken(accessToken);
@@ -110,6 +138,7 @@ public class AuthServiceImpl implements AuthService {
         response.setUsername(user.getUserName());
         response.setRole(user.getRole().getName());
 
+        log.info("[AUTH-TEACHER] Login success for user: {}", user.getUserName());
         return response;
     }
 
