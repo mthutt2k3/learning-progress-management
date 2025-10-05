@@ -11,14 +11,14 @@ import org.springframework.context.annotation.Configuration;
 
 @Configuration
 public class OpenApiConfig {
-    @Value("${application-context-name}")
+    @Value("${server.servlet.context-path}")
     private String contextPath;
 
     @Bean
     public GroupedOpenApi publicApi() {
         return GroupedOpenApi.builder()
                 .group("public")
-                .pathsToMatch(contextPath + "/api/**", contextPath + "/health/**")
+                .pathsToMatch("/api/**", "/health/**")
                 .build();
     }
 

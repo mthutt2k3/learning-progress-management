@@ -18,7 +18,7 @@ import java.time.LocalDateTime;
 import java.util.Map;
 
 @RestController
-@RequestMapping("${application-context-name}/api/v1/auth")
+@RequestMapping("/api/v1/auth")
 @Tag(name = "Authentication", description = "User Authentication APIs")
 public class AuthController {
 
