@@ -9,7 +9,7 @@ import com.learning.progress.dto.response.LoginResponse;
 import com.learning.progress.dto.response.ResetPasswordByTeacherResponse;
 import com.learning.progress.entity.RefreshToken;
 import com.learning.progress.entity.User;
-import com.learning.progress.repository.PermissionRepository;
+import com.learning.progress.exception.ApiException;
 import com.learning.progress.repository.RefreshTokenRepository;
 import com.learning.progress.repository.UserRepository;
 import com.learning.progress.service.AuthService;
@@ -35,9 +35,6 @@ public class AuthServiceImpl implements AuthService {
     private UserRepository userRepository;
 
     @Autowired
-    private PermissionRepository permissionRepository;
-
-    @Autowired
     private PasswordEncoder passwordEncoder;
 
     @Autowired
@@ -52,6 +49,33 @@ public class AuthServiceImpl implements AuthService {
     @Autowired
     private RefreshTokenRepository refreshTokenRepository;
 
+    public LoginResponse loginStudent(LoginRequest loginRequest) {
+        User user = userRepository.findByUserName(loginRequest.getUsername())
+                .orElseThrow(() -> new ApiException("Invalid username or password", 401));
+
+        if (!passwordEncoder.matches(loginRequest.getPassword(), user.getPassword())) {
+            throw new RuntimeException("Invalid username or password");
+        }
+
+        if (user.getStatus() != UserStatus.ACTIVE) {
+            throw new RuntimeException("User account is not active");
+        }
+
+        String accessToken = jwtUtil.generateToken(user.getUserName(), user.getRole().getName());
+
+        RefreshToken refreshToken = tokenService.createRefreshToken(user);
+
+        LoginResponse response = new LoginResponse();
+        response.setAccessToken(accessToken);
+        response.setRefreshToken(refreshToken.getToken());
+        response.setUsername(user.getUserName());
+        response.setRole(user.getRole().getName());
+
+        return response;
+    }
+
+
+    public LoginResponse loginTeacher(LoginRequest loginRequest) {
     public LoginResponse login(LoginRequest loginRequest) {
         User user = userRepository.findByUserName(loginRequest.getUsername())
                 .orElseThrow(() -> new RuntimeException("Invalid username or password"));
@@ -64,6 +88,7 @@ public class AuthServiceImpl implements AuthService {
             throw new RuntimeException("User account is not active");
         }
 
+        String accessToken = jwtUtil.generateToken(user.getUserName(), user.getRole().getName());
         String roleInput = loginRequest.getLoginRole();
         if (roleInput == null || roleInput.isBlank()) {
             throw new RuntimeException("Login role is required (TEACHER or STUDENT)");

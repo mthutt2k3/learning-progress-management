@@ -5,7 +5,6 @@ import com.learning.progress.dto.request.ResetPasswordRequest;
 import com.learning.progress.dto.response.DataResponse;
 import com.learning.progress.dto.response.ResetPasswordByTeacherResponse;
 import com.learning.progress.service.AuthService;
-import com.learning.progress.util.ResponseUtil;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
@@ -29,6 +28,24 @@ public class AuthController {
         this.authService = authService;
     }
 
+    @PostMapping("/login/student")
+    @Operation(summary = "Login student", description = "Authenticate user and return JWT token")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Login successful"),
+            @ApiResponse(responseCode = "400", description = "Invalid input data"),
+            @ApiResponse(responseCode = "401", description = "Invalid credentials")
+    })
+    public ResponseEntity<?> loginStudent(@Valid @RequestBody LoginRequest loginRequest) {
+            var response = authService.loginStudent(loginRequest);
+            return ResponseEntity.ok(
+                    DataResponse.success(response, "Login successful")
+            );
+
+    }
+
+
+    @PostMapping("/login/teacher")
+    @Operation(summary = "Login teacher", description = "Authenticate user and return JWT token")
     @PostMapping("/login")
     @Operation(summary = "Login", description = "Authenticate user and return JWT token")
     @ApiResponses(value = {
