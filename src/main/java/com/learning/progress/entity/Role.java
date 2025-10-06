@@ -1,9 +1,7 @@
 package com.learning.progress.entity;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
+import com.learning.progress.common.RoleName;
+import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -22,9 +20,9 @@ import java.time.OffsetDateTime;
 @Table(name = "roles")
 public class Role extends BaseEntity{
 
-
+    @Enumerated(EnumType.STRING)
     @Column(name = "name", nullable = false, length = 50, unique = true)
-    private String name;
+    private RoleName name;
 
     @ColumnDefault("true")
     @Column(name = "is_active")

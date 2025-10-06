@@ -39,6 +39,12 @@ spring:
           starttls:
             enable: true
             required: true
+  thymeleaf:
+    prefix: classpath:/templates/
+    suffix: .html
+    mode: HTML
+    encoding: UTF-8
+    cache: false
 
 server:
   port: 8080
@@ -52,8 +58,6 @@ server:
     max-http-form-post-size: 10MB
   servlet:
     context-path: /learning-progress-management
-
-application-context-name: /learning-progress-management
 
 jwt:
   secret: ${JWT_SECRET}

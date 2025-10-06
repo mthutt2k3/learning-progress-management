@@ -2,29 +2,24 @@ package com.learning.progress.entity;
 
 import com.learning.progress.common.UserStatus;
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.*;
 import lombok.experimental.SuperBuilder;
 import org.hibernate.annotations.OnDelete;
 import org.hibernate.annotations.OnDeleteAction;
 
 import java.util.Date;
 
-@SuperBuilder
 @NoArgsConstructor
 @AllArgsConstructor
-@Getter
-@Setter
+@Data
 @Entity
 @Table(name = "users")
 public class User extends BaseEntity{
 
-    @Column(name = "user_name", nullable = false, length = 50)
+    @Column(name = "user_name", length = 50)
     private String userName;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @ManyToOne
     @OnDelete(action = OnDeleteAction.RESTRICT)
     @JoinColumn(name = "role_id", nullable = false)
     private Role role;
@@ -32,7 +27,7 @@ public class User extends BaseEntity{
     @Column(name = "email", nullable = false)
     private String email;
 
-    @Column(name = "password", nullable = false, length = Integer.MAX_VALUE)
+    @Column(name = "password", length = Integer.MAX_VALUE)
     private String password;
 
     @Column(name = "first_name", nullable = false, length = 50)
@@ -59,4 +54,8 @@ public class User extends BaseEntity{
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
     private UserStatus status = UserStatus.ACTIVE;
+
+    @Column(name = "must_change_pw", nullable = false)
+    private boolean mustChangePassword = false;
+
 }

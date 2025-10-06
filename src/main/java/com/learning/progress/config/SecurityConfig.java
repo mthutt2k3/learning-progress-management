@@ -3,12 +3,15 @@ package com.learning.progress.config;
 import com.learning.progress.filter.JwtRequestFilter;
 import com.learning.progress.service.CustomUserDetailsService;
 import com.learning.progress.util.JwtUtil;
+import jakarta.servlet.http.HttpServletResponse;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -19,18 +22,17 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
-import org.springframework.web.filter.CorsFilter;
+
 import java.util.List;
 
 @Configuration
 @EnableWebSecurity
+@EnableMethodSecurity
+@Slf4j
 public class SecurityConfig {
 
     @Autowired
-    private JwtUtil jwtUtil;
-
-    @Autowired
-    private CustomUserDetailsService userDetailsService;
+    private JwtRequestFilter jwtRequestFilter;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -38,7 +40,7 @@ public class SecurityConfig {
                 .cors(Customizer.withDefaults())
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session
-                        .sessionCreationPolicy(SessionCreationPolicy.STATELESS)) // Không dùng session
+                        .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(
                                 "/swagger-ui*/**",
@@ -46,15 +48,14 @@ public class SecurityConfig {
                                 "/learning-progress-management/swagger-ui/**",
                                 "/v3/api-docs/**",
                                 "/webjars/**",
-                                "/learning-progress-management/api/v1/auth/**",
+                                "/api/v1/auth/**",
                                 "/learning-progress-management/health/**",
                                 "/login",
                                 "/favicon.ico"
-                        ).permitAll() // Cho phép truy cập không cần xác thực
-                        .anyRequest().authenticated() // Các request khác cần xác thực
+                        ).permitAll()
+                        .anyRequest().authenticated()
                 )
-                .addFilterBefore(new JwtRequestFilter(jwtUtil, userDetailsService), UsernamePasswordAuthenticationFilter.class);
-
+                .addFilterBefore(jwtRequestFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }
 
