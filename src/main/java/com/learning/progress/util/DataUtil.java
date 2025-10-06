@@ -7,6 +7,7 @@ import com.google.common.base.Strings;
 import com.google.common.base.Supplier;
 import com.google.common.collect.Lists;
 import com.google.gson.Gson;
+import com.learning.progress.common.Const;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.BeanUtils;
@@ -20,6 +21,7 @@ import java.lang.reflect.InvocationTargetException;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.math.RoundingMode;
+import java.security.SecureRandom;
 import java.sql.Blob;
 import java.sql.SQLException;
 import java.sql.Timestamp;
@@ -220,7 +222,7 @@ public class DataUtil {
     }
 
     public static boolean isValidEmail(String email) {
-        String emailRegex = "[A-Z0-9a-z\\._%+-]+@([A-Za-z0-9-]+\\.)+[A-Za-z]{2,4}";
+        String emailRegex = Const.VALIDATE_INPUT.regexEmail;
         return email.matches(emailRegex);
     }
 
@@ -245,8 +247,16 @@ public class DataUtil {
         return true;
     }
 
+    public static boolean isValidGender(String gender) {
+        return gender.matches(Const.VALIDATE_INPUT.regexGender);
+    }
+
+    public static boolean isValidPass(String pass) {
+        return pass.matches(Const.VALIDATE_INPUT.regexPass);
+    }
+
     public static boolean isValidPhoneNumber(String phoneNumber) {
-        return phoneNumber.matches("^\\s*(?:\\+?(\\d{1,3}))?[- (]*(\\d{3})[- )]*(\\d{3})[- ]*(\\d{4})(?: *[x/#]{1}(\\d+))?\\s*$");
+        return phoneNumber.matches(Const.VALIDATE_INPUT.regexPhone);
     }
 
     // check nhieu so dien thoai
@@ -1692,7 +1702,51 @@ public class DataUtil {
             return null;
         }
     }
+    /**
+     * Map role name to prefix (2 letters)
+     */
+    public static String mapRoleToPrefix(String roleName) {
+        if (roleName == null) {
+            throw new IllegalArgumentException("roleName must not be null");
+        }
+        switch (roleName) {
+            case "TEACHER":
+            case "TEACHING_ASSISTANT":
+                return "TC";
+            case "STUDENT":
+            case "TEST_TAKER":
+                return "ST";
+            case "ADMIN": return "AD";
+            case "MANAGER": return "MG";
+            default: throw new IllegalArgumentException("Unknown role: " + roleName);
+        }
+    }
 
+    /**
+     * Generate username based on role and ID.
+     * Example: TEACHER + 12 -> "TC000012"
+     */
+    public static String generateUsername(String roleName, Long id) {
+        String prefix = mapRoleToPrefix(roleName);
+        return prefix + String.format("%06d", id);
+    }
+
+    public static String generateRandomPassword(int length) {
+        if (length < 6) {
+            throw new RuntimeException("Password length must be at least 6 characters");
+        }
+
+        String chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+        SecureRandom random = new SecureRandom();
+        StringBuilder sb = new StringBuilder();
+
+        for (int i = 0; i < length; i++) {
+            int index = random.nextInt(chars.length());
+            sb.append(chars.charAt(index));
+        }
+
+        return sb.toString();
+    }
     public static String generateImageUrl(String imageUrlCheck) {
         if (DataUtil.isNullOrEmpty(imageUrlCheck)) {
             return null;
