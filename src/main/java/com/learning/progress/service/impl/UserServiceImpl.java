@@ -1,6 +1,8 @@
 package com.learning.progress.service.impl;
 
 import com.learning.progress.common.Const;
+import com.learning.progress.common.UserStatus;
+import com.learning.progress.common.RoleName;
 import com.learning.progress.dto.request.CreateAccountRequest;
 import com.learning.progress.dto.request.CreateUserRequest;
 import com.learning.progress.dto.response.CreateUserResponse;
@@ -45,15 +47,22 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public UserProfileResponse getCurrentUserProfile() {
+        // Validate username from JWT
         String username = jwtUtil.extractUsernameFromCurrentRequest();
-
         if (username == null || username.trim().isEmpty()) {
-            throw new ApiException(Const.USER.USERNAME_EMPTY, HttpStatus.BAD_REQUEST.value());
+            throw new ApiException(Const.AUTH.INVALID_TOKEN_USERNAME, HttpStatus.UNAUTHORIZED.value());
         }
 
+        // Find user
         User user = userRepository.findByUserName(username)
                 .orElseThrow(() -> new ApiException(Const.AUTH.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
+        // Validate user status
+        if (user.getStatus() != UserStatus.ACTIVE) {
+            throw new ApiException(Const.USER.USER_INACTIVE, HttpStatus.FORBIDDEN.value());
+        }
+
+        // Map to response
         return userMapper.toUserProfileResponse(user);
     }
 
@@ -68,7 +77,7 @@ public class UserServiceImpl implements UserService {
         }
 
         // Tìm role
-        Role role = roleRepository.findByName(request.getRoleName())
+        Role role = roleRepository.findByName(RoleName.valueOf(request.getRoleName().toUpperCase()))
                 .orElseThrow(() -> new ApiException("Invalid role: " + request.getRoleName(), 400));
 
         // Ánh xạ từ DTO sang entity
