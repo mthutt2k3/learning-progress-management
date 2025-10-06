@@ -1,8 +1,10 @@
 package com.learning.progress.service.impl;
 
+import com.learning.progress.common.RoleName;
 import com.learning.progress.common.UserStatus;
 import com.learning.progress.dto.request.ChangePasswordRequest;
 import com.learning.progress.dto.request.LoginRequest;
+import com.learning.progress.dto.request.ResetPasswordRequest;
 import com.learning.progress.dto.response.LoginResponse;
 import com.learning.progress.dto.response.ResetPasswordByTeacherResponse;
 import com.learning.progress.entity.RefreshToken;
@@ -50,7 +52,7 @@ public class AuthServiceImpl implements AuthService {
     @Autowired
     private RefreshTokenRepository refreshTokenRepository;
 
-    public LoginResponse loginStudent(LoginRequest loginRequest) {
+    public LoginResponse login(LoginRequest loginRequest) {
         User user = userRepository.findByUserName(loginRequest.getUsername())
                 .orElseThrow(() -> new RuntimeException("Invalid username or password"));
 
@@ -62,13 +64,29 @@ public class AuthServiceImpl implements AuthService {
             throw new RuntimeException("User account is not active");
         }
 
-        boolean hasPermission = permissionRepository.existsByUsernameAndPermissionId(user.getUserName(), 2L);
+        RoleName loginRole = RoleName.valueOf(loginRequest.getLoginRole().toUpperCase());
+        RoleName userRole = RoleName.valueOf(user.getRole().getName().toString().toUpperCase());
 
-        if (!hasPermission) {
-            throw new RuntimeException("User does not have permission to login as student");
+        switch (loginRole) {
+            case TEACHER -> {
+                if (!(userRole == RoleName.ADMIN
+                        || userRole == RoleName.MANAGER
+                        || userRole == RoleName.TEACHER
+                        || userRole == RoleName.TEACHING_ASSISTANT)) {
+                    throw new RuntimeException("User is not allowed to login as TEACHER");
+                }
+            }
+            case STUDENT -> {
+                if (!(userRole == RoleName.STUDENT || userRole == RoleName.TEST_TAKER)) {
+                    throw new RuntimeException("User is not allowed to login as STUDENT");
+                }
+            }
+            default -> throw new RuntimeException("Invalid login role: " + loginRole);
         }
 
-        String accessToken = jwtUtil.generateToken(user.getUserName(), user.getRole().getName());
+
+
+        String accessToken = jwtUtil.generateToken(user.getUserName(), user.getRole().getName().toString());
 
         RefreshToken refreshToken = tokenService.createRefreshToken(user);
 
@@ -76,53 +94,17 @@ public class AuthServiceImpl implements AuthService {
         response.setAccessToken(accessToken);
         response.setRefreshToken(refreshToken.getToken());
         response.setUsername(user.getUserName());
-        response.setRole(user.getRole().getName());
+        response.setRole(user.getRole().getName().toString());
 
         return response;
     }
 
-
-    public LoginResponse loginTeacher(LoginRequest loginRequest) {
-        User user = userRepository.findByUserName(loginRequest.getUsername())
-                .orElseThrow(() -> new RuntimeException("Invalid username or password"));
-
-        if (!passwordEncoder.matches(loginRequest.getPassword(), user.getPassword())) {
-            throw new RuntimeException("Invalid username or password");
-        }
-
-        if (user.getStatus() != UserStatus.ACTIVE) {
-            throw new RuntimeException("User account is not active");
-        }
-
-        boolean hasPermission = permissionRepository.existsByUsernameAndPermissionId(user.getUserName(), 3L);
-
-        if (!hasPermission) {
-            throw new RuntimeException("User does not have permission to login as teacher");
-        }
-
-        String accessToken = jwtUtil.generateToken(user.getUserName(), user.getRole().getName());
-
-        RefreshToken refreshToken = tokenService.createRefreshToken(user);
-
-        LoginResponse response = new LoginResponse();
-        response.setAccessToken(accessToken);
-        response.setRefreshToken(refreshToken.getToken());
-        response.setUsername(user.getUserName());
-        response.setRole(user.getRole().getName());
-
-        return response;
-    }
-
-    public void resetPasswordByEmail(String email) {
-        if (email == null || email.trim().isEmpty()) {
+    public String resetPasswordByEmail(ResetPasswordRequest request) {
+        if (request == null || request.getUsername().trim().isEmpty()) {
             throw new RuntimeException("Email must not be empty");
         }
 
-        if (!email.matches("^[A-Za-z0-9+_.-]+@(.+)$")) {
-            throw new RuntimeException("Invalid email format");
-        }
-
-        User user = userRepository.findByEmail(email)
+        User user = userRepository.findByUserName(request.getUsername())
                 .orElseThrow(() -> new RuntimeException("Email does not exist in the system"));
 
         String newPassword = generateRandomPassword(8);
@@ -131,7 +113,8 @@ public class AuthServiceImpl implements AuthService {
         userRepository.save(user);
 
         try {
-            sendDefaultPassword(email, user, newPassword);
+            sendDefaultPassword(user.getEmail(), user, newPassword);
+            return user.getEmail();
         } catch (Exception e) {
             throw new RuntimeException("Unable to send email. Please try again later");
         }
@@ -258,7 +241,7 @@ public class AuthServiceImpl implements AuthService {
         }
 
         User user = token.getUser();
-        String newAccessToken = jwtUtil.generateToken(user.getUserName(), user.getRole().getName());
+        String newAccessToken = jwtUtil.generateToken(user.getUserName(), user.getRole().getName().toString());
 
         return Map.of(
                 "accessToken", newAccessToken,

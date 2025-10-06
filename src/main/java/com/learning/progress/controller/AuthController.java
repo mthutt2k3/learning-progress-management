@@ -28,49 +28,16 @@ public class AuthController {
         this.authService = authService;
     }
 
-    @PostMapping("/login/student")
+    @PostMapping("/login")
     @Operation(summary = "Login student", description = "Authenticate user and return JWT token")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Login successful"),
             @ApiResponse(responseCode = "400", description = "Invalid input data"),
             @ApiResponse(responseCode = "401", description = "Invalid credentials")
     })
-    public ResponseEntity<?> loginStudent(@Valid @RequestBody LoginRequest loginRequest) {
+    public ResponseEntity<?> login(@Valid @RequestBody LoginRequest loginRequest) {
         try {
-            var response = authService.loginStudent(loginRequest);
-            return ResponseEntity.ok(
-                    DataResponse.builder()
-                            .success(true)
-                            .message("Login successful")
-                            .data(response)
-                            .status(HttpStatus.OK.value())
-                            .timestamp(LocalDateTime.now())
-                            .build()
-            );
-        } catch (RuntimeException e) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(
-                    DataResponse.builder()
-                            .success(false)
-                            .message("Login failed")
-                            .error(e.getMessage())
-                            .status(HttpStatus.UNAUTHORIZED.value())
-                            .timestamp(LocalDateTime.now())
-                            .build()
-            );
-        }
-    }
-
-
-    @PostMapping("/login/teacher")
-    @Operation(summary = "Login teacher", description = "Authenticate user and return JWT token")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Login successful"),
-            @ApiResponse(responseCode = "400", description = "Invalid input data"),
-            @ApiResponse(responseCode = "401", description = "Invalid credentials")
-    })
-    public ResponseEntity<?> loginTeacher(@Valid @RequestBody LoginRequest loginRequest) {
-        try {
-            var response = authService.loginTeacher(loginRequest);
+            var response = authService.login(loginRequest);
             return ResponseEntity.ok(
                     DataResponse.builder()
                             .success(true)
@@ -154,12 +121,13 @@ public class AuthController {
     })
     public ResponseEntity<?> resetPassword(@RequestBody ResetPasswordRequest request) {
         try {
-            authService.resetPasswordByEmail(request.getEmail());
+            String response = authService.resetPasswordByEmail(request);
             return ResponseEntity.ok(
                     DataResponse.builder()
                             .success(true)
                             .message("Email has been sent successfully")
                             .status(HttpStatus.OK.value())
+                            .data(response)
                             .timestamp(LocalDateTime.now())
                             .build()
             );
@@ -246,5 +214,4 @@ public class AuthController {
             );
         }
     }
-
 }

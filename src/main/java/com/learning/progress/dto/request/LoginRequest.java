@@ -13,4 +13,6 @@ public class LoginRequest {
     @NotBlank(message = "password không được để trống")
     @Size(min = 8, max = 128, message = "password phải có ít nhất 8 ký tự")
     private String password;
+
+    private String loginRole;
 }

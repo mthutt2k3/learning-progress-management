@@ -34,7 +34,7 @@ public class UserServiceImpl implements UserService {
         userProfileResponse.setGender(user.getGender());
         userProfileResponse.setStatus(user.getStatus());
         userProfileResponse.setAvatarUrl(user.getAvatarUrl());
-        userProfileResponse.setRole(user.getRole().getName());
+        userProfileResponse.setRole(user.getRole().getName().toString());
 
         return userProfileResponse;
     }
