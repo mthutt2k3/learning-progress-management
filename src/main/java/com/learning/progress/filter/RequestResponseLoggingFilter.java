@@ -29,8 +29,13 @@ public class RequestResponseLoggingFilter extends OncePerRequestFilter {
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
         String path = request.getRequestURI();
-        return path.startsWith("/static") || path.contains("/health") || path.contains("/favicon");
+        return path.startsWith("/static")
+                || path.contains("/health")
+                || path.contains("/favicon")
+                || path.contains("/swagger-ui")
+                || path.contains("/v3/api-docs");
     }
+
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)

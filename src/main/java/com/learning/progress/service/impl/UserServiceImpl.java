@@ -1,6 +1,7 @@
 package com.learning.progress.service.impl;
 
 import com.learning.progress.common.Const;
+import com.learning.progress.common.RoleName;
 import com.learning.progress.dto.request.CreateAccountRequest;
 import com.learning.progress.dto.request.CreateUserRequest;
 import com.learning.progress.dto.response.CreateUserResponse;
@@ -68,7 +69,7 @@ public class UserServiceImpl implements UserService {
         }
 
         // Tìm role
-        Role role = roleRepository.findByName(request.getRoleName())
+        Role role = roleRepository.findByName(RoleName.valueOf(request.getRoleName().toUpperCase()))
                 .orElseThrow(() -> new ApiException("Invalid role: " + request.getRoleName(), 400));
 
         // Ánh xạ từ DTO sang entity

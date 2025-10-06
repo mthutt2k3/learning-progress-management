@@ -28,23 +28,30 @@ public class AccountServiceImpl implements AccountService {
     @Override
     @Transactional
     public CreateAccountResponse createAccountForUser(CreateAccountRequest createAccountRequest) {
-        if(!userRepository.existsById(createAccountRequest.getUserId()))
-            throw new ApiException(Const.ERROR_MESSAGE.ACCOUNT_NOT_FOUND, 400);
-        if (userRepository.existsByUserName(createAccountRequest.getUserName()))
-            throw new ApiException(Const.ERROR_MESSAGE.USERNAME_EXISTS, 400);
 
-        User user = userRepository.findById(createAccountRequest.getUserId()).get();
+        if (userRepository.existsByUserName(createAccountRequest.getUserName())) {
+            throw new ApiException(Const.ERROR_MESSAGE.USERNAME_EXISTS, 400);
+        }
+
+        User user = userRepository.findById(createAccountRequest.getUserId())
+                .orElseThrow(() -> new ApiException(Const.ERROR_MESSAGE.ACCOUNT_NOT_FOUND, 400));
+
         user.setUserName(createAccountRequest.getUserName());
         user.setPassword(passwordEncoder.encode(createAccountRequest.getPassword()));
         user.setMustChangePassword(true);
+
         userRepository.save(user);
 
         return userMapper.toCreateAccountResponse(user);
     }
 
+
     @Override
     public CreateAccountResponse getAccountByUserId(Long userId) {
-        return null;
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ApiException(Const.ERROR_MESSAGE.ACCOUNT_NOT_FOUND, 400));
+
+        return userMapper.toCreateAccountResponse(user);
     }
 
     @Override
