@@ -19,7 +19,7 @@ public class User extends BaseEntity{
     @Column(name = "user_name", length = 50)
     private String userName;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @ManyToOne
     @OnDelete(action = OnDeleteAction.RESTRICT)
     @JoinColumn(name = "role_id", nullable = false)
     private Role role;
