@@ -12,6 +12,7 @@ import com.learning.progress.repository.RefreshTokenRepository;
 import com.learning.progress.repository.UserRepository;
 import com.learning.progress.service.AuthService;
 import com.learning.progress.service.TokenService;
+import com.learning.progress.util.DataUtil;
 import com.learning.progress.util.JwtUtil;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -110,7 +111,7 @@ public class AuthServiceImpl implements AuthService {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("Email does not exist in the system"));
 
-        String newPassword = generateRandomPassword(8);
+        String newPassword = DataUtil.generateRandomPassword(8);
 
         user.setPassword(passwordEncoder.encode(newPassword));
         userRepository.save(user);
@@ -122,22 +123,7 @@ public class AuthServiceImpl implements AuthService {
         }
     }
 
-    private String generateRandomPassword(int length) {
-        if (length < 6) {
-            throw new RuntimeException("Password length must be at least 6 characters");
-        }
 
-        String chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-        SecureRandom random = new SecureRandom();
-        StringBuilder sb = new StringBuilder();
-
-        for (int i = 0; i < length; i++) {
-            int index = random.nextInt(chars.length());
-            sb.append(chars.charAt(index));
-        }
-
-        return sb.toString();
-    }
 
     private void sendDefaultPassword(String toEmail, User user, String defaultPassword) {
         if (toEmail == null || toEmail.trim().isEmpty()) {
@@ -219,7 +205,7 @@ public class AuthServiceImpl implements AuthService {
         User user = userRepository.findByUserName(username)
                 .orElseThrow(() -> new RuntimeException("Username does not exist in the system"));
 
-        String newPassword = generateRandomPassword(8);
+        String newPassword = DataUtil.generateRandomPassword(8);
 
         user.setPassword(passwordEncoder.encode(newPassword));
         userRepository.save(user);

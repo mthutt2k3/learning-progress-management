@@ -1,6 +1,7 @@
 package com.learning.progress.exception;
 
 import com.learning.progress.dto.response.DataResponse;
+import io.swagger.v3.oas.annotations.Hidden;
 import org.slf4j.MDC;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -11,6 +12,7 @@ import org.springframework.web.context.request.WebRequest;
 
 import java.time.LocalDateTime;
 
+@Hidden
 @ControllerAdvice
 public class GlobalExceptionHandler {
 
