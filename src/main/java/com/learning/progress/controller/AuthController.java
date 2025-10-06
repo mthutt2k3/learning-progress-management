@@ -58,7 +58,6 @@ public class AuthController {
         return ResponseEntity.ok(DataResponse.success(Const.AUTH.LOGOUT_SUCCESS, Const.AUTH.LOGOUT_SUCCESS));
     }
 
-    @PreAuthorize("hasRole('TEACHER')")
     @PostMapping("/reset-password")
     @Operation(summary = "reset password by sent default pass word to email", description = "reset password by sent default pass word to ")
     @ApiResponses(value = {
@@ -67,11 +66,12 @@ public class AuthController {
             @ApiResponse(responseCode = "404", description = "Email not found in the system"),
             @ApiResponse(responseCode = "500", description = "Failed to send email, please try again later")
     })
-    public ResponseEntity<?> resetPassword(@RequestBody ResetPasswordRequest request) {
-        String response = authService.resetPasswordByEmail(request);
+    public ResponseEntity<?> resetPassword(@RequestParam String userName) {
+        String response = authService.resetPasswordByEmail(userName);
         return ResponseEntity.ok(DataResponse.success(response, Const.AUTH.PASSWORD_RESET_EMAIL_SENT));
     }
 
+    @PreAuthorize("isAuthenticated()")
     @PostMapping("/change-password")
     @Operation(
             summary = "Change user password",
@@ -88,6 +88,7 @@ public class AuthController {
         return ResponseEntity.ok(DataResponse.success(Const.AUTH.PASSWORD_CHANGED, Const.AUTH.PASSWORD_CHANGED));
     }
 
+    @PreAuthorize("hasRole('TEACHER')")
     @PostMapping("/reset-password-by-teacher")
     @Operation(
             summary = "Reset student password by teacher",
