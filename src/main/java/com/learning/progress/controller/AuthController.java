@@ -1,4 +1,5 @@
 package com.learning.progress.controller;
+import com.learning.progress.common.Const;
 import com.learning.progress.dto.request.ChangePasswordRequest;
 import com.learning.progress.dto.request.LoginRequest;
 import com.learning.progress.dto.request.ResetPasswordRequest;
@@ -12,6 +13,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
@@ -28,24 +30,6 @@ public class AuthController {
         this.authService = authService;
     }
 
-    @PostMapping("/login/student")
-    @Operation(summary = "Login student", description = "Authenticate user and return JWT token")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Login successful"),
-            @ApiResponse(responseCode = "400", description = "Invalid input data"),
-            @ApiResponse(responseCode = "401", description = "Invalid credentials")
-    })
-    public ResponseEntity<?> loginStudent(@Valid @RequestBody LoginRequest loginRequest) {
-            var response = authService.loginStudent(loginRequest);
-            return ResponseEntity.ok(
-                    DataResponse.success(response, "Login successful")
-            );
-
-    }
-
-
-    @PostMapping("/login/teacher")
-    @Operation(summary = "Login teacher", description = "Authenticate user and return JWT token")
     @PostMapping("/login")
     @Operation(summary = "Login", description = "Authenticate user and return JWT token")
     @ApiResponses(value = {
@@ -53,35 +37,28 @@ public class AuthController {
             @ApiResponse(responseCode = "400", description = "Invalid input data"),
             @ApiResponse(responseCode = "401", description = "Invalid credentials")
     })
-    public ResponseEntity<?> login(@Valid @RequestBody LoginRequest loginRequest) {
-        try {
+    public ResponseEntity<?> loginStudent(@Valid @RequestBody LoginRequest loginRequest) {
             var response = authService.login(loginRequest);
-            return ResponseUtil.success("Login successful", response);
-        } catch (RuntimeException e) {
-            return ResponseUtil.error(HttpStatus.UNAUTHORIZED, e.getMessage());
-        }
+            return ResponseEntity.ok(
+                    DataResponse.success(response, Const.AUTH.LOGIN_SUCCESS)
+            );
+
     }
 
+    @PreAuthorize("isAuthenticated()")
     @PostMapping("/refresh-token")
     public ResponseEntity<?> refreshToken(@RequestParam String refreshToken) {
-        try {
-            Map<String, String> response = authService.refreshAccessToken(refreshToken);
-            return ResponseUtil.success("Token refreshed successfully", response);
-        } catch (RuntimeException e) {
-            return ResponseUtil.error(HttpStatus.UNAUTHORIZED, e.getMessage());
-        }
+        Map<String, String> response = authService.refreshAccessToken(refreshToken);
+        return ResponseEntity.ok(DataResponse.success(response, Const.AUTH.TOKEN_REFRESH_SUCCESS));
     }
 
     @PostMapping("/logout")
     public ResponseEntity<?> logout(@RequestParam String refreshToken) {
-        try {
-            authService.logout(refreshToken);
-            return ResponseUtil.success("Logged out successfully");
-        } catch (RuntimeException e) {
-            return ResponseUtil.error(HttpStatus.BAD_REQUEST, e.getMessage());
-        }
+        authService.logout(refreshToken);
+        return ResponseEntity.ok(DataResponse.success(Const.AUTH.LOGOUT_SUCCESS, Const.AUTH.LOGOUT_SUCCESS));
     }
 
+    @PreAuthorize("hasRole('TEACHER')")
     @PostMapping("/reset-password")
     @Operation(summary = "reset password by sent default pass word to email", description = "reset password by sent default pass word to ")
     @ApiResponses(value = {
@@ -91,12 +68,8 @@ public class AuthController {
             @ApiResponse(responseCode = "500", description = "Failed to send email, please try again later")
     })
     public ResponseEntity<?> resetPassword(@RequestBody ResetPasswordRequest request) {
-        try {
-            String response = authService.resetPasswordByEmail(request);
-            return ResponseUtil.success("Email has been sent successfully", response);
-        } catch (RuntimeException e) {
-            return ResponseUtil.error(HttpStatus.BAD_REQUEST, e.getMessage());
-        }
+        String response = authService.resetPasswordByEmail(request);
+        return ResponseEntity.ok(DataResponse.success(response, Const.AUTH.PASSWORD_RESET_EMAIL_SENT));
     }
 
     @PostMapping("/change-password")
@@ -111,12 +84,8 @@ public class AuthController {
             @ApiResponse(responseCode = "500", description = "Unexpected server error")
     })
     public ResponseEntity<?> changePassword(@RequestBody ChangePasswordRequest request) {
-        try {
-            authService.changePassword(request);
-            return ResponseUtil.success("Password has been changed successfully");
-        } catch (RuntimeException e) {
-            return ResponseUtil.error(HttpStatus.BAD_REQUEST, e.getMessage());
-        }
+        authService.changePassword(request);
+        return ResponseEntity.ok(DataResponse.success(Const.AUTH.PASSWORD_CHANGED, Const.AUTH.PASSWORD_CHANGED));
     }
 
     @PostMapping("/reset-password-by-teacher")
@@ -131,11 +100,7 @@ public class AuthController {
             @ApiResponse(responseCode = "500", description = "Failed to send email, please try again later")
     })
     public ResponseEntity<?> resetPasswordByTeacher(@RequestParam String username) {
-        try {
-            ResetPasswordByTeacherResponse response = authService.resetPasswordByTeacher(username);
-            return ResponseUtil.success("Password has been reset successfully by teacher", response);
-        } catch (RuntimeException e) {
-            return ResponseUtil.error(HttpStatus.BAD_REQUEST, e.getMessage());
-        }
+        ResetPasswordByTeacherResponse response = authService.resetPasswordByTeacher(username);
+        return ResponseEntity.ok(DataResponse.success(response, Const.AUTH.PASSWORD_RESET_BY_TEACHER));
     }
 }

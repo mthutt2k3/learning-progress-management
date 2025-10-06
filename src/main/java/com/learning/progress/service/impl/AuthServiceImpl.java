@@ -1,5 +1,6 @@
 package com.learning.progress.service.impl;
 
+import com.learning.progress.common.Const;
 import com.learning.progress.common.RoleName;
 import com.learning.progress.common.UserStatus;
 import com.learning.progress.dto.request.ChangePasswordRequest;
@@ -10,13 +11,16 @@ import com.learning.progress.dto.response.ResetPasswordByTeacherResponse;
 import com.learning.progress.entity.RefreshToken;
 import com.learning.progress.entity.User;
 import com.learning.progress.exception.ApiException;
+import com.learning.progress.mapper.AuthMapper;
 import com.learning.progress.repository.RefreshTokenRepository;
 import com.learning.progress.repository.UserRepository;
 import com.learning.progress.service.AuthService;
 import com.learning.progress.service.TokenService;
 import com.learning.progress.util.JwtUtil;
 import jakarta.servlet.http.HttpServletRequest;
+import org.apache.commons.lang3.RandomStringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -24,7 +28,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
-import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.Map;
 
@@ -49,54 +52,34 @@ public class AuthServiceImpl implements AuthService {
     @Autowired
     private RefreshTokenRepository refreshTokenRepository;
 
-    public LoginResponse loginStudent(LoginRequest loginRequest) {
-        User user = userRepository.findByUserName(loginRequest.getUsername())
-                .orElseThrow(() -> new ApiException("Invalid username or password", 401));
+    @Autowired
+    private AuthMapper authMapper;
 
-        if (!passwordEncoder.matches(loginRequest.getPassword(), user.getPassword())) {
-            throw new RuntimeException("Invalid username or password");
-        }
-
-        if (user.getStatus() != UserStatus.ACTIVE) {
-            throw new RuntimeException("User account is not active");
-        }
-
-        String accessToken = jwtUtil.generateToken(user.getUserName(), user.getRole().getName());
-
-        RefreshToken refreshToken = tokenService.createRefreshToken(user);
-
-        LoginResponse response = new LoginResponse();
-        response.setAccessToken(accessToken);
-        response.setRefreshToken(refreshToken.getToken());
-        response.setUsername(user.getUserName());
-        response.setRole(user.getRole().getName());
-
-        return response;
-    }
-
-
-    public LoginResponse loginTeacher(LoginRequest loginRequest) {
+    @Override
     public LoginResponse login(LoginRequest loginRequest) {
+        if (loginRequest.getUsername() == null || loginRequest.getUsername().trim().isEmpty()) {
+            throw new ApiException(Const.USER.USERNAME_EMPTY, HttpStatus.BAD_REQUEST.value());
+        }
+
         User user = userRepository.findByUserName(loginRequest.getUsername())
-                .orElseThrow(() -> new RuntimeException("Invalid username or password"));
+                .orElseThrow(() -> new ApiException(Const.AUTH.INVALID_CREDENTIALS, HttpStatus.UNAUTHORIZED.value()));
 
         if (!passwordEncoder.matches(loginRequest.getPassword(), user.getPassword())) {
-            throw new RuntimeException("Invalid username or password");
+            throw new ApiException(Const.AUTH.INVALID_CREDENTIALS, HttpStatus.UNAUTHORIZED.value());
         }
 
         if (user.getStatus() != UserStatus.ACTIVE) {
-            throw new RuntimeException("User account is not active");
+            throw new ApiException(Const.USER.USER_INACTIVE, HttpStatus.FORBIDDEN.value());
         }
 
-        String accessToken = jwtUtil.generateToken(user.getUserName(), user.getRole().getName());
         String roleInput = loginRequest.getLoginRole();
-        if (roleInput == null || roleInput.isBlank()) {
-            throw new RuntimeException("Login role is required (TEACHER or STUDENT)");
+        if (roleInput == null || roleInput.trim().isEmpty()) {
+            throw new ApiException(Const.VALIDATION.MISSING_FIELD, HttpStatus.BAD_REQUEST.value());
         }
 
         String roleUpper = roleInput.trim().toUpperCase();
         if (!roleUpper.equals("TEACHER") && !roleUpper.equals("STUDENT")) {
-            throw new RuntimeException("Invalid login role: must be either TEACHER or STUDENT");
+            throw new ApiException(Const.VALIDATION.INVALID_FORMAT, HttpStatus.BAD_REQUEST.value());
         }
 
         RoleName loginRole = RoleName.valueOf(roleUpper);
@@ -108,42 +91,37 @@ public class AuthServiceImpl implements AuthService {
                         || userRole == RoleName.MANAGER
                         || userRole == RoleName.TEACHER
                         || userRole == RoleName.TEACHING_ASSISTANT)) {
-                    throw new RuntimeException("User is not allowed to login as TEACHER");
+                    throw new ApiException(Const.SECURITY.FORBIDDEN_ROLE, HttpStatus.FORBIDDEN.value());
                 }
             }
             case STUDENT -> {
                 if (!(userRole == RoleName.STUDENT || userRole == RoleName.TEST_TAKER)) {
-                    throw new RuntimeException("User is not allowed to login as STUDENT");
+                    throw new ApiException(Const.SECURITY.FORBIDDEN_ROLE, HttpStatus.FORBIDDEN.value());
                 }
             }
-            default -> throw new RuntimeException("Invalid login role: " + loginRole);
+            default -> throw new ApiException(Const.VALIDATION.INVALID_FORMAT, HttpStatus.BAD_REQUEST.value());
         }
 
-
-
         String accessToken = jwtUtil.generateToken(user.getUserName(), user.getRole().getName().toString());
-
         RefreshToken refreshToken = tokenService.createRefreshToken(user);
 
-        LoginResponse response = new LoginResponse();
-        response.setAccessToken(accessToken);
-        response.setRefreshToken(refreshToken.getToken());
-        response.setUsername(user.getUserName());
-        response.setRole(user.getRole().getName().toString());
-
-        return response;
+        return authMapper.toLoginResponse(user, refreshToken, accessToken);
     }
 
+    @Override
     public String resetPasswordByEmail(ResetPasswordRequest request) {
-        if (request == null || request.getUsername().trim().isEmpty()) {
-            throw new RuntimeException("Email must not be empty");
+        if (request == null || request.getUsername() == null || request.getUsername().trim().isEmpty()) {
+            throw new ApiException(Const.USER.EMAIL_NOT_FOUND, HttpStatus.BAD_REQUEST.value());
+        }
+
+        if (!request.getUsername().matches(Const.VALIDATE_INPUT.regexEmail)) {
+            throw new ApiException(Const.USER.EMAIL_INVALID, HttpStatus.BAD_REQUEST.value());
         }
 
         User user = userRepository.findByUserName(request.getUsername())
-                .orElseThrow(() -> new RuntimeException("Email does not exist in the system"));
+                .orElseThrow(() -> new ApiException(Const.USER.EMAIL_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         String newPassword = generateRandomPassword(8);
-
         user.setPassword(passwordEncoder.encode(newPassword));
         userRepository.save(user);
 
@@ -151,33 +129,23 @@ public class AuthServiceImpl implements AuthService {
             sendDefaultPassword(user.getEmail(), user, newPassword);
             return user.getEmail();
         } catch (Exception e) {
-            throw new RuntimeException("Unable to send email. Please try again later");
+            throw new ApiException(Const.VALIDATION.OPERATION_FAILED, HttpStatus.INTERNAL_SERVER_ERROR.value());
         }
     }
 
     private String generateRandomPassword(int length) {
         if (length < 6) {
-            throw new RuntimeException("Password length must be at least 6 characters");
+            throw new ApiException(Const.VALIDATION.INVALID_FORMAT, HttpStatus.BAD_REQUEST.value());
         }
-
-        String chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-        SecureRandom random = new SecureRandom();
-        StringBuilder sb = new StringBuilder();
-
-        for (int i = 0; i < length; i++) {
-            int index = random.nextInt(chars.length());
-            sb.append(chars.charAt(index));
-        }
-
-        return sb.toString();
+        return RandomStringUtils.secure().nextAlphanumeric(length);
     }
 
     private void sendDefaultPassword(String toEmail, User user, String defaultPassword) {
         if (toEmail == null || toEmail.trim().isEmpty()) {
-            throw new RuntimeException("Recipient email is invalid");
+            throw new ApiException(Const.VALIDATION.INVALID_INPUT, HttpStatus.BAD_REQUEST.value());
         }
         if (defaultPassword == null || defaultPassword.trim().isEmpty()) {
-            throw new RuntimeException("Default password cannot be empty");
+            throw new ApiException(Const.VALIDATION.INVALID_INPUT, HttpStatus.BAD_REQUEST.value());
         }
 
         String fullName = (user.getFirstName() != null ? user.getFirstName() : "")
@@ -187,7 +155,6 @@ public class AuthServiceImpl implements AuthService {
 
         String subject = "🔐 Cấp lại mật khẩu tài khoản học tập";
         StringBuilder content = new StringBuilder();
-
         content.append("Xin chào ").append(fullName.trim().isEmpty() ? "bạn" : fullName).append(",\n\n")
                 .append("Hệ thống đã cấp lại mật khẩu mới cho tài khoản của bạn.\n\n")
                 .append("👤 Thông tin đăng nhập:\n")
@@ -206,73 +173,80 @@ public class AuthServiceImpl implements AuthService {
         mailSender.send(message);
     }
 
+    @Override
     public void changePassword(ChangePasswordRequest request) {
-
         String username = jwtUtil.extractUsernameFromCurrentRequest();
         if (username == null || username.trim().isEmpty()) {
-            throw new RuntimeException("Username must not be empty");
+            throw new ApiException(Const.USER.USERNAME_EMPTY, HttpStatus.BAD_REQUEST.value());
         }
 
         if (request.getOldPassword() == null || request.getOldPassword().trim().isEmpty()) {
-            throw new RuntimeException("Old password must not be empty");
+            throw new ApiException(Const.VALIDATION.MISSING_FIELD, HttpStatus.BAD_REQUEST.value());
         }
 
         if (request.getNewPassword() == null || request.getNewPassword().trim().isEmpty()) {
-            throw new RuntimeException("New password must not be empty");
+            throw new ApiException(Const.VALIDATION.MISSING_FIELD, HttpStatus.BAD_REQUEST.value());
         }
 
         if (request.getNewPassword().length() < 6) {
-            throw new RuntimeException("New password must be at least 6 characters long");
+            throw new ApiException(Const.VALIDATION.INVALID_FORMAT, HttpStatus.BAD_REQUEST.value());
+        }
+
+        if (!request.getNewPassword().matches(Const.VALIDATE_INPUT.regexPass)) {
+            throw new ApiException(Const.VALIDATION.INVALID_FORMAT, HttpStatus.BAD_REQUEST.value());
         }
 
         if (!request.getNewPassword().equals(request.getConfirmPassword())) {
-            throw new RuntimeException("New password and confirm password do not match");
+            throw new ApiException(Const.VALIDATION.INVALID_INPUT, HttpStatus.BAD_REQUEST.value());
         }
 
         User user = userRepository.findByUserName(username)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new ApiException(Const.USER.USERNAME_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         if (!passwordEncoder.matches(request.getOldPassword(), user.getPassword())) {
-            throw new RuntimeException("Old password is incorrect");
+            throw new ApiException(Const.AUTH.INVALID_CREDENTIALS, HttpStatus.BAD_REQUEST.value());
         }
 
         if (passwordEncoder.matches(request.getNewPassword(), user.getPassword())) {
-            throw new RuntimeException("New password cannot be the same as old password");
+            throw new ApiException(Const.VALIDATION.INVALID_INPUT, HttpStatus.BAD_REQUEST.value());
         }
 
         user.setPassword(passwordEncoder.encode(request.getNewPassword()));
         userRepository.save(user);
     }
 
+    @Override
     public ResetPasswordByTeacherResponse resetPasswordByTeacher(String username) {
         if (username == null || username.trim().isEmpty()) {
-            throw new RuntimeException("Username must not be empty");
+            throw new ApiException(Const.USER.USERNAME_EMPTY, HttpStatus.BAD_REQUEST.value());
         }
 
         User user = userRepository.findByUserName(username)
-                .orElseThrow(() -> new RuntimeException("Username does not exist in the system"));
+                .orElseThrow(() -> new ApiException(Const.USER.USERNAME_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+
+        RoleName userRole = RoleName.valueOf(user.getRole().getName().toString().toUpperCase());
+        if (!(userRole == RoleName.STUDENT || userRole == RoleName.TEST_TAKER)) {
+            throw new ApiException(Const.SECURITY.FORBIDDEN_ROLE, HttpStatus.FORBIDDEN.value());
+        }
 
         String newPassword = generateRandomPassword(8);
-
         user.setPassword(passwordEncoder.encode(newPassword));
         userRepository.save(user);
 
-        ResetPasswordByTeacherResponse response = new ResetPasswordByTeacherResponse();
-        response.setUsername(username);
-        response.setNewPassword(newPassword);
-        return response;
+        return authMapper.toResetPasswordByTeacherResponse(user, newPassword);
     }
 
+    @Override
     public Map<String, String> refreshAccessToken(String refreshToken) {
         if (refreshToken == null || refreshToken.trim().isEmpty()) {
-            throw new RuntimeException("Refresh token must not be empty");
+            throw new ApiException(Const.VALIDATION.MISSING_FIELD, HttpStatus.BAD_REQUEST.value());
         }
 
         RefreshToken token = refreshTokenRepository.findByTokenAndRevokedFalse(refreshToken)
-                .orElseThrow(() -> new RuntimeException("Invalid or revoked refresh token"));
+                .orElseThrow(() -> new ApiException(Const.AUTH.UNAUTHORIZED, HttpStatus.UNAUTHORIZED.value()));
 
         if (token.getExpiresAt().isBefore(Instant.now())) {
-            throw new RuntimeException("Refresh token expired");
+            throw new ApiException(Const.AUTH.UNAUTHORIZED, HttpStatus.UNAUTHORIZED.value());
         }
 
         User user = token.getUser();
@@ -284,38 +258,35 @@ public class AuthServiceImpl implements AuthService {
         );
     }
 
+    @Override
     public void logout(String refreshTokenParam) {
         if (refreshTokenParam == null || refreshTokenParam.trim().isEmpty()) {
-            throw new RuntimeException("Refresh token must not be empty");
+            throw new ApiException(Const.VALIDATION.MISSING_FIELD, HttpStatus.BAD_REQUEST.value());
         }
 
-        // Lấy access token từ request header
         ServletRequestAttributes attributes = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
         if (attributes == null) {
-            throw new RuntimeException("Cannot access current request context");
+            throw new ApiException(Const.VALIDATION.OPERATION_FAILED, HttpStatus.INTERNAL_SERVER_ERROR.value());
         }
 
         HttpServletRequest request = attributes.getRequest();
         String authHeader = request.getHeader("Authorization");
 
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-            throw new RuntimeException("Missing or invalid Authorization header");
+            throw new ApiException(Const.SECURITY.AUTH_REQUIRED, HttpStatus.UNAUTHORIZED.value());
         }
 
         String accessToken = authHeader.substring(7);
 
-        // Check nếu access token đã bị blacklist
         if (tokenService.isAccessTokenBlacklisted(accessToken)) {
-            throw new RuntimeException("Access token is already blacklisted");
+            throw new ApiException(Const.AUTH.UNAUTHORIZED, HttpStatus.UNAUTHORIZED.value());
         }
 
-        // Blacklist access token
         Instant expiry = jwtUtil.getExpirationDateFromToken(accessToken).toInstant();
         tokenService.blacklistAccessToken(accessToken, expiry);
 
-        // Revoke refresh token
         RefreshToken refreshToken = refreshTokenRepository.findByTokenAndRevokedFalse(refreshTokenParam)
-                .orElseThrow(() -> new RuntimeException("Invalid or already revoked refresh token"));
+                .orElseThrow(() -> new ApiException(Const.AUTH.UNAUTHORIZED, HttpStatus.UNAUTHORIZED.value()));
         refreshToken.setRevoked(true);
         refreshTokenRepository.save(refreshToken);
     }
