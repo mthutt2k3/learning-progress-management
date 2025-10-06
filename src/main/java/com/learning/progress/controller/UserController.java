@@ -2,9 +2,14 @@ package com.learning.progress.controller;
 
 
 import com.learning.progress.common.Const;
+import com.learning.progress.dto.response.DataResponse;
+import com.learning.progress.dto.response.ResetPasswordByTeacherResponse;
+import com.learning.progress.dto.response.UserProfileResponse;
+import com.learning.progress.common.Const;
 import com.learning.progress.dto.request.CreateUserRequest;
 import com.learning.progress.dto.response.DataResponse;
 import com.learning.progress.service.UserService;
+import com.learning.progress.util.ResponseUtil;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
@@ -13,8 +18,13 @@ import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDateTime;
 import java.util.Map;
 
 @RestController
@@ -48,11 +58,7 @@ public class UserController {
             @ApiResponse(responseCode = "404", description = "User not found")
     })
     public ResponseEntity<?> getCurrentUserInfo() {
-        try {
-            return ResponseEntity.ok(userService.getCurrentUserProfile());
-        } catch (RuntimeException e) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(Map.of("error", e.getMessage()));
-        }
+        UserProfileResponse response = userService.getCurrentUserProfile();
+            return ResponseEntity.ok(DataResponse.success(response, Const.USER.PROFILE_RETRIEVED));
     }
 }
