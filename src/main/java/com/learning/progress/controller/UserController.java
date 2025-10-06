@@ -50,7 +50,6 @@ public class UserController {
         return new ResponseEntity<>(DataResponse.success(response, Const.CRUD_MESSAGE_CODE.CREATE_SUCCESSFUL), HttpStatus.CREATED);
     }
 
-    @PreAuthorize("hasAnyAuthority('TEACHER', 'ADMIN')")
     @GetMapping("/profile")
     @Operation(summary = "Get current user profile", description = "Get logged-in user profile")
     @ApiResponses(value = {

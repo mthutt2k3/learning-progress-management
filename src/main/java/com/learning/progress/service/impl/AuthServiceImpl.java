@@ -21,6 +21,7 @@ import com.learning.progress.util.JwtUtil;
 import jakarta.servlet.http.HttpServletRequest;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -124,7 +125,6 @@ public class AuthServiceImpl implements AuthService {
 
         String newPassword = DataUtil.generateRandomPassword(8);
 
-        String newPassword = generateRandomPassword(8);
         user.setPassword(passwordEncoder.encode(newPassword));
         userRepository.save(user);
 
@@ -135,14 +135,6 @@ public class AuthServiceImpl implements AuthService {
             throw new ApiException(Const.VALIDATION.OPERATION_FAILED, HttpStatus.INTERNAL_SERVER_ERROR.value());
         }
     }
-
-    private String generateRandomPassword(int length) {
-        if (length < 6) {
-            throw new ApiException(Const.VALIDATION.INVALID_FORMAT, HttpStatus.BAD_REQUEST.value());
-        }
-        return RandomStringUtils.secure().nextAlphanumeric(length);
-    }
-
 
     private void sendDefaultPassword(String toEmail, User user, String defaultPassword) {
         if (toEmail == null || toEmail.trim().isEmpty()) {

@@ -40,13 +40,10 @@ public class UserServiceImpl implements UserService {
     @Autowired
     private UserMapper userMapper;
 
-    @Override
-    @Autowired
-    private UserMapper userMapper;
-
     @Autowired
     private EntityManager entityManager;
 
+    @Override
     public UserProfileResponse getCurrentUserProfile() {
         String username = jwtUtil.extractUsernameFromCurrentRequest();
 
@@ -86,7 +83,7 @@ public class UserServiceImpl implements UserService {
         userRepository.save(user);
 
         //Auto generate username and password
-        user.setUserName(DataUtil.generateUsername(user.getRole().getName(), user.getId()));
+        user.setUserName(DataUtil.generateUsername(user.getRole().getName().toString(), user.getId()));
         user.setPassword(DataUtil.generateRandomPassword(8));
         // Auto-generate account
         accountService.createAccountForUser(CreateAccountRequest

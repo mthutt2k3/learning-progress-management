@@ -3,6 +3,7 @@ package com.learning.progress.mapper;
 import com.learning.progress.dto.request.CreateUserRequest;
 import com.learning.progress.dto.response.CreateAccountResponse;
 import com.learning.progress.dto.response.CreateUserResponse;
+import com.learning.progress.dto.response.UserProfileResponse;
 import com.learning.progress.entity.User;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
@@ -20,4 +21,8 @@ public interface UserMapper {
     CreateUserResponse toCreateUserResponse(User user);
 
     CreateAccountResponse toCreateAccountResponse(User user);
+
+    @Mapping(source = "userName", target = "username")
+    @Mapping(source = "role.name", target = "role")
+    UserProfileResponse toUserProfileResponse(User user);
 }
