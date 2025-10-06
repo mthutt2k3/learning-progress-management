@@ -36,28 +36,11 @@ public class AuthController {
             @ApiResponse(responseCode = "401", description = "Invalid credentials")
     })
     public ResponseEntity<?> loginStudent(@Valid @RequestBody LoginRequest loginRequest) {
-        try {
             var response = authService.loginStudent(loginRequest);
             return ResponseEntity.ok(
-                    DataResponse.builder()
-                            .success(true)
-                            .message("Login successful")
-                            .data(response)
-                            .status(HttpStatus.OK.value())
-                            .timestamp(LocalDateTime.now())
-                            .build()
+                    DataResponse.success(response, "Login successful")
             );
-        } catch (RuntimeException e) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(
-                    DataResponse.builder()
-                            .success(false)
-                            .message("Login failed")
-                            .error(e.getMessage())
-                            .status(HttpStatus.UNAUTHORIZED.value())
-                            .timestamp(LocalDateTime.now())
-                            .build()
-            );
-        }
+
     }
 
 

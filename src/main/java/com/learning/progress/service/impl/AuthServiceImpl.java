@@ -7,11 +7,12 @@ import com.learning.progress.dto.response.LoginResponse;
 import com.learning.progress.dto.response.ResetPasswordByTeacherResponse;
 import com.learning.progress.entity.RefreshToken;
 import com.learning.progress.entity.User;
-import com.learning.progress.repository.PermissionRepository;
+import com.learning.progress.exception.ApiException;
 import com.learning.progress.repository.RefreshTokenRepository;
 import com.learning.progress.repository.UserRepository;
 import com.learning.progress.service.AuthService;
 import com.learning.progress.service.TokenService;
+import com.learning.progress.util.DataUtil;
 import com.learning.progress.util.JwtUtil;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -33,9 +34,6 @@ public class AuthServiceImpl implements AuthService {
     private UserRepository userRepository;
 
     @Autowired
-    private PermissionRepository permissionRepository;
-
-    @Autowired
     private PasswordEncoder passwordEncoder;
 
     @Autowired
@@ -52,7 +50,7 @@ public class AuthServiceImpl implements AuthService {
 
     public LoginResponse loginStudent(LoginRequest loginRequest) {
         User user = userRepository.findByUserName(loginRequest.getUsername())
-                .orElseThrow(() -> new RuntimeException("Invalid username or password"));
+                .orElseThrow(() -> new ApiException("Invalid username or password", 401));
 
         if (!passwordEncoder.matches(loginRequest.getPassword(), user.getPassword())) {
             throw new RuntimeException("Invalid username or password");
@@ -60,12 +58,6 @@ public class AuthServiceImpl implements AuthService {
 
         if (user.getStatus() != UserStatus.ACTIVE) {
             throw new RuntimeException("User account is not active");
-        }
-
-        boolean hasPermission = permissionRepository.existsByUsernameAndPermissionId(user.getUserName(), 2L);
-
-        if (!hasPermission) {
-            throw new RuntimeException("User does not have permission to login as student");
         }
 
         String accessToken = jwtUtil.generateToken(user.getUserName(), user.getRole().getName());
@@ -94,12 +86,6 @@ public class AuthServiceImpl implements AuthService {
             throw new RuntimeException("User account is not active");
         }
 
-        boolean hasPermission = permissionRepository.existsByUsernameAndPermissionId(user.getUserName(), 3L);
-
-        if (!hasPermission) {
-            throw new RuntimeException("User does not have permission to login as teacher");
-        }
-
         String accessToken = jwtUtil.generateToken(user.getUserName(), user.getRole().getName());
 
         RefreshToken refreshToken = tokenService.createRefreshToken(user);
@@ -125,7 +111,7 @@ public class AuthServiceImpl implements AuthService {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("Email does not exist in the system"));
 
-        String newPassword = generateRandomPassword(8);
+        String newPassword = DataUtil.generateRandomPassword(8);
 
         user.setPassword(passwordEncoder.encode(newPassword));
         userRepository.save(user);
@@ -137,22 +123,7 @@ public class AuthServiceImpl implements AuthService {
         }
     }
 
-    private String generateRandomPassword(int length) {
-        if (length < 6) {
-            throw new RuntimeException("Password length must be at least 6 characters");
-        }
 
-        String chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-        SecureRandom random = new SecureRandom();
-        StringBuilder sb = new StringBuilder();
-
-        for (int i = 0; i < length; i++) {
-            int index = random.nextInt(chars.length());
-            sb.append(chars.charAt(index));
-        }
-
-        return sb.toString();
-    }
 
     private void sendDefaultPassword(String toEmail, User user, String defaultPassword) {
         if (toEmail == null || toEmail.trim().isEmpty()) {
@@ -234,7 +205,7 @@ public class AuthServiceImpl implements AuthService {
         User user = userRepository.findByUserName(username)
                 .orElseThrow(() -> new RuntimeException("Username does not exist in the system"));
 
-        String newPassword = generateRandomPassword(8);
+        String newPassword = DataUtil.generateRandomPassword(8);
 
         user.setPassword(passwordEncoder.encode(newPassword));
         userRepository.save(user);
