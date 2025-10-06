@@ -19,7 +19,6 @@ public class DataResponse<T> {
     private boolean success;
     private String message;
     private T data;
-    private String error;
 
     private Integer status;
     private LocalDateTime timestamp;

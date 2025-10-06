@@ -64,7 +64,17 @@ public class AuthServiceImpl implements AuthService {
             throw new RuntimeException("User account is not active");
         }
 
-        RoleName loginRole = RoleName.valueOf(loginRequest.getLoginRole().toUpperCase());
+        String roleInput = loginRequest.getLoginRole();
+        if (roleInput == null || roleInput.isBlank()) {
+            throw new RuntimeException("Login role is required (TEACHER or STUDENT)");
+        }
+
+        String roleUpper = roleInput.trim().toUpperCase();
+        if (!roleUpper.equals("TEACHER") && !roleUpper.equals("STUDENT")) {
+            throw new RuntimeException("Invalid login role: must be either TEACHER or STUDENT");
+        }
+
+        RoleName loginRole = RoleName.valueOf(roleUpper);
         RoleName userRole = RoleName.valueOf(user.getRole().getName().toString().toUpperCase());
 
         switch (loginRole) {

@@ -1,7 +1,10 @@
 package com.learning.progress.controller;
 
 
+import com.learning.progress.dto.response.DataResponse;
+import com.learning.progress.dto.response.UserProfileResponse;
 import com.learning.progress.service.UserService;
+import com.learning.progress.util.ResponseUtil;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
@@ -12,6 +15,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.LocalDateTime;
 import java.util.Map;
 
 @RestController
@@ -32,10 +36,10 @@ public class UserController {
     })
     public ResponseEntity<?> getCurrentUserInfo() {
         try {
-            return ResponseEntity.ok(userService.getCurrentUserProfile());
+            return ResponseUtil.success("Fetched user profile successfully", userService.getCurrentUserProfile());
         } catch (RuntimeException e) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(Map.of("error", e.getMessage()));
+            return ResponseUtil.error(HttpStatus.UNAUTHORIZED, e.getMessage());
         }
     }
+
 }
