@@ -7,7 +7,7 @@ import com.learning.progress.dto.response.LoginResponse;
 import com.learning.progress.dto.response.ResetPasswordByTeacherResponse;
 import com.learning.progress.entity.RefreshToken;
 import com.learning.progress.entity.User;
-import com.learning.progress.repository.PermissionRepository;
+import com.learning.progress.exception.ApiException;
 import com.learning.progress.repository.RefreshTokenRepository;
 import com.learning.progress.repository.UserRepository;
 import com.learning.progress.service.AuthService;
@@ -33,9 +33,6 @@ public class AuthServiceImpl implements AuthService {
     private UserRepository userRepository;
 
     @Autowired
-    private PermissionRepository permissionRepository;
-
-    @Autowired
     private PasswordEncoder passwordEncoder;
 
     @Autowired
@@ -52,7 +49,7 @@ public class AuthServiceImpl implements AuthService {
 
     public LoginResponse loginStudent(LoginRequest loginRequest) {
         User user = userRepository.findByUserName(loginRequest.getUsername())
-                .orElseThrow(() -> new RuntimeException("Invalid username or password"));
+                .orElseThrow(() -> new ApiException("Invalid username or password", 401));
 
         if (!passwordEncoder.matches(loginRequest.getPassword(), user.getPassword())) {
             throw new RuntimeException("Invalid username or password");
@@ -60,12 +57,6 @@ public class AuthServiceImpl implements AuthService {
 
         if (user.getStatus() != UserStatus.ACTIVE) {
             throw new RuntimeException("User account is not active");
-        }
-
-        boolean hasPermission = permissionRepository.existsByUsernameAndPermissionId(user.getUserName(), 2L);
-
-        if (!hasPermission) {
-            throw new RuntimeException("User does not have permission to login as student");
         }
 
         String accessToken = jwtUtil.generateToken(user.getUserName(), user.getRole().getName());
@@ -92,12 +83,6 @@ public class AuthServiceImpl implements AuthService {
 
         if (user.getStatus() != UserStatus.ACTIVE) {
             throw new RuntimeException("User account is not active");
-        }
-
-        boolean hasPermission = permissionRepository.existsByUsernameAndPermissionId(user.getUserName(), 3L);
-
-        if (!hasPermission) {
-            throw new RuntimeException("User does not have permission to login as teacher");
         }
 
         String accessToken = jwtUtil.generateToken(user.getUserName(), user.getRole().getName());

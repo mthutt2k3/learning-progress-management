@@ -1,8 +1,10 @@
 package com.learning.progress.filter;
 
 import com.learning.progress.util.Snowflake;
+import lombok.extern.slf4j.Slf4j;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 import org.springframework.web.util.ContentCachingRequestWrapper;
@@ -19,9 +21,9 @@ import java.time.format.DateTimeFormatter;
 import java.util.UUID;
 
 @Component
+@Slf4j
 public class RequestResponseLoggingFilter extends OncePerRequestFilter {
 
-    private static final Logger logger = LoggerFactory.getLogger(RequestResponseLoggingFilter.class);
     private static final Snowflake snowflake = new Snowflake(1); // nodeId = 1
 
     @Override
@@ -35,29 +37,35 @@ public class RequestResponseLoggingFilter extends OncePerRequestFilter {
             throws ServletException, IOException {
 
         String traceId = snowflake.nextId();
-        String clientIp = request.getHeader("X-Forwarded-For");
-        if (clientIp == null) clientIp = request.getRemoteAddr();
+        MDC.put("traceId", traceId); // Lưu traceId vào MDC
 
-        ContentCachingRequestWrapper reqWrapper = new ContentCachingRequestWrapper(request);
-        ContentCachingResponseWrapper respWrapper = new ContentCachingResponseWrapper(response);
+        try {
+            String clientIp = request.getHeader("X-Forwarded-For");
+            if (clientIp == null) clientIp = request.getRemoteAddr();
 
-        long startTime = System.currentTimeMillis();
-        filterChain.doFilter(reqWrapper, respWrapper);
-        long duration = System.currentTimeMillis() - startTime;
+            ContentCachingRequestWrapper reqWrapper = new ContentCachingRequestWrapper(request);
+            ContentCachingResponseWrapper respWrapper = new ContentCachingResponseWrapper(response);
 
-        String timestamp = LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME);
-        String requestBody = new String(reqWrapper.getContentAsByteArray(), StandardCharsets.UTF_8);
-        String responseBody = new String(respWrapper.getContentAsByteArray(), StandardCharsets.UTF_8);
+            long startTime = System.currentTimeMillis();
+            filterChain.doFilter(reqWrapper, respWrapper);
+            long duration = System.currentTimeMillis() - startTime;
 
-        requestBody = requestBody.replaceAll("[\\n\\r]", "");
-        responseBody = responseBody.replaceAll("[\\n\\r]", "");
+            String timestamp = LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+            String requestBody = new String(reqWrapper.getContentAsByteArray(), StandardCharsets.UTF_8);
+            String responseBody = new String(respWrapper.getContentAsByteArray(), StandardCharsets.UTF_8);
 
-        logger.info("API_LOG | traceId={} | ip={} | time={} | duration={}ms | method={} | path={} | request={} | response={}",
-                traceId, clientIp, timestamp, duration,
-                request.getMethod(), request.getRequestURI(),
-                requestBody, responseBody
-        );
+            requestBody = requestBody.replaceAll("[\\n\\r]", "");
+            responseBody = responseBody.replaceAll("[\\n\\r]", "");
 
-        respWrapper.copyBodyToResponse();
+            log.info("API_LOG | traceId={} | ip={} | time={} | duration={}ms | method={} | path={} | request={} | response={}",
+                    traceId, clientIp, timestamp, duration,
+                    request.getMethod(), request.getRequestURI(),
+                    requestBody, responseBody
+            );
+
+            respWrapper.copyBodyToResponse();
+        } finally {
+            MDC.clear(); // Xóa MDC sau khi hoàn thành request
+        }
     }
 }
