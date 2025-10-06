@@ -1,11 +1,13 @@
 package com.learning.progress.service.impl;
 
+import com.learning.progress.common.Const;
 import com.learning.progress.dto.request.CreateAccountRequest;
 import com.learning.progress.dto.request.CreateUserRequest;
 import com.learning.progress.dto.response.CreateUserResponse;
 import com.learning.progress.dto.response.UserProfileResponse;
 import com.learning.progress.entity.Role;
 import com.learning.progress.entity.User;
+import com.learning.progress.exception.ApiException;
 import com.learning.progress.exception.ApiException;
 import com.learning.progress.mapper.UserMapper;
 import com.learning.progress.repository.RoleRepository;
@@ -16,6 +18,7 @@ import com.learning.progress.util.DataUtil;
 import com.learning.progress.util.JwtUtil;
 import jakarta.persistence.EntityManager;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -40,26 +43,18 @@ public class UserServiceImpl implements UserService {
     @Autowired
     private EntityManager entityManager;
 
+    @Override
     public UserProfileResponse getCurrentUserProfile() {
         String username = jwtUtil.extractUsernameFromCurrentRequest();
 
+        if (username == null || username.trim().isEmpty()) {
+            throw new ApiException(Const.USER.USERNAME_EMPTY, HttpStatus.BAD_REQUEST.value());
+        }
+
         User user = userRepository.findByUserName(username)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new ApiException(Const.AUTH.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
-        UserProfileResponse userProfileResponse = new UserProfileResponse();
-
-        userProfileResponse.setUsername(user.getUserName());
-        userProfileResponse.setFirstName(user.getFirstName());
-        userProfileResponse.setLastName(user.getLastName());
-        userProfileResponse.setEmail(user.getEmail());
-        userProfileResponse.setPhoneNumber(user.getPhoneNumber());
-        userProfileResponse.setDateOfBirth(user.getDateOfBirth());
-        userProfileResponse.setGender(user.getGender());
-        userProfileResponse.setStatus(user.getStatus());
-        userProfileResponse.setAvatarUrl(user.getAvatarUrl());
-        userProfileResponse.setRole(user.getRole().getName());
-
-        return userProfileResponse;
+        return userMapper.toUserProfileResponse(user);
     }
 
     @Override
@@ -88,7 +83,7 @@ public class UserServiceImpl implements UserService {
         userRepository.save(user);
 
         //Auto generate username and password
-        user.setUserName(DataUtil.generateUsername(user.getRole().getName(), user.getId()));
+        user.setUserName(DataUtil.generateUsername(user.getRole().getName().toString(), user.getId()));
         user.setPassword(DataUtil.generateRandomPassword(8));
         // Auto-generate account
         accountService.createAccountForUser(CreateAccountRequest
