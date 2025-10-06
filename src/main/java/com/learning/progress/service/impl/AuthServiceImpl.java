@@ -16,11 +16,11 @@ import com.learning.progress.repository.RefreshTokenRepository;
 import com.learning.progress.repository.UserRepository;
 import com.learning.progress.service.AuthService;
 import com.learning.progress.service.TokenService;
+import com.learning.progress.util.DataUtil;
 import com.learning.progress.util.JwtUtil;
 import jakarta.servlet.http.HttpServletRequest;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpStatus;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -28,6 +28,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
+import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.Map;
 
@@ -121,6 +122,8 @@ public class AuthServiceImpl implements AuthService {
         User user = userRepository.findByUserName(request.getUsername())
                 .orElseThrow(() -> new ApiException(Const.USER.EMAIL_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
+        String newPassword = DataUtil.generateRandomPassword(8);
+
         String newPassword = generateRandomPassword(8);
         user.setPassword(passwordEncoder.encode(newPassword));
         userRepository.save(user);
@@ -140,12 +143,13 @@ public class AuthServiceImpl implements AuthService {
         return RandomStringUtils.secure().nextAlphanumeric(length);
     }
 
+
     private void sendDefaultPassword(String toEmail, User user, String defaultPassword) {
         if (toEmail == null || toEmail.trim().isEmpty()) {
-            throw new ApiException(Const.VALIDATION.INVALID_INPUT, HttpStatus.BAD_REQUEST.value());
+            throw new RuntimeException("Recipient email is invalid");
         }
         if (defaultPassword == null || defaultPassword.trim().isEmpty()) {
-            throw new ApiException(Const.VALIDATION.INVALID_INPUT, HttpStatus.BAD_REQUEST.value());
+            throw new RuntimeException("Default password cannot be empty");
         }
 
         String fullName = (user.getFirstName() != null ? user.getFirstName() : "")
@@ -173,8 +177,8 @@ public class AuthServiceImpl implements AuthService {
         mailSender.send(message);
     }
 
-    @Override
     public void changePassword(ChangePasswordRequest request) {
+
         String username = jwtUtil.extractUsernameFromCurrentRequest();
         if (username == null || username.trim().isEmpty()) {
             throw new ApiException(Const.USER.USERNAME_EMPTY, HttpStatus.BAD_REQUEST.value());
@@ -215,7 +219,6 @@ public class AuthServiceImpl implements AuthService {
         userRepository.save(user);
     }
 
-    @Override
     public ResetPasswordByTeacherResponse resetPasswordByTeacher(String username) {
         if (username == null || username.trim().isEmpty()) {
             throw new ApiException(Const.USER.USERNAME_EMPTY, HttpStatus.BAD_REQUEST.value());
@@ -229,14 +232,14 @@ public class AuthServiceImpl implements AuthService {
             throw new ApiException(Const.SECURITY.FORBIDDEN_ROLE, HttpStatus.FORBIDDEN.value());
         }
 
-        String newPassword = generateRandomPassword(8);
+        String newPassword = DataUtil.generateRandomPassword(8);
+
         user.setPassword(passwordEncoder.encode(newPassword));
         userRepository.save(user);
 
         return authMapper.toResetPasswordByTeacherResponse(user, newPassword);
     }
 
-    @Override
     public Map<String, String> refreshAccessToken(String refreshToken) {
         if (refreshToken == null || refreshToken.trim().isEmpty()) {
             throw new ApiException(Const.VALIDATION.MISSING_FIELD, HttpStatus.BAD_REQUEST.value());
@@ -258,7 +261,6 @@ public class AuthServiceImpl implements AuthService {
         );
     }
 
-    @Override
     public void logout(String refreshTokenParam) {
         if (refreshTokenParam == null || refreshTokenParam.trim().isEmpty()) {
             throw new ApiException(Const.VALIDATION.MISSING_FIELD, HttpStatus.BAD_REQUEST.value());
