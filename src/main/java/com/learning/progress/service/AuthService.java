@@ -10,7 +10,7 @@ import java.util.Map;
 
 public interface AuthService {
     LoginResponse login(LoginRequest loginRequest);
-    String resetPasswordByEmail(ResetPasswordRequest request);
+    String resetPasswordByEmail(String userName);
     void changePassword(ChangePasswordRequest request);
     ResetPasswordByTeacherResponse resetPasswordByTeacher(String username);
     void logout(String refreshTokenParam);
