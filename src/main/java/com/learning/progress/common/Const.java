@@ -25,6 +25,14 @@ public class Const {
         public static final String INVALID_PASSWORD_FORMAT = "Invalid password format. Must be 4-20 characters, containing only letters and digits";
         public static final String INVALID_GENDER_FORMAT = "Invalid gender format. Must be MALE, FEMALE, or OTHER";
         public static final String INVALID_PHONE_NUMBER_FORMAT = "Invalid phone number format. Must start with 0 or +84 followed by 9 or 10 digits";
+        public static final String PASSWORD_TOO_SHORT = "Password must be at least 6 characters long";
+        public static final String INVALID_PAGE = "Page number must be non-negative";
+        public static final String INVALID_SIZE = "Size must be between 1 and 100";
+        public static final String INVALID_TEXT = "Text search cannot be blank";
+        public static final String INVALID_STATUS = "Status list cannot be empty";
+        public static final String INVALID_ROLE_NAME = "Role name list cannot contain blank values";
+        public static final String INVALID_SORT_BY = "Invalid sort field";
+        public static final String INVALID_SORT_DIR = "Sort direction must be 'asc' or 'desc'";
     }
 
     public static class AUTH {
@@ -32,12 +40,20 @@ public class Const {
         public static final String LOGIN_FAILED = "Invalid username or password";
         public static final String LOGOUT_SUCCESS = "Logout successfully";
         public static final String TOKEN_REFRESH_SUCCESS = "Token refreshed successfully";
+
         public static final String PASSWORD_CHANGED = "Password has been changed successfully";
         public static final String PASSWORD_RESET_EMAIL_SENT = "Password reset email sent successfully";
         public static final String PASSWORD_RESET_BY_TEACHER = "Password has been reset successfully by teacher";
+
         public static final String INVALID_CREDENTIALS = "Invalid credentials";
         public static final String USER_NOT_FOUND = "User not found";
         public static final String UNAUTHORIZED = "Unauthorized access";
+        // ✅ NEW: More detailed auth messages
+        public static final String INVALID_OLD_PASSWORD = "Old password is incorrect";
+        public static final String INVALID_REFRESH_TOKEN = "Invalid or revoked refresh token";
+        public static final String REFRESH_TOKEN_EXPIRED = "Refresh token has expired";
+        public static final String ACCESS_TOKEN_BLACKLISTED = "Access token is blacklisted and cannot be used";
+        public static final String INVALID_TOKEN_USERNAME = "Cannot extract username from JWT token. Token may be invalid or missing";
     }
 
     public static class USER {
@@ -56,12 +72,29 @@ public class Const {
         public static final String INVALID_FORMAT = "Invalid format";
         public static final String OPERATION_FAILED = "Operation failed, please try again later";
         public static final String INVALID_DIFFICULTY = "Invalid difficulty format"; // Thêm mới
+        // ✅ NEW: More detailed validation messages
+        public static final String REQUEST_NULL = "Request body cannot be null";
+        public static final String PASSWORD_REQUIRED = "Password is required";
+        public static final String LOGIN_ROLE_REQUIRED = "Login role is required";
+        public static final String INVALID_LOGIN_ROLE = "Login role must be either TEACHER or STUDENT";
+        public static final String EMAIL_REQUIRED = "Email address is required";
+        public static final String OLD_PASSWORD_REQUIRED = "Old password is required";
+        public static final String NEW_PASSWORD_REQUIRED = "New password is required";
+        public static final String CONFIRM_PASSWORD_REQUIRED = "Confirm password is required";
+        public static final String PASSWORDS_DO_NOT_MATCH = "New password and confirm password do not match";
+        public static final String NEW_PASSWORD_SAME_AS_OLD = "New password must be different from the old password";
+        public static final String REFRESH_TOKEN_REQUIRED = "Refresh token is required";
+        public static final String EMAIL_SEND_FAILED = "Failed to send reset password email. Please try again";
     }
 
     public static class SECURITY {
         public static final String ACCESS_DENIED = "Access denied";
         public static final String FORBIDDEN_ROLE = "You do not have permission to perform this action";
         public static final String AUTH_REQUIRED = "Authentication is required";
+        // ✅ NEW: More detailed security messages
+        public static final String FORBIDDEN_ROLE_STUDENT_ONLY = "Only students and test takers can have their password reset by teachers";
+        public static final String AUTH_BEARER_REQUIRED = "Authorization header with Bearer token is required";
+        public static final String ACCESS_TOKEN_REQUIRED = "Access token is required in Authorization header";
     }
 
     public static class LEVEL {

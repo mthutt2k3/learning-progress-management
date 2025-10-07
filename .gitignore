@@ -56,5 +56,4 @@ build/
 hs_err_pid*
 replay_pid*
 
-application-dev.yaml
-src/main/resources/application-dev.yaml
+.github/workflows/

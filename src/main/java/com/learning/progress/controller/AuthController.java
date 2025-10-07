@@ -65,8 +65,8 @@ public class AuthController {
             @ApiResponse(responseCode = "404", description = "Email not found in the system"),
             @ApiResponse(responseCode = "500", description = "Failed to send email, please try again later")
     })
-    public ResponseEntity<?> resetPassword(@RequestBody ResetPasswordRequest request) {
-        String response = authService.resetPasswordByEmail(request);
+    public ResponseEntity<?> resetPassword(@RequestParam String userName) {
+        String response = authService.resetPasswordByEmail(userName);
         return ResponseEntity.ok(DataResponse.success(response, Const.AUTH.PASSWORD_RESET_EMAIL_SENT));
     }
 
