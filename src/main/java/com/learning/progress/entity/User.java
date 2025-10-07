@@ -28,7 +28,7 @@ public class User extends BaseEntity{
     @Column(name = "email", nullable = false)
     private String email;
 
-    @Column(name = "password", length = Integer.MAX_VALUE)
+    @Column(name = "password")
     private String password;
 
     @Column(name = "first_name", nullable = false, length = 50)
@@ -37,13 +37,13 @@ public class User extends BaseEntity{
     @Column(name = "last_name", nullable = false, length = 50)
     private String lastName;
 
-    @Column(name = "avatar_url", length = Integer.MAX_VALUE)
+    @Column(name = "avatar_url")
     private String avatarUrl;
 
     @Column(name = "date_of_birth")
     private Date dateOfBirth;
 
-    @Column(name = "address", length = Integer.MAX_VALUE)
+    @Column(name = "address")
     private String address;
 
     @Column(name = "phone_number", length = 20)
@@ -62,5 +62,6 @@ public class User extends BaseEntity{
     @Column(name = "request_reset_pw_by_tc", nullable = false)
     private boolean requestResetPasswordByTeacher = false;
 
-
+    @Column(name = "additional_data", columnDefinition = "jsonb")
+    private String additionalData;
 }
