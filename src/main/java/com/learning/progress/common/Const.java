@@ -68,6 +68,8 @@ public class Const {
         public static final String MISSING_FIELD = "Required field is missing";
         public static final String INVALID_FORMAT = "Invalid format";
         public static final String OPERATION_FAILED = "Operation failed, please try again later";
+        public static final String INVALID_DIFFICULTY = "Invalid difficulty format"; // Thêm mới
+        // ✅ NEW: More detailed validation messages
         public static final String REQUEST_NULL = "Request body cannot be null";
         public static final String PASSWORD_REQUIRED = "Password is required";
         public static final String LOGIN_ROLE_REQUIRED = "Login role is required";
@@ -89,5 +91,16 @@ public class Const {
         public static final String FORBIDDEN_ROLE_STUDENT_ONLY = "Only students and test takers can have their password reset by teachers";
         public static final String AUTH_BEARER_REQUIRED = "Authorization header with Bearer token is required";
         public static final String ACCESS_TOKEN_REQUIRED = "Access token is required in Authorization header";
+    }
+
+    public static class LEVEL {
+        public static final String LIST_RETRIEVED = "Level list retrieved successfully";
+        public static final String DETAILS_RETRIEVED = "Level details retrieved successfully";
+        public static final String LEVEL_CREATED = "Level created successfully";
+        public static final String LEVEL_UPDATED = "Level updated successfully";
+        public static final String STATUS_UPDATED = "Level status updated successfully";
+        public static final String LEVEL_NOT_FOUND = "Level not found";
+        public static final String DUPLICATE_LEVEL_NAME = "Level name already exists";
+        public static final String DUPLICATE_ORDER_NUMBER = "Order number already exists";
     }
 }
