@@ -11,12 +11,10 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.LocalDateTime;
 import java.util.Map;
 
 @RestController
@@ -52,13 +50,13 @@ public class AuthController {
         return ResponseEntity.ok(DataResponse.success(response, Const.AUTH.TOKEN_REFRESH_SUCCESS));
     }
 
+    @PreAuthorize("isAuthenticated()")
     @PostMapping("/logout")
     public ResponseEntity<?> logout(@RequestParam String refreshToken) {
         authService.logout(refreshToken);
         return ResponseEntity.ok(DataResponse.success(Const.AUTH.LOGOUT_SUCCESS, Const.AUTH.LOGOUT_SUCCESS));
     }
 
-    @PreAuthorize("hasRole('TEACHER')")
     @PostMapping("/reset-password")
     @Operation(summary = "reset password by sent default pass word to email", description = "reset password by sent default pass word to ")
     @ApiResponses(value = {
@@ -72,6 +70,7 @@ public class AuthController {
         return ResponseEntity.ok(DataResponse.success(response, Const.AUTH.PASSWORD_RESET_EMAIL_SENT));
     }
 
+    @PreAuthorize("isAuthenticated()")
     @PostMapping("/change-password")
     @Operation(
             summary = "Change user password",
@@ -88,6 +87,7 @@ public class AuthController {
         return ResponseEntity.ok(DataResponse.success(Const.AUTH.PASSWORD_CHANGED, Const.AUTH.PASSWORD_CHANGED));
     }
 
+    @PreAuthorize("hasRole('TEACHER')")
     @PostMapping("/reset-password-by-teacher")
     @Operation(
             summary = "Reset student password by teacher",

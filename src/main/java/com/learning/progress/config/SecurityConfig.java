@@ -1,9 +1,6 @@
 package com.learning.progress.config;
 
 import com.learning.progress.filter.JwtRequestFilter;
-import com.learning.progress.service.CustomUserDetailsService;
-import com.learning.progress.util.JwtUtil;
-import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;

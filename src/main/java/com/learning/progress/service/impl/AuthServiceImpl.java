@@ -19,7 +19,6 @@ import com.learning.progress.service.TokenService;
 import com.learning.progress.util.DataUtil;
 import com.learning.progress.util.JwtUtil;
 import jakarta.servlet.http.HttpServletRequest;
-import org.apache.commons.lang3.RandomStringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.mail.SimpleMailMessage;
@@ -29,7 +28,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
-import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.Map;
 
@@ -114,10 +112,6 @@ public class AuthServiceImpl implements AuthService {
     public String resetPasswordByEmail(ResetPasswordRequest request) {
         if (request == null || request.getUsername() == null || request.getUsername().trim().isEmpty()) {
             throw new ApiException(Const.USER.EMAIL_NOT_FOUND, HttpStatus.BAD_REQUEST.value());
-        }
-
-        if (!request.getUsername().matches(Const.VALIDATE_INPUT.regexEmail)) {
-            throw new ApiException(Const.USER.EMAIL_INVALID, HttpStatus.BAD_REQUEST.value());
         }
 
         User user = userRepository.findByUserName(request.getUsername())
