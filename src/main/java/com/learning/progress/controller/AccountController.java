@@ -1,7 +1,6 @@
 package com.learning.progress.controller;
 
 import com.learning.progress.common.Const;
-import com.learning.progress.common.RoleName;
 import com.learning.progress.common.UserStatus;
 import com.learning.progress.dto.AccountDTO;
 import com.learning.progress.dto.request.CreateAccountRequest;
@@ -41,8 +40,8 @@ public class AccountController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(required = false) String text,
-            @RequestParam(required = false) List<UserStatus> status,
-            @RequestParam(required = false) List<RoleName> roleName,
+            @RequestParam(required = false) List<String> status,
+            @RequestParam(required = false) List<String> roleName,
             @RequestParam(defaultValue = "id") String sortBy,
             @RequestParam(defaultValue = "asc") String sortDir) {
         return new ResponseEntity<>(accountService.listAccounts(page, size, text, status, roleName, sortBy, sortDir), HttpStatus.OK);
