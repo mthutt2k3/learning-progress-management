@@ -4,7 +4,7 @@ import com.learning.progress.common.Const;
 import com.learning.progress.common.RoleName;
 import com.learning.progress.common.UserStatus;
 import com.learning.progress.dto.AccountDTO;
-import com.learning.progress.dto.request.CreateAccountRequest;
+import com.learning.progress.dto.request.NewAccountRequest;
 import com.learning.progress.dto.response.CreateAccountResponse;
 import com.learning.progress.dto.response.DataResponse;
 import com.learning.progress.service.AccountService;
@@ -41,26 +41,11 @@ public class AccountController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(required = false) String text,
-            @RequestParam(required = false) List<UserStatus> status,
-            @RequestParam(required = false) List<RoleName> roleName,
-            @RequestParam(defaultValue = "id") String sortBy,
+            @RequestParam(required = false) List<String> status,
+            @RequestParam(required = false) List<String> roleName,
+            @RequestParam(defaultValue = "createdAt") String sortBy,
             @RequestParam(defaultValue = "asc") String sortDir) {
         return new ResponseEntity<>(accountService.listAccounts(page, size, text, status, roleName, sortBy, sortDir), HttpStatus.OK);
-    }
-
-    @PostMapping
-    @PreAuthorize("hasRole('ADMIN')")
-    @Operation(summary = "Create a new account", description = "Create a new account for a user (ADMIN only)")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "201", description = "Account created successfully"),
-            @ApiResponse(responseCode = "400", description = "Invalid input data"),
-            @ApiResponse(responseCode = "401", description = "Unauthorized - Missing or invalid JWT token"),
-            @ApiResponse(responseCode = "403", description = "Forbidden - Only ADMIN can create accounts"),
-            @ApiResponse(responseCode = "404", description = "User not found")
-    })
-    public ResponseEntity<DataResponse<CreateAccountResponse>> createAccountForExistUser(@Valid @RequestBody CreateAccountRequest request) {
-        CreateAccountResponse response = accountService.createAccountForUser(request);
-        return new ResponseEntity<>(DataResponse.success(response, Const.CRUD_MESSAGE_CODE.CREATE_SUCCESSFUL), HttpStatus.CREATED);
     }
 
     @GetMapping("/{userId}")
@@ -72,9 +57,39 @@ public class AccountController {
             @ApiResponse(responseCode = "403", description = "Forbidden - Only ADMIN can access"),
             @ApiResponse(responseCode = "404", description = "Account not found")
     })
-    public ResponseEntity<DataResponse<CreateAccountResponse>> getAccountByUserId(@PathVariable Long userId) {
-        CreateAccountResponse response = accountService.getAccountByUserId(userId);
+    public ResponseEntity<DataResponse<AccountDTO>> getAccountByUserId(@PathVariable Long userId) {
+        AccountDTO response = accountService.getAccountByUserId(userId);
         return new ResponseEntity<>(DataResponse.success(response, "Account retrieved successfully"), HttpStatus.OK);
+    }
+
+    @PostMapping("")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Create a new account from scratch", description = "Create a new account without an existing user (ADMIN only)")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "201", description = "Account created successfully"),
+            @ApiResponse(responseCode = "400", description = "Invalid input data or duplicate username/email"),
+            @ApiResponse(responseCode = "401", description = "Unauthorized - Missing or invalid JWT token"),
+            @ApiResponse(responseCode = "403", description = "Forbidden - Only ADMIN can create accounts"),
+            @ApiResponse(responseCode = "404", description = "Role not found")
+    })
+    public ResponseEntity<DataResponse<AccountDTO>> createNewAccount(@Valid @RequestBody NewAccountRequest request) {
+        AccountDTO response = accountService.createNewAccount(request);
+        return new ResponseEntity<>(DataResponse.success(response, Const.CRUD_MESSAGE_CODE.CREATE_SUCCESSFUL), HttpStatus.CREATED);
+    }
+
+
+    @PutMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Update account status", description = "Update status of an account (ADMIN only)")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Account status updated successfully"),
+            @ApiResponse(responseCode = "400", description = "Invalid status"),
+            @ApiResponse(responseCode = "401", description = "Unauthorized - Missing or invalid JWT token"),
+            @ApiResponse(responseCode = "403", description = "Forbidden - Only ADMIN can update accounts"),
+            @ApiResponse(responseCode = "404", description = "Account not found")
+    })
+    public ResponseEntity<DataResponse<?>> updateAccount(@PathVariable Long id, @Valid @RequestParam RoleName roleName) {
+        return new ResponseEntity<>(DataResponse.success(accountService.updateAccount(id, roleName), Const.CRUD_MESSAGE_CODE.UPDATE_SUCCESSFUL), HttpStatus.OK);
     }
 
     @PutMapping("/{id}/status")
@@ -87,9 +102,8 @@ public class AccountController {
             @ApiResponse(responseCode = "403", description = "Forbidden - Only ADMIN can update accounts"),
             @ApiResponse(responseCode = "404", description = "Account not found")
     })
-    public ResponseEntity<DataResponse<CreateAccountResponse>> updateAccountStatus(@PathVariable Long id, @Valid @RequestParam UserStatus status) {
-        CreateAccountResponse response = accountService.updateAccountStatus(id, status);
-        return new ResponseEntity<>(DataResponse.success(response, Const.CRUD_MESSAGE_CODE.UPDATE_SUCCESSFUL), HttpStatus.OK);
+    public ResponseEntity<DataResponse<?>> updateStatusAccount(@PathVariable Long id, @Valid @RequestParam UserStatus userStatus) {
+        return new ResponseEntity<>(DataResponse.success(accountService.updateStatusAccount(id, userStatus), Const.CRUD_MESSAGE_CODE.UPDATE_SUCCESSFUL), HttpStatus.OK);
     }
 
 

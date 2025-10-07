@@ -10,7 +10,6 @@ import com.learning.progress.dto.response.UserProfileResponse;
 import com.learning.progress.entity.Role;
 import com.learning.progress.entity.User;
 import com.learning.progress.exception.ApiException;
-import com.learning.progress.exception.ApiException;
 import com.learning.progress.mapper.UserMapper;
 import com.learning.progress.repository.RoleRepository;
 import com.learning.progress.repository.UserRepository;
@@ -95,7 +94,7 @@ public class UserServiceImpl implements UserService {
         user.setUserName(DataUtil.generateUsername(user.getRole().getName().toString(), user.getId()));
         user.setPassword(DataUtil.generateRandomPassword(8));
         // Auto-generate account
-        accountService.createAccountForUser(CreateAccountRequest
+        accountService.createAccountForExistUser(CreateAccountRequest
                 .builder()
                         .userId(user.getId())
                         .userName(user.getUserName())

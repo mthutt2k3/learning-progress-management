@@ -36,7 +36,7 @@ public class TokenServiceImpl implements TokenService {
         refreshToken.setUser(user);
         refreshToken.setToken(token);
         refreshToken.setIssuedAt(Instant.now());
-        refreshToken.setExpiresAt(Instant.now().plus(7, ChronoUnit.DAYS));
+        refreshToken.setExpiresAt(Instant.now().plus(30, ChronoUnit.DAYS));
         refreshToken.setRevoked(false);
         return refreshTokenRepository.save(refreshToken);
     }
