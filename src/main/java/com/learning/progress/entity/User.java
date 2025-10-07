@@ -9,6 +9,7 @@ import org.hibernate.annotations.OnDeleteAction;
 
 import java.util.Date;
 
+@Builder
 @NoArgsConstructor
 @AllArgsConstructor
 @Data
