@@ -7,7 +7,6 @@ import com.learning.progress.dto.AccountDTO;
 import com.learning.progress.dto.request.CreateAccountRequest;
 import com.learning.progress.dto.response.CreateAccountResponse;
 import com.learning.progress.dto.response.DataResponse;
-import com.learning.progress.entity.Role;
 import com.learning.progress.entity.User;
 import com.learning.progress.exception.ApiException;
 import com.learning.progress.mapper.UserMapper;
@@ -18,6 +17,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -71,7 +71,7 @@ public class AccountServiceImpl implements AccountService {
     }
 
     @Override
-    public DataResponse<List<AccountDTO>> listAccounts(int page, int size, String text, List<UserStatus> status, List<RoleName> roleName, String sortBy, String sortDir) {
+    public DataResponse<List<AccountDTO>> listAccounts(int page, int size, String text, List<String> statusStr, List<String> roleNameStr, String sortBy, String sortDir) {
         // Validate page
         if (page < 0) {
             throw new ApiException(Const.ERROR_MESSAGE.INVALID_PAGE, 400);
@@ -82,18 +82,39 @@ public class AccountServiceImpl implements AccountService {
             throw new ApiException(Const.ERROR_MESSAGE.INVALID_SIZE, 400);
         }
 
-        // Validate status
-        if (status != null && status.isEmpty()) {
+        // Validate statuses
+        List<UserStatus> statuses = statusStr != null
+                ? statusStr.stream().map(s -> {
+            try {
+                return UserStatus.valueOf(s);
+            } catch (IllegalArgumentException e) {
+                throw new ApiException("Invalid UserStatus: " + s, HttpStatus.BAD_REQUEST.value());
+            }
+        }).collect(Collectors.toList())
+                : null;
+
+        if (statusStr != null && statusStr.isEmpty()) {
             throw new ApiException(Const.ERROR_MESSAGE.INVALID_STATUS, 400);
         }
 
-        // Validate roleName
-        if (roleName != null && roleName.isEmpty()) {
+        // Validate roleNames
+        List<RoleName> roleNames = roleNameStr != null
+                ? roleNameStr.stream().map(r -> {
+            try {
+                return RoleName.valueOf(r);
+            } catch (IllegalArgumentException e) {
+                throw new ApiException("Invalid RoleName: " + r, HttpStatus.BAD_REQUEST.value());
+            }
+        }).collect(Collectors.toList())
+                : null;
+
+        if (roleNameStr != null && roleNameStr.isEmpty()) {
             throw new ApiException(Const.ERROR_MESSAGE.INVALID_ROLE_NAME, 400);
         }
 
+
         // Validate sortBy
-        String[] validSortFields = {"id", "userName", "email", "fullName", "status"};
+        String[] validSortFields = {"id", "userName", "email", "fullName", "statuses"};
         boolean isValidSortField = false;
         for (String field : validSortFields) {
             if (field.equalsIgnoreCase(sortBy)) {
@@ -119,22 +140,22 @@ public class AccountServiceImpl implements AccountService {
         Page<User> userPage;
 
         if (text != null && !text.isBlank()) {
-            if (status != null && !status.isEmpty() && roleName != null && !roleName.isEmpty()) {
-                userPage = userRepository.findByTextAndStatusInAndRoleNameIn(text, status, roleName, pageable);
-            } else if (status != null && !status.isEmpty()) {
-                userPage = userRepository.findByTextAndStatusIn(text, status, pageable);
-            } else if (roleName != null && !roleName.isEmpty()) {
-                userPage = userRepository.findByTextAndRoleNameIn(text, roleName, pageable);
+            if (statuses != null && !statuses.isEmpty() && roleNames != null && !roleNames.isEmpty()) {
+                userPage = userRepository.findByTextAndStatusInAndRoleNameIn(text, statuses, roleNames, pageable);
+            } else if (statuses != null && !statuses.isEmpty()) {
+                userPage = userRepository.findByTextAndStatusIn(text, statuses, pageable);
+            } else if (roleNames != null && !roleNames.isEmpty()) {
+                userPage = userRepository.findByTextAndRoleNameIn(text, roleNames, pageable);
             } else {
                 userPage = userRepository.findByText(text, pageable);
             }
         } else {
-            if (status != null && !status.isEmpty() && roleName != null && !roleName.isEmpty()) {
-                userPage = userRepository.findByStatusInAndRoleNameIn(status, roleName, pageable);
-            } else if (status != null && !status.isEmpty()) {
-                userPage = userRepository.findByStatusIn(status, pageable);
-            } else if (roleName != null && !roleName.isEmpty()) {
-                userPage = userRepository.findByRoleNameIn(roleName, pageable);
+            if (statuses != null && !statuses.isEmpty() && roleNames != null && !roleNames.isEmpty()) {
+                userPage = userRepository.findByStatusInAndRoleNameIn(statuses, roleNames, pageable);
+            } else if (statuses != null && !statuses.isEmpty()) {
+                userPage = userRepository.findByStatusIn(statuses, pageable);
+            } else if (roleNames != null && !roleNames.isEmpty()) {
+                userPage = userRepository.findByRoleNameIn(roleNames, pageable);
             } else {
                 userPage = userRepository.findAll(pageable);
             }

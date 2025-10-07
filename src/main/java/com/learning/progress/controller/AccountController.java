@@ -1,5 +1,6 @@
 package com.learning.progress.controller;
 
+import com.learning.progress.annotation.EnumName;
 import com.learning.progress.common.Const;
 import com.learning.progress.common.RoleName;
 import com.learning.progress.common.UserStatus;
@@ -20,6 +21,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/v1/account")
@@ -41,8 +43,8 @@ public class AccountController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(required = false) String text,
-            @RequestParam(required = false) List<UserStatus> status,
-            @RequestParam(required = false) List<RoleName> roleName,
+            @RequestParam(required = false) List<String> status,
+            @RequestParam(required = false) List<String> roleName,
             @RequestParam(defaultValue = "id") String sortBy,
             @RequestParam(defaultValue = "asc") String sortDir) {
         return new ResponseEntity<>(accountService.listAccounts(page, size, text, status, roleName, sortBy, sortDir), HttpStatus.OK);
