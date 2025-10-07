@@ -6,7 +6,6 @@ public class Const {
                 + "[^-][A-Za-z0-9-]+(\\.[A-Za-z0-9-]+)*(\\.[A-Za-z]{2,})$";
         public static final String regexPhone = "^(?:0|\\+84)(?:\\s?\\d){9,10}$";
         public static final String regexPass = "^[A-Za-z0-9]{4,20}$";
-
         public static final String regexGender = "MALE|FEMALE|OTHER";
     }
 
@@ -57,25 +56,22 @@ public class Const {
         public static final String INVALID_TOKEN_USERNAME = "Cannot extract username from JWT token. Token may be invalid or missing";
     }
 
-    // ✅ User feature messages
     public static class USER {
         public static final String PROFILE_RETRIEVED = "User info retrieved successfully";
         public static final String PROFILE_NOT_FOUND = "User profile not found";
-
         public static final String USERNAME_EMPTY = "Username must not be empty";
         public static final String USERNAME_NOT_FOUND = "Username does not exist in the system";
         public static final String USER_INACTIVE = "User account is not active";
-
         public static final String EMAIL_NOT_FOUND = "Email not found in the system";
         public static final String EMAIL_INVALID = "Invalid email format";
     }
 
-    // ✅ Validation / common error messages
     public static class VALIDATION {
         public static final String INVALID_INPUT = "Invalid input data";
         public static final String MISSING_FIELD = "Required field is missing";
         public static final String INVALID_FORMAT = "Invalid format";
         public static final String OPERATION_FAILED = "Operation failed, please try again later";
+        public static final String INVALID_DIFFICULTY = "Invalid difficulty format"; // Thêm mới
         // ✅ NEW: More detailed validation messages
         public static final String REQUEST_NULL = "Request body cannot be null";
         public static final String PASSWORD_REQUIRED = "Password is required";
@@ -91,7 +87,6 @@ public class Const {
         public static final String EMAIL_SEND_FAILED = "Failed to send reset password email. Please try again";
     }
 
-    // ✅ Permission & role related messages
     public static class SECURITY {
         public static final String ACCESS_DENIED = "Access denied";
         public static final String FORBIDDEN_ROLE = "You do not have permission to perform this action";
@@ -100,5 +95,16 @@ public class Const {
         public static final String FORBIDDEN_ROLE_STUDENT_ONLY = "Only students and test takers can have their password reset by teachers";
         public static final String AUTH_BEARER_REQUIRED = "Authorization header with Bearer token is required";
         public static final String ACCESS_TOKEN_REQUIRED = "Access token is required in Authorization header";
+    }
+
+    public static class LEVEL {
+        public static final String LIST_RETRIEVED = "Level list retrieved successfully";
+        public static final String DETAILS_RETRIEVED = "Level details retrieved successfully";
+        public static final String LEVEL_CREATED = "Level created successfully";
+        public static final String LEVEL_UPDATED = "Level updated successfully";
+        public static final String STATUS_UPDATED = "Level status updated successfully";
+        public static final String LEVEL_NOT_FOUND = "Level not found";
+        public static final String DUPLICATE_LEVEL_NAME = "Level name already exists";
+        public static final String DUPLICATE_ORDER_NUMBER = "Order number already exists";
     }
 }

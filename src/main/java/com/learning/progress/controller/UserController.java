@@ -3,13 +3,9 @@ package com.learning.progress.controller;
 
 import com.learning.progress.common.Const;
 import com.learning.progress.dto.response.DataResponse;
-import com.learning.progress.dto.response.ResetPasswordByTeacherResponse;
 import com.learning.progress.dto.response.UserProfileResponse;
-import com.learning.progress.common.Const;
 import com.learning.progress.dto.request.CreateUserRequest;
-import com.learning.progress.dto.response.DataResponse;
 import com.learning.progress.service.UserService;
-import com.learning.progress.util.ResponseUtil;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
@@ -21,11 +17,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
-
-import java.time.LocalDateTime;
-import java.util.Map;
 
 @RestController
 @RequestMapping("/api/v1/user")
@@ -50,6 +42,7 @@ public class UserController {
         return new ResponseEntity<>(DataResponse.success(response, Const.CRUD_MESSAGE_CODE.CREATE_SUCCESSFUL), HttpStatus.CREATED);
     }
 
+    @PreAuthorize("isAuthenticated()")
     @GetMapping("/profile")
     @Operation(summary = "Get current user profile", description = "Get logged-in user profile")
     @ApiResponses(value = {
