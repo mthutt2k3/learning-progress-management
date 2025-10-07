@@ -1,7 +1,6 @@
 package com.learning.progress.exception;
 
 import com.learning.progress.dto.response.DataResponse;
-import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
 import org.springframework.http.HttpStatus;
@@ -34,38 +33,6 @@ public class GlobalExceptionHandler {
                 .build();
 
         return new ResponseEntity<>(response, HttpStatus.valueOf(ex.getStatus()));
-    }
-
-    @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<DataResponse<Object>> handleValidationExceptions(MethodArgumentNotValidException ex, WebRequest request) {
-        String errorMessage = ex.getBindingResult().getFieldErrors().stream()
-                .map(error -> error.getField() + ": " + error.getDefaultMessage())
-                .collect(Collectors.joining(", "));
-        DataResponse<Object> response = DataResponse.builder()
-                .traceId(MDC.get("traceId"))
-                .success(false)
-                .error("Validation error: " + errorMessage)
-                .status(HttpStatus.BAD_REQUEST.value())
-                .timestamp(LocalDateTime.now())
-                .path(request.getDescription(false).replace("uri=", ""))
-                .build();
-        return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
-    }
-
-    @ExceptionHandler(ConstraintViolationException.class)
-    public ResponseEntity<DataResponse<Object>> handleConstraintViolationException(ConstraintViolationException ex, WebRequest request) {
-        String errorMessage = ex.getConstraintViolations().stream()
-                .map(violation -> violation.getPropertyPath() + ": " + violation.getMessage())
-                .collect(Collectors.joining(", "));
-        DataResponse<Object> response = DataResponse.builder()
-                .traceId(MDC.get("traceId"))
-                .success(false)
-                .error("Validation error: " + errorMessage)
-                .status(HttpStatus.BAD_REQUEST.value())
-                .timestamp(LocalDateTime.now())
-                .path(request.getDescription(false).replace("uri=", ""))
-                .build();
-        return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
     }
 
     // Xử lý lỗi xác thực (401 Unauthorized)

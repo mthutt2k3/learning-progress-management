@@ -2,6 +2,7 @@ package com.learning.progress.mapper;
 
 import com.learning.progress.dto.AccountDTO;
 import com.learning.progress.dto.request.CreateUserRequest;
+import com.learning.progress.dto.request.NewAccountRequest;
 import com.learning.progress.dto.response.CreateAccountResponse;
 import com.learning.progress.dto.response.CreateUserResponse;
 import com.learning.progress.dto.response.UserProfileResponse;
@@ -20,6 +21,8 @@ import java.util.Date;
 public interface UserMapper {
 
     User toUser(CreateUserRequest request);
+
+    User toUser(NewAccountRequest request);
 
     @Mapping(source = "role.name", target = "roleName")
     CreateUserResponse toCreateUserResponse(User user);
