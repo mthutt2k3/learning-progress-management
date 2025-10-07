@@ -58,4 +58,8 @@ public class User extends BaseEntity{
     @Column(name = "must_change_pw", nullable = false)
     private boolean mustChangePassword = false;
 
+    @Column(name = "request_reset_pw_by_tc", nullable = false)
+    private boolean requestResetPasswordByTeacher = false;
+
+
 }
