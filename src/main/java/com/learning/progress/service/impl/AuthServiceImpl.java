@@ -126,16 +126,13 @@ public class AuthServiceImpl implements AuthService {
     }
 
     @Override
-    public String resetPasswordByEmail(ResetPasswordRequest request) {
+    public String resetPasswordByEmail(String userName) {
         // Validate request
-        if (request == null) {
-            throw new ApiException(Const.VALIDATION.REQUEST_NULL, HttpStatus.BAD_REQUEST.value());
-        }
-        if (request.getUsername() == null || request.getUsername().trim().isEmpty()) {
+        if (userName == null || userName.trim().isEmpty()) {
             throw new ApiException(Const.USER.USERNAME_EMPTY, HttpStatus.BAD_REQUEST.value());
         }
 
-        User user = userRepository.findByUserName(request.getUsername())
+        User user = userRepository.findByUserName(userName)
                 .orElseThrow(() -> new ApiException(Const.USER.USERNAME_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         // Added: Check user active status for reset
