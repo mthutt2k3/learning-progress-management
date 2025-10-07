@@ -27,6 +27,13 @@ public class Const {
         public static final String INVALID_GENDER_FORMAT = "Invalid gender format. Must be MALE, FEMALE, or OTHER";
         public static final String INVALID_PHONE_NUMBER_FORMAT = "Invalid phone number format. Must start with 0 or +84 followed by 9 or 10 digits";
         public static final String PASSWORD_TOO_SHORT = "Password must be at least 6 characters long";
+        public static final String INVALID_PAGE = "Page number must be non-negative";
+        public static final String INVALID_SIZE = "Size must be between 1 and 100";
+        public static final String INVALID_TEXT = "Text search cannot be blank";
+        public static final String INVALID_STATUS = "Status list cannot be empty";
+        public static final String INVALID_ROLE_NAME = "Role name list cannot contain blank values";
+        public static final String INVALID_SORT_BY = "Invalid sort field";
+        public static final String INVALID_SORT_DIR = "Sort direction must be 'asc' or 'desc'";
     }
 
     public static class AUTH {
