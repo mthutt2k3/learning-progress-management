@@ -127,8 +127,9 @@ public class AuthServiceImpl implements AuthService {
         String accessToken = jwtUtil.generateToken(user.getUserName(), user.getRole().getName().toString());
         RefreshToken refreshToken = tokenService.createRefreshToken(user);
         boolean mustChangePassword = user.isMustChangePassword();
+        boolean mustUpdateProfile = user.isMustUpdateProfile();
 
-        return authMapper.toLoginResponse(user, refreshToken, accessToken, mustChangePassword);
+        return authMapper.toLoginResponse(user, refreshToken, accessToken, mustChangePassword, mustUpdateProfile);
     }
 
     @Override
@@ -238,8 +239,9 @@ public class AuthServiceImpl implements AuthService {
         String accessToken = jwtUtil.generateToken(user.getUserName(), user.getRole().getName().toString());
         RefreshToken refreshToken = tokenService.createRefreshToken(user);
         boolean mustChangePassword = user.isMustChangePassword();
+        boolean mustUpdateProfile = user.isMustUpdateProfile();
 
-        return authMapper.toLoginResponse(user, refreshToken, accessToken, mustChangePassword);
+        return authMapper.toLoginResponse(user, refreshToken, accessToken, mustChangePassword, mustUpdateProfile);
     }
 
     public ResetPasswordByTeacherResponse resetPasswordByTeacher(String username) {

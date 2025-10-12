@@ -32,6 +32,8 @@ public interface UserMapper {
 
     CreateAccountResponse toCreateAccountResponse(User user);
 
+    @Mapping(source = "theme", target = "theme")
+    @Mapping(source = "language", target = "language")
     UserProfileResponse toUserProfileResponse(User user);
 
     @Mapping(target = "roleName", source = "role.name")
