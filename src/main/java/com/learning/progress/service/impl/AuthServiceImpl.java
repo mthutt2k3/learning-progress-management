@@ -180,7 +180,7 @@ public class AuthServiceImpl implements AuthService {
         }
     }
 
-    public void changePassword(ChangePasswordRequest request) {
+    public LoginResponse changePassword(ChangePasswordRequest request) {
         // Validate request
         if (request == null) {
             throw new ApiException(Const.VALIDATION.REQUEST_NULL, HttpStatus.BAD_REQUEST.value());
@@ -232,6 +232,14 @@ public class AuthServiceImpl implements AuthService {
         user.setPassword(passwordEncoder.encode(request.getNewPassword()));
         user.setMustChangePassword(false);
         userRepository.save(user);
+
+        logout(request.getRefreshToken());
+
+        String accessToken = jwtUtil.generateToken(user.getUserName(), user.getRole().getName().toString());
+        RefreshToken refreshToken = tokenService.createRefreshToken(user);
+        boolean mustChangePassword = user.isMustChangePassword();
+
+        return authMapper.toLoginResponse(user, refreshToken, accessToken, mustChangePassword);
     }
 
     public ResetPasswordByTeacherResponse resetPasswordByTeacher(String username) {

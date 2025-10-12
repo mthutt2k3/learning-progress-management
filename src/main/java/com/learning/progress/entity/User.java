@@ -1,5 +1,7 @@
 package com.learning.progress.entity;
 
+import com.learning.progress.common.Language;
+import com.learning.progress.common.Theme;
 import com.learning.progress.common.UserStatus;
 import jakarta.persistence.*;
 import lombok.*;
@@ -67,4 +69,10 @@ public class User extends BaseEntity{
 
     @Column(name = "additional_data")
     private String additionalData;
+
+    @Enumerated(EnumType.STRING)
+    private Theme theme = Theme.LIGHT;
+
+    @Enumerated(EnumType.STRING)
+    private Language language = Language.VI;
 }
