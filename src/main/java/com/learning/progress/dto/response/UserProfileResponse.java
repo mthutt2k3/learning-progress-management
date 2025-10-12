@@ -31,4 +31,7 @@ public class UserProfileResponse {
     private UserStatus status;
     private boolean mustChangePassword;
     private boolean requestResetPasswordByTeacher;
+    private boolean mustUpdateProfile;
+    private String language;
+    private String theme;
 }

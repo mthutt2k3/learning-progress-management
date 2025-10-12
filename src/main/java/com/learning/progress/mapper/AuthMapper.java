@@ -14,8 +14,9 @@ public interface AuthMapper {
     @Mapping(source = "user.role.name", target = "role")
     @Mapping(source = "refreshToken.token", target = "refreshToken")
     @Mapping(source = "accessToken", target = "accessToken")
-    @Mapping(source = "isMustChangePassword", target = "isMustChangePassword")
-    LoginResponse toLoginResponse(User user, RefreshToken refreshToken, String accessToken, boolean isMustChangePassword);
+    @Mapping(source = "mustChangePassword", target = "mustChangePassword")
+    @Mapping(source = "mustUpdateProfile", target = "mustUpdateProfile")
+    LoginResponse toLoginResponse(User user, RefreshToken refreshToken, String accessToken, boolean mustChangePassword, boolean mustUpdateProfile);
 
     @Mapping(source = "user.userName", target = "username")
     @Mapping(source = "newPassword", target = "newPassword")
