@@ -61,7 +61,7 @@ server:
 
 jwt:
   secret: ${JWT_SECRET}
-  expiration: 604800000
+  expiration: 7200000
 
 logging:
   level:
