@@ -65,7 +65,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
             "FROM StudentLevel sl WHERE sl.user.id = :userId AND sl.status = 'ACTIVE'")
     Optional<LevelInfo> findActiveLevelInfoByUserId(Long userId);
 
-    @Query("SELECT NEW com.learning.progress.dto.ClassInfo(cs.classField.id, cs.classField.className) " +
+    @Query("SELECT NEW com.learning.progress.dto.ClassInfo(cs.classField.id, cs.classField.className, null) " +
             "FROM ClassStudent cs WHERE cs.user.id = :userId AND cs.status = 'ACTIVE' AND cs.classField.isActive = true")
     Optional<ClassInfo> findActiveClassInfoByUserId(Long userId);
 

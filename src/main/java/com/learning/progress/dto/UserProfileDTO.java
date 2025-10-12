@@ -1,27 +1,22 @@
-package com.learning.progress.dto.response;
+package com.learning.progress.dto;
 
-
-import com.fasterxml.jackson.annotation.JsonInclude;
+import com.learning.progress.common.Language;
+import com.learning.progress.common.Theme;
 import com.learning.progress.common.UserStatus;
 import lombok.AllArgsConstructor;
-import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.experimental.SuperBuilder;
 
 import java.util.Date;
 
 @Data
-@Builder
+@SuperBuilder
 @NoArgsConstructor
 @AllArgsConstructor
-
-public class CreateUserResponse {
-
+public class UserProfileDTO {
     private Long id;
     private String userName;
-    private String password;
-
-    private String roleName;
     private String email;
     private String firstName;
     private String lastName;
@@ -30,5 +25,11 @@ public class CreateUserResponse {
     private String address;
     private String phoneNumber;
     private String gender;
+    private String roleName;
     private UserStatus status;
+    private boolean mustUpdateProfile;
+    private boolean mustChangePassword;
+    private boolean requestResetPasswordByTeacher;
+    private Theme theme;
+    private Language language;
 }
