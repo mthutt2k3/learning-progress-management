@@ -40,7 +40,6 @@ public class AuthController {
             return ResponseEntity.ok(
                     DataResponse.success(response, Const.AUTH.LOGIN_SUCCESS)
             );
-
     }
 
     @PreAuthorize("isAuthenticated()")

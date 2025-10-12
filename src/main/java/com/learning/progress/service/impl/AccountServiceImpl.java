@@ -15,6 +15,7 @@ import com.learning.progress.mapper.UserMapper;
 import com.learning.progress.repository.RoleRepository;
 import com.learning.progress.repository.UserRepository;
 import com.learning.progress.service.AccountService;
+import com.learning.progress.service.EmailService;
 import com.learning.progress.util.DataUtil;
 import com.learning.progress.util.EnumUtil;
 import jakarta.persistence.EntityManager;
@@ -28,7 +29,10 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -47,6 +51,9 @@ public class AccountServiceImpl implements AccountService {
 
     @Autowired
     private EntityManager entityManager;
+
+    @Autowired
+    private EmailService emailService;
 
     @Override
     public DataResponse<List<AccountDTO>> listAccounts(int page, int size, String text, List<String> statusStr, List<String> roleNameStr, String sortBy, String sortDir) {
@@ -163,7 +170,7 @@ public class AccountServiceImpl implements AccountService {
             throw new ApiException(Const.USER.EMAIL_INVALID, 400);
         }
         //validate role name
-        if(!EnumUtil.isValidEnum(RoleName.class, request.getRoleName()))
+        if(!EnumUtil.isAllowedEnumValue(RoleName.class, request.getRoleName(), Set.of(RoleName.ADMIN, RoleName.MANAGER)))
             throw new ApiException(Const.ERROR_MESSAGE.INVALID_ROLE_NAME, HttpStatus.BAD_REQUEST.value());
 
         // Tìm role
@@ -192,10 +199,33 @@ public class AccountServiceImpl implements AccountService {
                 .build()
         );
 
+        // Gửi email thông báo tài khoản
+        sendNewAccountEmail(newUser, username, password);
+
         AccountDTO accountDTO = userMapper.toAccountDTO(newUser);
         accountDTO.setUserName(createAccountResponse.getUserName());
 
         return accountDTO;
+    }
+
+    private void sendNewAccountEmail(User user, String username, String password) {
+        try {
+            String fullName = (user.getFirstName() != null ? user.getFirstName() : "")
+                    + " "
+                    + (user.getLastName() != null ? user.getLastName() : "");
+
+            Map<String, Object> templateVariables = new HashMap<>();
+            templateVariables.put("fullName", fullName.trim().isEmpty() ? "bạn" : fullName.trim());
+            templateVariables.put("username", username);
+            templateVariables.put("password", password);
+
+            String subject = "🎉 Tài khoản học tập của bạn đã được tạo";
+            String templatePath = "email/create-account-email";
+
+            emailService.sendEmail(user.getEmail(), subject, templatePath, templateVariables);
+        } catch (Exception e) {
+            throw new ApiException(Const.VALIDATION.EMAIL_SEND_FAILED, HttpStatus.INTERNAL_SERVER_ERROR.value());
+        }
     }
 
     @Override
