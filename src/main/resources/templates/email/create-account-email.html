@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8"/>
+    <title>Thông tin tài khoản học tập mới</title>
+</head>
+<body>
+<p>Xin chào <span th:text="${fullName} ?: 'bạn'"></span>,</p>
+<p>Hệ thống đã tạo mới tài khoản học tập cho bạn.</p>
+
+<h3>👤 Thông tin đăng nhập:</h3>
+<ul>
+    <li>Tên đăng nhập: <span th:text="${username}"></span></li>
+    <li>Mật khẩu: <span th:text="${password}"></span></li>
+</ul>
+
+<p>📢 <strong>Lưu ý:</strong> Vì lý do bảo mật, bạn vui lòng đăng nhập và đổi mật khẩu ngay sau khi truy cập hệ thống.</p>
+<p>Nếu bạn không yêu cầu tạo tài khoản, vui lòng liên hệ với đội ngũ hỗ trợ.</p>
+
+<p>Trân trọng,<br/>Đội ngũ Hỗ trợ Hệ thống Học tập Camkey 🎓</p>
+</body>
+</html>
