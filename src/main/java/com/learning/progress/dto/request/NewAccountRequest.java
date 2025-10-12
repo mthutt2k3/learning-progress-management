@@ -20,7 +20,6 @@ public class NewAccountRequest {
     private String email;
 
     @NotNull(message = "Role name cannot be null")
-
     private String roleName;
 
 }
