@@ -8,8 +8,6 @@ import com.learning.progress.dto.response.UserProfileResponse;
 import com.learning.progress.dto.request.CreateUserRequest;
 import com.learning.progress.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.annotations.Parameter;
 import jakarta.validation.Valid;
@@ -33,15 +31,17 @@ public class UserController {
     private UserService userService;
 
     // Student/Test Taker Profile APIs
-    @GetMapping("/students")
+    @PostMapping("students")
+    @PreAuthorize("hasRole('MANAGER')")
+    @Operation(summary = "Create a new student", description = "Create a new user student profile(MANAGER only)")
+    public ResponseEntity<DataResponse<?>> createStudent(@Valid @RequestBody CreateStudentRequest request) {
+        var response = userService.createStudent(request);
+        return new ResponseEntity<>(DataResponse.success(response, Const.CRUD_MESSAGE_CODE.CREATE_SUCCESSFUL), HttpStatus.CREATED);
+    }
+
+    @GetMapping("students")
     @Operation(summary = "View Student/Test Taker List", description = "Retrieves a paginated list of students/test takers with optional filtering by text, statuses, roles, and sorting")
     @PreAuthorize("hasRole('MANAGER') or hasRole('TEACHER')")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Students retrieved successfully"),
-            @ApiResponse(responseCode = "400", description = "Invalid filter or sort parameters"),
-            @ApiResponse(responseCode = "401", description = "Unauthorized - Missing or invalid JWT token"),
-            @ApiResponse(responseCode = "403", description = "Forbidden - Insufficient permissions")
-    })
     public ResponseEntity<DataResponse<?>> getStudentList(
             @Parameter(description = "Page number, starting from 0") @RequestParam(defaultValue = "0") int page,
             @Parameter(description = "Page size") @RequestParam(defaultValue = "10") int size,
@@ -55,15 +55,17 @@ public class UserController {
     }
 
 
-    @GetMapping("/teachers")
+    @PostMapping("teachers")
+    @PreAuthorize("hasRole('MANAGER')")
+    @Operation(summary = "Create a new user", description = "Create a new user profile (MANAGER only)")
+    public ResponseEntity<DataResponse<?>> createUser(@Valid @RequestBody CreateUserRequest request) {
+        var response = userService.createUser(request);
+        return new ResponseEntity<>(DataResponse.success(response, Const.CRUD_MESSAGE_CODE.CREATE_SUCCESSFUL), HttpStatus.CREATED);
+    }
+
+    @GetMapping("teachers")
     @Operation(summary = "View Teacher/Assistant List", description = "Retrieves a paginated list of Teacher/Assistant with optional filtering by text, statuses, roles, and sorting")
     @PreAuthorize("hasRole('MANAGER') or hasRole('TEACHER')")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Teacher retrieved successfully"),
-            @ApiResponse(responseCode = "400", description = "Invalid filter or sort parameters"),
-            @ApiResponse(responseCode = "401", description = "Unauthorized - Missing or invalid JWT token"),
-            @ApiResponse(responseCode = "403", description = "Forbidden - Insufficient permissions")
-    })
     public ResponseEntity<DataResponse<?>> getTeacherList(
             @Parameter(description = "Page number, starting from 0") @RequestParam(defaultValue = "0") int page,
             @Parameter(description = "Page size") @RequestParam(defaultValue = "10") int size,
@@ -76,42 +78,9 @@ public class UserController {
         return ResponseEntity.ok(userService.getTeacherList(page, size, text, status, roleName, sortBy, sortDir));
     }
 
-    @PostMapping("student")
-    @PreAuthorize("hasRole('MANAGER')")
-    @Operation(summary = "Create a new student", description = "Create a new user student profile(MANAGER only)")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "201", description = "Ttudent created successfully"),
-            @ApiResponse(responseCode = "400", description = "Invalid input data"),
-            @ApiResponse(responseCode = "401", description = "Unauthorized - Missing or invalid JWT token"),
-            @ApiResponse(responseCode = "403", description = "Forbidden - Only MANAGER can create users")
-    })
-    public ResponseEntity<DataResponse<?>> createStudent(@Valid @RequestBody CreateStudentRequest request) {
-        var response = userService.createStudent(request);
-        return new ResponseEntity<>(DataResponse.success(response, Const.CRUD_MESSAGE_CODE.CREATE_SUCCESSFUL), HttpStatus.CREATED);
-    }
-
-    @PostMapping
-    @PreAuthorize("hasRole('MANAGER')")
-    @Operation(summary = "Create a new user", description = "Create a new user profile (MANAGER only)")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "201", description = "User created successfully"),
-            @ApiResponse(responseCode = "400", description = "Invalid input data"),
-            @ApiResponse(responseCode = "401", description = "Unauthorized - Missing or invalid JWT token"),
-            @ApiResponse(responseCode = "403", description = "Forbidden - Only MANAGER can create users")
-    })
-    public ResponseEntity<DataResponse<?>> createUser(@Valid @RequestBody CreateUserRequest request) {
-        var response = userService.createUser(request);
-        return new ResponseEntity<>(DataResponse.success(response, Const.CRUD_MESSAGE_CODE.CREATE_SUCCESSFUL), HttpStatus.CREATED);
-    }
-
     @PreAuthorize("isAuthenticated()")
     @GetMapping("/profile")
     @Operation(summary = "Get current user profile", description = "Get logged-in user profile")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "User info retrieved successfully"),
-            @ApiResponse(responseCode = "401", description = "Missing or invalid JWT token"),
-            @ApiResponse(responseCode = "404", description = "User not found")
-    })
     public ResponseEntity<?> getCurrentUserInfo() {
         UserProfileResponse response = userService.getCurrentUserProfile();
             return ResponseEntity.ok(DataResponse.success(response, Const.USER.PROFILE_RETRIEVED));

@@ -1,6 +1,7 @@
 package com.learning.progress.service.impl;
 
 import com.learning.progress.common.Const;
+import com.learning.progress.entity.User;
 import com.learning.progress.exception.ApiException;
 import com.learning.progress.service.EmailService;
 import jakarta.mail.MessagingException;
@@ -12,6 +13,7 @@ import org.springframework.stereotype.Service;
 import org.thymeleaf.context.Context;
 import org.thymeleaf.spring6.SpringTemplateEngine;
 
+import java.util.HashMap;
 import java.util.Map;
 import java.util.regex.Pattern;
 
@@ -25,6 +27,28 @@ public class EmailServiceImpl implements EmailService {
         this.mailSender = mailSender;
         this.templateEngine = templateEngine;
     }
+
+    @Override
+    public void sendNewAccountEmail(User user, String username, String password) {
+        try {
+            String fullName = (user.getFirstName() != null ? user.getFirstName() : "")
+                    + " "
+                    + (user.getLastName() != null ? user.getLastName() : "");
+
+            Map<String, Object> templateVariables = new HashMap<>();
+            templateVariables.put("fullName", fullName.trim().isEmpty() ? "bạn" : fullName.trim());
+            templateVariables.put("username", username);
+            templateVariables.put("password", password);
+
+            String subject = "🎉 Tài khoản học tập của bạn đã được tạo";
+            String templatePath = "email/create-account-email";
+
+            this.sendEmail(user.getEmail(), subject, templatePath, templateVariables);
+        } catch (Exception e) {
+            throw new ApiException(Const.VALIDATION.EMAIL_SEND_FAILED, HttpStatus.INTERNAL_SERVER_ERROR.value());
+        }
+    }
+
 
     @Override
     public void sendForgotPasswordEmail(String toEmail, String subject, String templatePath, Map<String, Object> templateVariables) throws MessagingException {
@@ -70,4 +94,5 @@ public class EmailServiceImpl implements EmailService {
 
         mailSender.send(message);
     }
+
 }

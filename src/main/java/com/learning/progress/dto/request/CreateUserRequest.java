@@ -17,7 +17,6 @@ import java.util.Date;
 public class CreateUserRequest {
 
     @NotBlank(message = "Role name is required")
-    @Pattern(regexp = "MANAGER|TEACHER|STUDENT|TEACHING_ASSISTANT|TEST_TAKER", message = "Role must be MANAGER, TEACHER, STUDENT, TEACHING_ASSISTANT, or TEST_TAKER")
     private String roleName;
 
     @NotBlank(message = "Email is required")

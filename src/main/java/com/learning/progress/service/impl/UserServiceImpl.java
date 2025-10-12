@@ -1,6 +1,7 @@
 package com.learning.progress.service.impl;
 
 import com.learning.progress.common.Const;
+import com.learning.progress.common.Gender;
 import com.learning.progress.common.UserStatus;
 import com.learning.progress.common.RoleName;
 import com.learning.progress.dto.AccountDTO;
@@ -19,11 +20,9 @@ import com.learning.progress.mapper.UserMapper;
 import com.learning.progress.repository.RoleRepository;
 import com.learning.progress.repository.UserRepository;
 import com.learning.progress.service.AccountService;
+import com.learning.progress.service.EmailService;
 import com.learning.progress.service.UserService;
-import com.learning.progress.util.DataUtil;
-import com.learning.progress.util.JsonUtil;
-import com.learning.progress.util.JwtUtil;
-import com.learning.progress.util.ValidateUtil;
+import com.learning.progress.util.*;
 import jakarta.persistence.EntityManager;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -37,6 +36,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -60,6 +60,54 @@ public class UserServiceImpl implements UserService {
 
     @Autowired
     private EntityManager entityManager;
+
+    @Autowired
+    private EmailService emailService;
+
+    @Override
+    public AccountDTO createStudent(CreateStudentRequest request) {
+        if (!EnumUtil.isValidEnum(Gender.class, request.getGender())) {
+            throw new ApiException(Const.ERROR_MESSAGE.INVALID_GENDER_FORMAT, HttpStatus.BAD_REQUEST.value());
+        }
+        if (request.getPhoneNumber() != null && !DataUtil.isValidPhoneNumber(request.getPhoneNumber())) {
+            throw new ApiException(Const.ERROR_MESSAGE.INVALID_PHONE_NUMBER_FORMAT, HttpStatus.BAD_REQUEST.value());
+        }
+        if (!EnumUtil.isAllowedEnumValue(RoleName.class, request.getRoleName(), Set.of(RoleName.STUDENT, RoleName.TEST_TAKER))) {
+            throw new ApiException(Const.ERROR_MESSAGE.INVALID_ROLE_NAME, HttpStatus.BAD_REQUEST.value());
+        }
+        // Tìm role
+        Role role = roleRepository.findByName(RoleName.valueOf(request.getRoleName().toUpperCase()))
+                .orElseThrow(() -> new ApiException("Invalid role: " + request.getRoleName(), HttpStatus.NOT_FOUND.value()));
+
+        // Ánh xạ từ DTO sang entity
+        User user = userMapper.toUser(request);
+        user.setRole(role);
+
+        // Lưu user và flush
+        userRepository.saveAndFlush(user);
+        entityManager.clear();
+
+        // Lưu user (các trường audit được tự động gán bởi BaseEntity)
+        userRepository.save(user);
+
+        //Auto generate username and password
+        String username = DataUtil.generateUsername(request.getRoleName(), user.getId());
+        String password = DataUtil.generateRandomPassword(8);
+
+        // Auto-generate account
+        accountService.createAccountForExistUser(CreateAccountRequest
+                .builder()
+                .userId(user.getId())
+                .userName(username)
+                .password(password)
+                .build()
+        );
+
+        // Gửi email thông báo tài khoản
+        emailService.sendNewAccountEmail(user, username, password);
+
+        return userMapper.toAccountDTO(user);
+    }
 
     @Override
     public UserProfileResponse getCurrentUserProfile() {
@@ -85,16 +133,17 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional
     public CreateUserResponse createUser(CreateUserRequest request) {
+
         if (request.getGender() != null && !DataUtil.isValidGender(request.getGender())) {
-            throw new ApiException("Invalid gender format", 400);
+            throw new ApiException("Invalid gender format", HttpStatus.BAD_REQUEST.value());
         }
         if (request.getPhoneNumber() != null && !DataUtil.isValidPhoneNumber(request.getPhoneNumber())) {
-            throw new ApiException("Invalid phone number format", 400);
+            throw new ApiException("Invalid phone number format", HttpStatus.BAD_REQUEST.value());
         }
 
         // Tìm role
         Role role = roleRepository.findByName(RoleName.valueOf(request.getRoleName().toUpperCase()))
-                .orElseThrow(() -> new ApiException("Invalid role: " + request.getRoleName(), 400));
+                .orElseThrow(() -> new ApiException("Invalid role: " + request.getRoleName(), HttpStatus.BAD_REQUEST.value()));
 
         // Ánh xạ từ DTO sang entity
         User user = userMapper.toUser(request);
@@ -256,45 +305,6 @@ public class UserServiceImpl implements UserService {
                 .totalElements(userPage.getTotalElements())
                 .totalPages(userPage.getTotalPages())
                 .build();
-    }
-
-    @Override
-    public AccountDTO createStudent(CreateStudentRequest request) {
-        if (request.getGender() != null && !DataUtil.isValidGender(request.getGender())) {
-            throw new ApiException("Invalid gender format", 400);
-        }
-        if (request.getPhoneNumber() != null && !DataUtil.isValidPhoneNumber(request.getPhoneNumber())) {
-            throw new ApiException("Invalid phone number format", 400);
-        }
-
-        // Tìm role
-        Role role = roleRepository.findByName(RoleName.valueOf(request.getRoleName().toUpperCase()))
-                .orElseThrow(() -> new ApiException("Invalid role: " + request.getRoleName(), 400));
-
-        // Ánh xạ từ DTO sang entity
-        User user = userMapper.toUser(request);
-        user.setRole(role);
-
-        // Lưu user và flush
-        userRepository.saveAndFlush(user);
-        entityManager.clear();
-
-        // Lưu user (các trường audit được tự động gán bởi BaseEntity)
-        userRepository.save(user);
-
-        //Auto generate username and password
-        user.setUserName(DataUtil.generateUsername(user.getRole().getName().toString(), user.getId()));
-        user.setPassword(DataUtil.generateRandomPassword(8));
-        // Auto-generate account
-        accountService.createAccountForExistUser(CreateAccountRequest
-                .builder()
-                .userId(user.getId())
-                .userName(user.getUserName())
-                .password(user.getPassword())
-                .build()
-        );
-
-        return userMapper.toAccountDTO(user);
     }
 
     private UserProfileResponse mapToUserProfileResponse(User user) {
