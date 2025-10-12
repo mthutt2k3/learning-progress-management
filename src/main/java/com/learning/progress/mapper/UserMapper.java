@@ -3,7 +3,7 @@ package com.learning.progress.mapper;
 import com.learning.progress.dto.AccountDTO;
 import com.learning.progress.dto.response.StudentProfileResponse;
 import com.learning.progress.dto.request.CreateUserRequest;
-import com.learning.progress.dto.request.NewAccountRequest;
+import com.learning.progress.dto.request.CreateNewAccountRequest;
 import com.learning.progress.dto.response.CreateAccountResponse;
 import com.learning.progress.dto.response.CreateUserResponse;
 import com.learning.progress.dto.response.UserProfileResponse;
@@ -25,13 +25,15 @@ public interface UserMapper {
 
     User toUser(CreateUserRequest request);
 
-    User toUser(NewAccountRequest request);
+    User toUser(CreateNewAccountRequest request);
 
     @Mapping(source = "role.name", target = "roleName")
     CreateUserResponse toCreateUserResponse(User user);
 
     CreateAccountResponse toCreateAccountResponse(User user);
 
+    @Mapping(source = "theme", target = "theme")
+    @Mapping(source = "language", target = "language")
     UserProfileResponse toUserProfileResponse(User user);
 
     @Mapping(target = "roleName", source = "role.name")

@@ -1,5 +1,7 @@
 package com.learning.progress.entity;
 
+import com.learning.progress.common.Language;
+import com.learning.progress.common.Theme;
 import com.learning.progress.common.UserStatus;
 import jakarta.persistence.*;
 import lombok.*;
@@ -56,12 +58,21 @@ public class User extends BaseEntity{
     @Column(name = "status", nullable = false)
     private UserStatus status = UserStatus.ACTIVE;
 
+    @Column(name = "must_update_profile", nullable = false)
+    private boolean mustUpdateProfile = true;
+
     @Column(name = "must_change_pw", nullable = false)
     private boolean mustChangePassword = false;
 
     @Column(name = "request_reset_pw_by_tc", nullable = false)
     private boolean requestResetPasswordByTeacher = false;
 
-    @Column(name = "additional_data", columnDefinition = "jsonb")
+    @Column(name = "additional_data")
     private String additionalData;
+
+    @Enumerated(EnumType.STRING)
+    private Theme theme = Theme.LIGHT;
+
+    @Enumerated(EnumType.STRING)
+    private Language language = Language.VI;
 }

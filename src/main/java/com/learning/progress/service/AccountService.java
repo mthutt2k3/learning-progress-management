@@ -1,10 +1,9 @@
 package com.learning.progress.service;
 
-import com.learning.progress.common.RoleName;
 import com.learning.progress.common.UserStatus;
 import com.learning.progress.dto.AccountDTO;
 import com.learning.progress.dto.request.CreateAccountRequest;
-import com.learning.progress.dto.request.NewAccountRequest;
+import com.learning.progress.dto.request.CreateNewAccountRequest;
 import com.learning.progress.dto.response.CreateAccountResponse;
 import com.learning.progress.dto.response.DataResponse;
 
@@ -15,11 +14,11 @@ public interface AccountService {
 
     AccountDTO getAccountByUserId(Long userId);
 
-    AccountDTO createNewAccount(NewAccountRequest request);
+    AccountDTO createNewAccount(CreateNewAccountRequest request);
 
     CreateAccountResponse createAccountForExistUser(CreateAccountRequest createAccountRequest);
 
-    AccountDTO updateAccount(Long id, RoleName updateAccountRequest);
+    AccountDTO updateAccount(Long id, CreateNewAccountRequest updateAccountRequest);
 
     AccountDTO updateStatusAccount(Long id, UserStatus userStatus);
 }

@@ -40,7 +40,6 @@ public class AuthController {
             return ResponseEntity.ok(
                     DataResponse.success(response, Const.AUTH.LOGIN_SUCCESS)
             );
-
     }
 
     @PreAuthorize("isAuthenticated()")
@@ -83,8 +82,8 @@ public class AuthController {
             @ApiResponse(responseCode = "500", description = "Unexpected server error")
     })
     public ResponseEntity<?> changePassword(@RequestBody ChangePasswordRequest request) {
-        authService.changePassword(request);
-        return ResponseEntity.ok(DataResponse.success(Const.AUTH.PASSWORD_CHANGED, Const.AUTH.PASSWORD_CHANGED));
+        var response = authService.changePassword(request);
+        return ResponseEntity.ok(DataResponse.success(response, Const.AUTH.PASSWORD_CHANGED));
     }
 
     @PreAuthorize("hasRole('TEACHER')")

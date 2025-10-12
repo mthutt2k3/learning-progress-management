@@ -4,8 +4,7 @@ import com.learning.progress.common.Const;
 import com.learning.progress.common.RoleName;
 import com.learning.progress.common.UserStatus;
 import com.learning.progress.dto.AccountDTO;
-import com.learning.progress.dto.request.NewAccountRequest;
-import com.learning.progress.dto.response.CreateAccountResponse;
+import com.learning.progress.dto.request.CreateNewAccountRequest;
 import com.learning.progress.dto.response.DataResponse;
 import com.learning.progress.service.AccountService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -72,7 +71,7 @@ public class AccountController {
             @ApiResponse(responseCode = "403", description = "Forbidden - Only ADMIN can create accounts"),
             @ApiResponse(responseCode = "404", description = "Role not found")
     })
-    public ResponseEntity<DataResponse<AccountDTO>> createNewAccount(@Valid @RequestBody NewAccountRequest request) {
+    public ResponseEntity<DataResponse<AccountDTO>> createNewAccount(@Valid @RequestBody CreateNewAccountRequest request) {
         AccountDTO response = accountService.createNewAccount(request);
         return new ResponseEntity<>(DataResponse.success(response, Const.CRUD_MESSAGE_CODE.CREATE_SUCCESSFUL), HttpStatus.CREATED);
     }
@@ -80,16 +79,9 @@ public class AccountController {
 
     @PutMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
-    @Operation(summary = "Update account status", description = "Update status of an account (ADMIN only)")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Account status updated successfully"),
-            @ApiResponse(responseCode = "400", description = "Invalid status"),
-            @ApiResponse(responseCode = "401", description = "Unauthorized - Missing or invalid JWT token"),
-            @ApiResponse(responseCode = "403", description = "Forbidden - Only ADMIN can update accounts"),
-            @ApiResponse(responseCode = "404", description = "Account not found")
-    })
-    public ResponseEntity<DataResponse<?>> updateAccount(@PathVariable Long id, @Valid @RequestParam RoleName roleName) {
-        return new ResponseEntity<>(DataResponse.success(accountService.updateAccount(id, roleName), Const.CRUD_MESSAGE_CODE.UPDATE_SUCCESSFUL), HttpStatus.OK);
+    @Operation(summary = "Update account", description = "Update account (ADMIN only)")
+    public ResponseEntity<DataResponse<?>> updateAccount(@PathVariable Long id, @Valid @RequestBody CreateNewAccountRequest request) {
+        return new ResponseEntity<>(DataResponse.success(accountService.updateAccount(id, request), Const.CRUD_MESSAGE_CODE.UPDATE_SUCCESSFUL), HttpStatus.OK);
     }
 
     @PutMapping("/{id}/status")
