@@ -1,7 +1,9 @@
 package com.learning.progress.controller;
 import com.learning.progress.common.Const;
 import com.learning.progress.dto.request.ChangePasswordRequest;
+import com.learning.progress.dto.request.ConfirmResetPasswordRequest;
 import com.learning.progress.dto.request.LoginRequest;
+import com.learning.progress.dto.request.ResetPasswordRequest;
 import com.learning.progress.dto.response.DataResponse;
 import com.learning.progress.dto.response.ResetPasswordByTeacherResponse;
 import com.learning.progress.service.AuthService;
@@ -50,9 +52,16 @@ public class AuthController {
 
     @PostMapping("/reset-password")
     @Operation(summary = "reset password by sent default pass word to email", description = "reset password by sent default pass word to ")
-    public ResponseEntity<?> resetPassword(@RequestParam String userName) {
-        String response = authService.resetPasswordByEmail(userName);
+    public ResponseEntity<?> resetPassword(@RequestBody ResetPasswordRequest request) {
+        String response = authService.resetPasswordByEmail(request);
         return ResponseEntity.ok(DataResponse.success(response, Const.AUTH.PASSWORD_RESET_EMAIL_SENT));
+    }
+
+    @PostMapping("/confirm-reset-password")
+    @Operation(summary = "Xác nhận và đặt lại mật khẩu", description = "Xác nhận token và cập nhật mật khẩu mới")
+    public ResponseEntity<?> confirmResetPassword(@RequestBody ConfirmResetPasswordRequest request) {
+        String response = authService.confirmResetPassword(request);
+        return ResponseEntity.ok(DataResponse.success(response, "Đặt lại mật khẩu thành công"));
     }
 
     @PreAuthorize("isAuthenticated()")
@@ -66,7 +75,7 @@ public class AuthController {
         return ResponseEntity.ok(DataResponse.success(response, Const.AUTH.PASSWORD_CHANGED));
     }
 
-    @PreAuthorize("hasRole('TEACHER')")
+    @PreAuthorize("hasRole('MANAGER') or hasRole('TEACHER')")
     @PostMapping("/reset-password-by-teacher")
     @Operation(
             summary = "Reset student password by teacher",

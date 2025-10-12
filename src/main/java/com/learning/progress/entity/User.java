@@ -5,10 +5,10 @@ import com.learning.progress.common.Theme;
 import com.learning.progress.common.UserStatus;
 import jakarta.persistence.*;
 import lombok.*;
-import lombok.experimental.SuperBuilder;
 import org.hibernate.annotations.OnDelete;
 import org.hibernate.annotations.OnDeleteAction;
 
+import java.time.OffsetDateTime;
 import java.util.Date;
 
 @Builder
@@ -75,4 +75,10 @@ public class User extends BaseEntity{
 
     @Enumerated(EnumType.STRING)
     private Language language = Language.VI;
+
+    @Column(name = "reset_password_token")
+    private String resetPasswordToken;
+
+    @Column(name = "reset_password_expires")
+    private OffsetDateTime resetPasswordExpires;
 }

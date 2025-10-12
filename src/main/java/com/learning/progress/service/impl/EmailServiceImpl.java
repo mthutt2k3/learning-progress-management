@@ -1,6 +1,7 @@
 package com.learning.progress.service.impl;
 
 import com.learning.progress.common.Const;
+import com.learning.progress.dto.request.ResetPasswordRequest;
 import com.learning.progress.entity.User;
 import com.learning.progress.exception.ApiException;
 import com.learning.progress.service.EmailService;
@@ -51,6 +52,28 @@ public class EmailServiceImpl implements EmailService {
 
 
     @Override
+    public void sendForgotPasswordEmail(User user, ResetPasswordRequest request, String resetToken) {
+        try {
+            String fullName = (user.getFirstName() != null ? user.getFirstName() : "")
+                    + " "
+                    + (user.getLastName() != null ? user.getLastName() : "");
+            String username = user.getUserName() != null ? user.getUserName() : "(chưa có)";
+            Map<String, Object> templateVariables = new HashMap<>();
+            templateVariables.put("fullName", fullName.trim().isEmpty() ? "bạn" : fullName.trim());
+            templateVariables.put("username", username);
+            // Tạo link reset password từ domain và path
+            String resetLink = request.getDomain() + (request.getPath().startsWith("/") ? request.getPath() : "/" + request.getPath()) + "?token=" + resetToken;
+            templateVariables.put("resetLink", resetLink);
+
+            String subject = "🔐 Yêu cầu đặt lại mật khẩu tài khoản học tập";
+            String templatePath = "email/reset-password-email";
+
+            this.sendEmail(user.getEmail(), subject, templatePath, templateVariables);
+        } catch (Exception e) {
+            throw new ApiException(Const.VALIDATION.EMAIL_SEND_FAILED, HttpStatus.INTERNAL_SERVER_ERROR.value());
+        }
+    }
+
     public void sendEmail(String toEmail, String subject, String templatePath, Map<String, Object> templateVariables) throws MessagingException {
         // Validate inputs
         if (toEmail == null || toEmail.trim().isEmpty()) {
