@@ -1,15 +1,12 @@
 package com.learning.progress.controller;
 
 import com.learning.progress.common.Const;
-import com.learning.progress.common.RoleName;
 import com.learning.progress.common.UserStatus;
 import com.learning.progress.dto.AccountDTO;
 import com.learning.progress.dto.request.CreateNewAccountRequest;
 import com.learning.progress.dto.response.DataResponse;
 import com.learning.progress.service.AccountService;
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -30,12 +27,6 @@ public class AccountController {
     @GetMapping
     @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "List all accounts", description = "Retrieve a paginated list of all accounts with optional filtering by text (email or name), statuses, roles, and sorting (ADMIN only)")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Accounts retrieved successfully"),
-            @ApiResponse(responseCode = "400", description = "Invalid filter or sort parameters"),
-            @ApiResponse(responseCode = "401", description = "Unauthorized - Missing or invalid JWT token"),
-            @ApiResponse(responseCode = "403", description = "Forbidden - Only ADMIN can access")
-    })
     public ResponseEntity<DataResponse<List<AccountDTO>>> listAccounts(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
@@ -50,12 +41,6 @@ public class AccountController {
     @GetMapping("/{userId}")
     @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Get account by user ID", description = "Retrieve account details for a user (ADMIN only)")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Account retrieved successfully"),
-            @ApiResponse(responseCode = "401", description = "Unauthorized - Missing or invalid JWT token"),
-            @ApiResponse(responseCode = "403", description = "Forbidden - Only ADMIN can access"),
-            @ApiResponse(responseCode = "404", description = "Account not found")
-    })
     public ResponseEntity<DataResponse<AccountDTO>> getAccountByUserId(@PathVariable Long userId) {
         AccountDTO response = accountService.getAccountByUserId(userId);
         return new ResponseEntity<>(DataResponse.success(response, "Account retrieved successfully"), HttpStatus.OK);
@@ -64,13 +49,6 @@ public class AccountController {
     @PostMapping("")
     @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Create a new account from scratch", description = "Create a new account without an existing user (ADMIN only)")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "201", description = "Account created successfully"),
-            @ApiResponse(responseCode = "400", description = "Invalid input data or duplicate username/email"),
-            @ApiResponse(responseCode = "401", description = "Unauthorized - Missing or invalid JWT token"),
-            @ApiResponse(responseCode = "403", description = "Forbidden - Only ADMIN can create accounts"),
-            @ApiResponse(responseCode = "404", description = "Role not found")
-    })
     public ResponseEntity<DataResponse<AccountDTO>> createNewAccount(@Valid @RequestBody CreateNewAccountRequest request) {
         AccountDTO response = accountService.createNewAccount(request);
         return new ResponseEntity<>(DataResponse.success(response, Const.CRUD_MESSAGE_CODE.CREATE_SUCCESSFUL), HttpStatus.CREATED);
@@ -87,13 +65,6 @@ public class AccountController {
     @PutMapping("/{id}/status")
     @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Update account status", description = "Update status of an account (ADMIN only)")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Account status updated successfully"),
-            @ApiResponse(responseCode = "400", description = "Invalid status"),
-            @ApiResponse(responseCode = "401", description = "Unauthorized - Missing or invalid JWT token"),
-            @ApiResponse(responseCode = "403", description = "Forbidden - Only ADMIN can update accounts"),
-            @ApiResponse(responseCode = "404", description = "Account not found")
-    })
     public ResponseEntity<DataResponse<?>> updateStatusAccount(@PathVariable Long id, @Valid @RequestParam UserStatus userStatus) {
         return new ResponseEntity<>(DataResponse.success(accountService.updateStatusAccount(id, userStatus), Const.CRUD_MESSAGE_CODE.UPDATE_SUCCESSFUL), HttpStatus.OK);
     }
