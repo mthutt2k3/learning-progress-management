@@ -1,14 +1,12 @@
 package com.learning.progress.dto.request;
 
-import com.learning.progress.common.RoleName;
-import com.learning.progress.common.UserStatus;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
 @Data
-public class NewAccountRequest {
+public class CreateNewAccountRequest {
     @NotBlank(message = "First name cannot be blank")
     private String firstName;
 
