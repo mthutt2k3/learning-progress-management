@@ -8,10 +8,9 @@ import com.learning.progress.dto.response.LevelDetailsResponse;
 import com.learning.progress.dto.response.LevelListResponse;
 import com.learning.progress.service.LevelService;
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -24,19 +23,12 @@ import java.util.List;
 @Tag(name = "Levels", description = "Level Management APIs")
 public class LevelController {
 
-    private final LevelService levelService;
-
-    public LevelController(LevelService levelService) {
-        this.levelService = levelService;
-    }
+    @Autowired
+    private LevelService levelService;
 
     @PreAuthorize("hasRole('MANAGER')")
     @GetMapping
     @Operation(summary = "View Level List", description = "Retrieve a list of all levels")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Level list retrieved successfully"),
-            @ApiResponse(responseCode = "500", description = "Unexpected server error")
-    })
     public ResponseEntity<DataResponse<List<LevelListResponse>>> viewLevelList(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
@@ -53,11 +45,6 @@ public class LevelController {
     @PreAuthorize("hasRole('MANAGER')")
     @GetMapping("/{id}")
     @Operation(summary = "View Level Details", description = "Retrieve details of a specific level by ID")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Level details retrieved successfully"),
-            @ApiResponse(responseCode = "404", description = "Level not found"),
-            @ApiResponse(responseCode = "500", description = "Unexpected server error")
-    })
     public ResponseEntity<?> viewLevelDetails(@PathVariable Long id) {
         LevelDetailsResponse response = levelService.getLevelDetails(id);
         return ResponseEntity.ok(DataResponse.success(response, Const.LEVEL.DETAILS_RETRIEVED));
@@ -66,12 +53,6 @@ public class LevelController {
     @PreAuthorize("hasRole('MANAGER')")
     @PostMapping
     @Operation(summary = "Create Level", description = "Create a new level")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Level created successfully"),
-            @ApiResponse(responseCode = "400", description = "Invalid input data"),
-            @ApiResponse(responseCode = "409", description = "Level name or order number already exists"),
-            @ApiResponse(responseCode = "500", description = "Unexpected server error")
-    })
     public ResponseEntity<?> createLevel(@Valid @RequestBody CreateLevelRequest request) {
         levelService.createLevel(request);
         return ResponseEntity.ok(DataResponse.success(Const.LEVEL.LEVEL_CREATED, Const.LEVEL.LEVEL_CREATED));
@@ -80,13 +61,6 @@ public class LevelController {
     @PreAuthorize("hasRole('MANAGER')")
     @PutMapping("/{id}")
     @Operation(summary = "Update Level", description = "Update an existing level by ID")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Level updated successfully"),
-            @ApiResponse(responseCode = "400", description = "Invalid input data"),
-            @ApiResponse(responseCode = "404", description = "Level not found"),
-            @ApiResponse(responseCode = "409", description = "Level name or order number already exists"),
-            @ApiResponse(responseCode = "500", description = "Unexpected server error")
-    })
     public ResponseEntity<?> updateLevel(@PathVariable Long id, @Valid @RequestBody UpdateLevelRequest request) {
         levelService.updateLevel(id, request);
         return ResponseEntity.ok(DataResponse.success(Const.LEVEL.LEVEL_UPDATED, Const.LEVEL.LEVEL_UPDATED));
@@ -95,11 +69,6 @@ public class LevelController {
     @PreAuthorize("hasRole('MANAGER')")
     @PatchMapping("/{id}/activate-deactivate")
     @Operation(summary = "Activate/Deactivate Level", description = "Toggle the active status of a level by ID")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Level status updated successfully"),
-            @ApiResponse(responseCode = "404", description = "Level not found"),
-            @ApiResponse(responseCode = "500", description = "Unexpected server error")
-    })
     public ResponseEntity<?> activateDeactivateLevel(@PathVariable Long id) {
         levelService.toggleLevelStatus(id);
         return ResponseEntity.ok(DataResponse.success(Const.LEVEL.STATUS_UPDATED, Const.LEVEL.STATUS_UPDATED));

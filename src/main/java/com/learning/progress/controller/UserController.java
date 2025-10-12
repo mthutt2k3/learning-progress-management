@@ -8,8 +8,6 @@ import com.learning.progress.dto.response.UserProfileResponse;
 import com.learning.progress.dto.request.CreateUserRequest;
 import com.learning.progress.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.annotations.Parameter;
 import jakarta.validation.Valid;
