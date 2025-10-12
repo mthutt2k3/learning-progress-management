@@ -15,6 +15,7 @@ import com.learning.progress.mapper.AuthMapper;
 import com.learning.progress.repository.RefreshTokenRepository;
 import com.learning.progress.repository.UserRepository;
 import com.learning.progress.service.AuthService;
+import com.learning.progress.service.EmailService;
 import com.learning.progress.service.TokenService;
 import com.learning.progress.util.DataUtil;
 import com.learning.progress.util.JwtUtil;
@@ -33,6 +34,7 @@ import org.thymeleaf.context.Context;
 import org.thymeleaf.spring6.SpringTemplateEngine;
 
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.regex.Pattern;
 
@@ -62,6 +64,9 @@ public class AuthServiceImpl implements AuthService {
 
     @Autowired
     private SpringTemplateEngine templateEngine;
+
+    @Autowired
+    private EmailService emailService;
 
     @Override
     public LoginResponse login(LoginRequest loginRequest) {
@@ -121,8 +126,9 @@ public class AuthServiceImpl implements AuthService {
 
         String accessToken = jwtUtil.generateToken(user.getUserName(), user.getRole().getName().toString());
         RefreshToken refreshToken = tokenService.createRefreshToken(user);
+        boolean mustChangePassword = user.isMustChangePassword();
 
-        return authMapper.toLoginResponse(user, refreshToken, accessToken);
+        return authMapper.toLoginResponse(user, refreshToken, accessToken, mustChangePassword);
     }
 
     @Override
@@ -148,52 +154,30 @@ public class AuthServiceImpl implements AuthService {
         String newPassword = DataUtil.generateRandomPassword(8);
 
         user.setPassword(passwordEncoder.encode(newPassword));
+        user.setMustChangePassword(true);
         userRepository.save(user);
 
-        try {
-            sendDefaultPassword(user.getEmail(), user, newPassword);
-            return user.getEmail();
-        } catch (Exception e) {
-            throw new ApiException(Const.VALIDATION.EMAIL_SEND_FAILED, HttpStatus.INTERNAL_SERVER_ERROR.value());
-        }
-    }
-
-    private void sendDefaultPassword(String toEmail, User user, String defaultPassword) throws MessagingException {
-        // Validate inputs with details
-        if (toEmail == null || toEmail.trim().isEmpty()) {
-            throw new ApiException(Const.VALIDATION.EMAIL_REQUIRED, HttpStatus.BAD_REQUEST.value());
-        }
-        // Added: Email format check
-        if (!Pattern.matches(Const.VALIDATE_INPUT.regexEmail, toEmail)) {
-            throw new ApiException(Const.USER.EMAIL_INVALID, HttpStatus.BAD_REQUEST.value());
-        }
-        if (defaultPassword == null || defaultPassword.trim().isEmpty()) {
-            throw new ApiException(Const.VALIDATION.PASSWORD_REQUIRED, HttpStatus.BAD_REQUEST.value());
-        }
-
+        // Prepare template variables
         String fullName = (user.getFirstName() != null ? user.getFirstName() : "")
                 + " "
                 + (user.getLastName() != null ? user.getLastName() : "");
         String username = user.getUserName() != null ? user.getUserName() : "(chưa có)";
+        Map<String, Object> templateVariables = new HashMap<>();
+        templateVariables.put("fullName", fullName.trim().isEmpty() ? "bạn" : fullName.trim());
+        templateVariables.put("username", username);
+        templateVariables.put("defaultPassword", newPassword);
+
         String subject = "🔐 Cấp lại mật khẩu tài khoản học tập";
+        String templatePath = "email/reset-password-email";
 
-        // Tạo context cho Thymeleaf
-        Context context = new Context();
-        context.setVariable("fullName", fullName.trim().isEmpty() ? "bạn" : fullName);
-        context.setVariable("username", username);
-        context.setVariable("defaultPassword", defaultPassword);
-
-        // Render nội dung email từ template
-        String emailContent = templateEngine.process("email/reset-password-email", context);
-
-        // Gửi email
-        MimeMessage message = mailSender.createMimeMessage();
-        MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
-        helper.setTo(toEmail);
-        helper.setSubject(subject);
-        helper.setText(emailContent, true); // true: hỗ trợ HTML
-
-        mailSender.send(message);
+        try {
+            emailService.sendEmail(user.getEmail(), subject, templatePath, templateVariables);
+            String email = user.getEmail();
+            int atIndex = email.indexOf('@');
+            return email.substring(0, 2) + "****" + email.substring(atIndex - 2);
+        } catch (Exception e) {
+            throw new ApiException(Const.VALIDATION.EMAIL_SEND_FAILED, HttpStatus.INTERNAL_SERVER_ERROR.value());
+        }
     }
 
     public void changePassword(ChangePasswordRequest request) {
@@ -246,6 +230,7 @@ public class AuthServiceImpl implements AuthService {
         }
 
         user.setPassword(passwordEncoder.encode(request.getNewPassword()));
+        user.setMustChangePassword(false);
         userRepository.save(user);
     }
 
@@ -271,6 +256,7 @@ public class AuthServiceImpl implements AuthService {
         String newPassword = DataUtil.generateRandomPassword(8);
 
         user.setPassword(passwordEncoder.encode(newPassword));
+        user.setMustChangePassword(true);
         userRepository.save(user);
 
         return authMapper.toResetPasswordByTeacherResponse(user, newPassword);

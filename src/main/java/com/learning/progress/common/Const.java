@@ -64,6 +64,7 @@ public class Const {
         public static final String USER_INACTIVE = "User account is not active";
         public static final String EMAIL_NOT_FOUND = "Email not found in the system";
         public static final String EMAIL_INVALID = "Invalid email format";
+
     }
 
     public static class VALIDATION {
@@ -85,6 +86,9 @@ public class Const {
         public static final String NEW_PASSWORD_SAME_AS_OLD = "New password must be different from the old password";
         public static final String REFRESH_TOKEN_REQUIRED = "Refresh token is required";
         public static final String EMAIL_SEND_FAILED = "Failed to send reset password email. Please try again";
+        public static final String SUBJECT_REQUIRED = "Email subject is required";
+        public static final String TEMPLATE_PATH_REQUIRED = "Template path is required";
+        public static final String TEMPLATE_VARIABLES_NULL = "Template variables cannot be null";
     }
 
     public static class SECURITY {
