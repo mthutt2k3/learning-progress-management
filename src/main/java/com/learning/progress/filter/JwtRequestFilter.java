@@ -2,11 +2,13 @@ package com.learning.progress.filter;
 
 import com.learning.progress.service.CustomUserDetailsService;
 import com.learning.progress.util.JwtUtil;
+import io.jsonwebtoken.JwtException;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -55,9 +57,18 @@ public class JwtRequestFilter extends OncePerRequestFilter {
                 }
             }
             chain.doFilter(request, response);
+        } catch (JwtException e) {
+            log.error("JWT validation failed: {}", e.getMessage());
+            response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Invalid or expired token");
+            return;
+        } catch (UsernameNotFoundException e) {
+            log.error("User not found: {}", e.getMessage());
+            response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "User not found");
+            return;
         } catch (Exception e) {
-            log.error("Error in JwtRequestFilter: ", e);
-            response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Invalid token or user");
+            log.error("Unexpected error in JwtRequestFilter: ", e);
+            response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Authentication error");
+            return;
         }
     }
 }

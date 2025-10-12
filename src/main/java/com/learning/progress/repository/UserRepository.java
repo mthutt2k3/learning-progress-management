@@ -18,6 +18,23 @@ public interface UserRepository extends JpaRepository<User, Long> {
     Optional<User> findByUserName(String username);
     Optional<User> findByEmail(String email);
 
+    @Query("""
+    SELECT u FROM User u
+    WHERE u.role.name IN :roles
+      AND (:statuses IS NULL OR u.status IN :statuses)
+      AND (:text IS NULL OR 
+           (LOWER(u.firstName) LIKE LOWER(CONCAT('%', CAST(:text AS string), '%'))
+         OR LOWER(u.lastName) LIKE LOWER(CONCAT('%', CAST(:text AS string), '%'))
+         OR LOWER(u.email) LIKE LOWER(CONCAT('%', CAST(:text AS string), '%'))))
+""")
+    Page<User> findByRoleNameInAndStatusInAndSearchText(
+            @Param("roles") List<RoleName> roles,
+            @Param("statuses") List<UserStatus> statuses,
+            @Param("text") String text,
+            Pageable pageable);
+
+
+
     @Query("SELECT CASE WHEN COUNT(u) > 0 THEN true ELSE false END FROM User u WHERE LOWER(u.userName) = LOWER(:userName)")
     boolean existsByUserName(String userName);
 
