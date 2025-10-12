@@ -5,7 +5,7 @@ import com.learning.progress.common.RoleName;
 import com.learning.progress.common.UserStatus;
 import com.learning.progress.dto.AccountDTO;
 import com.learning.progress.dto.request.CreateAccountRequest;
-import com.learning.progress.dto.request.NewAccountRequest;
+import com.learning.progress.dto.request.CreateNewAccountRequest;
 import com.learning.progress.dto.response.CreateAccountResponse;
 import com.learning.progress.dto.response.DataResponse;
 import com.learning.progress.entity.Role;
@@ -164,7 +164,7 @@ public class AccountServiceImpl implements AccountService {
 
     @Override
     @Transactional
-    public AccountDTO createNewAccount(NewAccountRequest request) {
+    public AccountDTO createNewAccount(CreateNewAccountRequest request) {
         // Validate formats email
         if (!request.getEmail().matches(Const.VALIDATE_INPUT.regexEmail)) {
             throw new ApiException(Const.USER.EMAIL_INVALID, 400);
@@ -249,18 +249,41 @@ public class AccountServiceImpl implements AccountService {
     }
 
     @Override
-    public AccountDTO updateAccount(Long id, RoleName roleName) {
+    public AccountDTO updateAccount(Long id, CreateNewAccountRequest request) {
+        // Tìm user theo id
         User user = userRepository.findById(id)
-                .orElseThrow(() -> new ApiException(Const.ERROR_MESSAGE.ACCOUNT_NOT_FOUND, HttpStatus.BAD_REQUEST.value()));
+                .orElseThrow(() ->
+                        new ApiException(Const.ERROR_MESSAGE.ACCOUNT_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
-        // Tìm role
-        Role role = roleRepository.findByName(roleName)
-                .orElseThrow(() -> new ApiException("Invalid role: " + roleName.name(), 400));
+        // Validate email format
+        if (!request.getEmail().matches(Const.VALIDATE_INPUT.regexEmail)) {
+            throw new ApiException(Const.USER.EMAIL_INVALID, HttpStatus.BAD_REQUEST.value());
+        }
 
+        // Validate role hợp lệ
+        if (!EnumUtil.isAllowedEnumValue(
+                RoleName.class,
+                request.getRoleName(),
+                Set.of(RoleName.ADMIN, RoleName.MANAGER)
+        )) {
+            throw new ApiException(Const.ERROR_MESSAGE.INVALID_ROLE_NAME, HttpStatus.BAD_REQUEST.value());
+        }
+
+        // Tìm role theo tên
+        Role role = roleRepository.findByName(RoleName.valueOf(request.getRoleName().toUpperCase()))
+                .orElseThrow(() ->
+                        new ApiException("Invalid role: " + request.getRoleName(), HttpStatus.NOT_FOUND.value()));
+
+        // Cập nhật field
+        user.setFirstName(request.getFirstName());
+        user.setLastName(request.getLastName());
+        user.setEmail(request.getEmail());
         user.setRole(role);
 
+        // Lưu lại
         userRepository.save(user);
 
+        // Trả về DTO
         return userMapper.toAccountDTO(user);
     }
 
