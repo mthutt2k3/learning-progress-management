@@ -3,6 +3,7 @@ import com.learning.progress.common.Const;
 import com.learning.progress.dto.request.ChangePasswordRequest;
 import com.learning.progress.dto.request.ConfirmResetPasswordRequest;
 import com.learning.progress.dto.request.LoginRequest;
+import com.learning.progress.dto.request.ResetPasswordRequest;
 import com.learning.progress.dto.response.DataResponse;
 import com.learning.progress.dto.response.ResetPasswordByTeacherResponse;
 import com.learning.progress.service.AuthService;

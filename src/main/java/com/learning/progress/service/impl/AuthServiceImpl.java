@@ -164,23 +164,10 @@ public class AuthServiceImpl implements AuthService {
         user.setMustChangePassword(true);
         userRepository.save(user);
 
-        // Chuẩn bị biến cho template email
-        String fullName = (user.getFirstName() != null ? user.getFirstName() : "")
-                + " "
-                + (user.getLastName() != null ? user.getLastName() : "");
-        String username = user.getUserName() != null ? user.getUserName() : "(chưa có)";
-        Map<String, Object> templateVariables = new HashMap<>();
-        templateVariables.put("fullName", fullName.trim().isEmpty() ? "bạn" : fullName.trim());
-        templateVariables.put("username", username);
-        // Tạo link reset password từ domain và path
-        String resetLink = request.getDomain() + (request.getPath().startsWith("/") ? request.getPath() : "/" + request.getPath()) + "?token=" + resetToken;
-        templateVariables.put("resetLink", resetLink);
 
-        String subject = "🔐 Yêu cầu đặt lại mật khẩu tài khoản học tập";
-        String templatePath = "email/reset-password-email";
 
         try {
-            emailService.sendForgotPasswordEmail(user.getEmail(), subject, templatePath, templateVariables);
+            emailService.sendForgotPasswordEmail(user, request, resetToken);
             String email = user.getEmail();
             int atIndex = email.indexOf('@');
             return email.substring(0, 2) + "****" + email.substring(atIndex - 2);
