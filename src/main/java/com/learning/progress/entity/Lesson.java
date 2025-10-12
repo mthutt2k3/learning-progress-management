@@ -28,7 +28,7 @@ public class Lesson extends BaseEntity{
     @Column(name = "lesson_name", nullable = false, length = 100)
     private String lessonName;
 
-    @Column(name = "common", length = Integer.MAX_VALUE)
+    @Column(name = "content", length = Integer.MAX_VALUE)
     private String content;
 
     @Column(name = "order_number", nullable = false)
