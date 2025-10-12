@@ -6,6 +6,7 @@ import com.learning.progress.dto.request.CreateAccountRequest;
 import com.learning.progress.dto.request.CreateNewAccountRequest;
 import com.learning.progress.dto.response.CreateAccountResponse;
 import com.learning.progress.dto.response.DataResponse;
+import com.learning.progress.entity.User;
 
 import java.util.List;
 
@@ -16,7 +17,7 @@ public interface AccountService {
 
     AccountDTO createNewAccount(CreateNewAccountRequest request);
 
-    CreateAccountResponse createAccountForExistUser(CreateAccountRequest createAccountRequest);
+    User createAccountForExistUser(User user, String username, String password);
 
     AccountDTO updateAccount(Long id, CreateNewAccountRequest updateAccountRequest);
 

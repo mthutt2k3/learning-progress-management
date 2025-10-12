@@ -2,6 +2,8 @@ package com.learning.progress.repository;
 
 import com.learning.progress.common.RoleName;
 import com.learning.progress.common.UserStatus;
+import com.learning.progress.dto.ClassInfo;
+import com.learning.progress.dto.LevelInfo;
 import com.learning.progress.entity.User;
 import org.springframework.data.domain.Page;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -59,4 +61,13 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     @Query("SELECT u FROM User u WHERE (LOWER(u.email) LIKE LOWER(CONCAT('%', :text, '%')) OR LOWER(CONCAT(u.firstName, ' ', u.lastName)) LIKE LOWER(CONCAT('%', :text, '%'))) AND u.status IN :statuses AND u.role.name IN :roleNames")
     Page<User> findByTextAndStatusInAndRoleNameIn(@Param("text") String text, @Param("statuses") List<UserStatus> statuses, @Param("roleNames") List<RoleName> roleNames, Pageable pageable);
+
+    @Query("SELECT NEW com.learning.progress.dto.LevelInfo(sl.level.id, sl.level.levelName) " +
+            "FROM StudentLevel sl WHERE sl.user.id = :userId AND sl.status = 'ACTIVE'")
+    Optional<LevelInfo> findActiveLevelInfoByUserId(Long userId);
+
+    @Query("SELECT NEW com.learning.progress.dto.ClassInfo(cs.classField.id, cs.classField.className, null) " +
+            "FROM ClassStudent cs WHERE cs.user.id = :userId AND cs.status = 'ACTIVE' AND cs.classField.isActive = true")
+    Optional<ClassInfo> findActiveClassInfoByUserId(Long userId);
+
 }

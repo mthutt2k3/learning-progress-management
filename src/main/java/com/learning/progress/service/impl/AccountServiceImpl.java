@@ -6,7 +6,6 @@ import com.learning.progress.common.UserStatus;
 import com.learning.progress.dto.AccountDTO;
 import com.learning.progress.dto.request.CreateAccountRequest;
 import com.learning.progress.dto.request.CreateNewAccountRequest;
-import com.learning.progress.dto.response.CreateAccountResponse;
 import com.learning.progress.dto.response.DataResponse;
 import com.learning.progress.entity.Role;
 import com.learning.progress.entity.User;
@@ -29,9 +28,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -191,41 +188,32 @@ public class AccountServiceImpl implements AccountService {
         //Auto generate username and password
         String username = DataUtil.generateUsername(request.getRoleName().toString(), newUser.getId());
         String password = DataUtil.generateRandomPassword(8);
-        CreateAccountResponse createAccountResponse = this.createAccountForExistUser(CreateAccountRequest
-                .builder()
-                .userId(newUser.getId())
-                .userName(username)
-                .password(password)
-                .build()
-        );
+        this.createAccountForExistUser(newUser, username, password);
 
         // Gửi email thông báo tài khoản
         emailService.sendNewAccountEmail(newUser, username, password);
 
         AccountDTO accountDTO = userMapper.toAccountDTO(newUser);
-        accountDTO.setUserName(createAccountResponse.getUserName());
+        accountDTO.setUserName(newUser.getUserName());
 
         return accountDTO;
     }
 
     @Override
     @Transactional
-    public CreateAccountResponse createAccountForExistUser(CreateAccountRequest createAccountRequest) {
+    public User createAccountForExistUser(User user, String username, String password) {
 
-        if (userRepository.existsByUserName(createAccountRequest.getUserName())) {
+        if (userRepository.existsByUserName(username)) {
             throw new ApiException(Const.ERROR_MESSAGE.USERNAME_EXISTS, HttpStatus.BAD_REQUEST.value());
         }
 
-        User user = userRepository.findById(createAccountRequest.getUserId())
-                .orElseThrow(() -> new ApiException(Const.ERROR_MESSAGE.ACCOUNT_NOT_FOUND, HttpStatus.BAD_REQUEST.value()));
-
-        user.setUserName(createAccountRequest.getUserName());
-        user.setPassword(passwordEncoder.encode(createAccountRequest.getPassword()));
+        user.setUserName(username);
+        user.setPassword(passwordEncoder.encode(password));
         user.setMustChangePassword(true);
 
         userRepository.save(user);
 
-        return userMapper.toCreateAccountResponse(user);
+        return user;
     }
 
     @Override

@@ -1,5 +1,6 @@
 package com.learning.progress.dto.request;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import com.learning.progress.common.UserStatus;
 import jakarta.validation.constraints.*;
 import lombok.AllArgsConstructor;
@@ -35,6 +36,7 @@ public class CreateUserRequest {
     @Size(max = 1024, message = "Avatar URL must not exceed 1024 characters")
     private String avatarUrl;
 
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd")
     private Date dateOfBirth;
 
     @Size(max = 255, message = "Address must not exceed 255 characters")

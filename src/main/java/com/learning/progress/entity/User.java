@@ -11,13 +11,13 @@ import org.hibernate.annotations.OnDeleteAction;
 import java.time.OffsetDateTime;
 import java.util.Date;
 
-@Builder
+@SuperBuilder
 @NoArgsConstructor
 @AllArgsConstructor
 @Data
 @Entity
 @Table(name = "users")
-public class User extends BaseEntity{
+public class User extends BaseEntity {
 
     @Column(name = "user_name", length = 50)
     private String userName;
@@ -54,26 +54,34 @@ public class User extends BaseEntity{
     @Column(name = "gender", length = 10)
     private String gender;
 
+    @Builder.Default
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
     private UserStatus status = UserStatus.ACTIVE;
 
+    @Builder.Default
     @Column(name = "must_update_profile", nullable = false)
     private boolean mustUpdateProfile = true;
 
+    @Builder.Default
     @Column(name = "must_change_pw", nullable = false)
     private boolean mustChangePassword = false;
 
+    @Builder.Default
     @Column(name = "request_reset_pw_by_tc", nullable = false)
     private boolean requestResetPasswordByTeacher = false;
 
     @Column(name = "additional_data")
     private String additionalData;
 
+    @Builder.Default
     @Enumerated(EnumType.STRING)
+    @Column(name = "theme", nullable = false)
     private Theme theme = Theme.LIGHT;
 
+    @Builder.Default
     @Enumerated(EnumType.STRING)
+    @Column(name = "language", nullable = false)
     private Language language = Language.VI;
 
     @Column(name = "reset_password_token")
