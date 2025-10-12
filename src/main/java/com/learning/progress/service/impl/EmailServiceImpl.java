@@ -27,6 +27,15 @@ public class EmailServiceImpl implements EmailService {
     }
 
     @Override
+    public void sendForgotPasswordEmail(String toEmail, String subject, String templatePath, Map<String, Object> templateVariables) throws MessagingException {
+        sendEmail(toEmail, subject, templatePath, templateVariables);
+    }
+
+    @Override
+    public void sendCreateAccountEmail(String toEmail, String subject, String templatePath, Map<String, Object> templateVariables) throws MessagingException {
+        sendEmail(toEmail, subject, templatePath, templateVariables);
+    }
+
     public void sendEmail(String toEmail, String subject, String templatePath, Map<String, Object> templateVariables) throws MessagingException {
         // Validate inputs
         if (toEmail == null || toEmail.trim().isEmpty()) {

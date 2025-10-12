@@ -4,6 +4,7 @@ import com.learning.progress.common.Const;
 import com.learning.progress.common.RoleName;
 import com.learning.progress.common.UserStatus;
 import com.learning.progress.dto.request.ChangePasswordRequest;
+import com.learning.progress.dto.request.ConfirmResetPasswordRequest;
 import com.learning.progress.dto.request.LoginRequest;
 import com.learning.progress.dto.request.ResetPasswordRequest;
 import com.learning.progress.dto.response.LoginResponse;
@@ -19,23 +20,21 @@ import com.learning.progress.service.EmailService;
 import com.learning.progress.service.TokenService;
 import com.learning.progress.util.DataUtil;
 import com.learning.progress.util.JwtUtil;
-import jakarta.mail.MessagingException;
-import jakarta.mail.internet.MimeMessage;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.mail.javamail.JavaMailSender;
-import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
-import org.thymeleaf.context.Context;
 import org.thymeleaf.spring6.SpringTemplateEngine;
 
 import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 import java.util.regex.Pattern;
 
 @Service
@@ -133,32 +132,39 @@ public class AuthServiceImpl implements AuthService {
     }
 
     @Override
-    public String resetPasswordByEmail(String userName) {
-        // Validate request
-        if (userName == null || userName.trim().isEmpty()) {
+    public String resetPasswordByEmail(ResetPasswordRequest request) {
+        // Kiểm tra đầu vào
+        if (request.getUserName() == null || request.getUserName().trim().isEmpty()) {
             throw new ApiException(Const.USER.USERNAME_EMPTY, HttpStatus.BAD_REQUEST.value());
         }
+        if (request.getDomain() == null || request.getDomain().trim().isEmpty()) {
+            throw new ApiException("Domain không được để trống", HttpStatus.BAD_REQUEST.value());
+        }
+        if (request.getPath() == null || request.getPath().trim().isEmpty()) {
+            throw new ApiException("Path không được để trống", HttpStatus.BAD_REQUEST.value());
+        }
 
-        User user = userRepository.findByUserName(userName)
+        User user = userRepository.findByUserName(request.getUserName())
                 .orElseThrow(() -> new ApiException(Const.USER.USERNAME_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
-        // Added: Check user active status for reset
+        // Kiểm tra trạng thái hoạt động của người dùng
         if (user.getStatus() != UserStatus.ACTIVE) {
             throw new ApiException(Const.USER.USER_INACTIVE, HttpStatus.FORBIDDEN.value());
         }
 
-        // Added: Validate email format of user
+        // Kiểm tra định dạng email
         if (user.getEmail() == null || user.getEmail().trim().isEmpty() || !Pattern.matches(Const.VALIDATE_INPUT.regexEmail, user.getEmail())) {
             throw new ApiException(Const.USER.EMAIL_INVALID, HttpStatus.BAD_REQUEST.value());
         }
 
-        String newPassword = DataUtil.generateRandomPassword(8);
-
-        user.setPassword(passwordEncoder.encode(newPassword));
+        // Tạo token đặt lại mật khẩu
+        String resetToken = UUID.randomUUID().toString();
+        user.setResetPasswordToken(resetToken);
+        user.setResetPasswordExpires(OffsetDateTime.now().plusHours(24));
         user.setMustChangePassword(true);
         userRepository.save(user);
 
-        // Prepare template variables
+        // Chuẩn bị biến cho template email
         String fullName = (user.getFirstName() != null ? user.getFirstName() : "")
                 + " "
                 + (user.getLastName() != null ? user.getLastName() : "");
@@ -166,19 +172,51 @@ public class AuthServiceImpl implements AuthService {
         Map<String, Object> templateVariables = new HashMap<>();
         templateVariables.put("fullName", fullName.trim().isEmpty() ? "bạn" : fullName.trim());
         templateVariables.put("username", username);
-        templateVariables.put("defaultPassword", newPassword);
+        // Tạo link reset password từ domain và path
+        String resetLink = request.getDomain() + (request.getPath().startsWith("/") ? request.getPath() : "/" + request.getPath()) + "?token=" + resetToken;
+        templateVariables.put("resetLink", resetLink);
 
-        String subject = "🔐 Cấp lại mật khẩu tài khoản học tập";
+        String subject = "🔐 Yêu cầu đặt lại mật khẩu tài khoản học tập";
         String templatePath = "email/reset-password-email";
 
         try {
-            emailService.sendEmail(user.getEmail(), subject, templatePath, templateVariables);
+            emailService.sendForgotPasswordEmail(user.getEmail(), subject, templatePath, templateVariables);
             String email = user.getEmail();
             int atIndex = email.indexOf('@');
             return email.substring(0, 2) + "****" + email.substring(atIndex - 2);
         } catch (Exception e) {
             throw new ApiException(Const.VALIDATION.EMAIL_SEND_FAILED, HttpStatus.INTERNAL_SERVER_ERROR.value());
         }
+    }
+
+    public String confirmResetPassword(ConfirmResetPasswordRequest request) {
+        // Kiểm tra đầu vào
+        if (request.getToken() == null || request.getToken().trim().isEmpty()) {
+            throw new ApiException("Token không được để trống", HttpStatus.BAD_REQUEST.value());
+        }
+        if (request.getNewPassword() == null || request.getNewPassword().trim().isEmpty()) {
+            throw new ApiException("Mật khẩu mới không được để trống", HttpStatus.BAD_REQUEST.value());
+        }
+
+        User user = userRepository.findByResetPasswordToken(request.getToken())
+                .orElseThrow(() -> new ApiException("Token không hợp lệ", HttpStatus.BAD_REQUEST.value()));
+
+        // Kiểm tra token hết hạn
+        if (user.getResetPasswordExpires().isBefore(OffsetDateTime.now())) {
+            throw new ApiException("Token đã hết hạn", HttpStatus.BAD_REQUEST.value());
+        }
+
+        // Cập nhật mật khẩu mới
+        user.setPassword(passwordEncoder.encode(request.getNewPassword()));
+        user.setResetPasswordToken(null);
+        user.setResetPasswordExpires(null);
+        user.setMustChangePassword(false);
+        userRepository.save(user);
+
+        // Trả về email dạng ẩn
+        String email = user.getEmail();
+        int atIndex = email.indexOf('@');
+        return email.substring(0, 2) + "****" + email.substring(atIndex - 2);
     }
 
     public LoginResponse changePassword(ChangePasswordRequest request) {

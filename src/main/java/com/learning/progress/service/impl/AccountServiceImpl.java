@@ -222,7 +222,7 @@ public class AccountServiceImpl implements AccountService {
             String subject = "🎉 Tài khoản học tập của bạn đã được tạo";
             String templatePath = "email/create-account-email";
 
-            emailService.sendEmail(user.getEmail(), subject, templatePath, templateVariables);
+            emailService.sendCreateAccountEmail(user.getEmail(), subject, templatePath, templateVariables);
         } catch (Exception e) {
             throw new ApiException(Const.VALIDATION.EMAIL_SEND_FAILED, HttpStatus.INTERNAL_SERVER_ERROR.value());
         }
