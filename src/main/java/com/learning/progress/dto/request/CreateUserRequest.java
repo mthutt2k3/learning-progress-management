@@ -1,5 +1,6 @@
 package com.learning.progress.dto.request;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import com.learning.progress.common.UserStatus;
 import jakarta.validation.constraints.*;
 import lombok.AllArgsConstructor;
@@ -17,7 +18,6 @@ import java.util.Date;
 public class CreateUserRequest {
 
     @NotBlank(message = "Role name is required")
-    @Pattern(regexp = "MANAGER|TEACHER|STUDENT|TEACHING_ASSISTANT|TEST_TAKER", message = "Role must be MANAGER, TEACHER, STUDENT, TEACHING_ASSISTANT, or TEST_TAKER")
     private String roleName;
 
     @NotBlank(message = "Email is required")
@@ -36,6 +36,7 @@ public class CreateUserRequest {
     @Size(max = 1024, message = "Avatar URL must not exceed 1024 characters")
     private String avatarUrl;
 
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd")
     private Date dateOfBirth;
 
     @Size(max = 255, message = "Address must not exceed 255 characters")

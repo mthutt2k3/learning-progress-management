@@ -11,5 +11,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class ResetPasswordRequest {
-    private String username;
+    private String userName;
+    private String domain;
+    private String path;
 }

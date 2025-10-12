@@ -6,7 +6,6 @@ import com.learning.progress.common.UserStatus;
 import com.learning.progress.dto.AccountDTO;
 import com.learning.progress.dto.request.CreateAccountRequest;
 import com.learning.progress.dto.request.CreateNewAccountRequest;
-import com.learning.progress.dto.response.CreateAccountResponse;
 import com.learning.progress.dto.response.DataResponse;
 import com.learning.progress.entity.Role;
 import com.learning.progress.entity.User;
@@ -29,9 +28,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -99,12 +96,12 @@ public class AccountServiceImpl implements AccountService {
             }
         }
         if (!isValidSortField) {
-            throw new ApiException(Const.ERROR_MESSAGE.INVALID_SORT_BY, 400);
+            throw new ApiException(Const.ERROR_MESSAGE.INVALID_SORT_BY, HttpStatus.BAD_REQUEST.value());
         }
 
         // Validate sortDir
         if (!sortDir.equalsIgnoreCase("asc") && !sortDir.equalsIgnoreCase("desc")) {
-            throw new ApiException(Const.ERROR_MESSAGE.INVALID_SORT_DIR, 400);
+            throw new ApiException(Const.ERROR_MESSAGE.INVALID_SORT_DIR, HttpStatus.BAD_REQUEST.value());
         }
 
         // Map fullName sort to firstName for database query
@@ -167,7 +164,7 @@ public class AccountServiceImpl implements AccountService {
     public AccountDTO createNewAccount(CreateNewAccountRequest request) {
         // Validate formats email
         if (!request.getEmail().matches(Const.VALIDATE_INPUT.regexEmail)) {
-            throw new ApiException(Const.USER.EMAIL_INVALID, 400);
+            throw new ApiException(Const.USER.EMAIL_INVALID, HttpStatus.BAD_REQUEST.value());
         }
         //validate role name
         if(!EnumUtil.isAllowedEnumValue(RoleName.class, request.getRoleName(), Set.of(RoleName.ADMIN, RoleName.MANAGER)))
@@ -175,7 +172,7 @@ public class AccountServiceImpl implements AccountService {
 
         // Tìm role
         Role role = roleRepository.findByName(RoleName.valueOf(request.getRoleName().toUpperCase()))
-                .orElseThrow(() -> new ApiException("Invalid role: " + request.getRoleName(), 400));
+                .orElseThrow(() -> new ApiException("Invalid role: " + request.getRoleName(), HttpStatus.BAD_REQUEST.value()));
 
         User newUser = userMapper.toUser(request);
         newUser.setMustChangePassword(true);
@@ -191,61 +188,32 @@ public class AccountServiceImpl implements AccountService {
         //Auto generate username and password
         String username = DataUtil.generateUsername(request.getRoleName().toString(), newUser.getId());
         String password = DataUtil.generateRandomPassword(8);
-        CreateAccountResponse createAccountResponse = createAccountForExistUser(CreateAccountRequest
-                .builder()
-                .userId(newUser.getId())
-                .userName(username)
-                .password(password)
-                .build()
-        );
+        this.createAccountForExistUser(newUser, username, password);
 
         // Gửi email thông báo tài khoản
-        sendNewAccountEmail(newUser, username, password);
+        emailService.sendNewAccountEmail(newUser, username, password);
 
         AccountDTO accountDTO = userMapper.toAccountDTO(newUser);
-        accountDTO.setUserName(createAccountResponse.getUserName());
+        accountDTO.setUserName(newUser.getUserName());
 
         return accountDTO;
     }
 
-    private void sendNewAccountEmail(User user, String username, String password) {
-        try {
-            String fullName = (user.getFirstName() != null ? user.getFirstName() : "")
-                    + " "
-                    + (user.getLastName() != null ? user.getLastName() : "");
-
-            Map<String, Object> templateVariables = new HashMap<>();
-            templateVariables.put("fullName", fullName.trim().isEmpty() ? "bạn" : fullName.trim());
-            templateVariables.put("username", username);
-            templateVariables.put("password", password);
-
-            String subject = "🎉 Tài khoản học tập của bạn đã được tạo";
-            String templatePath = "email/create-account-email";
-
-            emailService.sendEmail(user.getEmail(), subject, templatePath, templateVariables);
-        } catch (Exception e) {
-            throw new ApiException(Const.VALIDATION.EMAIL_SEND_FAILED, HttpStatus.INTERNAL_SERVER_ERROR.value());
-        }
-    }
-
     @Override
     @Transactional
-    public CreateAccountResponse createAccountForExistUser(CreateAccountRequest createAccountRequest) {
+    public User createAccountForExistUser(User user, String username, String password) {
 
-        if (userRepository.existsByUserName(createAccountRequest.getUserName())) {
-            throw new ApiException(Const.ERROR_MESSAGE.USERNAME_EXISTS, 400);
+        if (userRepository.existsByUserName(username)) {
+            throw new ApiException(Const.ERROR_MESSAGE.USERNAME_EXISTS, HttpStatus.BAD_REQUEST.value());
         }
 
-        User user = userRepository.findById(createAccountRequest.getUserId())
-                .orElseThrow(() -> new ApiException(Const.ERROR_MESSAGE.ACCOUNT_NOT_FOUND, 400));
-
-        user.setUserName(createAccountRequest.getUserName());
-        user.setPassword(passwordEncoder.encode(createAccountRequest.getPassword()));
+        user.setUserName(username);
+        user.setPassword(passwordEncoder.encode(password));
         user.setMustChangePassword(true);
 
         userRepository.save(user);
 
-        return userMapper.toCreateAccountResponse(user);
+        return user;
     }
 
     @Override

@@ -15,7 +15,7 @@ import java.util.Date;
 @SuperBuilder
 @NoArgsConstructor
 @AllArgsConstructor
-@JsonInclude(JsonInclude.Include.NON_NULL)
+
 public class UserProfileResponse {
     private Long id;
     private String userName;

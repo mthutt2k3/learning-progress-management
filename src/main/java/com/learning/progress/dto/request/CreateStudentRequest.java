@@ -1,6 +1,6 @@
 package com.learning.progress.dto.request;
 
-import com.learning.progress.dto.ClassInfo;
+import com.learning.progress.dto.LevelInfo;
 import com.learning.progress.dto.ParentInfo;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -13,5 +13,5 @@ import lombok.experimental.SuperBuilder;
 @AllArgsConstructor
 public class CreateStudentRequest extends CreateUserRequest{
     private ParentInfo parentInfo;
-    private ClassInfo classInfo;
+    private Long levelId;
 }

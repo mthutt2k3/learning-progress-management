@@ -1,6 +1,7 @@
 package com.learning.progress.service;
 
 import com.learning.progress.dto.request.ChangePasswordRequest;
+import com.learning.progress.dto.request.ConfirmResetPasswordRequest;
 import com.learning.progress.dto.request.LoginRequest;
 import com.learning.progress.dto.request.ResetPasswordRequest;
 import com.learning.progress.dto.response.LoginResponse;
@@ -10,7 +11,8 @@ import java.util.Map;
 
 public interface AuthService {
     LoginResponse login(LoginRequest loginRequest);
-    String resetPasswordByEmail(String userName);
+    String resetPasswordByEmail(ResetPasswordRequest request);
+    String confirmResetPassword(ConfirmResetPasswordRequest request);
     LoginResponse changePassword(ChangePasswordRequest request);
     ResetPasswordByTeacherResponse resetPasswordByTeacher(String username);
     void logout(String refreshTokenParam);
