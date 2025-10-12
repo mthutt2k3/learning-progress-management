@@ -16,4 +16,5 @@ public class LoginResponse {
     private String refreshToken;
     private String username;
     private String role;
+    private boolean isMustChangePassword;
 }

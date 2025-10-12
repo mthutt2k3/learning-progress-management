@@ -12,6 +12,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -36,9 +37,17 @@ public class LevelController {
             @ApiResponse(responseCode = "200", description = "Level list retrieved successfully"),
             @ApiResponse(responseCode = "500", description = "Unexpected server error")
     })
-    public ResponseEntity<?> viewLevelList() {
-        List<LevelListResponse> response = levelService.getAllLevels();
-        return ResponseEntity.ok(DataResponse.success(response, Const.LEVEL.LIST_RETRIEVED));
+    public ResponseEntity<DataResponse<List<LevelListResponse>>> viewLevelList(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) String text,
+            @RequestParam(required = false) List<Boolean> status,
+            @RequestParam(defaultValue = "orderNumber") String sortBy,
+            @RequestParam(defaultValue = "asc") String sortDir) {
+        return new ResponseEntity<>(
+                levelService.getAllLevels(page, size, text, status, sortBy, sortDir),
+                HttpStatus.OK
+        );
     }
 
     @PreAuthorize("hasRole('MANAGER')")
