@@ -11,7 +11,7 @@ import java.util.Map;
 public interface AuthService {
     LoginResponse login(LoginRequest loginRequest);
     String resetPasswordByEmail(String userName);
-    void changePassword(ChangePasswordRequest request);
+    LoginResponse changePassword(ChangePasswordRequest request);
     ResetPasswordByTeacherResponse resetPasswordByTeacher(String username);
     void logout(String refreshTokenParam);
     Map<String, String> refreshAccessToken(String refreshToken);
