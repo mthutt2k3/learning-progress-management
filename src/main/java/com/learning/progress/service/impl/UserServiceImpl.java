@@ -5,6 +5,7 @@ import com.learning.progress.common.Gender;
 import com.learning.progress.common.UserStatus;
 import com.learning.progress.common.RoleName;
 import com.learning.progress.dto.AccountDTO;
+import com.learning.progress.dto.LevelInfo;
 import com.learning.progress.dto.ParentInfo;
 import com.learning.progress.dto.request.CreateStudentRequest;
 import com.learning.progress.dto.response.StudentProfileResponse;
@@ -13,14 +14,16 @@ import com.learning.progress.dto.request.CreateUserRequest;
 import com.learning.progress.dto.response.CreateUserResponse;
 import com.learning.progress.dto.response.DataResponse;
 import com.learning.progress.dto.response.UserProfileResponse;
-import com.learning.progress.entity.Role;
-import com.learning.progress.entity.User;
+import com.learning.progress.entity.*;
 import com.learning.progress.exception.ApiException;
 import com.learning.progress.mapper.UserMapper;
+import com.learning.progress.repository.ClassStudentRepository;
 import com.learning.progress.repository.RoleRepository;
+import com.learning.progress.repository.StudentLevelRepository;
 import com.learning.progress.repository.UserRepository;
 import com.learning.progress.service.AccountService;
 import com.learning.progress.service.EmailService;
+import com.learning.progress.service.StudentLevelService;
 import com.learning.progress.service.UserService;
 import com.learning.progress.util.*;
 import jakarta.persistence.EntityManager;
@@ -48,6 +51,12 @@ public class UserServiceImpl implements UserService {
 
     @Autowired
     private RoleRepository roleRepository;
+
+    @Autowired
+    private StudentLevelService studentLevelService;
+
+    @Autowired
+    private StudentLevelRepository studentLevelRepository;
 
     @Autowired
     private AccountService accountService;
@@ -79,6 +88,7 @@ public class UserServiceImpl implements UserService {
         Role role = roleRepository.findByName(RoleName.valueOf(request.getRoleName().toUpperCase()))
                 .orElseThrow(() -> new ApiException("Invalid role: " + request.getRoleName(), HttpStatus.NOT_FOUND.value()));
 
+
         // Ánh xạ từ DTO sang entity
         User user = userMapper.toUser(request);
         user.setRole(role);
@@ -86,6 +96,11 @@ public class UserServiceImpl implements UserService {
         // Lưu user và flush
         userRepository.saveAndFlush(user);
         entityManager.clear();
+
+        // Gán level cho học sinh nếu levelInfo có dữ liệu
+        if (request.getLevelId() != null) {
+            studentLevelService.assignLevelToStudent(user.getId(), request.getLevelId());
+        }
 
         // Lưu user (các trường audit được tự động gán bởi BaseEntity)
         userRepository.save(user);
@@ -95,18 +110,86 @@ public class UserServiceImpl implements UserService {
         String password = DataUtil.generateRandomPassword(8);
 
         // Auto-generate account
-        accountService.createAccountForExistUser(CreateAccountRequest
-                .builder()
-                .userId(user.getId())
-                .userName(username)
-                .password(password)
-                .build()
-        );
+        accountService.createAccountForExistUser(user, username, password);
 
         // Gửi email thông báo tài khoản
         emailService.sendNewAccountEmail(user, username, password);
 
         return userMapper.toAccountDTO(user);
+    }
+
+    @Override
+    @Transactional
+    public AccountDTO updateStudent(Long userId, CreateStudentRequest request) {
+        if (!EnumUtil.isValidEnum(Gender.class, request.getGender())) {
+            throw new ApiException(Const.ERROR_MESSAGE.INVALID_GENDER_FORMAT, HttpStatus.BAD_REQUEST.value());
+        }
+        if (request.getPhoneNumber() != null && !DataUtil.isValidPhoneNumber(request.getPhoneNumber())) {
+            throw new ApiException(Const.ERROR_MESSAGE.INVALID_PHONE_NUMBER_FORMAT, HttpStatus.BAD_REQUEST.value());
+        }
+        if (!EnumUtil.isAllowedEnumValue(RoleName.class, request.getRoleName(), Set.of(RoleName.STUDENT, RoleName.TEST_TAKER))) {
+            throw new ApiException(Const.ERROR_MESSAGE.INVALID_ROLE_NAME, HttpStatus.BAD_REQUEST.value());
+        }
+
+        // Tìm user
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ApiException(Const.AUTH.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+
+        // Kiểm tra role
+        Role role = roleRepository.findByName(RoleName.valueOf(request.getRoleName().toUpperCase()))
+                .orElseThrow(() -> new ApiException("Invalid role: " + request.getRoleName(), HttpStatus.NOT_FOUND.value()));
+
+        // Cập nhật thông tin user
+        User updatedUser = userMapper.toUser(request);
+
+        user.setRole(role);
+        user.setEmail(updatedUser.getEmail());
+        user.setFirstName(updatedUser.getFirstName());
+        user.setLastName(updatedUser.getLastName());
+        user.setAvatarUrl(updatedUser.getAvatarUrl());
+        user.setDateOfBirth(updatedUser.getDateOfBirth());
+        user.setAddress(updatedUser.getAddress());
+        user.setPhoneNumber(updatedUser.getPhoneNumber());
+        user.setGender(updatedUser.getGender());
+        user.setAdditionalData(request.getParentInfo() != null ? JsonUtil.objectToJson(request.getParentInfo()) : null);
+
+        // Lưu user và flush
+        userRepository.saveAndFlush(user);
+        entityManager.clear();
+
+        // Cập nhật level nếu levelInfo có dữ liệu
+        if (request.getLevelId() != null) {
+            // Gán level mới
+            studentLevelService.assignLevelToStudent(userId, request.getLevelId());
+        }
+
+        // Lưu user
+        userRepository.save(user);
+
+        return userMapper.toAccountDTO(user);
+    }
+
+    @Override
+    @Transactional
+    public void updateStudentStatus(Long userId, String status) {
+        // Kiểm tra status hợp lệ
+        if (!EnumUtil.isValidEnum(UserStatus.class, status)) {
+            throw new ApiException("Invalid status: " + status, HttpStatus.BAD_REQUEST.value());
+        }
+
+        // Tìm user
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ApiException(Const.AUTH.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+
+        // Kiểm tra role
+        if (!EnumUtil.isAllowedEnumValue(RoleName.class, user.getRole().getName().name(), Set.of(RoleName.STUDENT, RoleName.TEST_TAKER)))
+            throw new ApiException("User is not a student or test taker", HttpStatus.BAD_REQUEST.value());
+
+        // Cập nhật status user
+        user.setStatus(UserStatus.valueOf(status));
+
+        // Lưu user
+        userRepository.save(user);
     }
 
     @Override
@@ -157,16 +240,11 @@ public class UserServiceImpl implements UserService {
         userRepository.save(user);
 
         //Auto generate username and password
-        user.setUserName(DataUtil.generateUsername(user.getRole().getName().toString(), user.getId()));
-        user.setPassword(DataUtil.generateRandomPassword(8));
+        String username = DataUtil.generateUsername(request.getRoleName(), user.getId());
+        String password = DataUtil.generateRandomPassword(8);
+
         // Auto-generate account
-        accountService.createAccountForExistUser(CreateAccountRequest
-                .builder()
-                        .userId(user.getId())
-                        .userName(user.getUserName())
-                        .password(user.getPassword())
-                        .build()
-                );
+        accountService.createAccountForExistUser(user, username, password);
         // Ánh xạ sang CreateUserResponse
         return userMapper.toCreateUserResponse(user);
     }
@@ -323,6 +401,13 @@ public class UserServiceImpl implements UserService {
                 log.warn("Failed to parse parent info for user {}", user.getId(), e);
             }
         }
+
+        // Ánh xạ LevelInfo từ student_levels
+        userRepository.findActiveLevelInfoByUserId(user.getId()).ifPresent(response::setLevelInfo);
+
+        // Ánh xạ ClassInfo từ class_students
+        userRepository.findActiveClassInfoByUserId(user.getId()).ifPresent(response::setClassInfo);
+
         return response;
     }
 }

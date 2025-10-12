@@ -38,6 +38,25 @@ public class UserController {
         var response = userService.createStudent(request);
         return new ResponseEntity<>(DataResponse.success(response, Const.CRUD_MESSAGE_CODE.CREATE_SUCCESSFUL), HttpStatus.CREATED);
     }
+    @PutMapping("students/{userId}")
+    @PreAuthorize("hasRole('MANAGER')")
+    @Operation(summary = "Update a student", description = "Update an existing student profile (MANAGER only)")
+    public ResponseEntity<DataResponse<?>> updateStudent(
+            @Parameter(description = "User ID of the student to update") @PathVariable Long userId,
+            @Valid @RequestBody CreateStudentRequest request) {
+        var response = userService.updateStudent(userId, request);
+        return new ResponseEntity<>(DataResponse.success(response, Const.CRUD_MESSAGE_CODE.UPDATE_SUCCESSFUL), HttpStatus.OK);
+    }
+
+    @PatchMapping("students/{userId}/status")
+    @PreAuthorize("hasRole('MANAGER')")
+    @Operation(summary = "Update student status", description = "Update status of an existing student profile (MANAGER only)")
+    public ResponseEntity<DataResponse<?>> updateStudentStatus(
+            @Parameter(description = "User ID of the student to update status") @PathVariable Long userId,
+            @Parameter(description = "New status (e.g., ACTIVE, INACTIVE)") @RequestParam String status) {
+        userService.updateStudentStatus(userId, status);
+        return new ResponseEntity<>(DataResponse.success(null, Const.CRUD_MESSAGE_CODE.UPDATE_SUCCESSFUL), HttpStatus.OK);
+    }
 
     @GetMapping("students")
     @Operation(summary = "View Student/Test Taker List", description = "Retrieves a paginated list of students/test takers with optional filtering by text, statuses, roles, and sorting")

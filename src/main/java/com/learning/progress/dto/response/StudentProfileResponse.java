@@ -1,6 +1,7 @@
 package com.learning.progress.dto.response;
 
 import com.learning.progress.dto.ClassInfo;
+import com.learning.progress.dto.LevelInfo;
 import com.learning.progress.dto.ParentInfo;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -14,5 +15,6 @@ import lombok.experimental.SuperBuilder;
 @AllArgsConstructor
 public class StudentProfileResponse extends UserProfileResponse {
     private ParentInfo parentInfo;
+    private LevelInfo levelInfo;
     private ClassInfo classInfo;
 }

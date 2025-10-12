@@ -20,4 +20,8 @@ public interface UserService {
     DataResponse<List<UserProfileResponse>> getTeacherList(int page, int size, String text, List<String> status, List<String> roleName, String sortBy, String sortDir);
 
     AccountDTO createStudent(CreateStudentRequest request);
+
+    AccountDTO updateStudent(Long userId, CreateStudentRequest request);
+
+    void updateStudentStatus(Long userId, String status);
 }

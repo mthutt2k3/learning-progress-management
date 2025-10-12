@@ -1,9 +1,11 @@
 package com.learning.progress.dto;
 
 import lombok.AllArgsConstructor;
+import lombok.Data;
 
 @AllArgsConstructor
-public class ClassInfo {
+@Data
+public class LevelInfo {
     private Long id;
-    private String className;
+    private String levelName;
 }
