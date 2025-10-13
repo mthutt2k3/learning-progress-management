@@ -6,7 +6,6 @@ import com.learning.progress.dto.request.UpdateLevelOrderRequest;
 import com.learning.progress.dto.request.UpdateLevelRequest;
 import com.learning.progress.dto.response.DataResponse;
 import com.learning.progress.dto.response.LevelDetailsResponse;
-import com.learning.progress.dto.response.LevelListResponse;
 import com.learning.progress.service.LevelService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -30,7 +29,7 @@ public class LevelController {
     @PreAuthorize("hasRole('MANAGER')")
     @GetMapping
     @Operation(summary = "View Level List", description = "Retrieve a list of all levels")
-    public ResponseEntity<DataResponse<List<LevelListResponse>>> viewLevelList(
+    public ResponseEntity<DataResponse<List<LevelDetailsResponse>>> viewLevelList(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(required = false) String text,
