@@ -4,7 +4,9 @@ import com.learning.progress.common.LevelDifficulty;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.PositiveOrZero;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -18,17 +20,20 @@ import java.util.List;
 @AllArgsConstructor
 public class UpdateLevelOrderRequest {
 
-    @NotNull(message = "ID is required")
     private Long id;
 
-    @NotNull(message = "Order number is required")
-    private Integer orderNumber;
-
-    @NotNull(message = "Level name number is required")
+    @NotBlank(message = "Level name is required")
     private String levelName;
-
-    @Enumerated(EnumType.STRING)
-    @NotNull(message = "Difficulty number is required")
-    private LevelDifficulty difficulty;
+    private String description;
+    private String difficulty;
+    private String prerequisite;
+    private String promotionCriteria;
+    private String learningObjectives;
+    @NotNull(message = "Estimated duration is required")
+    @PositiveOrZero(message = "Duration must be non-negative")
+    private Integer estimatedDurationWeeks;
+    @NotNull(message = "Order number is required")
+    @PositiveOrZero(message = "Order number must be non-negative")
+    private Integer orderNumber;
 
 }

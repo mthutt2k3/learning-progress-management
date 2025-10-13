@@ -78,3 +78,8 @@ logging:
 
 mapping:
   max-message-per-sub-batch: 1000
+
+azure:
+  storage:
+    connection-string: ${CONNECTION_STRING}
+    container-name: ${CONTAINER_NAME}

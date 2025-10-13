@@ -30,7 +30,7 @@ public class LevelController {
     @PreAuthorize("hasRole('MANAGER')")
     @GetMapping
     @Operation(summary = "View Level List", description = "Retrieve a list of all levels")
-    public ResponseEntity<DataResponse<List<LevelListResponse>>> viewLevelList(
+    public ResponseEntity<DataResponse<List<LevelDetailsResponse>>> viewLevelList(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(required = false) String text,
