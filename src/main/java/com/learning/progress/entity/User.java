@@ -62,7 +62,7 @@ public class User extends BaseEntity {
 
     @Builder.Default
     @Column(name = "must_update_profile", nullable = false)
-    private boolean mustUpdateProfile = true;
+    private boolean mustUpdateProfile = false;
 
     @Builder.Default
     @Column(name = "must_change_pw", nullable = false)
