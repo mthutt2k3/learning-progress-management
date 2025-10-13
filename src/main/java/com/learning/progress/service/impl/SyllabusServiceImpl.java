@@ -1,6 +1,7 @@
 package com.learning.progress.service.impl;
 
 import com.learning.progress.dto.SyllabusDTO;
+import com.learning.progress.dto.SyllabusDetailDTO;
 import com.learning.progress.dto.response.DataResponse;
 import com.learning.progress.dto.syllabus.CreateSyllabusRequest;
 import com.learning.progress.dto.syllabus.UpdateSyllabusRequest;
@@ -89,12 +90,75 @@ public class SyllabusServiceImpl implements SyllabusService {
     }
 
     @Override
-    public SyllabusDTO getSyllabus(Long id) {
+    public SyllabusDetailDTO getSyllabusDetail(Long id, String include) {
         Syllabus syllabus = syllabusRepository.findById(id)
                 .filter(s -> s.getDeletedAt() == null)
                 .orElseThrow(() -> new ApiException("Syllabus not found or deleted", HttpStatus.NOT_FOUND.value()));
 
-        return syllabusMapper.toSyllabusDTO(syllabus);
+        SyllabusDetailDTO syllabusDetailDTO = syllabusMapper.toSyllabusDetailDTO(syllabus);
+
+        switch (include.toUpperCase()) {
+            case "CHAPTERS":
+                syllabusDetailDTO.setChapterListInSyllabus(
+                        syllabusRepository.findChaptersBySyllabusId(id)
+                                .stream()
+                                .map(chapter -> SyllabusDetailDTO.ChapterInSyllabus.builder()
+                                        .chapterId(chapter.getId())
+                                        .chapterName(chapter.getChapterName())
+                                        .orderNumber(chapter.getOrderNumber())
+                                        .build())
+                                .collect(Collectors.toList()));
+                syllabusDetailDTO.setLessonListInSyllabus(null);
+                break;
+            case "LESSONS":
+                syllabusDetailDTO.setChapterListInSyllabus(null);
+                syllabusDetailDTO.setLessonListInSyllabus(
+                        syllabusRepository.findLessonsBySyllabusId(id)
+                                .stream()
+                                .map(lesson -> SyllabusDetailDTO.LessonInSyllabus.builder()
+                                        .id(lesson.getId())
+                                        .lessonName(lesson.getLessonName())
+                                        .content(lesson.getContent())
+                                        .orderNumber(lesson.getOrderNumber())
+                                        .chapter(SyllabusDetailDTO.ChapterInSyllabus.builder()
+                                                .chapterId(lesson.getChapter().getId())
+                                                .chapterName(lesson.getChapter().getChapterName())
+                                                .orderNumber(lesson.getChapter().getOrderNumber())
+                                                .build())
+                                        .build())
+                                .collect(Collectors.toList()));
+                break;
+            case "ALL":
+                syllabusDetailDTO.setChapterListInSyllabus(
+                        syllabusRepository.findChaptersBySyllabusId(id)
+                                .stream()
+                                .map(chapter -> SyllabusDetailDTO.ChapterInSyllabus.builder()
+                                        .chapterId(chapter.getId())
+                                        .chapterName(chapter.getChapterName())
+                                        .orderNumber(chapter.getOrderNumber())
+                                        .build())
+                                .collect(Collectors.toList()));
+                syllabusDetailDTO.setLessonListInSyllabus(
+                        syllabusRepository.findLessonsBySyllabusId(id)
+                                .stream()
+                                .map(lesson -> SyllabusDetailDTO.LessonInSyllabus.builder()
+                                        .id(lesson.getId())
+                                        .lessonName(lesson.getLessonName())
+                                        .content(lesson.getContent())
+                                        .orderNumber(lesson.getOrderNumber())
+                                        .chapter(SyllabusDetailDTO.ChapterInSyllabus.builder()
+                                                .chapterId(lesson.getChapter().getId())
+                                                .chapterName(lesson.getChapter().getChapterName())
+                                                .orderNumber(lesson.getChapter().getOrderNumber())
+                                                .build())
+                                        .build())
+                                .collect(Collectors.toList()));
+                break;
+            default:
+                throw new ApiException("Invalid include parameter. Use CHAPTERS, LESSONS, or ALL", HttpStatus.BAD_REQUEST.value());
+        }
+
+        return syllabusDetailDTO;
     }
 
     @Override

@@ -19,8 +19,16 @@ public interface LevelMapper {
     @Mapping(source = "promotionCriteria", target = "promotionCriteria")
     @Mapping(source = "learningObjectives", target = "learningObjectives")
     @Mapping(source = "estimatedDurationWeeks", target = "estimatedDurationWeeks")
-    @Mapping(source = "orderNumber", target = "orderNumber")
     Level toEntity(CreateLevelRequest request);
+
+    @Mapping(source = "levelName", target = "levelName")
+    @Mapping(source = "description", target = "description")
+    @Mapping(source = "difficulty", target = "difficulty")
+    @Mapping(source = "prerequisite", target = "prerequisite")
+    @Mapping(source = "promotionCriteria", target = "promotionCriteria")
+    @Mapping(source = "learningObjectives", target = "learningObjectives")
+    @Mapping(source = "estimatedDurationWeeks", target = "estimatedDurationWeeks")
+    Level toUpdateEntity(UpdateLevelRequest request);
 
     @Mapping(source = "id", target = "id")
     @Mapping(source = "levelName", target = "levelName")

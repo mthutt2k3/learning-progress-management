@@ -55,10 +55,12 @@ public class SyllabusController {
 
     @GetMapping("/{id}")
     @PreAuthorize("hasRole('MANAGER') or hasRole('TEACHER') or hasRole('TEACHING_ASSISTANT')")
-    @Operation(summary = "Get a syllabus", description = "Retrieve a syllabus by ID")
-    public ResponseEntity<DataResponse<SyllabusDTO>> getSyllabus(
-            @Parameter(description = "Syllabus ID") @PathVariable Long id) {
-        var response = syllabusService.getSyllabus(id);
+    @Operation(summary = "Get a syllabus", description = "Retrieve a syllabus by ID with optional chapter/lesson lists")
+    public ResponseEntity<DataResponse<?>> getSyllabus(
+            @Parameter(description = "Syllabus ID") @PathVariable Long id,
+            @Parameter(description = "Include chapters, lessons, or both (CHAPTERS, LESSONS, ALL)")
+            @RequestParam(defaultValue = "ALL") String include) {
+        var response = syllabusService.getSyllabusDetail(id, include);
         return ResponseEntity.ok(DataResponse.success(response, Const.CRUD_MESSAGE_CODE.RETRIEVE_SUCCESSFUL));
     }
 

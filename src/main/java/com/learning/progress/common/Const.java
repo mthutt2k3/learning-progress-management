@@ -107,5 +107,6 @@ public class Const {
         public static final String LEVEL_NOT_FOUND = "Level not found";
         public static final String DUPLICATE_LEVEL_NAME = "Level name already exists";
         public static final String DUPLICATE_ORDER_NUMBER = "Order number already exists";
+        public static final String INVALID_ORDER_SEQUENCE = "Order number have to be in order one by one";
     }
 }

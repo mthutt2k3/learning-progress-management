@@ -11,6 +11,7 @@ import org.hibernate.annotations.OnDelete;
 import org.hibernate.annotations.OnDeleteAction;
 
 import java.time.OffsetDateTime;
+import java.util.List;
 
 @SuperBuilder
 @NoArgsConstructor
@@ -31,6 +32,5 @@ public class Syllabus extends BaseEntity{
 
     @Column(name = "description", length = Integer.MAX_VALUE)
     private String description;
-
 
 }
