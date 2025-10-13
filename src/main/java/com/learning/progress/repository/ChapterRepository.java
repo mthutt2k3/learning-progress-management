@@ -11,4 +11,7 @@ import org.springframework.stereotype.Repository;
 public interface ChapterRepository extends JpaRepository<Chapter, Long> {
     @Query("SELECT c FROM Chapter c WHERE c.syllabus.id = :syllabusId AND c.deletedAt IS NULL AND (:searchText IS NULL OR c.chapterName LIKE %:searchText%)")
     Page<Chapter> findBySyllabusIdAndSearchText(Long syllabusId, String searchText, Pageable pageable);
+
+    @Query("SELECT COUNT(c) FROM Chapter c WHERE c.syllabus.id = :syllabusId AND c.deletedAt IS NULL")
+    int countActiveBySyllabusId(Long syllabusId);
 }
