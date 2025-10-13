@@ -32,7 +32,6 @@ import org.thymeleaf.spring6.SpringTemplateEngine;
 
 import java.time.Instant;
 import java.time.OffsetDateTime;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 import java.util.regex.Pattern;
@@ -123,7 +122,7 @@ public class AuthServiceImpl implements AuthService {
             default -> throw new ApiException(Const.VALIDATION.INVALID_LOGIN_ROLE, HttpStatus.BAD_REQUEST.value());
         }
 
-        String accessToken = jwtUtil.generateToken(user.getUserName(), user.getRole().getName().toString());
+        String accessToken = jwtUtil.generateToken(user.getUserName(), user.getRole().getName().toString(), user.getId());
         RefreshToken refreshToken = tokenService.createRefreshToken(user);
         boolean mustChangePassword = user.isMustChangePassword();
         boolean mustUpdateProfile = user.isMustUpdateProfile();
@@ -261,7 +260,7 @@ public class AuthServiceImpl implements AuthService {
 
         logout(request.getRefreshToken());
 
-        String accessToken = jwtUtil.generateToken(user.getUserName(), user.getRole().getName().toString());
+        String accessToken = jwtUtil.generateToken(user.getUserName(), user.getRole().getName().toString(), user.getId());
         RefreshToken refreshToken = tokenService.createRefreshToken(user);
         boolean mustChangePassword = user.isMustChangePassword();
         boolean mustUpdateProfile = user.isMustUpdateProfile();
@@ -311,7 +310,7 @@ public class AuthServiceImpl implements AuthService {
         }
 
         User user = token.getUser();
-        String newAccessToken = jwtUtil.generateToken(user.getUserName(), user.getRole().getName().toString());
+        String newAccessToken = jwtUtil.generateToken(user.getUserName(), user.getRole().getName().toString(), user.getId());
 
         return Map.of(
                 "accessToken", newAccessToken,

@@ -7,7 +7,6 @@ import com.learning.progress.dto.request.UpdateLevelOrderRequest;
 import com.learning.progress.dto.request.UpdateLevelRequest;
 import com.learning.progress.dto.response.DataResponse;
 import com.learning.progress.dto.response.LevelDetailsResponse;
-import com.learning.progress.dto.response.LevelListResponse;
 import com.learning.progress.entity.Level;
 import com.learning.progress.exception.ApiException;
 import com.learning.progress.mapper.LevelMapper;
@@ -57,7 +56,7 @@ public class LevelServiceImpl implements LevelService {
     }
 
     @Override
-    public DataResponse<List<LevelListResponse>> getAllLevels(int page, int size, String text, List<Boolean> status, String sortBy, String sortDir) {
+    public DataResponse<List<LevelDetailsResponse>> getAllLevels(int page, int size, String text, List<Boolean> status, String sortBy, String sortDir) {
         // Validate page
         if (page < 0) {
             throw new ApiException(Const.ERROR_MESSAGE.INVALID_PAGE, 400);
@@ -120,11 +119,11 @@ public class LevelServiceImpl implements LevelService {
             }
         }
 
-        List<LevelListResponse> levels = levelPage.getContent().stream()
-                .map(levelMapper::toLevelListResponse)
+        List<LevelDetailsResponse> levels = levelPage.getContent().stream()
+                .map(levelMapper::toLevelDetailsResponse)
                 .collect(Collectors.toList());
 
-        return DataResponse.<List<LevelListResponse>>builder()
+        return DataResponse.<List<LevelDetailsResponse>>builder()
                 .traceId(org.slf4j.MDC.get("traceId"))
                 .success(true)
                 .message(Const.LEVEL.LIST_RETRIEVED)
@@ -209,17 +208,8 @@ public class LevelServiceImpl implements LevelService {
             throw new ApiException(Const.VALIDATION.REQUEST_NULL, HttpStatus.BAD_REQUEST.value());
         }
 
+        // Validate each request
         for (UpdateLevelOrderRequest request : requests) {
-            // Validate ID
-            if (request.getId() == null) {
-                throw new ApiException(Const.VALIDATION.MISSING_FIELD, HttpStatus.BAD_REQUEST.value());
-            }
-
-            // Validate orderNumber
-            if (request.getOrderNumber() == null || request.getOrderNumber() <= 0) {
-                throw new ApiException(Const.VALIDATION.INVALID_FORMAT, HttpStatus.BAD_REQUEST.value());
-            }
-
             // Validate levelName
             if (request.getLevelName() == null || request.getLevelName().trim().isEmpty()) {
                 throw new ApiException(Const.VALIDATION.MISSING_FIELD, HttpStatus.BAD_REQUEST.value());
@@ -229,7 +219,12 @@ public class LevelServiceImpl implements LevelService {
             }
 
             // Validate difficulty
-            validateDifficulty(request.getDifficulty().name());
+            validateDifficulty(request.getDifficulty());
+
+            // Validate orderNumber
+            if (request.getOrderNumber() == null || request.getOrderNumber() <= 0) {
+                throw new ApiException(Const.VALIDATION.INVALID_FORMAT, HttpStatus.BAD_REQUEST.value());
+            }
         }
 
         // Check for duplicate order numbers in the input
@@ -254,26 +249,47 @@ public class LevelServiceImpl implements LevelService {
             }
         }
 
-        // Fetch all existing levels by IDs
-        List<Long> ids = requests.stream().map(UpdateLevelOrderRequest::getId).collect(Collectors.toList());
+        // Fetch existing levels for update requests (where id is not null)
+        List<Long> ids = requests.stream()
+                .filter(request -> request.getId() != null)
+                .map(UpdateLevelOrderRequest::getId)
+                .collect(Collectors.toList());
         List<Level> existingLevels = levelRepository.findAllById(ids);
 
         // Create a map of existing levels by ID for quick lookup
         Map<Long, Level> existingLevelMap = existingLevels.stream()
                 .collect(Collectors.toMap(Level::getId, level -> level));
 
-        // Validate and prepare levels
+        // Process levels
         List<Level> levelsToSave = new ArrayList<>();
         for (UpdateLevelOrderRequest request : requests) {
-            Level level = existingLevelMap.get(request.getId());
-            if (level == null) {
-                throw new ApiException(Const.LEVEL.LEVEL_NOT_FOUND, HttpStatus.NOT_FOUND.value());
-            }
+            if (request.getId() == null) {
+                // Create new level (reusing logic from createLevel)
+                if (levelRepository.existsByLevelName(request.getLevelName())) {
+                    throw new ApiException(Const.LEVEL.DUPLICATE_LEVEL_NAME, HttpStatus.CONFLICT.value());
+                }
 
-            level.setOrderNumber(request.getOrderNumber());
-            level.setLevelName(request.getLevelName());
-            level.setDifficulty(request.getDifficulty());
-            levelsToSave.add(level);
+                Level newLevel = levelMapper.toEntity(request);
+                newLevel.setOrderNumber(request.getOrderNumber());
+                newLevel.setIsActive(true); // Default for new levels
+                levelsToSave.add(newLevel);
+            } else {
+                // Update existing level
+                Level level = existingLevelMap.get(request.getId());
+                if (level == null) {
+                    throw new ApiException(Const.LEVEL.LEVEL_NOT_FOUND, HttpStatus.NOT_FOUND.value());
+                }
+
+                // Check for duplicate levelName excluding the current level
+                if (levelRepository.existsByLevelNameAndIdNot(request.getLevelName(), request.getId())) {
+                    throw new ApiException(Const.LEVEL.DUPLICATE_LEVEL_NAME, HttpStatus.CONFLICT.value());
+                }
+
+                // Update all fields using mapper
+                levelMapper.updateOrderFromRequest(level, request);
+                level.setOrderNumber(request.getOrderNumber());
+                levelsToSave.add(level);
+            }
         }
 
         // Save all levels
