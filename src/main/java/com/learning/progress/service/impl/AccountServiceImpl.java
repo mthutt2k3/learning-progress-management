@@ -178,6 +178,7 @@ public class AccountServiceImpl implements AccountService {
         newUser.setMustChangePassword(true);
         newUser.setRole(role);
         newUser.setStatus(UserStatus.ACTIVE);
+        newUser.setMustUpdateProfile(true);
 
         // Lưu user và flush
         userRepository.saveAndFlush(newUser);
