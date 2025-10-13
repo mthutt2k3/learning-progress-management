@@ -23,8 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 import jakarta.validation.Validator;
 
 import java.time.OffsetDateTime;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -84,89 +83,200 @@ public class ChapterServiceImpl implements ChapterService {
     public List<ChapterDTO> syncChapters(Long syllabusId, List<SyncChapterRequest> request) {
         Syllabus syllabus = syllabusRepository.findById(syllabusId)
                 .filter(s -> s.getDeletedAt() == null)
-                .orElseThrow(() -> new ApiException("Syllabus không tìm thấy hoặc đã bị xóa", HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> new ApiException("Syllabus không tìm thấy", HttpStatus.NOT_FOUND.value()));
 
-        // Lấy danh sách chapter hiện tại
-        List<Chapter> existingChapters = chapterRepository.findBySyllabusIdAndSearchText(syllabusId, null,
-                PageRequest.of(0, Integer.MAX_VALUE, Sort.by("orderNumber").ascending())).getContent();
+        // Lấy tất cả active chapters hiện tại
+        List<Chapter> existingActiveChapters = chapterRepository
+                .findBySyllabusIdAndDeletedAtIsNullOrderByOrderNumberAsc(syllabusId);
 
-        // Validate từng request
-        for (SyncChapterRequest req : request) {
-            if (req.isToBeDeleted()) {
-                if (req.getId() == null) {
-                    throw new ApiException("Chapter xóa phải có ID", HttpStatus.BAD_REQUEST.value());
-                }
-            } else {
-                // Validate chapterName và orderNumber chỉ khi không bị xóa
-                Set<ConstraintViolation<SyncChapterRequest>> violations = validator.validate(req, SyncChapterRequest.NotDeleted.class);
-                if (!violations.isEmpty()) {
-                    String errorMsg = violations.stream()
-                            .map(ConstraintViolation::getMessage)
-                            .collect(Collectors.joining(", "));
-                    throw new ApiException(errorMsg, HttpStatus.BAD_REQUEST.value());
-                }
+        Set<Long> existingActiveIds = existingActiveChapters.stream()
+                .map(Chapter::getId)
+                .collect(Collectors.toSet());
+
+        // 1. Separate requests: deleted vs non-deleted
+        List<SyncChapterRequest> deleteRequests = request.stream()
+                .filter(SyncChapterRequest::isToBeDeleted)
+                .collect(Collectors.toList());
+
+        List<SyncChapterRequest> nonDeletedRequests = request.stream()
+                .filter(req -> !req.isToBeDeleted())
+                .collect(Collectors.toList());
+
+        // 2. Validate DELETE requests (chỉ cần ID)
+        for (SyncChapterRequest deleteReq : deleteRequests) {
+            // Validate ID required cho delete
+            Set<ConstraintViolation<SyncChapterRequest>> violations = validator.validate(deleteReq, SyncChapterRequest.Deleted.class);
+            if (!violations.isEmpty()) {
+                String errorMsg = violations.stream()
+                        .map(ConstraintViolation::getMessage)
+                        .collect(Collectors.joining(", "));
+                throw new ApiException(errorMsg, HttpStatus.BAD_REQUEST.value());
+            }
+
+            Long deleteId = deleteReq.getId();
+            if (deleteId == null || !existingActiveIds.contains(deleteId)) {
+                throw new ApiException(
+                        "Chapter ID để xóa không tồn tại hoặc đã bị xóa: " + deleteId,
+                        HttpStatus.BAD_REQUEST.value()
+                );
             }
         }
 
-        // Validate orderNumber cho các chapter không bị xóa
-        List<SyncChapterRequest> nonDeletedChapters = request.stream()
-                .filter(ch -> !ch.isToBeDeleted())
-                .collect(Collectors.toList());
-        Set<Integer> orderNumbers = nonDeletedChapters.stream()
-                .map(SyncChapterRequest::getOrderNumber)
-                .collect(Collectors.toSet());
-        int expectedSize = nonDeletedChapters.size();
-        Set<Integer> expectedOrderNumbers = IntStream.rangeClosed(1, expectedSize).boxed().collect(Collectors.toSet());
-        if (orderNumbers.size() != expectedSize ||
-                orderNumbers.contains(null) ||
-                orderNumbers.stream().anyMatch(n -> n < 1) ||
-                !orderNumbers.equals(expectedOrderNumbers)) {
-            throw new ApiException("Order numbers phải duy nhất, không null, không âm và tuần tự từ 1", HttpStatus.BAD_REQUEST.value());
-        }
-
-        // Validate chapter IDs
-        Set<Long> inputIds = request.stream()
-                .filter(ch -> ch.getId() != null)
+        // 3. Validate EXISTING IDs trong non-deleted requests
+        Set<Long> existingUpdateIds = nonDeletedRequests.stream()
+                .filter(req -> req.getId() != null) // Existing chapters
                 .map(SyncChapterRequest::getId)
                 .collect(Collectors.toSet());
-        Set<Long> existingIds = existingChapters.stream().map(Chapter::getId).collect(Collectors.toSet());
-        if (!existingIds.containsAll(inputIds)) {
-            throw new ApiException("Một số chapter ID không khớp với chapter hiện có", HttpStatus.BAD_REQUEST.value());
+
+        Set<Long> invalidExistingIds = existingUpdateIds.stream()
+                .filter(id -> !existingActiveIds.contains(id))
+                .collect(Collectors.toSet());
+
+        if (!invalidExistingIds.isEmpty()) {
+            throw new ApiException(
+                    "Các existing chapter ID không tồn tại: " + invalidExistingIds,
+                    HttpStatus.BAD_REQUEST.value()
+            );
         }
 
-        String currentUser = jwtUtil.extractUsernameFromCurrentRequest();
-
-        return request.stream().map(req -> {
-            if (req.isToBeDeleted()) {
-                // Soft delete
-                Chapter chapter = chapterRepository.findById(req.getId())
-                        .filter(c -> c.getDeletedAt() == null)
-                        .orElseThrow(() -> new ApiException("Chapter không tìm thấy hoặc đã bị xóa: " + req.getId(), HttpStatus.NOT_FOUND.value()));
-                chapter.setDeletedBy(currentUser);
-                chapter.setDeletedAt(OffsetDateTime.now());
-                chapterRepository.save(chapter);
-                return null;
-            } else if (req.getId() == null) {
-                // Tạo chapter mới
-                Chapter chapter = new Chapter();
-                chapter.setSyllabus(syllabus);
-                chapter.setChapterName(req.getChapterName());
-                chapter.setOrderNumber(req.getOrderNumber());
-                chapter.setCreatedBy(currentUser);
-                chapterRepository.save(chapter);
-                return chapterMapper.toChapterDTO(chapter);
-            } else {
-                // Cập nhật chapter hiện có
-                Chapter chapter = chapterRepository.findById(req.getId())
-                        .filter(c -> c.getDeletedAt() == null)
-                        .orElseThrow(() -> new ApiException("Chapter không tìm thấy hoặc đã bị xóa: " + req.getId(), HttpStatus.NOT_FOUND.value()));
-                chapter.setChapterName(req.getChapterName());
-                chapter.setOrderNumber(req.getOrderNumber());
-                chapter.setUpdatedBy(currentUser);
-                chapter.setUpdatedAt(OffsetDateTime.now());
-                chapterRepository.save(chapter);
-                return chapterMapper.toChapterDTO(chapter);
+        // 4. Validate non-deleted requests với full validation
+        for (SyncChapterRequest req : nonDeletedRequests) {
+            Set<ConstraintViolation<SyncChapterRequest>> violations = validator.validate(req, SyncChapterRequest.NotDeleted.class);
+            if (!violations.isEmpty()) {
+                String errorMsg = violations.stream()
+                        .map(ConstraintViolation::getMessage)
+                        .collect(Collectors.joining(", "));
+                throw new ApiException(errorMsg, HttpStatus.BAD_REQUEST.value());
             }
-        }).filter(dto -> dto != null).collect(Collectors.toList());
+        }
+
+        // 5. Validate EXISTING IDs - Strict Matching
+        Set<Long> requestExistingIds = nonDeletedRequests.stream()
+                .filter(req -> req.getId() != null) // Existing chapters cần update
+                .map(SyncChapterRequest::getId)
+                .collect(Collectors.toSet());
+
+        Set<Long> requestDeleteIds = deleteRequests.stream()
+                .map(SyncChapterRequest::getId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+
+        // Check 1: Tất cả request IDs phải tồn tại trong DB active chapters
+        Set<Long> invalidRequestIds = new HashSet<>();
+        invalidRequestIds.addAll(requestExistingIds.stream()
+                .filter(id -> !existingActiveIds.contains(id))
+                .collect(Collectors.toSet()));
+        invalidRequestIds.addAll(requestDeleteIds.stream()
+                .filter(id -> !existingActiveIds.contains(id))
+                .collect(Collectors.toSet()));
+
+        if (!invalidRequestIds.isEmpty()) {
+            throw new ApiException(
+                    "Các chapter ID không tồn tại hoặc đã bị xóa: " + invalidRequestIds,
+                    HttpStatus.BAD_REQUEST.value()
+            );
+        }
+
+        // Check 2: Tất cả DB active chapters phải được handle (update HOẶC delete)
+        Set<Long> handledIds = new HashSet<>();
+        handledIds.addAll(requestExistingIds);
+        handledIds.addAll(requestDeleteIds);
+
+        Set<Long> unhandledDbIds = existingActiveIds.stream()
+                .filter(id -> !handledIds.contains(id))
+                .collect(Collectors.toSet());
+
+        if (!unhandledDbIds.isEmpty()) {
+            throw new ApiException(
+                    String.format("Các chapter sau không được handle trong sync request: %s. FE phải bao gồm tất cả active chapters!", unhandledDbIds),
+                    HttpStatus.BAD_REQUEST.value()
+            );
+        }
+
+        // Check 3: Verify exact matching logic
+        int expectedNonDeletedCount = existingActiveChapters.size() - requestDeleteIds.size();
+        int actualNonDeletedCount = requestExistingIds.size();
+
+        if (actualNonDeletedCount != expectedNonDeletedCount) {
+            throw new ApiException(
+                    String.format("Số lượng non-deleted chapters không khớp! Expected: %d, Actual: %d",
+                            expectedNonDeletedCount, actualNonDeletedCount),
+                    HttpStatus.BAD_REQUEST.value()
+            );
+        }
+
+        log.info("Strict ID validation passed: DB active={}, handled={}, existing={}, delete={}",
+                existingActiveIds.size(), handledIds.size(), requestExistingIds.size(), requestDeleteIds.size());
+
+
+        Set<Integer> orderNumbers = nonDeletedRequests.stream()
+                .map(SyncChapterRequest::getOrderNumber)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+
+        int nonDeletedSize = nonDeletedRequests.size();
+        Set<Integer> expectedOrders = IntStream.rangeClosed(1, nonDeletedSize).boxed().collect(Collectors.toSet());
+
+        if (orderNumbers.size() != nonDeletedSize || !orderNumbers.equals(expectedOrders)) {
+            throw new ApiException(
+                    String.format("Order numbers phải tuần tự từ 1 đến %d không trùng lặp và không có gap. Current: %s",
+                            nonDeletedSize, orderNumbers),
+                    HttpStatus.BAD_REQUEST.value()
+            );
+        }
+
+        log.info("Order number validation passed: nonDeletedSize={}, orders={}", nonDeletedSize, orderNumbers);
+        // 6. Initial process
+        String currentUser = jwtUtil.extractUsernameFromCurrentRequest();
+        OffsetDateTime now = OffsetDateTime.now();
+        List<ChapterDTO> result = new ArrayList<>();
+
+        // 7. Process DELETE (chỉ cần ID)
+        for (SyncChapterRequest deleteReq : deleteRequests) {
+            Chapter chapter = chapterRepository.findById(deleteReq.getId())
+                    .filter(c -> c.getDeletedAt() == null)
+                    .orElseThrow(() -> new ApiException("Chapter không tìm thấy để xóa", HttpStatus.NOT_FOUND.value()));
+            chapter.setDeletedBy(currentUser);
+            chapter.setDeletedAt(now);
+            chapterRepository.save(chapter);
+        }
+
+        // 8. Process UPDATE existing
+        List<SyncChapterRequest> updateRequests = nonDeletedRequests.stream()
+                .filter(req -> req.getId() != null)
+                .collect(Collectors.toList());
+
+        for (SyncChapterRequest req : updateRequests) {
+            Chapter chapter = chapterRepository.findById(req.getId())
+                    .filter(c -> c.getDeletedAt() == null)
+                    .orElseThrow(() -> new ApiException("Chapter không tìm thấy: " + req.getId(), HttpStatus.NOT_FOUND.value()));
+
+            chapter.setChapterName(req.getChapterName());
+            chapter.setOrderNumber(req.getOrderNumber());
+            chapter.setUpdatedBy(currentUser);
+            chapter.setUpdatedAt(now);
+            Chapter saved = chapterRepository.save(chapter);
+            result.add(chapterMapper.toChapterDTO(saved));
+        }
+
+        // 9. Process CREATE new (id = null)
+        List<SyncChapterRequest> newRequests = nonDeletedRequests.stream()
+                .filter(req -> req.getId() == null)
+                .collect(Collectors.toList());
+
+        for (SyncChapterRequest req : newRequests) {
+            Chapter newChapter = new Chapter();
+            newChapter.setSyllabus(syllabus);
+            newChapter.setChapterName(req.getChapterName());
+            newChapter.setOrderNumber(req.getOrderNumber());
+            newChapter.setCreatedBy(currentUser);
+            newChapter.setUpdatedBy(currentUser);
+            newChapter.setUpdatedAt(now);
+            Chapter saved = chapterRepository.save(newChapter);
+            result.add(chapterMapper.toChapterDTO(saved));
+        }
+
+        return result;
     }
+
 }
