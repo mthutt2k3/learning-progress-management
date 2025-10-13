@@ -7,19 +7,23 @@ import lombok.Data;
 
 @Data
 public class SyncChapterRequest {
-    private Long id; // Nullable cho chapter mới
+    @NotNull(message = "ID bắt buộc khi xóa", groups = Deleted.class)
+    private Long id; // Required cho delete/update, null cho new
 
-    // Chỉ validate khi không bị xóa
+    // Chỉ validate khi !toBeDeleted
     @NotBlank(message = "Tên chapter không được để trống", groups = NotDeleted.class)
     private String chapterName;
 
-    // Chỉ validate khi không bị xóa
+    // Chỉ validate khi !toBeDeleted
     @NotNull(message = "Order number không được null", groups = NotDeleted.class)
     @Min(value = 1, message = "Order number phải từ 1 trở lên", groups = NotDeleted.class)
     private Integer orderNumber;
 
-    private boolean toBeDeleted; // Cờ đánh dấu xóa
+    private boolean toBeDeleted; // true = chỉ cần id để delete
 
-    // Validation group cho các chapter không bị xóa
+    // Validation cho non-deleted items
     public interface NotDeleted {}
+
+    // Validation cho deleted items
+    public interface Deleted {}
 }
