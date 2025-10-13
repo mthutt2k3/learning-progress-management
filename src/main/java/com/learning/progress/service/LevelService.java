@@ -1,6 +1,7 @@
 package com.learning.progress.service;
 
 import com.learning.progress.dto.request.CreateLevelRequest;
+import com.learning.progress.dto.request.UpdateLevelOrderRequest;
 import com.learning.progress.dto.request.UpdateLevelRequest;
 import com.learning.progress.dto.response.DataResponse;
 import com.learning.progress.dto.response.LevelDetailsResponse;
@@ -14,4 +15,5 @@ public interface LevelService {
     void createLevel(CreateLevelRequest request);
     void updateLevel(Long id, UpdateLevelRequest request);
     void toggleLevelStatus(Long id);
+    void bulkUpdateLevels(List<UpdateLevelOrderRequest> requests);
 }

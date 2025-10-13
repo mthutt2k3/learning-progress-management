@@ -2,6 +2,7 @@ package com.learning.progress.controller;
 
 import com.learning.progress.common.Const;
 import com.learning.progress.dto.request.CreateLevelRequest;
+import com.learning.progress.dto.request.UpdateLevelOrderRequest;
 import com.learning.progress.dto.request.UpdateLevelRequest;
 import com.learning.progress.dto.response.DataResponse;
 import com.learning.progress.dto.response.LevelDetailsResponse;
@@ -63,6 +64,14 @@ public class LevelController {
     @Operation(summary = "Update Level", description = "Update an existing level by ID")
     public ResponseEntity<?> updateLevel(@PathVariable Long id, @Valid @RequestBody UpdateLevelRequest request) {
         levelService.updateLevel(id, request);
+        return ResponseEntity.ok(DataResponse.success(Const.LEVEL.LEVEL_UPDATED, Const.LEVEL.LEVEL_UPDATED));
+    }
+
+    @PreAuthorize("hasRole('MANAGER')")
+    @PutMapping("/bulk-order")
+    @Operation(summary = "Bulk Update Levels", description = "Create or update multiple levels with specified order numbers")
+    public ResponseEntity<?> bulkUpdateLevels(@Valid @RequestBody List<UpdateLevelOrderRequest> requests) {
+        levelService.bulkUpdateLevels(requests);
         return ResponseEntity.ok(DataResponse.success(Const.LEVEL.LEVEL_UPDATED, Const.LEVEL.LEVEL_UPDATED));
     }
 

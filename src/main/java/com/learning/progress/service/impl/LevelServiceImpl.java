@@ -3,6 +3,7 @@ package com.learning.progress.service.impl;
 import com.learning.progress.common.Const;
 import com.learning.progress.common.LevelDifficulty;
 import com.learning.progress.dto.request.CreateLevelRequest;
+import com.learning.progress.dto.request.UpdateLevelOrderRequest;
 import com.learning.progress.dto.request.UpdateLevelRequest;
 import com.learning.progress.dto.response.DataResponse;
 import com.learning.progress.dto.response.LevelDetailsResponse;
@@ -21,8 +22,9 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
+import java.util.*;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 
 @Service
@@ -159,10 +161,6 @@ public class LevelServiceImpl implements LevelService {
             throw new ApiException(Const.VALIDATION.INVALID_FORMAT, HttpStatus.BAD_REQUEST.value());
         }
 
-        if (request.getOrderNumber() == null || request.getOrderNumber() < 1) {
-            throw new ApiException(Const.VALIDATION.INVALID_FORMAT, HttpStatus.BAD_REQUEST.value());
-        }
-
         if (request.getDifficulty() == null) {
             throw new ApiException(Const.VALIDATION.INVALID_DIFFICULTY, HttpStatus.BAD_REQUEST.value());
         }
@@ -173,18 +171,9 @@ public class LevelServiceImpl implements LevelService {
         }
 
         // Handle order number
-        Integer requestedOrderNumber = request.getOrderNumber();
         Integer maxOrderNumber = levelRepository.findMaxOrderNumber().orElse(0);
 
-        // If requested order number is too high, set it to max + 1
-        if (requestedOrderNumber > maxOrderNumber + 1) {
-            requestedOrderNumber = maxOrderNumber + 1;
-        }
-
-        // If order number exists, shift subsequent levels
-        if (levelRepository.existsByOrderNumber(requestedOrderNumber)) {
-            levelRepository.incrementOrderNumbers(requestedOrderNumber);
-        }
+        Integer requestedOrderNumber = maxOrderNumber + 1;
 
         Level level = levelMapper.toEntity(request);
         level.setOrderNumber(requestedOrderNumber);
@@ -205,13 +194,90 @@ public class LevelServiceImpl implements LevelService {
         if (levelRepository.existsByLevelNameAndIdNot(request.getLevelName(), id)) {
             throw new ApiException(Const.LEVEL.DUPLICATE_LEVEL_NAME, HttpStatus.CONFLICT.value());
         }
-        if (levelRepository.existsByOrderNumberAndIdNot(request.getOrderNumber(), id)) {
-            throw new ApiException(Const.LEVEL.DUPLICATE_ORDER_NUMBER, HttpStatus.CONFLICT.value());
-        }
 
+        request.setOrderNumber(level.getOrderNumber());
         levelMapper.updateEntityFromRequest(level, request);
 
         levelRepository.save(level);
+    }
+
+
+    @Override
+    @Transactional
+    public void bulkUpdateLevels(List<UpdateLevelOrderRequest> requests) {
+        if (requests == null || requests.isEmpty()) {
+            throw new ApiException(Const.VALIDATION.REQUEST_NULL, HttpStatus.BAD_REQUEST.value());
+        }
+
+        for (UpdateLevelOrderRequest request : requests) {
+            // Validate ID
+            if (request.getId() == null) {
+                throw new ApiException(Const.VALIDATION.MISSING_FIELD, HttpStatus.BAD_REQUEST.value());
+            }
+
+            // Validate orderNumber
+            if (request.getOrderNumber() == null || request.getOrderNumber() <= 0) {
+                throw new ApiException(Const.VALIDATION.INVALID_FORMAT, HttpStatus.BAD_REQUEST.value());
+            }
+
+            // Validate levelName
+            if (request.getLevelName() == null || request.getLevelName().trim().isEmpty()) {
+                throw new ApiException(Const.VALIDATION.MISSING_FIELD, HttpStatus.BAD_REQUEST.value());
+            }
+            if (request.getLevelName().length() > 50) {
+                throw new ApiException(Const.VALIDATION.INVALID_FORMAT, HttpStatus.BAD_REQUEST.value());
+            }
+
+            // Validate difficulty
+            validateDifficulty(request.getDifficulty().name());
+        }
+
+        // Check for duplicate order numbers in the input
+        Set<Integer> usedOrderNumbers = new HashSet<>();
+        for (UpdateLevelOrderRequest request : requests) {
+            if (!usedOrderNumbers.add(request.getOrderNumber())) {
+                throw new ApiException(Const.LEVEL.DUPLICATE_ORDER_NUMBER, HttpStatus.CONFLICT.value());
+            }
+        }
+
+        // Check if order numbers form a continuous sequence starting from 1
+        int n = requests.size();
+        if (!usedOrderNumbers.containsAll(IntStream.rangeClosed(1, n).boxed().collect(Collectors.toSet()))) {
+            throw new ApiException(Const.LEVEL.INVALID_ORDER_SEQUENCE, HttpStatus.BAD_REQUEST.value());
+        }
+
+        // Check for duplicate level names in the input
+        Set<String> usedLevelNames = new HashSet<>();
+        for (UpdateLevelOrderRequest request : requests) {
+            if (!usedLevelNames.add(request.getLevelName())) {
+                throw new ApiException(Const.LEVEL.DUPLICATE_LEVEL_NAME, HttpStatus.CONFLICT.value());
+            }
+        }
+
+        // Fetch all existing levels by IDs
+        List<Long> ids = requests.stream().map(UpdateLevelOrderRequest::getId).collect(Collectors.toList());
+        List<Level> existingLevels = levelRepository.findAllById(ids);
+
+        // Create a map of existing levels by ID for quick lookup
+        Map<Long, Level> existingLevelMap = existingLevels.stream()
+                .collect(Collectors.toMap(Level::getId, level -> level));
+
+        // Validate and prepare levels
+        List<Level> levelsToSave = new ArrayList<>();
+        for (UpdateLevelOrderRequest request : requests) {
+            Level level = existingLevelMap.get(request.getId());
+            if (level == null) {
+                throw new ApiException(Const.LEVEL.LEVEL_NOT_FOUND, HttpStatus.NOT_FOUND.value());
+            }
+
+            level.setOrderNumber(request.getOrderNumber());
+            level.setLevelName(request.getLevelName());
+            level.setDifficulty(request.getDifficulty());
+            levelsToSave.add(level);
+        }
+
+        // Save all levels
+        levelRepository.saveAll(levelsToSave);
     }
 
     @Override

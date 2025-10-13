@@ -23,7 +23,4 @@ public class CreateLevelRequest {
     @NotNull(message = "Estimated duration is required")
     @PositiveOrZero(message = "Duration must be non-negative")
     private Integer estimatedDurationWeeks;
-    @NotNull(message = "Order number is required")
-    @PositiveOrZero(message = "Order number must be non-negative")
-    private Integer orderNumber;
 }
