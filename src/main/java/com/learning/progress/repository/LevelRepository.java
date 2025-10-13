@@ -18,8 +18,6 @@ public interface LevelRepository extends JpaRepository<Level, Long> {
 
     boolean existsByLevelNameAndIdNot(String levelName, Long id);
 
-    boolean existsByOrderNumber(Integer orderNumber);
-
     boolean existsByOrderNumberAndIdNot(Integer orderNumber, Long id);
 
     @Query("SELECT l FROM Level l WHERE l.deletedAt IS NULL AND (LOWER(l.levelName) LIKE LOWER(CONCAT('%', :text, '%')) OR LOWER(l.description) LIKE LOWER(CONCAT('%', :text, '%')))")
@@ -37,21 +35,5 @@ public interface LevelRepository extends JpaRepository<Level, Long> {
     @Query("SELECT MAX(l.orderNumber) FROM Level l WHERE l.deletedAt IS NULL")
     Optional<Integer> findMaxOrderNumber();
 
-    @Modifying
-    @Query("UPDATE Level l SET l.orderNumber = l.orderNumber + 1 WHERE l.orderNumber >= :orderNumber AND l.deletedAt IS NULL")
-    void incrementOrderNumbers(Integer orderNumber);
 
-    // Tăng orderNumber trong khoảng [start, end) (cho update)
-    @Modifying
-    @Query("UPDATE Level l SET l.orderNumber = l.orderNumber + 1 " +
-            "WHERE l.orderNumber >= :start AND l.orderNumber < :end " +
-            "AND l.deletedAt IS NULL")
-    void incrementOrderNumbersInRange(Integer start, Integer end);
-
-    // Giảm orderNumber trong khoảng (start, end] (cho update)
-    @Modifying
-    @Query("UPDATE Level l SET l.orderNumber = l.orderNumber - 1 " +
-            "WHERE l.orderNumber > :start AND l.orderNumber <= :end " +
-            "AND l.deletedAt IS NULL")
-    void decrementOrderNumbersInRange(Integer start, Integer end);
 }
