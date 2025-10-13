@@ -6,7 +6,6 @@ import com.learning.progress.dto.request.UpdateLevelOrderRequest;
 import com.learning.progress.dto.request.UpdateLevelRequest;
 import com.learning.progress.dto.response.DataResponse;
 import com.learning.progress.dto.response.LevelDetailsResponse;
-import com.learning.progress.dto.response.LevelListResponse;
 import com.learning.progress.service.LevelService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;

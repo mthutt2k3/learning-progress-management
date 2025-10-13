@@ -5,7 +5,6 @@ import com.learning.progress.dto.request.UpdateLevelOrderRequest;
 import com.learning.progress.dto.request.UpdateLevelRequest;
 import com.learning.progress.dto.response.DataResponse;
 import com.learning.progress.dto.response.LevelDetailsResponse;
-import com.learning.progress.dto.response.LevelListResponse;
 
 import java.util.List;
 
