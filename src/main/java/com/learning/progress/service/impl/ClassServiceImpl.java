@@ -1,7 +1,8 @@
 package com.learning.progress.service.impl;
 
 import com.learning.progress.dto.clazz.ClassDTO;
-import com.learning.progress.dto.clazz.ClassRequest;
+import com.learning.progress.dto.clazz.CreateClassRequest;
+import com.learning.progress.dto.clazz.UpdateClassRequest;
 import com.learning.progress.dto.response.DataResponse;
 import com.learning.progress.entity.Chapter;
 import com.learning.progress.entity.ClassChapter;
@@ -58,9 +59,9 @@ public class ClassServiceImpl implements ClassService {
 
     @Override
     @Transactional
-    public ClassDTO createClass(ClassRequest request) {
+    public ClassDTO createClass(CreateClassRequest request) {
         // Validate request
-        Set<ConstraintViolation<ClassRequest>> violations = validator.validate(request);
+        Set<ConstraintViolation<CreateClassRequest>> violations = validator.validate(request);
         if (!violations.isEmpty()) {
             throw new ApiException(violations.stream().map(ConstraintViolation::getMessage).collect(Collectors.joining(", ")), HttpStatus.BAD_REQUEST.value());
         }
@@ -91,9 +92,7 @@ public class ClassServiceImpl implements ClassService {
         for (Chapter chapter : chapters) {
             ClassChapter classChapter = new ClassChapter();
             classChapter.setClazz(savedClass);
-            classChapter.setChapter(chapter);
             classChapter.setClassChapterName(chapter.getChapterName());
-            classChapter.setClassChapterContent(""); // Nội dung mặc định
             classChapter.setOrderNumber(chapter.getOrderNumber());
             classChapter.setCreatedBy(currentUser);
             classChapter.setUpdatedBy(currentUser);
@@ -105,9 +104,7 @@ public class ClassServiceImpl implements ClassService {
             List<Lesson> lessons = lessonRepository.findByChapterIdAndDeletedAtIsNullOrderByOrderNumberAsc(chapter.getId());
             for (Lesson lesson : lessons) {
                 ClassLesson classLesson = new ClassLesson();
-                classLesson.setClazz(savedClass);
                 classLesson.setClassChapter(classChapter);
-                classLesson.setLesson(lesson);
                 classLesson.setClassLessonName(lesson.getLessonName());
                 classLesson.setClassLessonContent(lesson.getContent());
                 classLesson.setOrderNumber(lesson.getOrderNumber());
@@ -150,13 +147,13 @@ public class ClassServiceImpl implements ClassService {
 
     @Override
     @Transactional
-    public ClassDTO updateClass(Long id, ClassRequest request) {
+    public ClassDTO updateClass(Long id, UpdateClassRequest request) {
         Clazz clazz = classRepository.findById(id)
                 .filter(c -> c.getDeletedAt() == null)
                 .orElseThrow(() -> new ApiException("Class không tồn tại", HttpStatus.NOT_FOUND.value()));
 
         // Validate request
-        Set<ConstraintViolation<ClassRequest>> violations = validator.validate(request);
+        Set<ConstraintViolation<UpdateClassRequest>> violations = validator.validate(request);
         if (!violations.isEmpty()) {
             throw new ApiException(violations.stream().map(ConstraintViolation::getMessage).collect(Collectors.joining(", ")), HttpStatus.BAD_REQUEST.value());
         }
@@ -168,12 +165,7 @@ public class ClassServiceImpl implements ClassService {
         clazz.setAvatarUrl(request.getAvatarUrl());
         clazz.setUpdatedBy(currentUser);
         clazz.setUpdatedAt(now);
-        if (request.getSyllabusId() != null) {
-            Syllabus syllabus = syllabusRepository.findById(request.getSyllabusId())
-                    .filter(s -> s.getDeletedAt() == null)
-                    .orElseThrow(() -> new ApiException("Syllabus không tồn tại", HttpStatus.NOT_FOUND.value()));
-            clazz.setSyllabus(syllabus);
-        }
+
 
         return classMapper.toClassDTO(classRepository.save(clazz));
     }
@@ -187,6 +179,19 @@ public class ClassServiceImpl implements ClassService {
         clazz.setIsActive(isActive);
         clazz.setUpdatedBy(jwtUtil.extractUsernameFromCurrentRequest());
         clazz.setUpdatedAt(OffsetDateTime.now());
+        classRepository.save(clazz);
+    }
+
+    @Override
+    @Transactional
+    public void deleteClass(Long id) {
+        Clazz clazz = classRepository.findById(id)
+                .filter(c -> c.getDeletedAt() == null)
+                .orElseThrow(() -> new ApiException("Class không tồn tại", HttpStatus.NOT_FOUND.value()));
+        String currentUser = jwtUtil.extractUsernameFromCurrentRequest();
+        OffsetDateTime now = OffsetDateTime.now();
+        clazz.setDeletedBy(currentUser);
+        clazz.setDeletedAt(now);
         classRepository.save(clazz);
     }
 

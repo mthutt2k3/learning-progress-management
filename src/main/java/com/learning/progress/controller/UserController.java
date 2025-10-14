@@ -3,7 +3,7 @@ package com.learning.progress.controller;
 import com.learning.progress.common.Const;
 import com.learning.progress.dto.StudentProfileDTO;
 import com.learning.progress.dto.TeacherProfileDTO;
-import com.learning.progress.dto.UserProfileDTO;
+import com.learning.progress.dto.UpdateUserProfileDTO;
 import com.learning.progress.dto.request.CreateStudentRequest;
 import com.learning.progress.dto.request.CreateUserRequest;
 import com.learning.progress.dto.response.DataResponse;
@@ -115,10 +115,20 @@ public class UserController {
     @GetMapping("profile/{userId}")
     @PreAuthorize("hasRole('MANAGER') or hasRole('TEACHER') or hasRole('TEACHING_ASSISTANT') or @jwtUtil.isCurrentUser(#userId)")
     @Operation(summary = "Get user profile", description = "Retrieve profile of a specific user by user ID or current user if userId is not provided")
-    public ResponseEntity<DataResponse<UserProfileDTO>> getUserProfile(
+    public ResponseEntity<DataResponse<?>> getUserProfile(
             @Parameter(description = "User ID of the user (optional, defaults to current user)") @PathVariable(required = false) Long userId) {
         boolean isCurrentUser = userId == null;
         var response = userService.getUserProfile(userId, isCurrentUser);
         return ResponseEntity.ok(DataResponse.success(response, Const.CRUD_MESSAGE_CODE.RETRIEVE_SUCCESSFUL));
+    }
+
+    @PutMapping("profile")
+    @PreAuthorize("@jwtUtil.isCurrentUser(#userId)")
+    @Operation(summary = "Update current user profile", description = "Update profile of the currently authenticated user")
+    public ResponseEntity<DataResponse<?>> updateUserProfile(
+            @Parameter(description = "User ID of the current user") @PathVariable Long userId,
+            @RequestBody @Valid UpdateUserProfileDTO updateUserProfileDTO) {
+        var response = userService.updateUserProfile(userId, updateUserProfileDTO);
+        return ResponseEntity.ok(DataResponse.success(response, Const.CRUD_MESSAGE_CODE.UPDATE_SUCCESSFUL));
     }
 }

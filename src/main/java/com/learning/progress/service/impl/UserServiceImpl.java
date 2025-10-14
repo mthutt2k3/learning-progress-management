@@ -1,14 +1,7 @@
 package com.learning.progress.service.impl;
 
-import com.learning.progress.common.Const;
-import com.learning.progress.common.Gender;
-import com.learning.progress.common.UserStatus;
-import com.learning.progress.common.RoleName;
-import com.learning.progress.dto.ClassInfo;
-import com.learning.progress.dto.ParentInfo;
-import com.learning.progress.dto.StudentProfileDTO;
-import com.learning.progress.dto.TeacherProfileDTO;
-import com.learning.progress.dto.UserProfileDTO;
+import com.learning.progress.common.*;
+import com.learning.progress.dto.*;
 import com.learning.progress.dto.request.CreateStudentRequest;
 import com.learning.progress.dto.request.CreateUserRequest;
 import com.learning.progress.dto.response.DataResponse;
@@ -427,4 +420,25 @@ public class UserServiceImpl implements UserService {
 
         return response;
     }
+
+    @Override
+    public UserProfileDTO updateUserProfile(Long userId, UpdateUserProfileDTO updateDTO) {
+        String username = jwtUtil.extractUsernameFromCurrentRequest();
+        if (username == null || username.trim().isEmpty()) {
+            throw new ApiException(Const.AUTH.INVALID_TOKEN_USERNAME, HttpStatus.UNAUTHORIZED.value());
+        }
+        User user = userRepository.findByUserName(username)
+                .orElseThrow(() -> new ApiException(Const.AUTH.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+
+        if (!user.getId().equals(userId)) {
+            throw new ApiException("User ID does not match current user", HttpStatus.FORBIDDEN.value());
+        }
+
+        // Update basic user information
+        User updateUser = userMapper.toUser(updateDTO);
+
+        userRepository.save(updateUser);
+        return userMapper.toUserProfileDTO(updateUser);
+    }
+
 }

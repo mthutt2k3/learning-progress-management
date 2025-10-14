@@ -10,11 +10,11 @@ import java.util.List;
 
 public interface ClassLessonService {
 
-    List<ClassLessonDTO> syncClassLessons(Long classId, Long classChapterId, List<SyncClassLessonRequest> request);
+    List<ClassLessonDTO> syncClassLessons(Long classChapterId, List<SyncClassLessonRequest> request);
 
     ClassLessonDTO getClassLesson(Long id);
 
-    DataResponse<List<ClassLessonDTO>> getClassLessonList(Long classId, Long classChapterId, int page, int size, String searchText);
+    DataResponse<List<ClassLessonDTO>> getClassLessonList(Long classChapterId, int page, int size, String searchText);
 
     void exportClassLessonsToExcel(Long classChapterId, OutputStream outputStream);
 

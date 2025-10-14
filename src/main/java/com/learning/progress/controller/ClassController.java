@@ -2,10 +2,12 @@ package com.learning.progress.controller;
 
 import com.learning.progress.common.Const;
 import com.learning.progress.dto.clazz.ClassDTO;
-import com.learning.progress.dto.clazz.ClassRequest;
+import com.learning.progress.dto.clazz.CreateClassRequest;
+import com.learning.progress.dto.clazz.UpdateClassRequest;
 import com.learning.progress.dto.response.DataResponse;
 import com.learning.progress.service.ClassService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
@@ -29,7 +31,7 @@ public class ClassController {
     @PostMapping
     @PreAuthorize("hasRole('MANAGER')")
     @Operation(summary = "Tạo class", description = "Tạo class mới và tự động sao chép chapters, lessons")
-    public ResponseEntity<DataResponse<ClassDTO>> createClass(@Valid @RequestBody ClassRequest request) {
+    public ResponseEntity<DataResponse<ClassDTO>> createClass(@Valid @RequestBody CreateClassRequest request) {
         return ResponseEntity.ok(DataResponse.success(classService.createClass(request), Const.CRUD_MESSAGE_CODE.CREATE_SUCCESSFUL));
     }
 
@@ -54,17 +56,26 @@ public class ClassController {
     @PreAuthorize("hasRole('MANAGER')")
     @Operation(summary = "Cập nhật class", description = "Cập nhật thông tin class")
     public ResponseEntity<DataResponse<ClassDTO>> updateClass(
-            @PathVariable Long id, @Valid @RequestBody ClassRequest request) {
+            @PathVariable Long id, @Valid @RequestBody UpdateClassRequest request) {
         return ResponseEntity.ok(DataResponse.success(classService.updateClass(id, request), Const.CRUD_MESSAGE_CODE.UPDATE_SUCCESSFUL));
     }
 
     @PatchMapping("/{id}/toggle")
     @PreAuthorize("hasRole('MANAGER')")
-    @Operation(summary = "Kích hoạt/Hủy kích hoạt class", description = "Thay đổi trạng thái isActive")
+    @Operation(summary = "Kết thúc lớp học", description = "Thay đổi trạng thái isActive")
     public ResponseEntity<DataResponse<Void>> toggleClassActivation(
             @PathVariable Long id, @RequestParam boolean isActive) {
         classService.toggleClassActivation(id, isActive);
         return ResponseEntity.ok(DataResponse.success(null, Const.CRUD_MESSAGE_CODE.UPDATE_SUCCESSFUL));
+    }
+
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('MANAGER')")
+    @Operation(summary = "Xóa class", description = "Xóa mềm class theo ID")
+    public ResponseEntity<DataResponse<Void>> deleteClass(
+            @Parameter(description = "Class ID") @PathVariable Long id) {
+        classService.deleteClass(id);
+        return ResponseEntity.ok(DataResponse.success(null, Const.CRUD_MESSAGE_CODE.DELETE_SUCCESSFUL));
     }
 
     @GetMapping("/export")

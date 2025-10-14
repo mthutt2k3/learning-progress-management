@@ -9,4 +9,5 @@ import java.util.Map;
 public interface EmailService {
     void sendForgotPasswordEmail(User user, ResetPasswordRequest request, String resetToken);
     void sendNewAccountEmail(User user, String username, String password);
+
 }

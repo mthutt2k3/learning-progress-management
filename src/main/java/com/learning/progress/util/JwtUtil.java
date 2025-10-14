@@ -90,4 +90,31 @@ public class JwtUtil {
         String token = authHeader.substring(7);
         return getUsernameFromToken(token);
     }
+    public boolean isCurrentUser(Long userId) {
+        try {
+            // Lấy request hiện tại
+            ServletRequestAttributes attributes = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+            if (attributes == null) {
+                return false;
+            }
+
+            HttpServletRequest request = attributes.getRequest();
+            String authHeader = request.getHeader("Authorization");
+
+            if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+                return false;
+            }
+
+            String token = authHeader.substring(7);
+
+            // Lấy userId từ JWT
+            Claims claims = getAllClaimsFromToken(token);
+            Long currentUserId = ((Number) claims.get("userId")).longValue();
+
+            return currentUserId.equals(userId);
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
 }
