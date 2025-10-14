@@ -63,7 +63,12 @@ public class Const {
         public static final String USER_INACTIVE = "User account is not active";
         public static final String EMAIL_NOT_FOUND = "Email not found in the system";
         public static final String EMAIL_INVALID = "Invalid email format";
-
+        public static final String USER_NOT_FOUND = "User does not exist in the system";
+        public static final String INVALID_ID = "Invalid user ID";
+        public static final String DELETED = "User has been deleted";
+        public static final String INVALID_ROLE_STUDENT_ONLY = "User must have student role";
+        public static final String INVALID_ROLE_FOR_CLASS = "User must have a student or test taker role to join class";
+        public static final String INACTIVE = "User is inactive";
     }
 
     public static class VALIDATION {
@@ -72,7 +77,6 @@ public class Const {
         public static final String INVALID_FORMAT = "Invalid format";
         public static final String OPERATION_FAILED = "Operation failed, please try again later";
         public static final String INVALID_DIFFICULTY = "Invalid difficulty format"; // Thêm mới
-        // ✅ NEW: More detailed validation messages
         public static final String REQUEST_NULL = "Request body cannot be null";
         public static final String PASSWORD_REQUIRED = "Password is required";
         public static final String LOGIN_ROLE_REQUIRED = "Login role is required";
@@ -110,4 +114,27 @@ public class Const {
         public static final String DUPLICATE_ORDER_NUMBER = "Order number already exists";
         public static final String INVALID_ORDER_SEQUENCE = "Order number have to be in order one by one";
     }
+
+    public static class CLASS {
+        public static final String CLASS_NOT_FOUND = "Class not found";
+        public static final String INVALID_ID = "Invalid class ID";
+        public static final String INACTIVE = "Class is inactive";
+        public static final String DELETED = "Class has been deleted";
+    }
+
+    public static class CLASS_STUDENT {
+        public static final String LIST_RETRIEVED = "Student list retrieved successfully";
+        public static final String PROFILE_RETRIEVED = "Student profile retrieved successfully";
+        public static final String PERFORMANCE_RETRIEVED = "Student performance report retrieved successfully";
+        public static final String PROGRESS_RETRIEVED = "Student progress overview retrieved successfully";
+        public static final String STUDENT_ADDED = "Student added to class successfully";
+        public static final String STUDENT_REMOVED = "Student removed from class successfully";
+        public static final String STUDENTS_IMPORTED = "Students imported successfully";
+        public static final String TEMPLATE_GENERATION_FAILED = "Failed to generate import template";
+        public static final String IMPORT_FAILED = "Failed to import students from Excel";
+        public static final String STUDENT_NOT_FOUND = "Student not found in class";
+        public static final String STUDENT_ALREADY_IN_CLASS = "Student is already in the class";
+    }
+
+
 }
