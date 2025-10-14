@@ -65,6 +65,7 @@ server:
 jwt:
   secret: ${JWT_SECRET}
   expiration: 7200000
+  email-change-expiration: 86400000 # Thời gian hết hạn token đổi email (24 giờ)
 
 logging:
   level:

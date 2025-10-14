@@ -16,7 +16,6 @@ public class ClassChapterDTO {
     private Long classId;
     private Long chapterId; // Tham chiếu chapter gốc, có thể null
     private String classChapterName;
-    private String classChapterContent;
     private Integer orderNumber;
     private String createdBy;
     private OffsetDateTime createdAt;

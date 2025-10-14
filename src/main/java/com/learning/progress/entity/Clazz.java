@@ -1,10 +1,7 @@
 package com.learning.progress.entity;
 
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.*;
 import lombok.experimental.SuperBuilder;
 import org.hibernate.annotations.ColumnDefault;
 import org.hibernate.annotations.OnDelete;
@@ -32,6 +29,7 @@ public class Clazz extends BaseEntity{
 
     @ColumnDefault("true")
     @Column(name = "is_active")
-    private Boolean isActive;
+    @Builder.Default
+    private Boolean isActive = true;
 
 }
