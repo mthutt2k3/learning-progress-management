@@ -6,11 +6,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.experimental.SuperBuilder;
-import org.hibernate.annotations.ColumnDefault;
 import org.hibernate.annotations.OnDelete;
 import org.hibernate.annotations.OnDeleteAction;
-
-import java.time.OffsetDateTime;
 
 @SuperBuilder
 @NoArgsConstructor
@@ -20,22 +17,11 @@ import java.time.OffsetDateTime;
 @Entity
 @Table(name = "class_lessons")
 public class ClassLesson extends BaseEntity{
-    
-
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @OnDelete(action = OnDeleteAction.CASCADE)
-    @JoinColumn(name = "class_id", nullable = false)
-    private Class classField;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @OnDelete(action = OnDeleteAction.SET_NULL)
     @JoinColumn(name = "class_chapter_id")
     private ClassChapter classChapter;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @OnDelete(action = OnDeleteAction.SET_NULL)
-    @JoinColumn(name = "lesson_id")
-    private Lesson lesson;
 
     @Column(name = "class_lesson_name", nullable = false, length = 100)
     private String classLessonName;

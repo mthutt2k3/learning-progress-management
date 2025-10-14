@@ -1,5 +1,6 @@
 package com.learning.progress.controller;
 import com.learning.progress.common.Const;
+import com.learning.progress.dto.ChangeEmailRequestDTO;
 import com.learning.progress.dto.request.ChangePasswordRequest;
 import com.learning.progress.dto.request.ConfirmResetPasswordRequest;
 import com.learning.progress.dto.request.LoginRequest;
@@ -85,4 +86,5 @@ public class AuthController {
         ResetPasswordByTeacherResponse response = authService.resetPasswordByTeacher(username);
         return ResponseEntity.ok(DataResponse.success(response, Const.AUTH.PASSWORD_RESET_BY_TEACHER));
     }
+
 }

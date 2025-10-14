@@ -1,16 +1,11 @@
 package com.learning.progress.entity;
 
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.*;
 import lombok.experimental.SuperBuilder;
 import org.hibernate.annotations.ColumnDefault;
 import org.hibernate.annotations.OnDelete;
 import org.hibernate.annotations.OnDeleteAction;
-
-import java.time.OffsetDateTime;
 
 @SuperBuilder
 @NoArgsConstructor
@@ -19,7 +14,7 @@ import java.time.OffsetDateTime;
 @Setter
 @Entity
 @Table(name = "classes")
-public class Class extends BaseEntity{
+public class Clazz extends BaseEntity{
     
     @Column(name = "class_name", nullable = false, length = 50)
     private String className;
@@ -34,6 +29,7 @@ public class Class extends BaseEntity{
 
     @ColumnDefault("true")
     @Column(name = "is_active")
-    private Boolean isActive;
+    @Builder.Default
+    private Boolean isActive = true;
 
 }

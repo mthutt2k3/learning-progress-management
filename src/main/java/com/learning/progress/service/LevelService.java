@@ -14,5 +14,5 @@ public interface LevelService {
     void createLevel(CreateLevelRequest request);
     void updateLevel(Long id, UpdateLevelRequest request);
     void toggleLevelStatus(Long id);
-    void bulkUpdateLevels(List<UpdateLevelOrderRequest> requests);
+    List<LevelDetailsResponse> bulkUpdateLevels(List<UpdateLevelOrderRequest> requests);
 }
