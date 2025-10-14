@@ -8,6 +8,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.core.env.Environment;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
+import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.web.client.RestTemplate;
 
 import java.net.InetAddress;
@@ -16,6 +17,7 @@ import java.net.UnknownHostException;
 @SpringBootApplication
 @EnableJpaRepositories(basePackages = {"com.learning.progress.repository"})
 @Slf4j
+@EnableAsync
 public class LearningProgressApplication {
 
 	public static void main(String[] args) {
