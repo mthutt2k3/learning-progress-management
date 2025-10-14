@@ -70,8 +70,8 @@ public class LevelController {
     @PutMapping("/bulk-order")
     @Operation(summary = "Bulk Update Levels", description = "Create or update multiple levels with specified order numbers")
     public ResponseEntity<?> bulkUpdateLevels(@Valid @RequestBody List<UpdateLevelOrderRequest> requests) {
-        levelService.bulkUpdateLevels(requests);
-        return ResponseEntity.ok(DataResponse.success(Const.LEVEL.LEVEL_UPDATED, Const.LEVEL.LEVEL_UPDATED));
+        List<LevelDetailsResponse> response = levelService.bulkUpdateLevels(requests);
+        return ResponseEntity.ok(DataResponse.success(response, Const.LEVEL.LEVEL_UPDATED));
     }
 
     @PreAuthorize("hasRole('MANAGER')")

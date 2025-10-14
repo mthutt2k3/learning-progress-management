@@ -12,6 +12,9 @@ import com.learning.progress.exception.ApiException;
 import com.learning.progress.mapper.LevelMapper;
 import com.learning.progress.repository.LevelRepository;
 import com.learning.progress.service.LevelService;
+import com.learning.progress.util.JwtUtil;
+import jakarta.validation.ConstraintViolation;
+import jakarta.validation.Validator;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -21,6 +24,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.OffsetDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -34,6 +38,12 @@ public class LevelServiceImpl implements LevelService {
 
     @Autowired
     private LevelMapper levelMapper;
+
+    @Autowired
+    private Validator validator;
+
+    @Autowired
+    private JwtUtil jwtUtil;
 
     private void validateDifficulty(String difficulty) {
         // Kiểm tra null hoặc rỗng
@@ -203,97 +213,187 @@ public class LevelServiceImpl implements LevelService {
 
     @Override
     @Transactional
-    public void bulkUpdateLevels(List<UpdateLevelOrderRequest> requests) {
+    public List<LevelDetailsResponse> bulkUpdateLevels(List<UpdateLevelOrderRequest> requests) {
         if (requests == null || requests.isEmpty()) {
             throw new ApiException(Const.VALIDATION.REQUEST_NULL, HttpStatus.BAD_REQUEST.value());
         }
 
-        // Validate each request
-        for (UpdateLevelOrderRequest request : requests) {
-            // Validate levelName
-            if (request.getLevelName() == null || request.getLevelName().trim().isEmpty()) {
+        // Step 1: Load existing active levels
+        List<Level> existingActiveLevels = levelRepository.findAllByIsActiveIsTrueOrderByOrderNumberAsc();
+        Set<Long> existingActiveIds = existingActiveLevels.stream()
+                .map(Level::getId)
+                .collect(Collectors.toSet());
+
+        // Step 2: Separate requests into delete and non-delete
+        List<UpdateLevelOrderRequest> deleteRequests = requests.stream()
+                .filter(UpdateLevelOrderRequest::isToBeDeleted)
+                .collect(Collectors.toList());
+        List<UpdateLevelOrderRequest> nonDeletedRequests = requests.stream()
+                .filter(req -> !req.isToBeDeleted())
+                .collect(Collectors.toList());
+
+        // Step 3: Validate DELETE requests
+        for (UpdateLevelOrderRequest deleteReq : deleteRequests) {
+            Set<ConstraintViolation<UpdateLevelOrderRequest>> violations = validator.validate(deleteReq, UpdateLevelOrderRequest.Deleted.class);
+            if (!violations.isEmpty()) {
+                String errorMsg = violations.stream().map(ConstraintViolation::getMessage).collect(Collectors.joining(", "));
+                throw new ApiException(errorMsg, HttpStatus.BAD_REQUEST.value());
+            }
+            Long deleteId = deleteReq.getId();
+            if (deleteId == null || !existingActiveIds.contains(deleteId)) {
+                throw new ApiException("Level ID to delete not found: " + deleteId, HttpStatus.BAD_REQUEST.value());
+            }
+        }
+
+        // Step 4: Validate EXISTING IDs - Strict Matching
+        Set<Long> requestExistingIds = nonDeletedRequests.stream()
+                .filter(req -> req.getId() != null)
+                .map(UpdateLevelOrderRequest::getId)
+                .collect(Collectors.toSet());
+        Set<Long> requestDeleteIds = deleteRequests.stream()
+                .map(UpdateLevelOrderRequest::getId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+
+        // Check 1: All request IDs must exist
+        Set<Long> invalidRequestIds = new HashSet<>();
+        invalidRequestIds.addAll(requestExistingIds.stream()
+                .filter(id -> !existingActiveIds.contains(id))
+                .collect(Collectors.toSet()));
+        invalidRequestIds.addAll(requestDeleteIds.stream()
+                .filter(id -> !existingActiveIds.contains(id))
+                .collect(Collectors.toSet()));
+        if (!invalidRequestIds.isEmpty()) {
+            throw new ApiException("Level IDs not found: " + invalidRequestIds, HttpStatus.BAD_REQUEST.value());
+        }
+
+        // Check 2: All DB levels must be handled
+        Set<Long> handledIds = new HashSet<>();
+        handledIds.addAll(requestExistingIds);
+        handledIds.addAll(requestDeleteIds);
+        Set<Long> unhandledDbIds = existingActiveIds.stream()
+                .filter(id -> !handledIds.contains(id))
+                .collect(Collectors.toSet());
+        if (!unhandledDbIds.isEmpty()) {
+            throw new ApiException(
+                    String.format("Levels not handled: %s. FE must include ALL active levels!", unhandledDbIds),
+                    HttpStatus.BAD_REQUEST.value()
+            );
+        }
+
+        // Check 3: Count consistency
+        int newLevelCount = (int) nonDeletedRequests.stream().filter(req -> req.getId() == null).count();
+        int expectedNonDeletedCount = existingActiveLevels.size() - requestDeleteIds.size() + newLevelCount;
+        int actualNonDeletedCount = nonDeletedRequests.size();
+        if (actualNonDeletedCount != expectedNonDeletedCount) {
+            throw new ApiException(
+                    String.format("Non-deleted levels count mismatch! Expected: %d, Actual: %d",
+                            expectedNonDeletedCount, actualNonDeletedCount),
+                    HttpStatus.BAD_REQUEST.value()
+            );
+        }
+
+        // Step 5: Bean Validation Non-Deleted
+        for (UpdateLevelOrderRequest req : nonDeletedRequests) {
+            Set<ConstraintViolation<UpdateLevelOrderRequest>> violations = validator.validate(req, UpdateLevelOrderRequest.NotDeleted.class);
+            if (!violations.isEmpty()) {
+                String errorMsg = violations.stream().map(ConstraintViolation::getMessage).collect(Collectors.joining(", "));
+                throw new ApiException(errorMsg, HttpStatus.BAD_REQUEST.value());
+            }
+            validateDifficulty(req.getDifficulty());
+            if (req.getLevelName() == null || req.getLevelName().trim().isEmpty()) {
                 throw new ApiException(Const.VALIDATION.MISSING_FIELD, HttpStatus.BAD_REQUEST.value());
             }
-            if (request.getLevelName().length() > 50) {
+            if (req.getLevelName().length() > 100) {
                 throw new ApiException(Const.VALIDATION.INVALID_FORMAT, HttpStatus.BAD_REQUEST.value());
             }
-
-            // Validate difficulty
-            validateDifficulty(request.getDifficulty());
-
-            // Validate orderNumber
-            if (request.getOrderNumber() == null || request.getOrderNumber() <= 0) {
+            if (req.getOrderNumber() == null || req.getOrderNumber() <= 0) {
                 throw new ApiException(Const.VALIDATION.INVALID_FORMAT, HttpStatus.BAD_REQUEST.value());
             }
         }
 
-        // Check for duplicate order numbers in the input
-        Set<Integer> usedOrderNumbers = new HashSet<>();
-        for (UpdateLevelOrderRequest request : requests) {
-            if (!usedOrderNumbers.add(request.getOrderNumber())) {
-                throw new ApiException(Const.LEVEL.DUPLICATE_ORDER_NUMBER, HttpStatus.CONFLICT.value());
-            }
+        // Step 6: Validate Order Numbers (sequential from 1)
+        Set<Integer> orderNumbers = nonDeletedRequests.stream()
+                .map(UpdateLevelOrderRequest::getOrderNumber)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        int nonDeletedSize = nonDeletedRequests.size();
+        Set<Integer> expectedOrders = IntStream.rangeClosed(1, nonDeletedSize).boxed().collect(Collectors.toSet());
+        if (orderNumbers.size() != nonDeletedSize || !orderNumbers.equals(expectedOrders)) {
+            throw new ApiException(
+                    String.format("Order numbers must be sequential from 1 to %d. Current: %s", nonDeletedSize, orderNumbers),
+                    HttpStatus.BAD_REQUEST.value()
+            );
         }
 
-        // Check if order numbers form a continuous sequence starting from 1
-        int n = requests.size();
-        if (!usedOrderNumbers.containsAll(IntStream.rangeClosed(1, n).boxed().collect(Collectors.toSet()))) {
-            throw new ApiException(Const.LEVEL.INVALID_ORDER_SEQUENCE, HttpStatus.BAD_REQUEST.value());
-        }
-
-        // Check for duplicate level names in the input
+        // Step 7: Validate duplicate level names
         Set<String> usedLevelNames = new HashSet<>();
-        for (UpdateLevelOrderRequest request : requests) {
-            if (!usedLevelNames.add(request.getLevelName())) {
+        for (UpdateLevelOrderRequest req : nonDeletedRequests) {
+            if (!usedLevelNames.add(req.getLevelName())) {
                 throw new ApiException(Const.LEVEL.DUPLICATE_LEVEL_NAME, HttpStatus.CONFLICT.value());
             }
         }
 
-        // Fetch existing levels for update requests (where id is not null)
-        List<Long> ids = requests.stream()
-                .filter(request -> request.getId() != null)
-                .map(UpdateLevelOrderRequest::getId)
-                .collect(Collectors.toList());
-        List<Level> existingLevels = levelRepository.findAllById(ids);
-
-        // Create a map of existing levels by ID for quick lookup
-        Map<Long, Level> existingLevelMap = existingLevels.stream()
-                .collect(Collectors.toMap(Level::getId, level -> level));
-
-        // Process levels
+        // Step 8: Process
+        String currentUser = jwtUtil.extractUsernameFromCurrentRequest();
+        OffsetDateTime now = OffsetDateTime.now();
         List<Level> levelsToSave = new ArrayList<>();
-        for (UpdateLevelOrderRequest request : requests) {
-            if (request.getId() == null) {
-                // Create new level (reusing logic from createLevel)
-                if (levelRepository.existsByLevelName(request.getLevelName())) {
-                    throw new ApiException(Const.LEVEL.DUPLICATE_LEVEL_NAME, HttpStatus.CONFLICT.value());
-                }
+        List<LevelDetailsResponse> result = new ArrayList<>();
 
-                Level newLevel = levelMapper.toEntity(request);
-                newLevel.setOrderNumber(request.getOrderNumber());
-                newLevel.setIsActive(true); // Default for new levels
-                levelsToSave.add(newLevel);
-            } else {
-                // Update existing level
-                Level level = existingLevelMap.get(request.getId());
-                if (level == null) {
-                    throw new ApiException(Const.LEVEL.LEVEL_NOT_FOUND, HttpStatus.NOT_FOUND.value());
-                }
+        // Process DELETE
+        for (Long deleteId : requestDeleteIds) {
+            Level level = levelRepository.findById(deleteId)
+                    .filter(Level::getIsActive)
+                    .orElseThrow(() -> new ApiException("Level not found to delete: " + deleteId, HttpStatus.NOT_FOUND.value()));
+            level.setDeletedAt(now);
+            level.setIsActive(false);
+            level.setUpdatedBy(currentUser);
+            level.setUpdatedAt(now);
+            level.setDeletedBy(currentUser);
+            level.setDeletedAt(now);
+            levelsToSave.add(level);
+        }
 
-                // Check for duplicate levelName excluding the current level
-                if (levelRepository.existsByLevelNameAndIdNot(request.getLevelName(), request.getId())) {
-                    throw new ApiException(Const.LEVEL.DUPLICATE_LEVEL_NAME, HttpStatus.CONFLICT.value());
-                }
-
-                // Update all fields using mapper
-                levelMapper.updateOrderFromRequest(level, request);
-                level.setOrderNumber(request.getOrderNumber());
-                levelsToSave.add(level);
+        // Process UPDATE existing
+        List<UpdateLevelOrderRequest> updateRequests = nonDeletedRequests.stream()
+                .filter(req -> req.getId() != null)
+                .collect(Collectors.toList());
+        for (UpdateLevelOrderRequest req : updateRequests) {
+            Level level = levelRepository.findById(req.getId())
+                    .filter(Level::getIsActive)
+                    .orElseThrow(() -> new ApiException("Level not found: " + req.getId(), HttpStatus.NOT_FOUND.value()));
+            if (levelRepository.existsByLevelNameAndIdNot(req.getLevelName(), req.getId())) {
+                throw new ApiException(Const.LEVEL.DUPLICATE_LEVEL_NAME, HttpStatus.CONFLICT.value());
             }
+            levelMapper.updateOrderFromRequest(level, req);
+            level.setOrderNumber(req.getOrderNumber());
+            level.setUpdatedBy(currentUser);
+            level.setUpdatedAt(now);
+            levelsToSave.add(level);
+            result.add(levelMapper.toLevelDetailsResponse(level));
+        }
+
+        // Process CREATE new
+        List<UpdateLevelOrderRequest> newRequests = nonDeletedRequests.stream()
+                .filter(req -> req.getId() == null)
+                .collect(Collectors.toList());
+        for (UpdateLevelOrderRequest req : newRequests) {
+            if (levelRepository.existsByLevelName(req.getLevelName())) {
+                throw new ApiException(Const.LEVEL.DUPLICATE_LEVEL_NAME, HttpStatus.CONFLICT.value());
+            }
+            Level newLevel = levelMapper.toEntity(req);
+            newLevel.setOrderNumber(req.getOrderNumber());
+            newLevel.setIsActive(true);
+            newLevel.setCreatedBy(currentUser);
+            newLevel.setUpdatedBy(currentUser);
+            newLevel.setUpdatedAt(now);
+            levelsToSave.add(newLevel);
+            result.add(levelMapper.toLevelDetailsResponse(newLevel));
         }
 
         // Save all levels
         levelRepository.saveAll(levelsToSave);
+        return result;
     }
 
     @Override
@@ -302,6 +402,12 @@ public class LevelServiceImpl implements LevelService {
                 .orElseThrow(() -> new ApiException(Const.LEVEL.LEVEL_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         level.setIsActive(!level.getIsActive());
+
+        Integer maxOrderNumber = levelRepository.findMaxOrderNumber().orElse(0);
+
+        Integer requestedOrderNumber = maxOrderNumber + 1;
+
+        level.setOrderNumber(requestedOrderNumber);
 
         levelRepository.save(level);
     }

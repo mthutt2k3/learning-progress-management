@@ -18,7 +18,9 @@ public interface LevelRepository extends JpaRepository<Level, Long> {
 
     boolean existsByLevelNameAndIdNot(String levelName, Long id);
 
-    boolean existsByOrderNumberAndIdNot(Integer orderNumber, Long id);
+    // Find all active levels (not deleted) ordered by orderNumber
+    @Query("SELECT l FROM Level l WHERE l.isActive IS true ORDER BY l.orderNumber ASC")
+    List<Level> findAllByIsActiveIsTrueOrderByOrderNumberAsc();
 
     @Query("SELECT l FROM Level l WHERE l.deletedAt IS NULL AND (LOWER(l.levelName) LIKE LOWER(CONCAT('%', :text, '%')) OR LOWER(l.description) LIKE LOWER(CONCAT('%', :text, '%')))")
     Page<Level> findByText(String text, Pageable pageable);
