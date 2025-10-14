@@ -26,7 +26,7 @@ public class ClassTeacher extends BaseEntity{
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @OnDelete(action = OnDeleteAction.CASCADE)
     @JoinColumn(name = "class_id", nullable = false)
-    private Class classField;
+    private Clazz clazz;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @OnDelete(action = OnDeleteAction.CASCADE)

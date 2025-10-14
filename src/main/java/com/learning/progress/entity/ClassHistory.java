@@ -24,7 +24,7 @@ public class ClassHistory extends BaseEntity{
     @ManyToOne(fetch = FetchType.LAZY)
     @OnDelete(action = OnDeleteAction.CASCADE)
     @JoinColumn(name = "class_id")
-    private Class classField;
+    private Clazz clazz;
 
     @Column(name = "action_details", length = Integer.MAX_VALUE)
     private String actionDetails;

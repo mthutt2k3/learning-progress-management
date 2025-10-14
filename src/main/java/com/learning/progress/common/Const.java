@@ -17,6 +17,7 @@ public class Const {
         public static final String ACTIVATE_SUCCESSFUL = "Activated successful";
         public static final String DEACTIVATE_SUCCESSFUL = "Deactivated successful";
         public static final String RETRIEVE_SUCCESSFUL = "Retrieved successful";
+        public static final String IMPORT_SUCCESSFUL = "Imported successful";
     }
 
     public static class ERROR_MESSAGE {

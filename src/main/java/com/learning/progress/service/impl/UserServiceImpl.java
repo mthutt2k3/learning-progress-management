@@ -418,8 +418,8 @@ public class UserServiceImpl implements UserService {
         List<ClassInfo> classList = classTeacherRepository.findActiveClassesByUserId(user.getId())
                 .stream()
                 .map(ct -> ClassInfo.builder()
-                        .id(ct.getClassField().getId())
-                        .className(ct.getClassField().getClassName())
+                        .id(ct.getClazz().getId())
+                        .className(ct.getClazz().getClassName())
                         .roleInClass(ct.getRoleInClass().name())
                         .build())
                 .collect(Collectors.toList());
