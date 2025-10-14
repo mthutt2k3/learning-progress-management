@@ -22,16 +22,8 @@ public class ClassChapter extends BaseEntity{
     @JoinColumn(name = "class_id", nullable = false)
     private Clazz clazz;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @OnDelete(action = OnDeleteAction.SET_NULL)
-    @JoinColumn(name = "chapter_id")
-    private Chapter chapter;
-
     @Column(name = "class_chapter_name", nullable = false, length = 100)
     private String classChapterName;
-
-    @Column(name = "class_chapter_content", nullable = false, length = Integer.MAX_VALUE)
-    private String classChapterContent;
 
     @Column(name = "order_number", nullable = false)
     private Integer orderNumber;

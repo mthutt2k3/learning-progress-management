@@ -13,11 +13,11 @@ import java.util.Optional;
 @Repository
 public interface ClassLessonRepository extends JpaRepository<ClassLesson, Long> {
 
-    @Query("SELECT cl FROM ClassLesson cl WHERE cl.classChapter.id = :classChapterId AND cl.clazz.id = :classId AND cl.deletedAt IS NULL ORDER BY cl.orderNumber ASC")
-    List<ClassLesson> findByClassChapterIdAndClassIdAndDeletedAtIsNullOrderByOrderNumberAsc(Long classChapterId, Long classId);
+    @Query("SELECT cl FROM ClassLesson cl WHERE cl.classChapter.id = :classChapterId AND cl.deletedAt IS NULL ORDER BY cl.orderNumber ASC")
+    List<ClassLesson> findByClassChapterIdAndDeletedAtIsNullOrderByOrderNumberAsc(Long classChapterId);
 
-    @Query("SELECT cl FROM ClassLesson cl WHERE cl.classChapter.id = :classChapterId AND cl.clazz.id = :classId AND cl.deletedAt IS NULL AND (:searchText IS NULL OR cl.classLessonName LIKE %:searchText%)")
-    Page<ClassLesson> findByClassChapterIdAndClassIdAndSearchText(Long classChapterId, Long classId, String searchText, Pageable pageable);
+    @Query("SELECT cl FROM ClassLesson cl WHERE cl.classChapter.id = :classChapterId AND cl.deletedAt IS NULL AND (:searchText IS NULL OR cl.classLessonName LIKE %:searchText%)")
+    Page<ClassLesson> findByClassChapterIdAndSearchText(Long classChapterId, String searchText, Pageable pageable);
 
     Optional<ClassLesson> findByIdAndDeletedAtIsNull(Long id);
 }

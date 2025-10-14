@@ -1,9 +1,6 @@
 package com.learning.progress.mapper;
 
-import com.learning.progress.dto.AccountDTO;
-import com.learning.progress.dto.StudentProfileDTO;
-import com.learning.progress.dto.TeacherProfileDTO;
-import com.learning.progress.dto.UserProfileDTO;
+import com.learning.progress.dto.*;
 import com.learning.progress.dto.request.CreateStudentRequest;
 import com.learning.progress.dto.response.StudentProfileResponse;
 import com.learning.progress.dto.request.CreateUserRequest;
@@ -36,6 +33,8 @@ public interface UserMapper {
 
     User toUser(CreateNewAccountRequest request);
 
+    User toUser(UpdateUserProfileDTO updateDTO);
+
     @Mapping(source = "role.name", target = "roleName")
     CreateUserResponse toCreateUserResponse(User user);
 
@@ -62,4 +61,5 @@ public interface UserMapper {
 
     @Mapping(target = "roleName", source = "role.name")
     TeacherProfileDTO toTeacherProfileDTO(User user);
+
 }

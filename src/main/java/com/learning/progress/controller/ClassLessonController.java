@@ -27,15 +27,14 @@ public class ClassLessonController {
     @Autowired
     private ClassLessonService classLessonService;
 
-    @PutMapping("/sync/{classId}/{classChapterId}")
+    @PutMapping("/sync/{classChapterId}")
     @PreAuthorize("hasRole('TEACHER')")
     @Operation(summary = "Đồng bộ class lessons", description = "Đồng bộ danh sách class lessons cho lớp và chapter")
     public ResponseEntity<DataResponse<List<ClassLessonDTO>>> syncClassLessons(
-            @Parameter(description = "Class ID") @PathVariable Long classId,
             @Parameter(description = "Class Chapter ID") @PathVariable Long classChapterId,
             @Valid @RequestBody List<SyncClassLessonRequest> request) {
         return ResponseEntity.ok(DataResponse.success(
-                classLessonService.syncClassLessons(classId, classChapterId, request),
+                classLessonService.syncClassLessons(classChapterId, request),
                 Const.CRUD_MESSAGE_CODE.UPDATE_SUCCESSFUL));
     }
 
@@ -50,12 +49,11 @@ public class ClassLessonController {
     @PreAuthorize("hasRole('MANAGER') or hasRole('TEACHER')")
     @Operation(summary = "Lấy danh sách class lesson", description = "Lấy danh sách class lesson phân trang")
     public ResponseEntity<DataResponse<List<ClassLessonDTO>>> getClassLessonList(
-            @Parameter(description = "Class ID") @RequestParam Long classId,
             @Parameter(description = "Class Chapter ID") @RequestParam Long classChapterId,
             @Parameter(description = "Số trang, bắt đầu từ 0") @RequestParam(defaultValue = "0") int page,
             @Parameter(description = "Kích thước trang") @RequestParam(defaultValue = "10") int size,
             @Parameter(description = "Từ khóa tìm kiếm") @RequestParam(required = false) String searchText) {
-        return ResponseEntity.ok(classLessonService.getClassLessonList(classId, classChapterId, page, size, searchText));
+        return ResponseEntity.ok(classLessonService.getClassLessonList(classChapterId, page, size, searchText));
     }
 
     @GetMapping("/export")

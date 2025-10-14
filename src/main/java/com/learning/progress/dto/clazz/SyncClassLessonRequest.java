@@ -1,5 +1,6 @@
 package com.learning.progress.dto.clazz;
 
+import com.learning.progress.dto.syllabus.SyncLessonRequest;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -16,6 +17,7 @@ import jakarta.validation.constraints.Min;
 @AllArgsConstructor
 public class SyncClassLessonRequest {
 
+    @NotNull(message = "ID bắt buộc khi xóa", groups = Deleted.class)
     private Long id; // Null khi tạo mới, bắt buộc khi update/xóa
 
     @NotBlank(groups = NotDeleted.class, message = "Tên lesson không được để trống")
