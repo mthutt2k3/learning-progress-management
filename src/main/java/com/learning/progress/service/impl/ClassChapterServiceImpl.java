@@ -1,6 +1,7 @@
 package com.learning.progress.service.impl;
 
 import com.learning.progress.common.ActionType;
+import com.learning.progress.common.RoleName;
 import com.learning.progress.dto.clazz.ClassChapterDTO;
 import com.learning.progress.dto.clazz.SyncClassChapterRequest;
 import com.learning.progress.dto.response.DataResponse;
@@ -181,6 +182,7 @@ public class ClassChapterServiceImpl implements ClassChapterService {
         OffsetDateTime now = OffsetDateTime.now();
         Long actionByUserId = jwtUtil.extractUserIdFromCurrentRequest();
         List<ClassChapterDTO> result = new ArrayList<>();
+        String visibleToRoles = String.format("%s,%s,%s", RoleName.MANAGER.name(), RoleName.TEACHER.name(), RoleName.TEACHING_ASSISTANT.name());
 
         // Process DELETE
         for (SyncClassChapterRequest deleteReq : deleteRequests) {
@@ -190,13 +192,19 @@ public class ClassChapterServiceImpl implements ClassChapterService {
             classChapter.setDeletedBy(currentUser);
             classChapter.setDeletedAt(now);
             classChapterRepository.save(classChapter);
+
             // Ghi lịch sử
+            String actionDetails = String.format(
+                    "Đã xóa chương %s của lớp %s",
+                    classChapter.getClassChapterName(),
+                    classEntity.getClassName()
+            );
             classHistoryService.saveClassHistory(
                     classId,
-                    String.format("{\"chapterId\": %d, \"action\": \"deleted\"}", deleteReq.getId()),
+                    actionDetails,
                     actionByUserId,
                     ActionType.DELETE_CHAPTER.name(),
-                    "MANAGER,TEACHER"
+                    visibleToRoles
             );
 
         }
@@ -214,14 +222,20 @@ public class ClassChapterServiceImpl implements ClassChapterService {
             classChapter.setUpdatedBy(currentUser);
             classChapter.setUpdatedAt(now);
             result.add(classChapterMapper.toClassChapterDTO(classChapterRepository.save(classChapter)));
+
             // Ghi lịch sử
+            String actionDetails = String.format(
+                    "Đã cập nhật chương %s của lớp %s với thứ tự %d",
+                    req.getClassChapterName(),
+                    classEntity.getClassName(),
+                    req.getOrderNumber()
+            );
             classHistoryService.saveClassHistory(
                     classId,
-                    String.format("{\"chapterId\": %d, \"classChapterName\": \"%s\", \"orderNumber\": %d}",
-                            req.getId(), req.getClassChapterName(), req.getOrderNumber()),
+                    actionDetails,
                     actionByUserId,
                     ActionType.UPDATE_CHAPTER.name(),
-                    "MANAGER,TEACHER"
+                    visibleToRoles
             );
         }
 
@@ -239,14 +253,20 @@ public class ClassChapterServiceImpl implements ClassChapterService {
             newChapter.setCreatedAt(now);
             newChapter.setUpdatedAt(now);
             result.add(classChapterMapper.toClassChapterDTO(classChapterRepository.save(newChapter)));
+
             // Ghi lịch sử
+            String actionDetails = String.format(
+                    "Đã tạo chương %s cho lớp %s với thứ tự %d",
+                    req.getClassChapterName(),
+                    classEntity.getClassName(),
+                    req.getOrderNumber()
+            );
             classHistoryService.saveClassHistory(
                     classId,
-                    String.format("{\"classChapterName\": \"%s\", \"orderNumber\": %d}",
-                            req.getClassChapterName(), req.getOrderNumber()),
+                    actionDetails,
                     actionByUserId,
                     ActionType.CREATE_CHAPTER.name(),
-                    "MANAGER,TEACHER"
+                    visibleToRoles
             );
         }
 

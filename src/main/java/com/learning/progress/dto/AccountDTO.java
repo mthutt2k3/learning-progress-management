@@ -10,7 +10,8 @@ import java.util.Date;
 public class AccountDTO {
     private Long id;
     private String userName;
-    private String fullName;
+    private String firstName;
+    private String lastName;
     private String email;
     private RoleName roleName;
     private UserStatus status;

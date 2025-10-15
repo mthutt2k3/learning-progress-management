@@ -2,11 +2,13 @@ package com.learning.progress.service.impl;
 
 import com.learning.progress.common.Const;
 import com.learning.progress.common.RoleName;
+import com.learning.progress.dto.ClassHistoryDTO;
 import com.learning.progress.dto.response.DataResponse;
 import com.learning.progress.entity.ClassHistory;
 import com.learning.progress.entity.Clazz;
 import com.learning.progress.entity.User;
 import com.learning.progress.exception.ApiException;
+import com.learning.progress.mapper.ClassHistoryMapper;
 import com.learning.progress.repository.ClassHistoryRepository;
 import com.learning.progress.repository.ClassRepository;
 import com.learning.progress.repository.ClassTeacherRepository;
@@ -41,6 +43,9 @@ public class ClassHistoryServiceImpl implements ClassHistoryService {
 
     @Autowired
     private UserRepository userRepository;
+
+    @Autowired
+    private ClassHistoryMapper classHistoryMapper;
 
     @Autowired
     private ClassTeacherRepository classTeacherRepository;
@@ -87,7 +92,7 @@ public class ClassHistoryServiceImpl implements ClassHistoryService {
 
     @Override
     @Transactional(readOnly = true)
-    public DataResponse<List<ClassHistory>> getClassHistory(Long classId, int page, int size, String sortBy, String sortDir) {
+    public DataResponse<List<ClassHistoryDTO>> getClassHistory(Long classId, int page, int size, String sortBy, String sortDir) {
         ValidateUtil.validatePaginationParams(page, size);
         ValidateUtil.validateSortParams(List.of("actionAt", "actionType"), sortBy, sortDir);
 
@@ -111,12 +116,15 @@ public class ClassHistoryServiceImpl implements ClassHistoryService {
         List<ClassHistory> histories = historyPage.getContent().stream()
                 .filter(history -> isVisibleToUser(history, role))
                 .collect(Collectors.toList());
+        List<ClassHistoryDTO> historiesDTO = histories.stream()
+                .map(classHistoryMapper::toClassHistoryDTO)
+                .collect(Collectors.toList());
 
-        return DataResponse.<List<ClassHistory>>builder()
+        return DataResponse.<List<ClassHistoryDTO>>builder()
                 .traceId(org.slf4j.MDC.get("traceId"))
                 .success(true)
                 .message("Successful")
-                .data(histories)
+                .data(historiesDTO)
                 .timestamp(LocalDateTime.now())
                 .page(page)
                 .size(size)
@@ -127,7 +135,7 @@ public class ClassHistoryServiceImpl implements ClassHistoryService {
 
     @Override
     @Transactional(readOnly = true)
-    public DataResponse<List<ClassHistory>> getClassHistoryByUser(Long userId, int page, int size, String sortBy, String sortDir) {
+    public DataResponse<List<ClassHistoryDTO>> getClassHistoryByUser(Long userId, int page, int size, String sortBy, String sortDir) {
         ValidateUtil.validatePaginationParams(page, size);
         ValidateUtil.validateSortParams(List.of("actionAt", "actionType"), sortBy, sortDir);
 
@@ -154,7 +162,7 @@ public class ClassHistoryServiceImpl implements ClassHistoryService {
         }
 
         if (classIds.isEmpty()) {
-            return DataResponse.<List<ClassHistory>>builder()
+            return DataResponse.<List<ClassHistoryDTO>>builder()
                     .traceId(org.slf4j.MDC.get("traceId"))
                     .success(true)
                     .message("No class history found")
@@ -175,12 +183,14 @@ public class ClassHistoryServiceImpl implements ClassHistoryService {
         List<ClassHistory> histories = historyPage.getContent().stream()
                 .filter(history -> isVisibleToUser(history, currentUser.getRole().getName()))
                 .collect(Collectors.toList());
-
-        return DataResponse.<List<ClassHistory>>builder()
+        List<ClassHistoryDTO> historiesDTO = histories.stream()
+                .map(classHistoryMapper::toClassHistoryDTO)
+                .collect(Collectors.toList());
+        return DataResponse.<List<ClassHistoryDTO>>builder()
                 .traceId(org.slf4j.MDC.get("traceId"))
                 .success(true)
                 .message("Successful")
-                .data(histories)
+                .data(historiesDTO)
                 .timestamp(LocalDateTime.now())
                 .page(page)
                 .size(size)

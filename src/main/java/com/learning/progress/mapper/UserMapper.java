@@ -46,7 +46,6 @@ public interface UserMapper {
 
     @Mapping(target = "roleName", source = "role.name")
     @Mapping(target = "createAt", source = "createdAt")
-    @Mapping(target = "fullName", expression = "java(user.getFirstName() + \" \" + user.getLastName())")
     AccountDTO toAccountDTO(User user);
 
     default Date map(OffsetDateTime offsetDateTime) {
