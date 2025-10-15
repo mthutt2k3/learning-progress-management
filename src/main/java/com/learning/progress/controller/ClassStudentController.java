@@ -93,7 +93,7 @@ public class ClassStudentController {
     @GetMapping("/download-template")
     @Operation(summary = "Download Student Import Template", description = "Download Excel template for importing students")
     public ResponseEntity<ByteArrayResource> downloadImportTemplate() {
-        byte[] template = classStudentService.generateImportTemplate();
+        byte[] template = classStudentService.generateStudentImportTemplate();
         ByteArrayResource resource = new ByteArrayResource(template);
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=student_import_template.xlsx")
@@ -105,9 +105,9 @@ public class ClassStudentController {
     @PreAuthorize("hasRole('MANAGER')")
     @PostMapping("/{classId}/import-students")
     @Operation(summary = "Import Students from Excel", description = "Import multiple students to a class from an Excel file")
-    public ResponseEntity<?> importStudentsFromExcel(@PathVariable Long classId, @RequestParam("file") MultipartFile file) {
-        ImportStudentsRequest request = new ImportStudentsRequest(file);
-        classStudentService.importStudentsFromExcel(classId, request);
+    public ResponseEntity<?> importStudentsFromExcel(@RequestParam("file") MultipartFile file) {
+//        ImportStudentsRequest request = new ImportStudentsRequest(file);
+        classStudentService.importStudentsFromExcel(file);
         return ResponseEntity.ok(DataResponse.success(Const.CLASS_STUDENT.STUDENTS_IMPORTED, Const.CLASS_STUDENT.STUDENTS_IMPORTED));
     }
 }
