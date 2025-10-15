@@ -1,29 +1,36 @@
 package com.learning.progress.dto;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
+import com.learning.progress.common.Const;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 import java.util.Date;
 
 @Data
 public class UpdateUserProfileDTO {
-    @Size(max = 50, message = "First name must not exceed 50 characters")
+    @NotBlank(message = Const.NAME.FIRST_NAME_REQUIRED)
     private String firstName;
 
-    @Size(max = 50, message = "Last name must not exceed 50 characters")
+    @NotBlank(message = Const.NAME.LAST_NAME_REQUIRED)
     private String lastName;
 
-    @Size(max = 255, message = "Avatar URL must not exceed 255 characters")
     private String avatarUrl;
 
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = Const.VALIDATE_INPUT.dateOfbirth)
     private Date dateOfBirth;
 
-    @Size(max = 255, message = "Address must not exceed 255 characters")
     private String address;
 
-    @Size(max = 20, message = "Phone number must not exceed 20 characters")
+    @Pattern(
+            regexp = Const.VALIDATE_INPUT.regexPhone,
+            message = Const.PHONE_NUMBER.INVALID_PHONE_FORMAT
+    )
+    @NotBlank(message = Const.PHONE_NUMBER.REQUIRED)
     private String phoneNumber;
 
-    @Size(max = 10, message = "Gender must not exceed 10 characters")
+    @NotBlank(message = Const.GENDER.REQUIRED)
     private String gender;
 
 }

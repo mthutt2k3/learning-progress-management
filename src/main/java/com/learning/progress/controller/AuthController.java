@@ -11,13 +11,16 @@ import com.learning.progress.service.AuthService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
 
 @RestController
+@Validated
 @RequestMapping("/api/v1/auth")
 @Tag(name = "Authentication", description = "User Authentication APIs")
 public class AuthController {
@@ -82,7 +85,7 @@ public class AuthController {
             summary = "Reset student password by teacher",
             description = "Allows teacher to change their student's password"
     )
-    public ResponseEntity<?> resetPasswordByTeacher(@RequestParam String username) {
+    public ResponseEntity<?> resetPasswordByTeacher(@RequestParam(required = false) String username) {
         ResetPasswordByTeacherResponse response = authService.resetPasswordByTeacher(username);
         return ResponseEntity.ok(DataResponse.success(response, Const.AUTH.PASSWORD_RESET_BY_TEACHER));
     }

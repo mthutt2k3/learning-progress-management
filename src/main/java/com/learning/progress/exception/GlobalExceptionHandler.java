@@ -85,9 +85,11 @@ public class GlobalExceptionHandler {
     public ResponseEntity<DataResponse<Object>> handleMethodArgumentNotValidException(
             MethodArgumentNotValidException ex, WebRequest request) {
 
+        // Lấy message của lỗi đầu tiên
         String errorMessage = ex.getBindingResult().getFieldErrors().stream()
-                .map(FieldError::getDefaultMessage)  // ✅ Chỉ lấy message
-                .collect(Collectors.joining(", "));  // Gộp nếu có nhiều lỗi
+                .map(FieldError::getDefaultMessage)
+                .findFirst()
+                .orElse("Validation error");
 
         DataResponse<Object> response = DataResponse.builder()
                 .traceId(MDC.get("traceId"))

@@ -95,7 +95,7 @@ public class EmailServiceImpl implements EmailService {
 
             this.sendEmail(user.getEmail(), subject, templatePath, templateVariables);
         } catch (Exception e) {
-            throw new ApiException(Const.VALIDATION.EMAIL_SEND_FAILED, HttpStatus.INTERNAL_SERVER_ERROR.value());
+            throw new ApiException(Const.AUTH.EMAIL_SEND_FAILED, HttpStatus.INTERNAL_SERVER_ERROR.value());
         }
     }
 
