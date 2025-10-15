@@ -1,12 +1,9 @@
 package com.learning.progress.service;
 
 import com.learning.progress.common.ClassStudentStatus;
-import com.learning.progress.dto.clazz.AddStudentToClassRequest;
-import com.learning.progress.dto.clazz.ImportStudentsRequest;
-import com.learning.progress.dto.clazz.ClassStudentResponse;
+import com.learning.progress.dto.clazz.*;
 import com.learning.progress.dto.response.DataResponse;
-import com.learning.progress.dto.clazz.StudentPerformanceReport;
-import com.learning.progress.dto.clazz.StudentProgressOverview;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -17,6 +14,6 @@ public interface ClassStudentService {
     StudentProgressOverview getStudentProgressOverview(Long classId, Long userId);
     void addStudentToClass(Long classId, AddStudentToClassRequest request);
     void removeStudentFromClass(Long classId, Long userId);
-    byte[] generateImportTemplate();
-    void importStudentsFromExcel(Long classId, ImportStudentsRequest request);
+    byte[] generateStudentImportTemplate();
+    void importStudentsFromExcel(MultipartFile file);
 }

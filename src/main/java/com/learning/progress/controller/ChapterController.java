@@ -10,10 +10,15 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.io.ByteArrayResource;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
+
 import java.util.List;
 
 @RestController
@@ -52,5 +57,27 @@ public class ChapterController {
             @Parameter(description = "Kích thước trang") @RequestParam(defaultValue = "10") int size,
             @Parameter(description = "Từ khóa tìm kiếm (chapterName)") @RequestParam(required = false) String searchText) {
         return ResponseEntity.ok(chapterService.getChapterList(syllabusId, page, size, searchText));
+    }
+
+    @GetMapping("/download-template")
+    @PreAuthorize("hasRole('MANAGER')")
+    @Operation(summary = "Download Chapter Import Template", description = "Download Excel template for importing chapters")
+    public ResponseEntity<ByteArrayResource> downloadChapterImportTemplate() {
+        byte[] template = chapterService.generateChapterImportTemplate();
+        ByteArrayResource resource = new ByteArrayResource(template);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=chapter_import_template.xlsx")
+                .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                .contentLength(template.length)
+                .body(resource);
+    }
+
+    @PostMapping("/import")
+    @PreAuthorize("hasRole('MANAGER')")
+    @Operation(summary = "Import Chapters from Excel", description = "Import multiple chapters from an Excel file")
+    public ResponseEntity<DataResponse<List<ChapterDTO>>> importChaptersFromExcel(
+            @Parameter(description = "Excel file containing chapter data") @RequestParam("file") MultipartFile file) {
+        var response = chapterService.importChaptersFromExcel(file);
+        return new ResponseEntity<>(DataResponse.success(response, Const.CRUD_MESSAGE_CODE.IMPORT_SUCCESSFUL), HttpStatus.OK);
     }
 }

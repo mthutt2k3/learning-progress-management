@@ -144,6 +144,7 @@ public class Const {
         public static final String DELETED = "User has been deleted";
         public static final String INVALID_ROLE_STUDENT_ONLY = "User must have student role";
         public static final String INVALID_ROLE_FOR_CLASS = "User must have a student or test taker role to join class";
+        public static final String INVALID_ROLE_TEACHER_ONLY = "User must have teacher or teaching assistant role";
         public static final String INACTIVE = "User is inactive";
     }
     public static class ACCOUNT {
@@ -218,5 +219,12 @@ public class Const {
         public static final String STUDENT_ALREADY_IN_CLASS = "Student is already in the class";
     }
 
-
+    public static class CLASS_TEACHER {
+        public static final String TEACHER_ADDED = "Teacher added to class successfully";
+        public static final String TEACHER_REMOVED = "Teacher removed from class successfully";
+        public static final String LIST_RETRIEVED = "Teacher list retrieved successfully";
+        public static final String PERFORMANCE_RETRIEVED = "Teacher performance report retrieved successfully";
+        public static final String TEACHER_NOT_FOUND = "Teacher not found in class";
+        public static final String TEACHER_ALREADY_IN_CLASS = "Teacher is already in the class";
+    }
 }

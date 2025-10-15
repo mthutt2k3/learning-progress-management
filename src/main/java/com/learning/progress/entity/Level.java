@@ -47,6 +47,7 @@ public class Level extends BaseEntity{
     @Column(name = "is_active")
     private Boolean isActive;
 
-    
+    @Column(name = "level_code", length = 20)
+    private String levelCode;
 
 }
