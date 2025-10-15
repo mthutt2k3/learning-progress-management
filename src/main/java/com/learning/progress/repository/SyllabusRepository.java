@@ -10,6 +10,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface SyllabusRepository extends JpaRepository<Syllabus, Long> {
@@ -21,4 +22,6 @@ public interface SyllabusRepository extends JpaRepository<Syllabus, Long> {
 
     @Query("SELECT l FROM Lesson l WHERE l.chapter.syllabus.id = :syllabusId AND l.deletedAt IS NULL ORDER BY l.chapter.orderNumber ASC, l.orderNumber ASC")
     List<Lesson> findLessonsBySyllabusId(Long syllabusId);
+
+    Optional<Syllabus> findBySyllabusCode(String syllabusId);
 }

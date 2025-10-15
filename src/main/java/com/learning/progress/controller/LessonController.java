@@ -10,9 +10,14 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.io.ByteArrayResource;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -53,5 +58,27 @@ public class LessonController {
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(required = false) String searchText) {
         return ResponseEntity.ok(lessonService.getLessonList(chapterId, page, size, searchText));
+    }
+
+    @GetMapping("/download-template")
+    @PreAuthorize("hasRole('MANAGER')")
+    @Operation(summary = "Download Lesson Import Template", description = "Download Excel template for importing lessons")
+    public ResponseEntity<ByteArrayResource> downloadLessonImportTemplate() {
+        byte[] template = lessonService.generateLessonImportTemplate();
+        ByteArrayResource resource = new ByteArrayResource(template);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=lesson_import_template.xlsx")
+                .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                .contentLength(template.length)
+                .body(resource);
+    }
+
+    @PostMapping("/import")
+    @PreAuthorize("hasRole('MANAGER')")
+    @Operation(summary = "Import Lessons from Excel", description = "Import multiple lessons from an Excel file")
+    public ResponseEntity<DataResponse<List<LessonDTO>>> importLessonsFromExcel(
+            @Parameter(description = "Excel file containing lesson data") @RequestParam("file") MultipartFile file) {
+        var response = lessonService.importLessonsFromExcel(file);
+        return new ResponseEntity<>(DataResponse.success(response, Const.CRUD_MESSAGE_CODE.IMPORT_SUCCESSFUL), HttpStatus.OK);
     }
 }
