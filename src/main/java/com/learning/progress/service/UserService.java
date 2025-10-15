@@ -1,9 +1,6 @@
 package com.learning.progress.service;
 
-import com.learning.progress.dto.StudentProfileDTO;
-import com.learning.progress.dto.TeacherProfileDTO;
-import com.learning.progress.dto.UpdateUserProfileDTO;
-import com.learning.progress.dto.UserProfileDTO;
+import com.learning.progress.dto.*;
 import com.learning.progress.dto.request.CreateStudentRequest;
 import com.learning.progress.dto.request.CreateUserRequest;
 import com.learning.progress.dto.response.DataResponse;
@@ -22,4 +19,7 @@ public interface UserService {
     UserProfileDTO getUserProfile(Long userId, boolean isCurrentUser);
 
     Object updateUserProfile(Long userId, UpdateUserProfileDTO updateUserProfileDTO);
+
+    void requestChangeEmail(Long userId, ChangeEmailRequest request);
+    UserProfileDTO confirmChangeEmail(String token);
 }

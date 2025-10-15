@@ -1,9 +1,7 @@
 package com.learning.progress.controller;
 
 import com.learning.progress.common.Const;
-import com.learning.progress.dto.StudentProfileDTO;
-import com.learning.progress.dto.TeacherProfileDTO;
-import com.learning.progress.dto.UpdateUserProfileDTO;
+import com.learning.progress.dto.*;
 import com.learning.progress.dto.request.CreateStudentRequest;
 import com.learning.progress.dto.request.CreateUserRequest;
 import com.learning.progress.dto.response.DataResponse;
@@ -122,7 +120,7 @@ public class UserController {
         return ResponseEntity.ok(DataResponse.success(response, Const.CRUD_MESSAGE_CODE.RETRIEVE_SUCCESSFUL));
     }
 
-    @PutMapping("profile")
+    @PutMapping("profile/{userId}")
     @PreAuthorize("@jwtUtil.isCurrentUser(#userId)")
     @Operation(summary = "Update current user profile", description = "Update profile of the currently authenticated user")
     public ResponseEntity<DataResponse<?>> updateUserProfile(
@@ -130,5 +128,22 @@ public class UserController {
             @RequestBody @Valid UpdateUserProfileDTO updateUserProfileDTO) {
         var response = userService.updateUserProfile(userId, updateUserProfileDTO);
         return ResponseEntity.ok(DataResponse.success(response, Const.CRUD_MESSAGE_CODE.UPDATE_SUCCESSFUL));
+    }
+    @PostMapping("/change-email")
+    @PreAuthorize("@jwtUtil.isCurrentUser(#userId)")
+    @Operation(summary = "Request change email", description = "Request to change the email address of the current user")
+    public ResponseEntity<DataResponse<String>> requestChangeEmail(
+            @Parameter(description = "User ID of the current user") @RequestParam Long userId,
+            @Valid @RequestBody ChangeEmailRequest request) {
+        userService.requestChangeEmail(userId, request);
+        return new ResponseEntity<>(DataResponse.success("Email change confirmation sent", Const.CRUD_MESSAGE_CODE.REQUEST_SENT), HttpStatus.OK);
+    }
+
+    @GetMapping("/confirm-email-change")
+    @Operation(summary = "Confirm email change", description = "Confirm the email change using the token sent in the email")
+    public ResponseEntity<DataResponse<UserProfileDTO>> confirmChangeEmail(
+            @Parameter(description = "JWT token for email change confirmation") @RequestParam String token) {
+        UserProfileDTO response = userService.confirmChangeEmail(token);
+        return new ResponseEntity<>(DataResponse.success(response, Const.CRUD_MESSAGE_CODE.UPDATE_SUCCESSFUL), HttpStatus.OK);
     }
 }

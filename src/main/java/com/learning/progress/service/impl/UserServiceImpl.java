@@ -14,6 +14,8 @@ import com.learning.progress.service.EmailService;
 import com.learning.progress.service.StudentLevelService;
 import com.learning.progress.service.UserService;
 import com.learning.progress.util.*;
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.JwtException;
 import jakarta.persistence.EntityManager;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -25,9 +27,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.Arrays;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 @Service
@@ -441,4 +442,56 @@ public class UserServiceImpl implements UserService {
         return userMapper.toUserProfileDTO(updateUser);
     }
 
+    @Override
+    @Transactional
+    public void requestChangeEmail(Long userId, ChangeEmailRequest request) {
+        String username = jwtUtil.extractUsernameFromCurrentRequest();
+        if (username == null || username.trim().isEmpty()) {
+            throw new ApiException(Const.AUTH.INVALID_TOKEN_USERNAME, HttpStatus.UNAUTHORIZED.value());
+        }
+        User user = userRepository.findByUserName(username)
+                .orElseThrow(() -> new ApiException(Const.AUTH.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+
+        if (!user.getId().equals(userId)) {
+            throw new ApiException("User ID does not match current user", HttpStatus.FORBIDDEN.value());
+        }
+
+        String newEmail = request.getNewEmail();
+        if (newEmail == null || newEmail.trim().isEmpty()) {
+            throw new ApiException(Const.VALIDATION.EMAIL_REQUIRED, HttpStatus.BAD_REQUEST.value());
+        }
+        if (!Pattern.matches(Const.VALIDATE_INPUT.regexEmail, newEmail)) {
+            throw new ApiException(Const.USER.EMAIL_INVALID, HttpStatus.BAD_REQUEST.value());
+        }
+
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("userId", user.getId());
+        claims.put("newEmail", newEmail);
+        String token = jwtUtil.generateToken(user.getUserName(), user.getRole().getName().toString(), user.getId());
+        // Gửi email xác nhận bất đồng bộ
+        emailService.sendChangeEmailConfirmation(user, newEmail, token, request.getDomain(), request.getPath());
+    }
+
+    @Override
+    @Transactional
+    public UserProfileDTO confirmChangeEmail(String token) {
+        EmailChangeTokenClaims claims = jwtUtil.validateEmailChangeToken(token);
+        Long userId = claims.getUserId();
+        String newEmail = claims.getNewEmail();
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ApiException(Const.AUTH.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+
+        user.setEmail(newEmail);
+        userRepository.save(user);
+
+        RoleName roleName = user.getRole().getName();
+        if (List.of(RoleName.STUDENT, RoleName.TEST_TAKER).contains(roleName)) {
+            return mapToStudentProfileDTO(user);
+        } else if (List.of(RoleName.TEACHER, RoleName.TEACHING_ASSISTANT).contains(roleName)) {
+            return mapToTeacherProfileDTO(user);
+        } else {
+            return userMapper.toUserProfileDTO(user);
+        }
+    }
 }

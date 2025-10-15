@@ -1,7 +1,9 @@
 package com.learning.progress.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.learning.progress.common.ActionType;
 import jakarta.persistence.*;
+import jakarta.validation.constraints.Pattern;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -21,7 +23,7 @@ import java.time.OffsetDateTime;
 @Entity
 @Table(name = "class_history")
 public class ClassHistory extends BaseEntity{
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne()
     @OnDelete(action = OnDeleteAction.CASCADE)
     @JoinColumn(name = "class_id")
     private Clazz clazz;
@@ -41,5 +43,10 @@ public class ClassHistory extends BaseEntity{
     @Enumerated(EnumType.STRING)
     @Column(name = "action_type", nullable = false)
     private ActionType actionType;
+
+    @Column(name = "visible_to_roles")
+    @Pattern(regexp = "^(MANAGER|TEACHER|TEACHING_ASSISTANT|STUDENT|TEST_TAKER)(,(MANAGER|TEACHER|TEACHING_ASSISTANT|STUDENT|TEST_TAKER))*$|^$",
+            message = "Invalid visible_to_roles format. Must be a comma-separated list of valid roles or empty.")
+    private String visibleToRoles; // Ví dụ: "MANAGER,TEACHER,ASSISTANT"
 
 }

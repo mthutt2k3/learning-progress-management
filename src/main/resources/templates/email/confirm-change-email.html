@@ -1,18 +1,15 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org" lang="vi">
+<html xmlns:th="http://www.thymeleaf.org">
 <head>
-    <meta charset="UTF-8" />
+    <meta charset="UTF-8"/>
     <title>Xác nhận thay đổi email</title>
 </head>
 <body>
-<p>Xin chào <strong th:text="${fullName}">bạn</strong>,</p>
-<p>Bạn đã yêu cầu thay đổi email đăng nhập thành: <strong th:text="${newEmail}">email</strong>.</p>
-<p>Vui lòng nhấn vào liên kết bên dưới để xác nhận:</p>
-<p>
-    <a th:href="${confirmLink}" th:text="${confirmLink}">Xác nhận thay đổi email</a>
-</p>
+<p>Xin chào <span th:text="${fullName}">bạn</span>,</p>
+<p>Bạn đã yêu cầu thay đổi email tài khoản sang <span th:text="${newEmail}">[new email]</span>.</p>
+<p>Vui lòng nhấn vào liên kết sau để xác nhận thay đổi:</p>
+<p><a th:href="${confirmLink}" th:text="${confirmLink}">[Confirm Link]</a></p>
 <p>Nếu bạn không thực hiện yêu cầu này, vui lòng bỏ qua email này.</p>
-<p>Trân trọng,</p>
-<p>Hệ thống quản lý học tập</p>
+<p>Trân trọng,<br/>Hệ thống LPMS</p>
 </body>
 </html>

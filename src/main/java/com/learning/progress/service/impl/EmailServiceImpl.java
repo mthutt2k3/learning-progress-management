@@ -52,6 +52,28 @@ public class EmailServiceImpl implements EmailService {
         }
     }
 
+    @Override
+    @Async("taskExecutor")
+    public void sendChangeEmailConfirmation(User user, String newEmail, String token, String domain, String path) {
+        try {
+            String fullName = (user.getFirstName() != null ? user.getFirstName() : "")
+                    + " "
+                    + (user.getLastName() != null ? user.getLastName() : "");
+            Map<String, Object> templateVariables = new HashMap<>();
+            templateVariables.put("fullName", fullName.trim().isEmpty() ? "bạn" : fullName.trim());
+            templateVariables.put("newEmail", newEmail);
+            String confirmLink = domain + (path.startsWith("/") ? path : "/" + path) + "?token=" + token;
+            templateVariables.put("confirmLink", confirmLink);
+
+            String subject = "🔄 Xác nhận thay đổi email tài khoản học tập";
+            String templatePath = "email/change-email-confirmation";
+
+            this.sendEmail(newEmail, subject, templatePath, templateVariables);
+        } catch (Exception e) {
+            throw new ApiException(Const.VALIDATION.EMAIL_SEND_FAILED, HttpStatus.INTERNAL_SERVER_ERROR.value());
+        }
+    }
+
 
     @Override
     @Async("taskExecutor")
