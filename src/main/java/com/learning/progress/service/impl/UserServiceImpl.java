@@ -402,7 +402,6 @@ public class UserServiceImpl implements UserService {
         }
 
         userRepository.findActiveLevelInfoByUserId(user.getId()).ifPresent(response::setCurrentLevelInfo);
-        userRepository.findActiveClassInfoByUserId(user.getId()).ifPresent(response::setCurrentClassInfo);
 
         return response;
     }

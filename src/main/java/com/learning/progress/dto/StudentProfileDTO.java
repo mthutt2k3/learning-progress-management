@@ -12,5 +12,4 @@ import lombok.experimental.SuperBuilder;
 public class StudentProfileDTO extends UserProfileDTO {
     private ParentInfo parentInfo;
     private LevelInfo currentLevelInfo;
-    private ClassInfo currentClassInfo;
 }
