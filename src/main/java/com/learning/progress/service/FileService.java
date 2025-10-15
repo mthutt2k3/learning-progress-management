@@ -5,6 +5,8 @@ import org.springframework.web.multipart.MultipartFile;
 import java.util.List;
 
 public interface FileService {
+    byte[] generateTeacherImportTemplate();
     byte[] generateStudentImportTemplate();
+    byte[] generateStudentToClassImportTemplate();
     <T> List<T> readExcelData(MultipartFile file, String sheetName, Class<T> clazz);
 }

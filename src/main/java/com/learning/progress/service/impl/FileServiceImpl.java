@@ -1,6 +1,8 @@
 package com.learning.progress.service.impl;
 
+import com.learning.progress.dto.ImportTeacherDTO;
 import com.learning.progress.dto.clazz.ImportStudentToClass;
+import com.learning.progress.dto.ImportStudentDTO;
 import com.learning.progress.dto.excel.ExcelColumn;
 import com.learning.progress.dto.excel.ExcelSheetSpec;
 import com.learning.progress.service.FileService;
@@ -13,17 +15,85 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.Field;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.*;
 
 @Service
 public class FileServiceImpl implements FileService {
 
-
     @Override
     public byte[] generateStudentImportTemplate() {
+        List<ExcelColumn> columns = fromClass(ImportStudentDTO.class);
+        ExcelSheetSpec sampleSheet = new ExcelSheetSpec("Sample Data", List.of(new ExcelColumn("Guide", "Guide")));
+        List<List<Object>> guideRows = List.of(
+                List.of("📘 HƯỚNG DẪN SỬ DỤNG SHEET"),
+                List.of("Sheet này dùng để import thông tin học sinh (Student/Test Taker) vào hệ thống."),
+                List.of("Mỗi dòng tương ứng với một học sinh."),
+                List.of("Cần đảm bảo đúng định dạng và tuân theo các giá trị quy định bên dưới:"),
+                List.of("- Email: Định dạng email hợp lệ (ví dụ: student@example.com)"),
+                List.of("- First Name: Tên của học sinh, tối đa 50 ký tự"),
+                List.of("- Last Name: Họ của học sinh, tối đa 50 ký tự"),
+                List.of("- Role Name: [STUDENT, TEST_TAKER]"),
+                List.of("- Parent Email: Email phụ huynh (tùy chọn)"),
+                List.of("- Avatar URL: URL ảnh đại diện, tối đa 1024 ký tự (tùy chọn)"),
+                List.of("- Date of Birth: Định dạng yyyy-MM-dd (tùy chọn)"),
+                List.of("- Address: Địa chỉ, tối đa 255 ký tự (tùy chọn)"),
+                List.of("- Phone Number: Số điện thoại, tối đa 20 ký tự (tùy chọn)"),
+                List.of("- Gender: Giới tính, tối đa 10 ký tự (tùy chọn)"),
+                List.of("- Level ID: ID của level (tùy chọn)")
+        );
+        List<List<Object>> sheetData = new ArrayList<>();
+        sheetData.addAll(guideRows);
+        sheetData.add(List.of());
+        sampleSheet.setSampleData(sheetData);
+        sampleSheet.setProtected(true);
+
+        ExcelSheetSpec importSheet = new ExcelSheetSpec("Import Data", columns);
+        importSheet.setSampleData(List.of(
+                List.of("student1@example.com", "John", "Doe", "STUDENT", "parent1@example.com","Le Duc Dung", "0987654321", "Bố", "http://example.com/avatar1.jpg", "2000-01-01", "123 Main St", "0123456789", "MALE", "LEVEL_CODE"),
+                List.of("student2@example.com", "Alice", "Smith", "TEST_TAKER", "parent2@example.com","Le Duc Dung", "0987654321", "Mẹ", "http://example.com/avatar1.jpg", "2000-01-01", "123 Main St", "0123456789", "MALE", "LEVEL_CODE")
+        ));
+
+        return generateTemplate(List.of(sampleSheet, importSheet));
+    }
+
+    @Override
+    public byte[] generateTeacherImportTemplate() {
+        List<ExcelColumn> columns = fromClass(ImportTeacherDTO.class);
+        ExcelSheetSpec sampleSheet = new ExcelSheetSpec("Sample Data", List.of(new ExcelColumn("Guide", "Guide")));
+        List<List<Object>> guideRows = List.of(
+                List.of("📘 HƯỚNG DẪN SỬ DỤNG SHEET"),
+                List.of("Sheet này dùng để import thông tin giáo viên (Teacher/Teaching Assistant) vào hệ thống."),
+                List.of("Mỗi dòng tương ứng với một giáo viên."),
+                List.of("Cần đảm bảo đúng định dạng và tuân theo các giá trị quy định bên dưới:"),
+                List.of("- Email: Định dạng email hợp lệ (ví dụ: teacher@example.com)"),
+                List.of("- First Name: Tên của giáo viên, tối đa 50 ký tự"),
+                List.of("- Last Name: Họ của giáo viên, tối đa 50 ký tự"),
+                List.of("- Role Name: [TEACHER, TEACHING_ASSISTANT]"),
+                List.of("- Avatar URL: URL ảnh đại diện, tối đa 1024 ký tự (tùy chọn)"),
+                List.of("- Date of Birth: Định dạng yyyy-MM-dd (tùy chọn)"),
+                List.of("- Address: Địa chỉ, tối đa 255 ký tự (tùy chọn)"),
+                List.of("- Phone Number: Số điện thoại, tối đa 20 ký tự (tùy chọn)"),
+                List.of("- Gender: Giới tính, tối đa 10 ký tự (tùy chọn)")
+        );
+        List<List<Object>> sheetData = new ArrayList<>();
+        sheetData.addAll(guideRows);
+        sheetData.add(List.of());
+        sampleSheet.setSampleData(sheetData);
+        sampleSheet.setProtected(true);
+
+        ExcelSheetSpec importSheet = new ExcelSheetSpec("Import Data", columns);
+        importSheet.setSampleData(List.of(
+                List.of("teacher1@example.com", "Jane", "Smith", "TEACHER", "http://example.com/avatar2.jpg", "1980-01-01", "456 Elm St", "0987654321", "FEMALE"),
+                List.of("teacher2@example.com", "Bob", "Johnson", "TEACHING_ASSISTANT", "http://example.com/avatar2.jpg", "1980-01-01", "456 Elm St", "0987654321", "MALE")
+        ));
+
+        return generateTemplate(List.of(sampleSheet, importSheet));
+    }
+
+    @Override
+    public byte[] generateStudentToClassImportTemplate() {
         // Lấy auto column từ class User
         List<ExcelColumn> columns = fromClass(ImportStudentToClass.class);
 
@@ -328,6 +398,26 @@ public class FileServiceImpl implements FileService {
                 if (type == Integer.class || type == int.class) return Integer.parseInt(str);
                 if (type == Long.class || type == long.class) return Long.parseLong(str);
                 if (type == Double.class || type == double.class) return Double.parseDouble(str);
+                // --- Enum hỗ trợ đọc theo tên ---
+                if (type.isEnum()) {
+                    for (Object constant : type.getEnumConstants()) {
+                        if (constant.toString().equalsIgnoreCase(str)) {
+                            return constant;
+                        }
+                    }
+                    throw new IllegalArgumentException("Không tìm thấy giá trị enum: " + str);
+                }
+
+                // --- Date parse từ text ---
+                if (type == Date.class) {
+                    List<String> patterns = List.of("dd/MM/yyyy", "yyyy-MM-dd", "MM/dd/yyyy");
+                    for (String pattern : patterns) {
+                        try {
+                            return new SimpleDateFormat(pattern).parse(str);
+                        } catch (ParseException ignored) {}
+                    }
+                    throw new IllegalArgumentException("Không parse được ngày: " + str);
+                }
                 return str;
             case NUMERIC:
                 double numericValue = cell.getNumericCellValue();

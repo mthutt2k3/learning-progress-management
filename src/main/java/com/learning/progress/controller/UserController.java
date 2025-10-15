@@ -11,10 +11,14 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.io.ByteArrayResource;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -129,6 +133,7 @@ public class UserController {
         var response = userService.updateUserProfile(userId, updateUserProfileDTO);
         return ResponseEntity.ok(DataResponse.success(response, Const.CRUD_MESSAGE_CODE.UPDATE_SUCCESSFUL));
     }
+
     @PostMapping("/change-email")
     @PreAuthorize("@jwtUtil.isCurrentUser(#userId)")
     @Operation(summary = "Request change email", description = "Request to change the email address of the current user")
@@ -145,5 +150,49 @@ public class UserController {
             @Parameter(description = "JWT token for email change confirmation") @RequestParam String token) {
         UserProfileDTO response = userService.confirmChangeEmail(token);
         return new ResponseEntity<>(DataResponse.success(response, Const.CRUD_MESSAGE_CODE.UPDATE_SUCCESSFUL), HttpStatus.OK);
+    }
+
+    @GetMapping("/students/download-template")
+    @PreAuthorize("hasRole('MANAGER')")
+    @Operation(summary = "Download Student Import Template", description = "Download Excel template for importing students")
+    public ResponseEntity<ByteArrayResource> downloadStudentImportTemplate() {
+        byte[] template = userService.generateStudentImportTemplate();
+        ByteArrayResource resource = new ByteArrayResource(template);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=student_import_template.xlsx")
+                .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                .contentLength(template.length)
+                .body(resource);
+    }
+
+    @PostMapping("/students/import")
+    @PreAuthorize("hasRole('MANAGER')")
+    @Operation(summary = "Import Students from Excel", description = "Import multiple students from an Excel file")
+    public ResponseEntity<DataResponse<String>> importStudentsFromExcel(
+            @Parameter(description = "Excel file containing student data") @RequestParam("file") MultipartFile file) {
+        userService.importStudentsFromExcel(file);
+        return new ResponseEntity<>(DataResponse.success("Students imported successfully", Const.CRUD_MESSAGE_CODE.IMPORT_SUCCESSFUL), HttpStatus.OK);
+    }
+
+    @GetMapping("/teachers/download-template")
+    @PreAuthorize("hasRole('MANAGER')")
+    @Operation(summary = "Download Teacher Import Template", description = "Download Excel template for importing teachers")
+    public ResponseEntity<ByteArrayResource> downloadTeacherImportTemplate() {
+        byte[] template = userService.generateTeacherImportTemplate();
+        ByteArrayResource resource = new ByteArrayResource(template);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=teacher_import_template.xlsx")
+                .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                .contentLength(template.length)
+                .body(resource);
+    }
+
+    @PostMapping("/teachers/import")
+    @PreAuthorize("hasRole('MANAGER')")
+    @Operation(summary = "Import Teachers from Excel", description = "Import multiple teachers from an Excel file")
+    public ResponseEntity<DataResponse<String>> importTeachersFromExcel(
+            @Parameter(description = "Excel file containing teacher data") @RequestParam("file") MultipartFile file) {
+        userService.importTeachersFromExcel(file);
+        return new ResponseEntity<>(DataResponse.success("Teachers imported successfully", Const.CRUD_MESSAGE_CODE.IMPORT_SUCCESSFUL), HttpStatus.OK);
     }
 }
