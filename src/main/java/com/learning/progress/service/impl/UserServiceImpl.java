@@ -27,6 +27,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.OffsetDateTime;
 import java.util.*;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -428,6 +429,7 @@ public class UserServiceImpl implements UserService {
         if (username == null || username.trim().isEmpty()) {
             throw new ApiException(Const.AUTH.INVALID_TOKEN_USERNAME, HttpStatus.UNAUTHORIZED.value());
         }
+
         User user = userRepository.findByUserName(username)
                 .orElseThrow(() -> new ApiException(Const.AUTH.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
@@ -435,12 +437,29 @@ public class UserServiceImpl implements UserService {
             throw new ApiException("User ID does not match current user", HttpStatus.FORBIDDEN.value());
         }
 
-        // Update basic user information
-        User updateUser = userMapper.toUser(updateDTO);
+        if (updateDTO.getFirstName() != null) user.setFirstName(updateDTO.getFirstName());
+        if (updateDTO.getLastName() != null) user.setLastName(updateDTO.getLastName());
+        if (updateDTO.getPhoneNumber() != null &&
+                !DataUtil.isValidPhoneNumber(updateDTO.getPhoneNumber())) {
+            throw new ApiException("Invalid phone number format", HttpStatus.BAD_REQUEST.value());
+        }
 
-        userRepository.save(updateUser);
-        return userMapper.toUserProfileDTO(updateUser);
+        if (updateDTO.getGender() != null &&
+                !DataUtil.isValidGender(updateDTO.getGender())) {
+            throw new ApiException("Invalid gender format", HttpStatus.BAD_REQUEST.value());
+        }
+
+        if (updateDTO.getDateOfBirth() != null) user.setDateOfBirth(updateDTO.getDateOfBirth());
+        if (updateDTO.getAvatarUrl() != null) user.setAvatarUrl(updateDTO.getAvatarUrl());
+        if (updateDTO.getAddress() != null) user.setAddress(updateDTO.getAddress());
+
+        user.setUpdatedAt(OffsetDateTime.now());
+        user.setUpdatedBy(username); // nếu có tracking
+
+        userRepository.save(user);
+        return userMapper.toUserProfileDTO(user);
     }
+
 
     @Override
     @Transactional
