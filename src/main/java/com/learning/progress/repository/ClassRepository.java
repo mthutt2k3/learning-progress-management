@@ -16,4 +16,6 @@ public interface ClassRepository extends JpaRepository<Clazz, Long> {
     Page<Clazz> findBySearchText(String searchText, Pageable pageable);
 
     Optional<Clazz> findByIdAndDeletedAtIsNull(Long id);
+
+    Optional<Clazz> findByClassCodeIgnoreCase(String classCode);
 }

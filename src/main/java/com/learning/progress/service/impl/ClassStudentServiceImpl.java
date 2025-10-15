@@ -4,12 +4,8 @@ import com.learning.progress.common.ClassStudentStatus;
 import com.learning.progress.common.Const;
 import com.learning.progress.common.RoleName;
 import com.learning.progress.common.UserStatus;
-import com.learning.progress.dto.clazz.AddStudentToClassRequest;
-import com.learning.progress.dto.clazz.ImportStudentsRequest;
-import com.learning.progress.dto.clazz.ClassStudentResponse;
+import com.learning.progress.dto.clazz.*;
 import com.learning.progress.dto.response.DataResponse;
-import com.learning.progress.dto.clazz.StudentPerformanceReport;
-import com.learning.progress.dto.clazz.StudentProgressOverview;
 import com.learning.progress.entity.ClassStudent;
 import com.learning.progress.entity.Clazz;
 import com.learning.progress.entity.User;
@@ -20,9 +16,8 @@ import com.learning.progress.repository.ClassStudentRepository;
 import com.learning.progress.repository.SubmissionDailyChallengeRepository;
 import com.learning.progress.repository.UserRepository;
 import com.learning.progress.service.ClassStudentService;
+import com.learning.progress.service.FileService;
 import com.learning.progress.util.JwtUtil;
-import org.apache.poi.ss.usermodel.*;
-import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -31,9 +26,11 @@ import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -60,6 +57,9 @@ public class ClassStudentServiceImpl implements ClassStudentService {
 
     @Autowired
     private JwtUtil jwtUtil;
+
+    @Autowired
+    private FileService fileService;
 
     @Override
     public DataResponse<List<ClassStudentResponse>> getStudentsInClass(Long classId, int page, int size, String text, ClassStudentStatus status, String sortBy, String sortDir) {
@@ -320,52 +320,29 @@ public class ClassStudentServiceImpl implements ClassStudentService {
     }
 
     @Override
-    public byte[] generateImportTemplate() {
-        try (Workbook workbook = new XSSFWorkbook(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
-            Sheet sheet = workbook.createSheet("Students");
-
-            Row headerRow = sheet.createRow(0);
-            String[] columns = {"User ID", "Email", "First Name", "Last Name"};
-            for (int i = 0; i < columns.length; i++) {
-                Cell cell = headerRow.createCell(i);
-                cell.setCellValue(columns[i]);
-            }
-
-            workbook.write(out);
-            return out.toByteArray();
-        } catch (IOException e) {
-            throw new ApiException(Const.CLASS_STUDENT.TEMPLATE_GENERATION_FAILED, HttpStatus.INTERNAL_SERVER_ERROR.value());
-        }
+    public byte[] generateStudentImportTemplate() {
+        return fileService.generateStudentImportTemplate();
     }
 
     @Override
     @Transactional
-    public void importStudentsFromExcel(Long classId, ImportStudentsRequest request) {
-        Clazz clazz = classRepository.findById(classId)
-                .orElseThrow(() -> new ApiException(Const.CLASS.CLASS_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+    public void importStudentsFromExcel(MultipartFile file) {
+        // 1️⃣ Đọc dữ liệu từ file Excel ra list object
+        List<ImportStudentToClass> importList = fileService.readExcelData(file, "Import Data", ImportStudentToClass.class);
 
-        try (Workbook workbook = new XSSFWorkbook(request.getFile().getInputStream())) {
-            Sheet sheet = workbook.getSheetAt(0);
+        // 2️⃣ Lặp qua danh sách và xử lý import
+        for (ImportStudentToClass record : importList) {
 
-            for (int i = 1; i <= sheet.getLastRowNum(); i++) {
-                Row row = sheet.getRow(i);
-                if (row == null) continue;
+            Clazz clazz = classRepository.findByClassCodeIgnoreCase(record.getClassCode())
+                    .orElseThrow(() -> new ApiException(Const.CLASS.CLASS_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
-                Long userId = (long) row.getCell(0).getNumericCellValue();
-                User user = userRepository.findById(userId)
-                        .orElseThrow(() -> new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+            User user = userRepository.findByUserNameIgnoreCase(record.getUserName())
+                    .orElseThrow(() -> new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
-                if (!classStudentRepository.existsByClassIdAndUserId(classId, userId)) {
-                    ClassStudent classStudent = new ClassStudent();
-                    classStudent.setClazz(clazz);
-                    classStudent.setUser(user);
-                    classStudent.setStatus(ClassStudentStatus.ACTIVE);
-                    classStudent.setJoinedAt(OffsetDateTime.now());
-                    classStudentRepository.save(classStudent);
-                }
-            }
-        } catch (IOException e) {
-            throw new ApiException(Const.CLASS_STUDENT.IMPORT_FAILED, HttpStatus.BAD_REQUEST.value());
+            AddStudentToClassRequest dto = new AddStudentToClassRequest();
+            dto.setUserId(user.getId());
+
+            addStudentToClass(clazz.getId(), dto);
         }
     }
 }
