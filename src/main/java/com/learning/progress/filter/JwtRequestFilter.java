@@ -52,7 +52,7 @@ public class JwtRequestFilter extends OncePerRequestFilter {
                             new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
                     authenticationToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
                     SecurityContextHolder.getContext().setAuthentication(authenticationToken);
-                    log.info("Authenticated user: {} | authorities: {} | traceId={}",
+                    log.info("[AUTHENTICATION] Authenticated user: {} | authorities: {} | traceId={}",
                             username, userDetails.getAuthorities(), MDC.get("traceId"));
                 }
             }

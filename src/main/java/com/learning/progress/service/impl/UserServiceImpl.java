@@ -66,78 +66,22 @@ public class UserServiceImpl implements UserService {
     @Autowired
     private LevelRepository levelRepository;
 
+    @Autowired
+    private AppValidator appValidator;
     //=============================================STUDENT========================================================
-    @Override
-    public DataResponse<List<StudentProfileDTO>> getStudentList(int page, int size, String searchText, List<String> status, List<String> roleName, String sortBy, String sortDir) {
-        ValidateUtil.validatePaginationParams(page, size);
-        ValidateUtil.validateSortParams(List.of("createdAt", "firstName", "lastName", "email", "status"), sortBy, sortDir);
-
-        List<RoleName> roles = roleName != null && !roleName.isEmpty()
-                ? roleName.stream()
-                .map(r -> {
-                    try {
-                        return RoleName.valueOf(r.toUpperCase());
-                    } catch (IllegalArgumentException e) {
-                        log.warn("Invalid role ignored: {}", r);
-                        return null;
-                    }
-                })
-                .filter(r -> r != null && Arrays.asList(RoleName.STUDENT, RoleName.TEST_TAKER).contains(r))
-                .collect(Collectors.toList())
-                : Arrays.asList(RoleName.STUDENT, RoleName.TEST_TAKER);
-        if (roles.isEmpty()) {
-            throw new ApiException("No valid roles provided: only STUDENT or TEST_TAKER allowed", HttpStatus.BAD_REQUEST.value());
-        }
-
-        List<UserStatus> statuses = status != null && !status.isEmpty()
-                ? status.stream()
-                .map(s -> {
-                    try {
-                        return UserStatus.valueOf(s.toUpperCase());
-                    } catch (IllegalArgumentException e) {
-                        log.warn("Invalid status ignored: {}", s);
-                        return null;
-                    }
-                })
-                .filter(s -> s != null)
-                .collect(Collectors.toList())
-                : Arrays.asList(UserStatus.values());
-
-        Sort sort = Sort.by(Sort.Direction.fromString(sortDir), sortBy);
-        Pageable pageable = PageRequest.of(page, size, sort);
-        Page<User> userPage = userRepository.findByRoleNameInAndStatusInAndSearchText(roles, statuses, searchText, pageable);
-
-        List<StudentProfileDTO> responses = userPage.getContent().stream()
-                .map(this::mapToStudentProfileDTO)
-                .collect(Collectors.toList());
-
-        return DataResponse.<List<StudentProfileDTO>>builder()
-                .traceId(org.slf4j.MDC.get("traceId"))
-                .success(true)
-                .message("Successful")
-                .data(responses)
-                .timestamp(java.time.LocalDateTime.now())
-                .page(page)
-                .size(size)
-                .totalElements(userPage.getTotalElements())
-                .totalPages(userPage.getTotalPages())
-                .build();
-    }
 
     @Override
     public StudentProfileDTO createStudent(CreateStudentRequest request) {
-        if (!EnumUtil.isValidEnum(Gender.class, request.getGender())) {
-            throw new ApiException(Const.ERROR_MESSAGE.INVALID_GENDER_FORMAT, HttpStatus.BAD_REQUEST.value());
-        }
-        if (request.getPhoneNumber() != null && !DataUtil.isValidPhoneNumber(request.getPhoneNumber())) {
-            throw new ApiException(Const.ERROR_MESSAGE.INVALID_PHONE_NUMBER_FORMAT, HttpStatus.BAD_REQUEST.value());
-        }
-        if (!EnumUtil.isAllowedEnumValue(RoleName.class, request.getRoleName(), Set.of(RoleName.STUDENT, RoleName.TEST_TAKER))) {
-            throw new ApiException(Const.ERROR_MESSAGE.INVALID_ROLE_NAME, HttpStatus.BAD_REQUEST.value());
-        }
+        appValidator.validateEnumValue(Gender.class, request.getGender());
+
+        appValidator.validateAllowedEnumValue(
+                RoleName.class,
+                request.getRoleName(),
+                Set.of(RoleName.STUDENT, RoleName.TEST_TAKER)
+        );
 
         Role role = roleRepository.findByName(RoleName.valueOf(request.getRoleName().toUpperCase()))
-                .orElseThrow(() -> new ApiException("Invalid role: " + request.getRoleName(), HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> new ApiException(Const.ROLE.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         User user = userMapper.toUser(request);
         user.setRole(role);
@@ -162,21 +106,20 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional
     public StudentProfileDTO updateStudent(Long userId, CreateStudentRequest request) {
-        if (!EnumUtil.isValidEnum(Gender.class, request.getGender())) {
-            throw new ApiException(Const.ERROR_MESSAGE.INVALID_GENDER_FORMAT, HttpStatus.BAD_REQUEST.value());
-        }
-        if (request.getPhoneNumber() != null && !DataUtil.isValidPhoneNumber(request.getPhoneNumber())) {
-            throw new ApiException(Const.ERROR_MESSAGE.INVALID_PHONE_NUMBER_FORMAT, HttpStatus.BAD_REQUEST.value());
-        }
-        if (!EnumUtil.isAllowedEnumValue(RoleName.class, request.getRoleName(), Set.of(RoleName.STUDENT, RoleName.TEST_TAKER))) {
-            throw new ApiException(Const.ERROR_MESSAGE.INVALID_ROLE_NAME, HttpStatus.BAD_REQUEST.value());
-        }
+        appValidator.validateEnumValue(Gender.class, request.getGender());
+
+        appValidator.validateAllowedEnumValue(
+                RoleName.class,
+                request.getRoleName(),
+                Set.of(RoleName.STUDENT, RoleName.TEST_TAKER)
+        );
+
+        Role role = roleRepository.findByName(RoleName.valueOf(request.getRoleName().toUpperCase()))
+                .orElseThrow(() -> new ApiException(Const.ROLE.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ApiException(Const.AUTH.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
-
-        Role role = roleRepository.findByName(RoleName.valueOf(request.getRoleName().toUpperCase()))
-                .orElseThrow(() -> new ApiException("Invalid role: " + request.getRoleName(), HttpStatus.NOT_FOUND.value()));
 
         User updatedUser = userMapper.toUser(request);
         user.setRole(role);
@@ -205,16 +148,16 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional
     public StudentProfileDTO updateStudentStatus(Long userId, String status) {
-        if (!EnumUtil.isValidEnum(UserStatus.class, status)) {
-            throw new ApiException("Invalid status: " + status, HttpStatus.BAD_REQUEST.value());
-        }
 
+        appValidator.validateEnumValue(UserStatus.class, status);
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ApiException(Const.AUTH.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
-        if (!List.of(RoleName.STUDENT, RoleName.TEST_TAKER).contains(user.getRole().getName())) {
-            throw new ApiException("User is not a student or test taker", HttpStatus.BAD_REQUEST.value());
-        }
+        appValidator.validateAllowedEnumValue(
+                RoleName.class,
+                user.getRole().getName().name(),
+                Set.of(RoleName.STUDENT, RoleName.TEST_TAKER)
+        );
 
         user.setStatus(UserStatus.valueOf(status));
         userRepository.save(user);
@@ -222,22 +165,111 @@ public class UserServiceImpl implements UserService {
         return mapToStudentProfileDTO(user);
     }
 
+    @Override
+    public DataResponse<List<StudentProfileDTO>> getStudentList(int page, int size, String searchText, List<String> status, List<String> roleName, String sortBy, String sortDir) {
+        // Validate pagination and sort parameters
+        appValidator.validatePaginationParams(page, size);
+        appValidator.validateSortParams(List.of("createdAt", "userName", "email", "firstName", "lastName", "status"), sortBy, sortDir);
+
+        List<RoleName> roles;
+        if (roleName == null || roleName.isEmpty()) {
+            roles = Arrays.asList(RoleName.STUDENT, RoleName.TEST_TAKER);
+        } else {
+            roles = appValidator.validateAndConvertEnums(roleName, RoleName.class)
+                    .stream()
+                    .filter(r -> Arrays.asList(RoleName.STUDENT, RoleName.TEST_TAKER).contains(r))
+                    .collect(Collectors.toList());
+        }
+
+        List<UserStatus> statuses;
+        if (status == null || status.isEmpty()) {
+            statuses = Arrays.asList(UserStatus.values());
+        } else {
+            statuses = appValidator.validateAndConvertEnums(status, UserStatus.class);
+        }
+
+
+        Sort sort = Sort.by(Sort.Direction.fromString(sortDir), sortBy);
+        Pageable pageable = PageRequest.of(page, size, sort);
+        Page<User> userPage = userRepository.findByRoleNameInAndStatusInAndSearchText(roles, statuses, searchText, pageable);
+
+        List<StudentProfileDTO> responses = userPage.getContent().stream()
+                .map(this::mapToStudentProfileDTO)
+                .collect(Collectors.toList());
+
+        return DataResponse.<List<StudentProfileDTO>>builder()
+                .traceId(org.slf4j.MDC.get("traceId"))
+                .success(true)
+                .message("Successful")
+                .data(responses)
+                .timestamp(java.time.LocalDateTime.now())
+                .page(page)
+                .size(size)
+                .totalElements(userPage.getTotalElements())
+                .totalPages(userPage.getTotalPages())
+                .build();
+    }
+
     //=============================================TEACHER========================================================
+
+    @Override
+    public DataResponse<List<TeacherProfileDTO>> getTeacherList(int page, int size, String searchText, List<String> status, List<String> roleName, String sortBy, String sortDir) {
+        // Validate pagination and sort parameters
+        appValidator.validatePaginationParams(page, size);
+        appValidator.validateSortParams(List.of("createdAt", "userName", "email", "firstName", "lastName", "status"), sortBy, sortDir);
+
+        List<RoleName> roles;
+        if (roleName == null || roleName.isEmpty()) {
+            roles = Arrays.asList(RoleName.TEACHER, RoleName.TEACHING_ASSISTANT);
+        } else {
+            roles = appValidator.validateAndConvertEnums(roleName, RoleName.class)
+                    .stream()
+                    .filter(r -> Arrays.asList(RoleName.TEACHER, RoleName.TEACHING_ASSISTANT).contains(r))
+                    .collect(Collectors.toList());
+        }
+
+        List<UserStatus> statuses;
+        if (status == null || status.isEmpty()) {
+            statuses = Arrays.asList(UserStatus.values());
+        } else {
+            statuses = appValidator.validateAndConvertEnums(status, UserStatus.class);
+        }
+
+        Sort sort = Sort.by(Sort.Direction.fromString(sortDir), sortBy);
+        Pageable pageable = PageRequest.of(page, size, sort);
+        Page<User> userPage = userRepository.findByRoleNameInAndStatusInAndSearchText(roles, statuses, searchText, pageable);
+
+        List<TeacherProfileDTO> responses = userPage.getContent().stream()
+                .map(this::mapToTeacherProfileDTO)
+                .collect(Collectors.toList());
+
+        return DataResponse.<List<TeacherProfileDTO>>builder()
+                .traceId(org.slf4j.MDC.get("traceId"))
+                .success(true)
+                .message("Successful")
+                .data(responses)
+                .timestamp(java.time.LocalDateTime.now())
+                .page(page)
+                .size(size)
+                .totalElements(userPage.getTotalElements())
+                .totalPages(userPage.getTotalPages())
+                .build();
+    }
+
+
     @Override
     @Transactional
     public TeacherProfileDTO createTeacher(CreateUserRequest request) {
-        if (!EnumUtil.isValidEnum(Gender.class, request.getGender())) {
-            throw new ApiException(Const.ERROR_MESSAGE.INVALID_GENDER_FORMAT, HttpStatus.BAD_REQUEST.value());
-        }
-        if (request.getPhoneNumber() != null && !DataUtil.isValidPhoneNumber(request.getPhoneNumber())) {
-            throw new ApiException(Const.ERROR_MESSAGE.INVALID_PHONE_NUMBER_FORMAT, HttpStatus.BAD_REQUEST.value());
-        }
-        if (!EnumUtil.isAllowedEnumValue(RoleName.class, request.getRoleName(), Set.of(RoleName.TEACHER, RoleName.TEACHING_ASSISTANT))) {
-            throw new ApiException(Const.ERROR_MESSAGE.INVALID_ROLE_NAME, HttpStatus.BAD_REQUEST.value());
-        }
+        appValidator.validateEnumValue(Gender.class, request.getGender());
+
+        appValidator.validateAllowedEnumValue(
+                RoleName.class,
+                request.getRoleName(),
+                Set.of(RoleName.TEACHER, RoleName.TEACHING_ASSISTANT)
+        );
 
         Role role = roleRepository.findByName(RoleName.valueOf(request.getRoleName().toUpperCase()))
-                .orElseThrow(() -> new ApiException("Invalid role: " + request.getRoleName(), HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> new ApiException(Const.ROLE.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         User user = userMapper.toUser(request);
         user.setRole(role);
@@ -256,21 +288,19 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional
     public TeacherProfileDTO updateTeacher(Long userId, CreateUserRequest request) {
-        if (!EnumUtil.isValidEnum(Gender.class, request.getGender())) {
-            throw new ApiException(Const.ERROR_MESSAGE.INVALID_GENDER_FORMAT, HttpStatus.BAD_REQUEST.value());
-        }
-        if (request.getPhoneNumber() != null && !DataUtil.isValidPhoneNumber(request.getPhoneNumber())) {
-            throw new ApiException(Const.ERROR_MESSAGE.INVALID_PHONE_NUMBER_FORMAT, HttpStatus.BAD_REQUEST.value());
-        }
-        if (!EnumUtil.isAllowedEnumValue(RoleName.class, request.getRoleName(), Set.of(RoleName.TEACHER, RoleName.TEACHING_ASSISTANT))) {
-            throw new ApiException(Const.ERROR_MESSAGE.INVALID_ROLE_NAME, HttpStatus.BAD_REQUEST.value());
-        }
+        appValidator.validateEnumValue(Gender.class, request.getGender());
+
+        appValidator.validateAllowedEnumValue(
+                RoleName.class,
+                request.getRoleName(),
+                Set.of(RoleName.TEACHER, RoleName.TEACHING_ASSISTANT)
+        );
+
+        Role role = roleRepository.findByName(RoleName.valueOf(request.getRoleName().toUpperCase()))
+                .orElseThrow(() -> new ApiException(Const.ROLE.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ApiException(Const.AUTH.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
-
-        Role role = roleRepository.findByName(RoleName.valueOf(request.getRoleName().toUpperCase()))
-                .orElseThrow(() -> new ApiException("Invalid role: " + request.getRoleName(), HttpStatus.NOT_FOUND.value()));
 
         User updatedUser = userMapper.toUser(request);
         user.setRole(role);
@@ -299,72 +329,16 @@ public class UserServiceImpl implements UserService {
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ApiException(Const.AUTH.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
-
-        if (!List.of(RoleName.TEACHER, RoleName.TEACHING_ASSISTANT).contains(user.getRole().getName())) {
-            throw new ApiException("User is not a teacher or teaching assistant", HttpStatus.BAD_REQUEST.value());
-        }
+        appValidator.validateAllowedEnumValue(
+                RoleName.class,
+                user.getRole().getName().name(),
+                Set.of(RoleName.TEACHER, RoleName.TEACHING_ASSISTANT)
+        );
 
         user.setStatus(UserStatus.valueOf(status));
         userRepository.save(user);
 
         return mapToTeacherProfileDTO(user);
-    }
-
-    @Override
-    public DataResponse<List<TeacherProfileDTO>> getTeacherList(int page, int size, String searchText, List<String> status, List<String> roleName, String sortBy, String sortDir) {
-        ValidateUtil.validatePaginationParams(page, size);
-        ValidateUtil.validateSortParams(List.of("createdAt", "firstName", "lastName", "email", "status"), sortBy, sortDir);
-
-        List<RoleName> roles = roleName != null && !roleName.isEmpty()
-                ? roleName.stream()
-                .map(r -> {
-                    try {
-                        return RoleName.valueOf(r.toUpperCase());
-                    } catch (IllegalArgumentException e) {
-                        log.warn("Invalid role ignored: {}", r);
-                        return null;
-                    }
-                })
-                .filter(r -> r != null && Arrays.asList(RoleName.TEACHER, RoleName.TEACHING_ASSISTANT).contains(r))
-                .collect(Collectors.toList())
-                : Arrays.asList(RoleName.TEACHER, RoleName.TEACHING_ASSISTANT);
-        if (roles.isEmpty()) {
-            throw new ApiException("No valid roles provided: only TEACHER or TEACHING_ASSISTANT allowed", HttpStatus.BAD_REQUEST.value());
-        }
-
-        List<UserStatus> statuses = status != null && !status.isEmpty()
-                ? status.stream()
-                .map(s -> {
-                    try {
-                        return UserStatus.valueOf(s.toUpperCase());
-                    } catch (IllegalArgumentException e) {
-                        log.warn("Invalid status ignored: {}", s);
-                        return null;
-                    }
-                })
-                .filter(s -> s != null)
-                .collect(Collectors.toList())
-                : Arrays.asList(UserStatus.values());
-
-        Sort sort = Sort.by(Sort.Direction.fromString(sortDir), sortBy);
-        Pageable pageable = PageRequest.of(page, size, sort);
-        Page<User> userPage = userRepository.findByRoleNameInAndStatusInAndSearchText(roles, statuses, searchText, pageable);
-
-        List<TeacherProfileDTO> responses = userPage.getContent().stream()
-                .map(this::mapToTeacherProfileDTO)
-                .collect(Collectors.toList());
-
-        return DataResponse.<List<TeacherProfileDTO>>builder()
-                .traceId(org.slf4j.MDC.get("traceId"))
-                .success(true)
-                .message("Successful")
-                .data(responses)
-                .timestamp(java.time.LocalDateTime.now())
-                .page(page)
-                .size(size)
-                .totalElements(userPage.getTotalElements())
-                .totalPages(userPage.getTotalPages())
-                .build();
     }
 
     @Override
@@ -436,7 +410,7 @@ public class UserServiceImpl implements UserService {
                 .orElseThrow(() -> new ApiException(Const.AUTH.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         if (!user.getId().equals(userId)) {
-            throw new ApiException("User ID does not match current user", HttpStatus.FORBIDDEN.value());
+            throw new ApiException(Const.SECURITY.NOT_MATCH_CURRENT_USER, HttpStatus.FORBIDDEN.value());
         }
 
         if (updateDTO.getFirstName() != null) user.setFirstName(updateDTO.getFirstName());
@@ -474,7 +448,7 @@ public class UserServiceImpl implements UserService {
                 .orElseThrow(() -> new ApiException(Const.AUTH.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         if (!user.getId().equals(userId)) {
-            throw new ApiException("User ID does not match current user", HttpStatus.FORBIDDEN.value());
+            throw new ApiException(Const.SECURITY.NOT_MATCH_CURRENT_USER, HttpStatus.FORBIDDEN.value());
         }
 
         String newEmail = request.getNewEmail();

@@ -15,9 +15,13 @@ import com.learning.progress.repository.RoleRepository;
 import com.learning.progress.repository.UserRepository;
 import com.learning.progress.service.AccountService;
 import com.learning.progress.service.EmailService;
+import com.learning.progress.util.AppValidator;
 import com.learning.progress.util.DataUtil;
 import com.learning.progress.util.EnumUtil;
 import jakarta.persistence.EntityManager;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -34,6 +38,9 @@ import java.util.stream.Collectors;
 
 @Service
 public class AccountServiceImpl implements AccountService {
+
+    private static final Logger log = LoggerFactory.getLogger(AccountServiceImpl.class);
+
     @Autowired
     private UserRepository userRepository;
 
@@ -52,66 +59,43 @@ public class AccountServiceImpl implements AccountService {
     @Autowired
     private EmailService emailService;
 
+    @Autowired
+    private AppValidator appValidator;
+
+    /**
+     * Retrieves a paginated list of accounts based on search criteria, status, role, and sorting parameters.
+     *
+     * @param page        Page number for pagination.
+     * @param size        Number of items per page.
+     * @param text        Search text for filtering users.
+     * @param statusStr   List of user status strings to filter.
+     * @param roleNameStr List of role name strings to filter.
+     * @param sortBy      Field to sort by.
+     * @param sortDir     Sorting direction (asc or desc).
+     * @return DataResponse containing the list of accounts and pagination details.
+     */
     @Override
     public DataResponse<List<AccountDTO>> listAccounts(int page, int size, String text, List<String> statusStr, List<String> roleNameStr, String sortBy, String sortDir) {
-        // Validate page
-        if (page < 0) {
-            throw new ApiException(Const.ERROR_MESSAGE.INVALID_PAGE, HttpStatus.BAD_REQUEST.value());
-        }
+        String traceId = MDC.get("traceId");
+        log.info("[{}] Listing accounts with page: {}, size: {}, text: {}, statuses: {}, roles: {}, sortBy: {}, sortDir: {}",
+                traceId, page, size, text, statusStr, roleNameStr, sortBy, sortDir);
 
-        // Validate size
-        if (size < 1 || size > 100) {
-            throw new ApiException(Const.ERROR_MESSAGE.INVALID_SIZE, HttpStatus.BAD_REQUEST.value());
-        }
+        // Validate pagination and sort parameters
+        appValidator.validatePaginationParams(page, size);
+        appValidator.validateSortParams(List.of("createdAt", "userName", "email", "firstName", "lastName", "status"), sortBy, sortDir);
+        log.debug("[{}] Pagination and sort parameters validated", traceId);
 
-        // Validate statuses
-        List<UserStatus> statuses = statusStr != null
-                ? statusStr.stream().map(s -> {
-            try {
-                return UserStatus.valueOf(s);
-            } catch (IllegalArgumentException e) {
-                throw new ApiException("Invalid UserStatus: " + s, HttpStatus.BAD_REQUEST.value());
-            }
-        }).collect(Collectors.toList())
-                : null;
+        // Convert status and role strings to enums
+        List<UserStatus> statuses = appValidator.validateAndConvertEnums(statusStr, UserStatus.class);
+        List<RoleName> roleNames = appValidator.validateAndConvertEnums(roleNameStr, RoleName.class);
+        log.debug("[{}] Converted statuses: {}, roles: {}", traceId, statuses, roleNames);
 
-        // Validate roleNames
-        List<RoleName> roleNames = roleNameStr != null
-                ? roleNameStr.stream().map(r -> {
-            try {
-                return RoleName.valueOf(r);
-            } catch (IllegalArgumentException e) {
-                throw new ApiException("Invalid RoleName: " + r, HttpStatus.BAD_REQUEST.value());
-            }
-        }).collect(Collectors.toList())
-                : null;
-
-        // Validate sortBy
-        String[] validSortFields = {"createdAt", "userName", "email", "fullName", "statuses"};
-        boolean isValidSortField = false;
-        for (String field : validSortFields) {
-            if (field.equalsIgnoreCase(sortBy)) {
-                isValidSortField = true;
-                break;
-            }
-        }
-        if (!isValidSortField) {
-            throw new ApiException(Const.ERROR_MESSAGE.INVALID_SORT_BY, HttpStatus.BAD_REQUEST.value());
-        }
-
-        // Validate sortDir
-        if (!sortDir.equalsIgnoreCase("asc") && !sortDir.equalsIgnoreCase("desc")) {
-            throw new ApiException(Const.ERROR_MESSAGE.INVALID_SORT_DIR, HttpStatus.BAD_REQUEST.value());
-        }
-
-        // Map fullName sort to firstName for database query
-        String sortField = "fullName".equalsIgnoreCase(sortBy) ? "firstName" : sortBy;
-
-        // Create Sort object
-        Sort sort = Sort.by(sortDir.equalsIgnoreCase("asc") ? Sort.Direction.ASC : Sort.Direction.DESC, sortField);
+        // Create Sort and Pageable objects
+        Sort sort = Sort.by(sortDir.equalsIgnoreCase("asc") ? Sort.Direction.ASC : Sort.Direction.DESC, sortBy);
         Pageable pageable = PageRequest.of(page, size, sort);
-        Page<User> userPage;
 
+        // Fetch users based on filters
+        Page<User> userPage;
         if (text != null && !text.isBlank()) {
             if (statuses != null && !statuses.isEmpty() && roleNames != null && !roleNames.isEmpty()) {
                 userPage = userRepository.findByTextAndStatusInAndRoleNameIn(text, statuses, roleNames, pageable);
@@ -133,15 +117,18 @@ public class AccountServiceImpl implements AccountService {
                 userPage = userRepository.findAll(pageable);
             }
         }
+        log.debug("[{}] Retrieved {} users for page {}", traceId, userPage.getTotalElements(), page);
 
+        // Map users to DTOs
         List<AccountDTO> accounts = userPage.getContent().stream()
                 .map(userMapper::toAccountDTO)
                 .collect(Collectors.toList());
 
+        log.info("[{}] Successfully retrieved account list with {} accounts", traceId, accounts.size());
         return DataResponse.<List<AccountDTO>>builder()
-                .traceId(org.slf4j.MDC.get("traceId"))
+                .traceId(traceId)
                 .success(true)
-                .message("Accounts retrieved successfully")
+                .message(Const.CRUD_MESSAGE_CODE.RETRIEVE_SUCCESSFUL)
                 .data(accounts)
                 .timestamp(java.time.LocalDateTime.now())
                 .page(page)
@@ -151,120 +138,194 @@ public class AccountServiceImpl implements AccountService {
                 .build();
     }
 
+    /**
+     * Retrieves an account by user ID.
+     *
+     * @param userId The ID of the user to retrieve.
+     * @return AccountDTO containing the user details.
+     */
     @Override
     public AccountDTO getAccountByUserId(Long userId) {
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ApiException(Const.ERROR_MESSAGE.ACCOUNT_NOT_FOUND, HttpStatus.BAD_REQUEST.value()));
+        String traceId = MDC.get("traceId");
+        log.info("[{}] Retrieving account for userId: {}", traceId, userId);
 
+        // Fetch user by ID
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> {
+                    log.error("[{}] Account not found for userId: {}", traceId, userId);
+                    return new ApiException(Const.ACCOUNT.ACCOUNT_NOT_FOUND, HttpStatus.BAD_REQUEST.value());
+                });
+
+        log.info("[{}] Successfully retrieved account for userId: {}", traceId, userId);
         return userMapper.toAccountDTO(user);
     }
 
+    /**
+     * Creates a new account with a generated username and password, and sends a notification email.
+     *
+     * @param request The request containing account details and role.
+     * @return AccountDTO containing the created account details.
+     */
     @Override
     @Transactional
     public AccountDTO createNewAccount(CreateNewAccountRequest request) {
-        // Validate formats email
-        if (!request.getEmail().matches(Const.VALIDATE_INPUT.regexEmail)) {
-            throw new ApiException(Const.USER.EMAIL_INVALID, HttpStatus.BAD_REQUEST.value());
-        }
-        //validate role name
-        if(!EnumUtil.isAllowedEnumValue(RoleName.class, request.getRoleName(), Set.of(RoleName.ADMIN, RoleName.MANAGER)))
-            throw new ApiException(Const.ERROR_MESSAGE.INVALID_ROLE_NAME, HttpStatus.BAD_REQUEST.value());
+        String traceId = MDC.get("traceId");
+        log.info("[{}] Creating new account with role: {}", traceId, request.getRoleName());
 
-        // Tìm role
+        // Validate role name
+        appValidator.validateAllowedEnumValue(
+                RoleName.class,
+                request.getRoleName(),
+                Set.of(RoleName.ADMIN, RoleName.MANAGER)
+        );
+        log.debug("[{}] Role name validated: {}", traceId, request.getRoleName());
+
+        // Fetch role
         Role role = roleRepository.findByName(RoleName.valueOf(request.getRoleName().toUpperCase()))
-                .orElseThrow(() -> new ApiException("Invalid role: " + request.getRoleName(), HttpStatus.BAD_REQUEST.value()));
+                .orElseThrow(() -> {
+                    log.error("[{}] Role not found: {}", traceId, request.getRoleName());
+                    return new ApiException(Const.ROLE.NOT_FOUND, HttpStatus.BAD_REQUEST.value());
+                });
 
+        // Map request to user entity
         User newUser = userMapper.toUser(request);
         newUser.setMustChangePassword(true);
         newUser.setRole(role);
         newUser.setStatus(UserStatus.ACTIVE);
         newUser.setMustUpdateProfile(true);
 
-        // Lưu user và flush
+        // Save user and flush
         userRepository.saveAndFlush(newUser);
         entityManager.clear();
-
         userRepository.save(newUser);
+        log.debug("[{}] User saved with ID: {}", traceId, newUser.getId());
 
-        //Auto generate username and password
+        // Generate username and password
         String username = DataUtil.generateUsername(request.getRoleName().toString(), newUser.getId());
         String password = DataUtil.generateRandomPassword(8);
         this.createAccountForExistUser(newUser, username, password);
+        log.debug("[{}] Generated username: {}, password for userId: {}", traceId, username, newUser.getId());
 
-        // Gửi email thông báo tài khoản
-        emailService.sendNewAccountEmail(newUser, username, password);
+        // Send notification email
+        try {
+            emailService.sendNewAccountEmail(newUser, username, password);
+            log.info("[{}] New account email sent to: {}", traceId, newUser.getEmail());
+        } catch (Exception e) {
+            log.error("[{}] Failed to send new account email for userId: {}, error: {}",
+                    traceId, newUser.getId(), e.getMessage());
+            throw new ApiException(Const.AUTH.EMAIL_SEND_FAILED, HttpStatus.INTERNAL_SERVER_ERROR.value());
+        }
 
+        // Map to DTO
         AccountDTO accountDTO = userMapper.toAccountDTO(newUser);
         accountDTO.setUserName(newUser.getUserName());
 
+        log.info("[{}] Successfully created account for userId: {}", traceId, newUser.getId());
         return accountDTO;
     }
 
+    /**
+     * Creates an account for an existing user with a specified username and password.
+     *
+     * @param user     The existing user entity.
+     * @param username The username to set.
+     * @param password The password to set.
+     * @return Updated User entity.
+     */
     @Override
     @Transactional
     public User createAccountForExistUser(User user, String username, String password) {
+        String traceId = MDC.get("traceId");
+        log.info("[{}] Creating account for existing user with username: {}", traceId, username);
 
+        // Check for username uniqueness
         if (userRepository.existsByUserName(username)) {
-            throw new ApiException(Const.ERROR_MESSAGE.USERNAME_EXISTS, HttpStatus.BAD_REQUEST.value());
+            log.error("[{}] Username already exists: {}", traceId, username);
+            throw new ApiException(Const.USER.USERNAME_EXISTS, HttpStatus.BAD_REQUEST.value());
         }
 
+        // Update user details
         user.setUserName(username);
         user.setPassword(passwordEncoder.encode(password));
         user.setMustChangePassword(true);
 
         userRepository.save(user);
+        log.info("[{}] Account created for existing user with username: {}", traceId, username);
 
         return user;
     }
 
+    /**
+     * Updates an existing account's details, including first name, last name, email, and role.
+     *
+     * @param id      The ID of the user to update.
+     * @param request The request containing updated account details.
+     * @return Updated AccountDTO.
+     */
     @Override
     public AccountDTO updateAccount(Long id, CreateNewAccountRequest request) {
-        // Tìm user theo id
+        String traceId = MDC.get("traceId");
+        log.info("[{}] Updating account for userId: {}, role: {}", traceId, id, request.getRoleName());
+
+        // Fetch user by ID
         User user = userRepository.findById(id)
-                .orElseThrow(() ->
-                        new ApiException(Const.ERROR_MESSAGE.ACCOUNT_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> {
+                    log.error("[{}] User not found for userId: {}", traceId, id);
+                    return new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value());
+                });
 
-        // Validate email format
-        if (!request.getEmail().matches(Const.VALIDATE_INPUT.regexEmail)) {
-            throw new ApiException(Const.USER.EMAIL_INVALID, HttpStatus.BAD_REQUEST.value());
-        }
-
-        // Validate role hợp lệ
-        if (!EnumUtil.isAllowedEnumValue(
+        // Validate role name
+        appValidator.validateAllowedEnumValue(
                 RoleName.class,
                 request.getRoleName(),
                 Set.of(RoleName.ADMIN, RoleName.MANAGER)
-        )) {
-            throw new ApiException(Const.ERROR_MESSAGE.INVALID_ROLE_NAME, HttpStatus.BAD_REQUEST.value());
-        }
+        );
+        log.debug("[{}] Role name validated: {}", traceId, request.getRoleName());
 
-        // Tìm role theo tên
+        // Fetch role
         Role role = roleRepository.findByName(RoleName.valueOf(request.getRoleName().toUpperCase()))
-                .orElseThrow(() ->
-                        new ApiException("Invalid role: " + request.getRoleName(), HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> {
+                    log.error("[{}] Role not found: {}", traceId, request.getRoleName());
+                    return new ApiException(Const.ROLE.NOT_FOUND, HttpStatus.NOT_FOUND.value());
+                });
 
-        // Cập nhật field
+        // Update user fields
         user.setFirstName(request.getFirstName());
         user.setLastName(request.getLastName());
         user.setEmail(request.getEmail());
         user.setRole(role);
 
-        // Lưu lại
+        // Save updates
         userRepository.save(user);
+        log.info("[{}] Successfully updated account for userId: {}", traceId, id);
 
-        // Trả về DTO
         return userMapper.toAccountDTO(user);
     }
 
+    /**
+     * Updates the status of an existing account.
+     *
+     * @param id         The ID of the user to update.
+     * @param userStatus The new status to set.
+     * @return Updated AccountDTO.
+     */
     @Override
     public AccountDTO updateStatusAccount(Long id, UserStatus userStatus) {
-        User user = userRepository.findById(id)
-                .orElseThrow(() -> new ApiException(Const.ERROR_MESSAGE.ACCOUNT_NOT_FOUND, HttpStatus.BAD_REQUEST.value()));
+        String traceId = MDC.get("traceId");
+        log.info("[{}] Updating status for userId: {} to {}", traceId, id, userStatus);
 
+        // Fetch user by ID
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> {
+                    log.error("[{}] User not found for userId: {}", traceId, id);
+                    return new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.BAD_REQUEST.value());
+                });
+
+        // Update status
         user.setStatus(userStatus);
         userRepository.save(user);
+        log.info("[{}] Successfully updated status for userId: {} to {}", traceId, id, userStatus);
 
         return userMapper.toAccountDTO(user);
     }
-
 }

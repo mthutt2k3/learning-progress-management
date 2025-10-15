@@ -40,6 +40,22 @@ import java.util.stream.Collectors;
 
 @Slf4j
 public class DataUtil {
+
+    public static String maskEmail(String email) {
+        if (email == null || !email.contains("@")) {
+            return email; // hoặc throw exception tuỳ bạn xử lý
+        }
+
+        int atIndex = email.indexOf('@');
+
+        // Trường hợp email quá ngắn thì xử lý an toàn hơn
+        if (atIndex < 4) {
+            return "****" + email.substring(atIndex);
+        }
+
+        return email.substring(0, 2) + "****" + email.substring(atIndex - 2);
+    }
+
     /**
      * check null or empty
      * Su dung ma nguon cua thu vien StringUtils trong apache common lang
