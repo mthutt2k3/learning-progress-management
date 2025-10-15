@@ -3,7 +3,6 @@ package com.learning.progress.controller;
 import com.learning.progress.common.ClassStudentStatus;
 import com.learning.progress.common.Const;
 import com.learning.progress.dto.clazz.AddStudentToClassRequest;
-import com.learning.progress.dto.clazz.ImportStudentsRequest;
 import com.learning.progress.dto.clazz.ClassStudentResponse;
 import com.learning.progress.dto.response.DataResponse;
 import com.learning.progress.dto.clazz.StudentPerformanceReport;
@@ -106,7 +105,6 @@ public class ClassStudentController {
     @PostMapping("/{classId}/import-students")
     @Operation(summary = "Import Students from Excel", description = "Import multiple students to a class from an Excel file")
     public ResponseEntity<?> importStudentsFromExcel(@RequestParam("file") MultipartFile file) {
-//        ImportStudentsRequest request = new ImportStudentsRequest(file);
         classStudentService.importStudentsFromExcel(file);
         return ResponseEntity.ok(DataResponse.success(Const.CLASS_STUDENT.STUDENTS_IMPORTED, Const.CLASS_STUDENT.STUDENTS_IMPORTED));
     }

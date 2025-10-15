@@ -28,9 +28,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -321,7 +318,7 @@ public class ClassStudentServiceImpl implements ClassStudentService {
 
     @Override
     public byte[] generateStudentImportTemplate() {
-        return fileService.generateStudentImportTemplate();
+        return fileService.generateStudentToClassImportTemplate();
     }
 
     @Override

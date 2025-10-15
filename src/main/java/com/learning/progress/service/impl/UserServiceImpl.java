@@ -2,6 +2,7 @@ package com.learning.progress.service.impl;
 
 import com.learning.progress.common.*;
 import com.learning.progress.dto.*;
+import com.learning.progress.dto.ImportStudentDTO;
 import com.learning.progress.dto.request.CreateStudentRequest;
 import com.learning.progress.dto.request.CreateUserRequest;
 import com.learning.progress.dto.response.DataResponse;
@@ -9,13 +10,8 @@ import com.learning.progress.entity.*;
 import com.learning.progress.exception.ApiException;
 import com.learning.progress.mapper.UserMapper;
 import com.learning.progress.repository.*;
-import com.learning.progress.service.AccountService;
-import com.learning.progress.service.EmailService;
-import com.learning.progress.service.StudentLevelService;
-import com.learning.progress.service.UserService;
+import com.learning.progress.service.*;
 import com.learning.progress.util.*;
-import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.JwtException;
 import jakarta.persistence.EntityManager;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -26,6 +22,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.time.OffsetDateTime;
 import java.util.*;
@@ -62,6 +59,12 @@ public class UserServiceImpl implements UserService {
 
     @Autowired
     private EmailService emailService;
+
+    @Autowired
+    private FileService fileService;
+
+    @Autowired
+    private LevelRepository levelRepository;
 
     //=============================================STUDENT========================================================
     @Override
@@ -511,5 +514,122 @@ public class UserServiceImpl implements UserService {
         } else {
             return userMapper.toUserProfileDTO(user);
         }
+    }
+
+
+
+    @Override
+    @Transactional
+    public void importStudentsFromExcel(MultipartFile file) {
+        List<ImportStudentDTO> importList = fileService.readExcelData(file, "Import Data", ImportStudentDTO.class);
+        for (ImportStudentDTO record : importList) {
+            // Kiểm tra các trường bắt buộc
+            if (record.getEmail() == null || !Pattern.matches(Const.VALIDATE_INPUT.regexEmail, record.getEmail())) {
+                throw new ApiException("Invalid email format: " + record.getEmail(), HttpStatus.BAD_REQUEST.value());
+            }
+            if (record.getFirstName() == null || record.getFirstName().trim().isEmpty()) {
+                throw new ApiException("First name is required", HttpStatus.BAD_REQUEST.value());
+            }
+            if (record.getLastName() == null || record.getLastName().trim().isEmpty()) {
+                throw new ApiException("Last name is required", HttpStatus.BAD_REQUEST.value());
+            }
+            if (!EnumUtil.isAllowedEnumValue(RoleName.class, record.getRoleName(), Set.of(RoleName.STUDENT, RoleName.TEST_TAKER))) {
+                throw new ApiException("Invalid role name: " + record.getRoleName(), HttpStatus.BAD_REQUEST.value());
+            }
+            // Kiểm tra các trường tùy chọn
+            if (record.getPhoneNumber() != null && !DataUtil.isValidPhoneNumber(record.getPhoneNumber())) {
+                throw new ApiException("Invalid phone number format: " + record.getPhoneNumber(), HttpStatus.BAD_REQUEST.value());
+            }
+            if (record.getGender() != null && !EnumUtil.isValidEnum(Gender.class, record.getGender())) {
+                throw new ApiException("Invalid gender format: " + record.getGender(), HttpStatus.BAD_REQUEST.value());
+            }
+            if (record.getParentEmail() != null && !record.getParentEmail().isEmpty() &&
+                    !Pattern.matches(Const.VALIDATE_INPUT.regexEmail, record.getParentEmail())) {
+                throw new ApiException("Invalid parent email format: " + record.getParentEmail(), HttpStatus.BAD_REQUEST.value());
+            }
+
+            Long levelId = null;
+            if (record.getLevelCode() != null && !record.getLevelCode().isBlank()) {
+                Level level = levelRepository.findByLevelCodeIgnoreCase(record.getLevelCode())
+                        .orElseThrow(() -> new ApiException(
+                                "Level not found with code: " + record.getLevelCode(),
+                                HttpStatus.NOT_FOUND.value()
+                        ));
+                levelId = level.getId();
+            }
+
+            CreateStudentRequest request = CreateStudentRequest.builder()
+                    .email(record.getEmail())
+                    .firstName(record.getFirstName())
+                    .lastName(record.getLastName())
+                    .roleName(record.getRoleName())
+                    .avatarUrl(record.getAvatarUrl())
+                    .dateOfBirth(record.getDateOfBirth())
+                    .address(record.getAddress())
+                    .phoneNumber(record.getPhoneNumber())
+                    .gender(record.getGender())
+                    .levelId(levelId)
+                    .build();
+            if (record.getParentEmail() != null && !record.getParentEmail().isEmpty()) {
+                ParentInfo parentInfo = new ParentInfo();
+                parentInfo.setParentEmail(record.getParentEmail());
+                parentInfo.setParentName(record.getParentName());
+                parentInfo.setParentPhone(record.getParentPhone());
+                parentInfo.setRelationship(record.getRelationship());
+                request.setParentInfo(parentInfo);
+            }
+            createStudent(request);
+        }
+    }
+
+    @Override
+    @Transactional
+    public void importTeachersFromExcel(MultipartFile file) {
+        List<ImportTeacherDTO> importList = fileService.readExcelData(file, "Import Data", ImportTeacherDTO.class);
+        for (ImportTeacherDTO record : importList) {
+            // Kiểm tra các trường bắt buộc
+            if (record.getEmail() == null || !Pattern.matches(Const.VALIDATE_INPUT.regexEmail, record.getEmail())) {
+                throw new ApiException("Invalid email format: " + record.getEmail(), HttpStatus.BAD_REQUEST.value());
+            }
+            if (record.getFirstName() == null || record.getFirstName().trim().isEmpty()) {
+                throw new ApiException("First name is required", HttpStatus.BAD_REQUEST.value());
+            }
+            if (record.getLastName() == null || record.getLastName().trim().isEmpty()) {
+                throw new ApiException("Last name is required", HttpStatus.BAD_REQUEST.value());
+            }
+            if (!EnumUtil.isAllowedEnumValue(RoleName.class, record.getRoleName(), Set.of(RoleName.TEACHER, RoleName.TEACHING_ASSISTANT))) {
+                throw new ApiException("Invalid role name: " + record.getRoleName(), HttpStatus.BAD_REQUEST.value());
+            }
+            // Kiểm tra các trường tùy chọn
+            if (record.getPhoneNumber() != null && !DataUtil.isValidPhoneNumber(record.getPhoneNumber())) {
+                throw new ApiException("Invalid phone number format: " + record.getPhoneNumber(), HttpStatus.BAD_REQUEST.value());
+            }
+            if (record.getGender() != null && !EnumUtil.isValidEnum(Gender.class, record.getGender())) {
+                throw new ApiException("Invalid gender format: " + record.getGender(), HttpStatus.BAD_REQUEST.value());
+            }
+
+            CreateUserRequest request = CreateUserRequest.builder()
+                    .email(record.getEmail())
+                    .firstName(record.getFirstName())
+                    .lastName(record.getLastName())
+                    .roleName(record.getRoleName())
+                    .avatarUrl(record.getAvatarUrl())
+                    .dateOfBirth(record.getDateOfBirth())
+                    .address(record.getAddress())
+                    .phoneNumber(record.getPhoneNumber())
+                    .gender(record.getGender())
+                    .build();
+            createTeacher(request);
+        }
+    }
+
+    @Override
+    public byte[] generateStudentImportTemplate() {
+        return fileService.generateStudentImportTemplate();
+    }
+
+    @Override
+    public byte[] generateTeacherImportTemplate() {
+        return fileService.generateTeacherImportTemplate();
     }
 }

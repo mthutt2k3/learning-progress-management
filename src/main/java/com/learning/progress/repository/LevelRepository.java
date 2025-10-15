@@ -4,7 +4,6 @@ import com.learning.progress.entity.Level;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
@@ -37,5 +36,5 @@ public interface LevelRepository extends JpaRepository<Level, Long> {
     @Query("SELECT MAX(l.orderNumber) FROM Level l WHERE l.deletedAt IS NULL")
     Optional<Integer> findMaxOrderNumber();
 
-
+    Optional<Level> findByLevelCodeIgnoreCase(String levelCode);
 }
