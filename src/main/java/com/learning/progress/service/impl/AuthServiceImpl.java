@@ -21,6 +21,8 @@ import com.learning.progress.service.TokenService;
 import com.learning.progress.util.DataUtil;
 import com.learning.progress.util.JwtUtil;
 import jakarta.servlet.http.HttpServletRequest;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.mail.javamail.JavaMailSender;
@@ -38,6 +40,8 @@ import java.util.regex.Pattern;
 
 @Service
 public class AuthServiceImpl implements AuthService {
+
+    private static final Logger log = LoggerFactory.getLogger(AuthServiceImpl.class);
 
     @Autowired
     private UserRepository userRepository;
@@ -65,23 +69,18 @@ public class AuthServiceImpl implements AuthService {
 
     @Autowired
     private EmailService emailService;
-
+    /**
+     * Authenticates a user and generates access and refresh tokens.
+     * Validates username, password, user status, and role permissions.
+     *
+     * @param loginRequest The login request containing username, password, and role.
+     * @return LoginResponse containing user details and tokens.
+     */
     @Override
     public LoginResponse login(LoginRequest loginRequest) {
-        // Validate username
-        if (loginRequest == null) {
-            throw new ApiException(Const.VALIDATION.REQUEST_NULL, HttpStatus.BAD_REQUEST.value());
-        }
-        if (loginRequest.getUsername() == null || loginRequest.getUsername().trim().isEmpty()) {
-            throw new ApiException(Const.USER.USERNAME_EMPTY, HttpStatus.BAD_REQUEST.value());
-        }
-        // Added: Validate password
-        if (loginRequest.getPassword() == null || loginRequest.getPassword().trim().isEmpty()) {
-            throw new ApiException(Const.VALIDATION.PASSWORD_REQUIRED, HttpStatus.BAD_REQUEST.value());
-        }
 
         User user = userRepository.findByUserName(loginRequest.getUsername())
-                .orElseThrow(() -> new ApiException(Const.AUTH.USER_NOT_FOUND, HttpStatus.UNAUTHORIZED.value()));
+                .orElseThrow(() -> new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.UNAUTHORIZED.value()));
 
         if (!passwordEncoder.matches(loginRequest.getPassword(), user.getPassword())) {
             throw new ApiException(Const.AUTH.INVALID_CREDENTIALS, HttpStatus.UNAUTHORIZED.value());
@@ -93,14 +92,8 @@ public class AuthServiceImpl implements AuthService {
 
         // Validate login role
         String roleInput = loginRequest.getLoginRole();
-        if (roleInput == null || roleInput.trim().isEmpty()) {
-            throw new ApiException(Const.VALIDATION.LOGIN_ROLE_REQUIRED, HttpStatus.BAD_REQUEST.value());
-        }
 
         String roleUpper = roleInput.trim().toUpperCase();
-        if (!roleUpper.equals("TEACHER") && !roleUpper.equals("STUDENT")) {
-            throw new ApiException(Const.VALIDATION.INVALID_LOGIN_ROLE, HttpStatus.BAD_REQUEST.value());
-        }
 
         RoleName loginRole = RoleName.valueOf(roleUpper);
         RoleName userRole = RoleName.valueOf(user.getRole().getName().toString().toUpperCase());
@@ -119,7 +112,7 @@ public class AuthServiceImpl implements AuthService {
                     throw new ApiException(Const.SECURITY.FORBIDDEN_ROLE, HttpStatus.FORBIDDEN.value());
                 }
             }
-            default -> throw new ApiException(Const.VALIDATION.INVALID_LOGIN_ROLE, HttpStatus.BAD_REQUEST.value());
+            default -> throw new ApiException(Const.ROLE.INVALID_LOGIN_ROLE, HttpStatus.BAD_REQUEST.value());
         }
 
         String accessToken = jwtUtil.generateToken(user.getUserName(), user.getRole().getName().toString(), user.getId());
@@ -132,28 +125,13 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     public String resetPasswordByEmail(ResetPasswordRequest request) {
-        // Kiểm tra đầu vào
-        if (request.getUserName() == null || request.getUserName().trim().isEmpty()) {
-            throw new ApiException(Const.USER.USERNAME_EMPTY, HttpStatus.BAD_REQUEST.value());
-        }
-        if (request.getDomain() == null || request.getDomain().trim().isEmpty()) {
-            throw new ApiException("Domain không được để trống", HttpStatus.BAD_REQUEST.value());
-        }
-        if (request.getPath() == null || request.getPath().trim().isEmpty()) {
-            throw new ApiException("Path không được để trống", HttpStatus.BAD_REQUEST.value());
-        }
 
         User user = userRepository.findByUserName(request.getUserName())
-                .orElseThrow(() -> new ApiException(Const.USER.USERNAME_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         // Kiểm tra trạng thái hoạt động của người dùng
         if (user.getStatus() != UserStatus.ACTIVE) {
             throw new ApiException(Const.USER.USER_INACTIVE, HttpStatus.FORBIDDEN.value());
-        }
-
-        // Kiểm tra định dạng email
-        if (user.getEmail() == null || user.getEmail().trim().isEmpty() || !Pattern.matches(Const.VALIDATE_INPUT.regexEmail, user.getEmail())) {
-            throw new ApiException(Const.USER.EMAIL_INVALID, HttpStatus.BAD_REQUEST.value());
         }
 
         // Tạo token đặt lại mật khẩu
@@ -163,33 +141,21 @@ public class AuthServiceImpl implements AuthService {
         user.setMustChangePassword(true);
         userRepository.save(user);
 
-
-
         try {
             emailService.sendForgotPasswordEmail(user, request, resetToken);
-            String email = user.getEmail();
-            int atIndex = email.indexOf('@');
-            return email.substring(0, 2) + "****" + email.substring(atIndex - 2);
+            return DataUtil.maskEmail(user.getEmail());
         } catch (Exception e) {
-            throw new ApiException(Const.VALIDATION.EMAIL_SEND_FAILED, HttpStatus.INTERNAL_SERVER_ERROR.value());
+            throw new ApiException(Const.AUTH.EMAIL_SEND_FAILED, HttpStatus.INTERNAL_SERVER_ERROR.value());
         }
     }
 
     public String confirmResetPassword(ConfirmResetPasswordRequest request) {
-        // Kiểm tra đầu vào
-        if (request.getToken() == null || request.getToken().trim().isEmpty()) {
-            throw new ApiException("Token không được để trống", HttpStatus.BAD_REQUEST.value());
-        }
-        if (request.getNewPassword() == null || request.getNewPassword().trim().isEmpty()) {
-            throw new ApiException("Mật khẩu mới không được để trống", HttpStatus.BAD_REQUEST.value());
-        }
-
         User user = userRepository.findByResetPasswordToken(request.getToken())
-                .orElseThrow(() -> new ApiException("Token không hợp lệ", HttpStatus.BAD_REQUEST.value()));
+                .orElseThrow(() -> new ApiException(Const.AUTH.INVALID_CREDENTIALS, HttpStatus.BAD_REQUEST.value()));
 
         // Kiểm tra token hết hạn
         if (user.getResetPasswordExpires().isBefore(OffsetDateTime.now())) {
-            throw new ApiException("Token đã hết hạn", HttpStatus.BAD_REQUEST.value());
+            throw new ApiException(Const.TOKEN.EXPIRED, HttpStatus.BAD_REQUEST.value());
         }
 
         // Cập nhật mật khẩu mới
@@ -199,59 +165,26 @@ public class AuthServiceImpl implements AuthService {
         user.setMustChangePassword(false);
         userRepository.save(user);
 
-        // Trả về email dạng ẩn
-        String email = user.getEmail();
-        int atIndex = email.indexOf('@');
-        return email.substring(0, 2) + "****" + email.substring(atIndex - 2);
+        return DataUtil.maskEmail(user.getEmail());
     }
 
     public LoginResponse changePassword(ChangePasswordRequest request) {
-        // Validate request
-        if (request == null) {
-            throw new ApiException(Const.VALIDATION.REQUEST_NULL, HttpStatus.BAD_REQUEST.value());
-        }
 
         String username = jwtUtil.extractUsernameFromCurrentRequest();
-        if (username == null || username.trim().isEmpty()) {
-            throw new ApiException(Const.USER.USERNAME_EMPTY, HttpStatus.BAD_REQUEST.value());
-        }
-
-        // Validate old password
-        if (request.getOldPassword() == null || request.getOldPassword().trim().isEmpty()) {
-            throw new ApiException(Const.VALIDATION.OLD_PASSWORD_REQUIRED, HttpStatus.BAD_REQUEST.value());
-        }
-
-        // Validate new password
-        if (request.getNewPassword() == null || request.getNewPassword().trim().isEmpty()) {
-            throw new ApiException(Const.VALIDATION.NEW_PASSWORD_REQUIRED, HttpStatus.BAD_REQUEST.value());
-        }
-
-        if (request.getNewPassword().length() < 6) {
-            throw new ApiException(Const.ERROR_MESSAGE.PASSWORD_TOO_SHORT, HttpStatus.BAD_REQUEST.value());
-        }
-
-        // Added: Check confirm password null/empty
-        if (request.getConfirmPassword() == null || request.getConfirmPassword().trim().isEmpty()) {
-            throw new ApiException(Const.VALIDATION.CONFIRM_PASSWORD_REQUIRED, HttpStatus.BAD_REQUEST.value());
-        }
-
-        if (!request.getNewPassword().matches(Const.VALIDATE_INPUT.regexPass)) {
-            throw new ApiException(Const.ERROR_MESSAGE.INVALID_PASSWORD_FORMAT, HttpStatus.BAD_REQUEST.value());
-        }
 
         if (!request.getNewPassword().equals(request.getConfirmPassword())) {
-            throw new ApiException(Const.VALIDATION.PASSWORDS_DO_NOT_MATCH, HttpStatus.BAD_REQUEST.value());
+            throw new ApiException(Const.AUTH.PASSWORDS_DO_NOT_MATCH, HttpStatus.BAD_REQUEST.value());
         }
 
         User user = userRepository.findByUserName(username)
-                .orElseThrow(() -> new ApiException(Const.USER.USERNAME_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         if (!passwordEncoder.matches(request.getOldPassword(), user.getPassword())) {
             throw new ApiException(Const.AUTH.INVALID_OLD_PASSWORD, HttpStatus.BAD_REQUEST.value());
         }
 
         if (passwordEncoder.matches(request.getNewPassword(), user.getPassword())) {
-            throw new ApiException(Const.VALIDATION.NEW_PASSWORD_SAME_AS_OLD, HttpStatus.BAD_REQUEST.value());
+            throw new ApiException(Const.AUTH.NEW_PASSWORD_SAME_AS_OLD, HttpStatus.BAD_REQUEST.value());
         }
 
         user.setPassword(passwordEncoder.encode(request.getNewPassword()));
@@ -271,11 +204,11 @@ public class AuthServiceImpl implements AuthService {
     public ResetPasswordByTeacherResponse resetPasswordByTeacher(String username) {
         // Validate username
         if (username == null || username.trim().isEmpty()) {
-            throw new ApiException(Const.USER.USERNAME_EMPTY, HttpStatus.BAD_REQUEST.value());
+            throw new ApiException(Const.USERNAME.REQUIRED, HttpStatus.BAD_REQUEST.value());
         }
 
         User user = userRepository.findByUserName(username)
-                .orElseThrow(() -> new ApiException(Const.USER.USERNAME_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         // Added: Check user active
         if (user.getStatus() != UserStatus.ACTIVE) {
@@ -321,12 +254,12 @@ public class AuthServiceImpl implements AuthService {
     public void logout(String refreshTokenParam) {
         // Validate refresh token param
         if (refreshTokenParam == null || refreshTokenParam.trim().isEmpty()) {
-            throw new ApiException(Const.VALIDATION.REFRESH_TOKEN_REQUIRED, HttpStatus.BAD_REQUEST.value());
+            throw new ApiException(Const.TOKEN.REFRESH_TOKEN_REQUIRED, HttpStatus.BAD_REQUEST.value());
         }
 
         ServletRequestAttributes attributes = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
         if (attributes == null) {
-            throw new ApiException(Const.VALIDATION.OPERATION_FAILED, HttpStatus.INTERNAL_SERVER_ERROR.value());
+            throw new ApiException(Const.SECURITY.OPERATION_FAILED, HttpStatus.INTERNAL_SERVER_ERROR.value());
         }
 
         HttpServletRequest request = attributes.getRequest();
