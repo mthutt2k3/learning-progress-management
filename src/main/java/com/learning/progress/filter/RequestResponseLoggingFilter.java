@@ -62,7 +62,7 @@ public class RequestResponseLoggingFilter extends OncePerRequestFilter {
             requestBody = requestBody.replaceAll("[\\n\\r]", "");
             responseBody = responseBody.replaceAll("[\\n\\r]", "");
 
-            log.info("API_LOG | traceId={} | ip={} | time={} | duration={}ms | method={} | path={} | request={} | response={}",
+            log.info("[{}] API_LOG | ip={} | time={} | duration={}ms | method={} | path={} | request={} | response={}",
                     traceId, clientIp, timestamp, duration,
                     request.getMethod(), request.getRequestURI(),
                     requestBody, responseBody

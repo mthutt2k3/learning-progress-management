@@ -1,10 +1,9 @@
 package com.learning.progress.dto.request;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
-import com.learning.progress.common.UserStatus;
+import com.learning.progress.common.Const;
 import jakarta.validation.constraints.*;
 import lombok.AllArgsConstructor;
-import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.SuperBuilder;
@@ -17,35 +16,34 @@ import java.util.Date;
 @AllArgsConstructor
 public class CreateUserRequest {
 
-    @NotBlank(message = "Role name is required")
+    @NotBlank(message = Const.NAME.ROLE_NAME_REQUIRED)
     private String roleName;
 
-    @NotBlank(message = "Email is required")
-    @Email(message = "Invalid email format")
-    @Size(max = 255, message = "Email must not exceed 255 characters")
+    @NotBlank(message = Const.EMAIL.REQUIRED)
+    @Pattern(regexp = Const.VALIDATE_INPUT.regexEmail, message = Const.EMAIL.INVALID)
     private String email;
 
-    @NotBlank(message = "First name is required")
-    @Size(max = 50, message = "First name must not exceed 50 characters")
+    @NotBlank(message = Const.NAME.FIRST_NAME_REQUIRED)
     private String firstName;
 
-    @NotBlank(message = "Last name is required")
-    @Size(max = 50, message = "Last name must not exceed 50 characters")
+    @NotBlank(message = Const.NAME.LAST_NAME_REQUIRED)
     private String lastName;
 
-    @Size(max = 1024, message = "Avatar URL must not exceed 1024 characters")
     private String avatarUrl;
 
-    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd")
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = Const.VALIDATE_INPUT.dateOfbirth)
     private Date dateOfBirth;
 
-    @Size(max = 255, message = "Address must not exceed 255 characters")
     private String address;
 
-    @Size(max = 20, message = "Phone number must not exceed 20 characters")
+    @Pattern(
+            regexp = Const.VALIDATE_INPUT.regexPhone,
+            message = Const.PHONE_NUMBER.INVALID_PHONE_FORMAT
+    )
+    @NotBlank(message = Const.PHONE_NUMBER.REQUIRED)
     private String phoneNumber;
 
-    @Size(max = 10, message = "Gender must not exceed 10 characters")
+    @NotBlank(message = Const.GENDER.REQUIRED)
     private String gender;
 
 }

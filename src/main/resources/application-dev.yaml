@@ -84,3 +84,7 @@ azure:
   storage:
     connection-string: ${CONNECTION_STRING}
     container-name: ${CONTAINER_NAME}
+
+app:
+  pagination:
+    max-size: 100

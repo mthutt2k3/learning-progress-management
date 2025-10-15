@@ -10,10 +10,6 @@ public class ValidateUtil {
     private ValidateUtil() {
     }
 
-    public static boolean regexValidation(String input, String stringPattern) {
-        Pattern pattern = Pattern.compile(stringPattern);
-        return pattern.matcher(input).matches();
-    }
     public static void validateSortParams(List<String> validSortFields, String sortBy, String sortDir) {
         if (!validSortFields.contains(sortBy)) {
             throw new ApiException("Invalid sortBy: " + sortBy, HttpStatus.BAD_REQUEST.value());
