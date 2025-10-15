@@ -1,5 +1,6 @@
 package com.learning.progress.service.impl;
 
+import com.learning.progress.common.ActionType;
 import com.learning.progress.dto.clazz.ClassLessonDTO;
 import com.learning.progress.dto.clazz.SyncClassLessonRequest;
 import com.learning.progress.dto.response.DataResponse;
@@ -10,6 +11,7 @@ import com.learning.progress.exception.ApiException;
 import com.learning.progress.mapper.ClassLessonMapper;
 import com.learning.progress.repository.ClassChapterRepository;
 import com.learning.progress.repository.ClassLessonRepository;
+import com.learning.progress.service.ClassHistoryService;
 import com.learning.progress.service.ClassLessonService;
 import com.learning.progress.util.JwtUtil;
 import jakarta.validation.ConstraintViolation;
@@ -39,6 +41,8 @@ public class ClassLessonServiceImpl implements ClassLessonService {
     @Autowired
     private ClassChapterRepository classChapterRepository;
     @Autowired
+    private ClassHistoryService classHistoryService;
+    @Autowired
     private ClassLessonMapper classLessonMapper;
     @Autowired
     private JwtUtil jwtUtil;
@@ -52,6 +56,7 @@ public class ClassLessonServiceImpl implements ClassLessonService {
         ClassChapter classChapter = classChapterRepository.findById(classChapterId)
                 .filter(c -> c.getDeletedAt() == null)
                 .orElseThrow(() -> new ApiException("Class chapter không tồn tại hoặc không thuộc lớp này", HttpStatus.NOT_FOUND.value()));
+        Long classId = classChapter.getClazz().getId();
 
         // Load existing active class lessons
         List<ClassLesson> existingActiveLessons = classLessonRepository
@@ -162,6 +167,7 @@ public class ClassLessonServiceImpl implements ClassLessonService {
 
         String currentUser = jwtUtil.extractUsernameFromCurrentRequest();
         OffsetDateTime now = OffsetDateTime.now();
+        Long actionByUserId = jwtUtil.extractUserIdFromCurrentRequest();
         List<ClassLessonDTO> result = new ArrayList<>();
 
         // Process DELETE
@@ -172,6 +178,16 @@ public class ClassLessonServiceImpl implements ClassLessonService {
             classLesson.setDeletedBy(currentUser);
             classLesson.setDeletedAt(now);
             classLessonRepository.save(classLesson);
+
+            // Ghi lịch sử
+            classHistoryService.saveClassHistory(
+                    classId,
+                    String.format("{\"lessonId\": %d, \"action\": \"deleted\"}", deleteReq.getId()),
+                    actionByUserId,
+                    ActionType.DELETE_LESSON.name(),
+                    "MANAGER,TEACHER"
+            );
+
         }
 
         // Process UPDATE
@@ -188,6 +204,16 @@ public class ClassLessonServiceImpl implements ClassLessonService {
             classLesson.setUpdatedBy(currentUser);
             classLesson.setUpdatedAt(now);
             result.add(classLessonMapper.toClassLessonDTO(classLessonRepository.save(classLesson)));
+
+            // Ghi lịch sử
+            classHistoryService.saveClassHistory(
+                    classId,
+                    String.format("{\"lessonId\": %d, \"classLessonName\": \"%s\", \"orderNumber\": %d}",
+                            req.getId(), req.getClassLessonName(), req.getOrderNumber()),
+                    actionByUserId,
+                    ActionType.UPDATE_LESSON.name(),
+                    "MANAGER,TEACHER"
+            );
         }
 
         // Process CREATE
@@ -205,6 +231,16 @@ public class ClassLessonServiceImpl implements ClassLessonService {
             newLesson.setCreatedAt(now);
             newLesson.setUpdatedAt(now);
             result.add(classLessonMapper.toClassLessonDTO(classLessonRepository.save(newLesson)));
+
+            // Ghi lịch sử
+            classHistoryService.saveClassHistory(
+                    classId,
+                    String.format("{\"classLessonName\": \"%s\", \"orderNumber\": %d}",
+                            req.getClassLessonName(), req.getOrderNumber()),
+                    actionByUserId,
+                    ActionType.CREATE_LESSON.name(),
+                    "MANAGER,TEACHER"
+            );
         }
 
         return result;

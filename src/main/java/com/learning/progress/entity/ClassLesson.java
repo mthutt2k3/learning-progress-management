@@ -18,7 +18,7 @@ import org.hibernate.annotations.OnDeleteAction;
 @Table(name = "class_lessons")
 public class ClassLesson extends BaseEntity{
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne()
     @OnDelete(action = OnDeleteAction.SET_NULL)
     @JoinColumn(name = "class_chapter_id")
     private ClassChapter classChapter;

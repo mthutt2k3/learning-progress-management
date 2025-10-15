@@ -1,5 +1,6 @@
 package com.learning.progress.service.impl;
 
+import com.learning.progress.common.ActionType;
 import com.learning.progress.dto.clazz.ClassChapterDTO;
 import com.learning.progress.dto.clazz.SyncClassChapterRequest;
 import com.learning.progress.dto.response.DataResponse;
@@ -11,6 +12,7 @@ import com.learning.progress.mapper.ClassChapterMapper;
 import com.learning.progress.repository.ClassChapterRepository;
 import com.learning.progress.repository.ClassRepository;
 import com.learning.progress.service.ClassChapterService;
+import com.learning.progress.service.ClassHistoryService;
 import com.learning.progress.util.JwtUtil;
 import jakarta.transaction.Transactional;
 import jakarta.validation.ConstraintViolation;
@@ -38,6 +40,8 @@ public class ClassChapterServiceImpl implements ClassChapterService {
     private ClassChapterRepository classChapterRepository;
     @Autowired
     private ClassRepository classRepository;
+    @Autowired
+    private ClassHistoryService classHistoryService;
     @Autowired
     private ClassChapterMapper classChapterMapper;
     @Autowired
@@ -175,6 +179,7 @@ public class ClassChapterServiceImpl implements ClassChapterService {
 
         String currentUser = jwtUtil.extractUsernameFromCurrentRequest();
         OffsetDateTime now = OffsetDateTime.now();
+        Long actionByUserId = jwtUtil.extractUserIdFromCurrentRequest();
         List<ClassChapterDTO> result = new ArrayList<>();
 
         // Process DELETE
@@ -185,6 +190,15 @@ public class ClassChapterServiceImpl implements ClassChapterService {
             classChapter.setDeletedBy(currentUser);
             classChapter.setDeletedAt(now);
             classChapterRepository.save(classChapter);
+            // Ghi lịch sử
+            classHistoryService.saveClassHistory(
+                    classId,
+                    String.format("{\"chapterId\": %d, \"action\": \"deleted\"}", deleteReq.getId()),
+                    actionByUserId,
+                    ActionType.DELETE_CHAPTER.name(),
+                    "MANAGER,TEACHER"
+            );
+
         }
 
         // Process UPDATE
@@ -200,6 +214,15 @@ public class ClassChapterServiceImpl implements ClassChapterService {
             classChapter.setUpdatedBy(currentUser);
             classChapter.setUpdatedAt(now);
             result.add(classChapterMapper.toClassChapterDTO(classChapterRepository.save(classChapter)));
+            // Ghi lịch sử
+            classHistoryService.saveClassHistory(
+                    classId,
+                    String.format("{\"chapterId\": %d, \"classChapterName\": \"%s\", \"orderNumber\": %d}",
+                            req.getId(), req.getClassChapterName(), req.getOrderNumber()),
+                    actionByUserId,
+                    ActionType.UPDATE_CHAPTER.name(),
+                    "MANAGER,TEACHER"
+            );
         }
 
         // Process CREATE
@@ -216,6 +239,15 @@ public class ClassChapterServiceImpl implements ClassChapterService {
             newChapter.setCreatedAt(now);
             newChapter.setUpdatedAt(now);
             result.add(classChapterMapper.toClassChapterDTO(classChapterRepository.save(newChapter)));
+            // Ghi lịch sử
+            classHistoryService.saveClassHistory(
+                    classId,
+                    String.format("{\"classChapterName\": \"%s\", \"orderNumber\": %d}",
+                            req.getClassChapterName(), req.getOrderNumber()),
+                    actionByUserId,
+                    ActionType.CREATE_CHAPTER.name(),
+                    "MANAGER,TEACHER"
+            );
         }
 
         return result;
