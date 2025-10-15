@@ -1,11 +1,15 @@
 package com.learning.progress.util;
 
+import com.learning.progress.dto.EmailChangeTokenClaims;
+import com.learning.progress.exception.ApiException;
 import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.security.Keys;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
@@ -50,10 +54,10 @@ public class JwtUtil {
         Map<String, Object> claims = new HashMap<>();
         claims.put("role", role);
         claims.put("userId", userId);
-        return doGenerateToken(claims, username);
+        return doGenerateToken(claims, username, this.expiration);
     }
 
-    private String doGenerateToken(Map<String, Object> claims, String subject) {
+    private String doGenerateToken(Map<String, Object> claims, String subject, Long expiration) {
         Key key = Keys.hmacShaKeyFor(secret.getBytes());
         return Jwts.builder()
                 .setClaims(claims)
@@ -116,5 +120,43 @@ public class JwtUtil {
             return false;
         }
     }
+    public EmailChangeTokenClaims validateEmailChangeToken(String token) {
+        try {
+            Claims claims = getAllClaimsFromToken(token);
+            if (isTokenExpired(token)) {
+                throw new ApiException("Token has expired", HttpStatus.BAD_REQUEST.value());
+            }
 
+            Long userId = ((Number) claims.get("userId")).longValue();
+            String newEmail = (String) claims.get("newEmail");
+
+            if (userId == null || newEmail == null) {
+                throw new ApiException("Invalid token: missing userId or newEmail", HttpStatus.BAD_REQUEST.value());
+            }
+
+            return EmailChangeTokenClaims.builder()
+                    .userId(userId).newEmail(newEmail).build();
+        } catch (JwtException e) {
+            throw new ApiException("Invalid token", HttpStatus.BAD_REQUEST.value());
+        }
+    }
+
+
+    public Long extractUserIdFromCurrentRequest() {
+        ServletRequestAttributes attributes = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+        if (attributes == null) {
+            throw new ApiException("Cannot access current request context", HttpStatus.UNAUTHORIZED.value());
+        }
+
+        HttpServletRequest request = attributes.getRequest();
+        String authHeader = request.getHeader("Authorization");
+
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            throw new ApiException("Missing or invalid Authorization header", HttpStatus.UNAUTHORIZED.value());
+        }
+
+        String token = authHeader.substring(7);
+        Claims claims = getAllClaimsFromToken(token);
+        return ((Number) claims.get("userId")).longValue();
+    }
 }
