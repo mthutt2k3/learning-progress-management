@@ -11,6 +11,7 @@ import org.springframework.stereotype.Repository;
 
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface ChapterRepository extends JpaRepository<Chapter, Long> {
@@ -23,4 +24,6 @@ public interface ChapterRepository extends JpaRepository<Chapter, Long> {
 
     @Query("SELECT c FROM Chapter c WHERE c.syllabus.id = :syllabusId AND c.deletedAt IS NULL ORDER BY c.orderNumber ASC")
     List<Chapter> findBySyllabusIdAndDeletedAtIsNullOrderByOrderNumberAsc(@Param("syllabusId") Long syllabusId);
+
+    Optional<Chapter> findByChapterCode(String chapterCode);
 }

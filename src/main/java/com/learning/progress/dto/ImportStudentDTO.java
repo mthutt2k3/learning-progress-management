@@ -1,0 +1,38 @@
+package com.learning.progress.dto;
+
+import com.fasterxml.jackson.annotation.JsonFormat;
+import lombok.Data;
+
+import java.util.Date;
+
+@Data
+public class ImportStudentDTO {
+    private String email;
+
+    private String firstName;
+
+    private String lastName;
+
+    private String roleName;
+
+    private String parentEmail;
+
+    private String parentName;
+
+    private String parentPhone;
+
+    private String relationship;
+
+    private String avatarUrl;
+
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd")
+    private Date dateOfBirth;
+
+    private String address;
+
+    private String phoneNumber;
+
+    private String gender;
+
+    private String levelCode;
+}

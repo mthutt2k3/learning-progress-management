@@ -4,6 +4,7 @@ import com.learning.progress.dto.*;
 import com.learning.progress.dto.request.CreateStudentRequest;
 import com.learning.progress.dto.request.CreateUserRequest;
 import com.learning.progress.dto.response.DataResponse;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -22,4 +23,9 @@ public interface UserService {
 
     void requestChangeEmail(Long userId, ChangeEmailRequest request);
     UserProfileDTO confirmChangeEmail(String token);
+
+    byte[] generateTeacherImportTemplate();
+    byte[] generateStudentImportTemplate();
+    void importTeachersFromExcel(MultipartFile file);
+    void importStudentsFromExcel(MultipartFile file);
 }

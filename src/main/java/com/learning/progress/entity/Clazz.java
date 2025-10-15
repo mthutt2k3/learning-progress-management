@@ -32,4 +32,6 @@ public class Clazz extends BaseEntity{
     @Builder.Default
     private Boolean isActive = true;
 
+    @Column(name = "class_code", length = 20)
+    private String classCode;
 }

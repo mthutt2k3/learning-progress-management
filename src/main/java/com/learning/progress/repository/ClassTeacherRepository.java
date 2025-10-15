@@ -1,12 +1,17 @@
 package com.learning.progress.repository;
 
+import com.learning.progress.common.ClassTeacherStatus;
 import com.learning.progress.entity.ClassTeacher;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface ClassTeacherRepository extends JpaRepository<ClassTeacher, Long> {
@@ -16,4 +21,18 @@ public interface ClassTeacherRepository extends JpaRepository<ClassTeacher, Long
     Collection<ClassTeacher> findByUser_Id(Long userId);
 
     boolean existsByUser_IdAndClazz_Id(Long id, Long classId);
+
+    @Query("SELECT ct FROM ClassTeacher ct WHERE ct.clazz.id = :classId AND ct.status = :status " +
+            "AND (LOWER(ct.user.userName) LIKE LOWER(CONCAT('%', :text, '%')) " +
+            "OR LOWER(ct.user.firstName) LIKE LOWER(CONCAT('%', :text, '%')) " +
+            "OR LOWER(ct.user.lastName) LIKE LOWER(CONCAT('%', :text, '%')) " +
+            "OR LOWER(ct.user.email) LIKE LOWER(CONCAT('%', :text, '%')))")
+    Page<ClassTeacher> findByClassIdAndText(@Param("classId") Long classId, @Param("text") String text,
+                                            @Param("status") ClassTeacherStatus status, Pageable pageable);
+
+    Page<ClassTeacher> findByClazzIdAndStatus(Long classId, ClassTeacherStatus status, Pageable pageable);
+
+    Optional<ClassTeacher> findByClazzIdAndUserId(Long classId, Long userId);
+
+    boolean existsByClazzIdAndUserId(Long classId, Long userId);
 }

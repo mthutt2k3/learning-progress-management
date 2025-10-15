@@ -2,6 +2,7 @@ package com.learning.progress.service.impl;
 
 import com.learning.progress.dto.LessonDTO;
 import com.learning.progress.dto.response.DataResponse;
+import com.learning.progress.dto.syllabus.ImportLessonDTO;
 import com.learning.progress.dto.syllabus.SyncLessonRequest;
 import com.learning.progress.entity.Chapter;
 import com.learning.progress.entity.Lesson;
@@ -9,6 +10,7 @@ import com.learning.progress.exception.ApiException;
 import com.learning.progress.mapper.LessonMapper;
 import com.learning.progress.repository.ChapterRepository;
 import com.learning.progress.repository.LessonRepository;
+import com.learning.progress.service.FileService;
 import com.learning.progress.service.LessonService;
 import com.learning.progress.util.JwtUtil;
 import jakarta.validation.ConstraintViolation;
@@ -21,6 +23,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.time.OffsetDateTime;
 import java.util.*;
@@ -41,6 +44,8 @@ public class LessonServiceImpl implements LessonService {
     private JwtUtil jwtUtil;
     @Autowired
     private Validator validator;
+    @Autowired
+    private FileService fileService;
 
     @Override
     @Transactional
@@ -244,4 +249,82 @@ public class LessonServiceImpl implements LessonService {
                 .build();
     }
 
+    @Override
+    public byte[] generateLessonImportTemplate() {
+        return fileService.generateLessonImportTemplate();
+    }
+
+    @Override
+    @Transactional
+    public List<LessonDTO> importLessonsFromExcel(MultipartFile file) {
+        List<ImportLessonDTO> importList = fileService.readExcelData(file, "Import Data", ImportLessonDTO.class);
+        List<LessonDTO> result = new ArrayList<>();
+        String currentUser = jwtUtil.extractUsernameFromCurrentRequest();
+        OffsetDateTime now = OffsetDateTime.now();
+
+        // Nhóm theo chapterCode
+        Map<String, List<ImportLessonDTO>> lessonsByChapter = importList.stream()
+                .collect(Collectors.groupingBy(ImportLessonDTO::getChapterCode));
+
+        for (Map.Entry<String, List<ImportLessonDTO>> entry : lessonsByChapter.entrySet()) {
+            String chapterCode = entry.getKey();
+            List<ImportLessonDTO> lessons = entry.getValue();
+
+            // 1. Kiểm tra chapterCode
+            Chapter chapter = chapterRepository.findByChapterCode(chapterCode)
+                    .filter(c -> c.getDeletedAt() == null)
+                    .orElseThrow(() -> new ApiException("Chapter không tìm thấy hoặc đã bị xóa với mã: " + chapterCode, HttpStatus.NOT_FOUND.value()));
+
+            // 2. Validate lessons
+            for (ImportLessonDTO req : lessons) {
+                if (req.getLessonName() == null || req.getLessonName().trim().isEmpty()) {
+                    throw new ApiException("Lesson name là bắt buộc: " + req.getLessonName(), HttpStatus.BAD_REQUEST.value());
+                }
+                if (req.getLessonName().length() > 255) {
+                    throw new ApiException("Lesson name vượt quá 255 ký tự: " + req.getLessonName(), HttpStatus.BAD_REQUEST.value());
+                }
+                if (req.getContent() != null && req.getContent().length() > 1000) {
+                    throw new ApiException("Content vượt quá 1000 ký tự: " + req.getContent(), HttpStatus.BAD_REQUEST.value());
+                }
+                if (req.getOrderNumber() == null || req.getOrderNumber() < 1) {
+                    throw new ApiException("Order number phải là số dương: " + req.getOrderNumber(), HttpStatus.BAD_REQUEST.value());
+                }
+            }
+
+            // 3. Validate order numbers
+            Set<Integer> orderNumbers = lessons.stream()
+                    .map(ImportLessonDTO::getOrderNumber)
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toSet());
+
+            int lessonSize = lessons.size();
+            Set<Integer> expectedOrders = IntStream.rangeClosed(1, lessonSize).boxed().collect(Collectors.toSet());
+
+            if (orderNumbers.size() != lessonSize || !orderNumbers.equals(expectedOrders)) {
+                throw new ApiException(
+                        String.format("Order numbers phải tuần tự từ 1 đến %d, không trùng lặp và không có gap. Current: %s",
+                                lessonSize, orderNumbers),
+                        HttpStatus.BAD_REQUEST.value()
+                );
+            }
+
+            log.info("Validation passed for chapterCode={}: total lessons={}", chapterCode, lessonSize);
+
+            // 4. Tạo mới lessons
+            for (ImportLessonDTO req : lessons) {
+                Lesson newLesson = new Lesson();
+                newLesson.setChapter(chapter);
+                newLesson.setLessonName(req.getLessonName());
+                newLesson.setContent(req.getContent());
+                newLesson.setOrderNumber(req.getOrderNumber());
+                newLesson.setCreatedBy(currentUser);
+                newLesson.setUpdatedBy(currentUser);
+                newLesson.setUpdatedAt(now);
+                Lesson saved = lessonRepository.save(newLesson);
+                result.add(lessonMapper.toLessonDTO(saved));
+            }
+        }
+
+        return result;
+    }
 }

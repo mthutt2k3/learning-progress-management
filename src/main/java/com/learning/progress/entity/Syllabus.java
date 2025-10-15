@@ -33,4 +33,6 @@ public class Syllabus extends BaseEntity{
     @Column(name = "description", length = Integer.MAX_VALUE)
     private String description;
 
+    @Column(name = "syllabus_code", length = 20)
+    private String syllabusCode;
 }
