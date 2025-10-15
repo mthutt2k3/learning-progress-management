@@ -1,6 +1,7 @@
 package com.learning.progress.controller;
 
 import com.learning.progress.common.Const;
+import com.learning.progress.dto.ClassHistoryDTO;
 import com.learning.progress.dto.clazz.CreateClassHistoryRequest;
 import com.learning.progress.dto.response.DataResponse;
 import com.learning.progress.entity.ClassHistory;
@@ -51,26 +52,26 @@ public class ClassHistoryController {
     @GetMapping("/{classId}")
     @PreAuthorize("hasRole('MANAGER') or @classTeacherRepository.existsByUser_IdAndClazz_Id(@jwtUtil.extractUserIdFromCurrentRequest(), #classId)")
     @Operation(summary = "Get class history", description = "Retrieve history records for a specific class")
-    public ResponseEntity<DataResponse<List<ClassHistory>>> getClassHistory(
+    public ResponseEntity<DataResponse<List<ClassHistoryDTO>>> getClassHistory(
             @Parameter(description = "ID of the class") @PathVariable Long classId,
             @Parameter(description = "Page number (0-based)") @RequestParam(defaultValue = "0") int page,
             @Parameter(description = "Number of records per page") @RequestParam(defaultValue = "10") int size,
             @Parameter(description = "Field to sort by (e.g., actionAt, actionType)") @RequestParam(defaultValue = "actionAt") String sortBy,
             @Parameter(description = "Sort direction (asc or desc)") @RequestParam(defaultValue = "desc") String sortDir) {
-        DataResponse<List<ClassHistory>> response = classHistoryService.getClassHistory(classId, page, size, sortBy, sortDir);
+        DataResponse<List<ClassHistoryDTO>> response = classHistoryService.getClassHistory(classId, page, size, sortBy, sortDir);
         return new ResponseEntity<>(response, HttpStatus.OK);
     }
 
     @GetMapping("/user/{userId}")
     @PreAuthorize("hasRole('MANAGER') or @jwtUtil.isCurrentUser(#userId)")
     @Operation(summary = "Get class history by user", description = "Retrieve class history records for classes related to a specific user")
-    public ResponseEntity<DataResponse<List<ClassHistory>>> getClassHistoryByUser(
+    public ResponseEntity<DataResponse<List<ClassHistoryDTO>>> getClassHistoryByUser(
             @Parameter(description = "ID of the user") @PathVariable Long userId,
             @Parameter(description = "Page number (0-based)") @RequestParam(defaultValue = "0") int page,
             @Parameter(description = "Number of records per page") @RequestParam(defaultValue = "10") int size,
             @Parameter(description = "Field to sort by (e.g., actionAt, actionType)") @RequestParam(defaultValue = "actionAt") String sortBy,
             @Parameter(description = "Sort direction (asc or desc)") @RequestParam(defaultValue = "desc") String sortDir) {
-        DataResponse<List<ClassHistory>> response = classHistoryService.getClassHistoryByUser(userId, page, size, sortBy, sortDir);
+        DataResponse<List<ClassHistoryDTO>> response = classHistoryService.getClassHistoryByUser(userId, page, size, sortBy, sortDir);
         return new ResponseEntity<>(response, HttpStatus.OK);
     }
 }
