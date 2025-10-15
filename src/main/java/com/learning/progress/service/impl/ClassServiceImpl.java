@@ -1,5 +1,7 @@
 package com.learning.progress.service.impl;
 
+import com.learning.progress.common.ActionType;
+import com.learning.progress.common.RoleName;
 import com.learning.progress.dto.clazz.ClassDTO;
 import com.learning.progress.dto.clazz.CreateClassRequest;
 import com.learning.progress.dto.clazz.UpdateClassRequest;
@@ -13,6 +15,7 @@ import com.learning.progress.entity.Syllabus;
 import com.learning.progress.exception.ApiException;
 import com.learning.progress.mapper.ClassMapper;
 import com.learning.progress.repository.*;
+import com.learning.progress.service.ClassHistoryService;
 import com.learning.progress.service.ClassService;
 import com.learning.progress.util.JwtUtil;
 import jakarta.validation.ConstraintViolation;
@@ -51,6 +54,8 @@ public class ClassServiceImpl implements ClassService {
     @Autowired
     private ClassLessonRepository classLessonRepository;
     @Autowired
+    private ClassHistoryService classHistoryService;
+    @Autowired
     private ClassMapper classMapper;
     @Autowired
     private JwtUtil jwtUtil;
@@ -73,6 +78,7 @@ public class ClassServiceImpl implements ClassService {
 
         String currentUser = jwtUtil.extractUsernameFromCurrentRequest();
         OffsetDateTime now = OffsetDateTime.now();
+        Long actionByUserId = jwtUtil.extractUserIdFromCurrentRequest();
 
         // Tạo class
         Clazz clazz = new Clazz();
@@ -84,7 +90,21 @@ public class ClassServiceImpl implements ClassService {
         clazz.setUpdatedBy(currentUser);
         clazz.setCreatedAt(now);
         clazz.setUpdatedAt(now);
-        Clazz savedClass = classRepository.save(clazz);
+        Clazz savedClass = classRepository.saveAndFlush(clazz);
+
+        // Ghi lịch sử
+        String actionDetails = String.format(
+                "Đã tạo lớp %s với giáo trình %s",
+                request.getClassName(),
+                syllabus.getSyllabusName()
+        );
+        classHistoryService.saveClassHistory(
+                savedClass.getId(),
+                actionDetails,
+                actionByUserId,
+                ActionType.CREATE_CLASS.name(),
+                RoleName.MANAGER.name()
+        );
 
         // Sao chép chapters
         List<Chapter> chapters = chapterRepository.findBySyllabusIdAndDeletedAtIsNullOrderByOrderNumberAsc(syllabus.getId());
@@ -160,6 +180,20 @@ public class ClassServiceImpl implements ClassService {
 
         String currentUser = jwtUtil.extractUsernameFromCurrentRequest();
         OffsetDateTime now = OffsetDateTime.now();
+        Long actionByUserId = jwtUtil.extractUserIdFromCurrentRequest();
+        // Ghi lịch sử
+        String actionDetails = String.format(
+                "Đã cập nhật lớp %s với avatar %s",
+                request.getClassName(),
+                request.getAvatarUrl()
+        );
+        classHistoryService.saveClassHistory(
+                id,
+                actionDetails,
+                actionByUserId,
+                ActionType.UPDATE_CLASS.name(),
+                RoleName.MANAGER.name()
+        );
 
         clazz.setClassName(request.getClassName());
         clazz.setAvatarUrl(request.getAvatarUrl());
@@ -176,6 +210,22 @@ public class ClassServiceImpl implements ClassService {
         Clazz clazz = classRepository.findById(id)
                 .filter(c -> c.getDeletedAt() == null)
                 .orElseThrow(() -> new ApiException("Class không tồn tại", HttpStatus.NOT_FOUND.value()));
+        Long actionByUserId = jwtUtil.extractUserIdFromCurrentRequest();
+
+        // Ghi lịch sử
+        String actionDetails = String.format(
+                "Đã %s lớp %s",
+                isActive ? "kích hoạt" : "hủy kích hoạt",
+                clazz.getClassName()
+        );
+        classHistoryService.saveClassHistory(
+                id,
+                actionDetails,
+                actionByUserId,
+                ActionType.TOGGLE_CLASS_ACTIVATION.name(),
+                RoleName.MANAGER.name()
+        );
+
         clazz.setIsActive(isActive);
         clazz.setUpdatedBy(jwtUtil.extractUsernameFromCurrentRequest());
         clazz.setUpdatedAt(OffsetDateTime.now());
@@ -189,6 +239,21 @@ public class ClassServiceImpl implements ClassService {
                 .filter(c -> c.getDeletedAt() == null)
                 .orElseThrow(() -> new ApiException("Class không tồn tại", HttpStatus.NOT_FOUND.value()));
         String currentUser = jwtUtil.extractUsernameFromCurrentRequest();
+        Long actionByUserId = jwtUtil.extractUserIdFromCurrentRequest();
+
+        // Ghi lịch sử
+        String actionDetails = String.format(
+                "Đã xóa lớp %s",
+                clazz.getClassName()
+        );
+        classHistoryService.saveClassHistory(
+                id,
+                actionDetails,
+                actionByUserId,
+                ActionType.DELETE_CLASS.name(),
+                RoleName.MANAGER.name()
+        );
+
         OffsetDateTime now = OffsetDateTime.now();
         clazz.setDeletedBy(currentUser);
         clazz.setDeletedAt(now);

@@ -1,5 +1,7 @@
 package com.learning.progress.service.impl;
 
+import com.learning.progress.common.ActionType;
+import com.learning.progress.common.RoleName;
 import com.learning.progress.dto.clazz.ClassChapterDTO;
 import com.learning.progress.dto.clazz.SyncClassChapterRequest;
 import com.learning.progress.dto.response.DataResponse;
@@ -11,6 +13,7 @@ import com.learning.progress.mapper.ClassChapterMapper;
 import com.learning.progress.repository.ClassChapterRepository;
 import com.learning.progress.repository.ClassRepository;
 import com.learning.progress.service.ClassChapterService;
+import com.learning.progress.service.ClassHistoryService;
 import com.learning.progress.util.JwtUtil;
 import jakarta.transaction.Transactional;
 import jakarta.validation.ConstraintViolation;
@@ -38,6 +41,8 @@ public class ClassChapterServiceImpl implements ClassChapterService {
     private ClassChapterRepository classChapterRepository;
     @Autowired
     private ClassRepository classRepository;
+    @Autowired
+    private ClassHistoryService classHistoryService;
     @Autowired
     private ClassChapterMapper classChapterMapper;
     @Autowired
@@ -175,7 +180,9 @@ public class ClassChapterServiceImpl implements ClassChapterService {
 
         String currentUser = jwtUtil.extractUsernameFromCurrentRequest();
         OffsetDateTime now = OffsetDateTime.now();
+        Long actionByUserId = jwtUtil.extractUserIdFromCurrentRequest();
         List<ClassChapterDTO> result = new ArrayList<>();
+        String visibleToRoles = String.format("%s,%s,%s", RoleName.MANAGER.name(), RoleName.TEACHER.name(), RoleName.TEACHING_ASSISTANT.name());
 
         // Process DELETE
         for (SyncClassChapterRequest deleteReq : deleteRequests) {
@@ -185,6 +192,21 @@ public class ClassChapterServiceImpl implements ClassChapterService {
             classChapter.setDeletedBy(currentUser);
             classChapter.setDeletedAt(now);
             classChapterRepository.save(classChapter);
+
+            // Ghi lịch sử
+            String actionDetails = String.format(
+                    "Đã xóa chương %s của lớp %s",
+                    classChapter.getClassChapterName(),
+                    classEntity.getClassName()
+            );
+            classHistoryService.saveClassHistory(
+                    classId,
+                    actionDetails,
+                    actionByUserId,
+                    ActionType.DELETE_CHAPTER.name(),
+                    visibleToRoles
+            );
+
         }
 
         // Process UPDATE
@@ -200,6 +222,21 @@ public class ClassChapterServiceImpl implements ClassChapterService {
             classChapter.setUpdatedBy(currentUser);
             classChapter.setUpdatedAt(now);
             result.add(classChapterMapper.toClassChapterDTO(classChapterRepository.save(classChapter)));
+
+            // Ghi lịch sử
+            String actionDetails = String.format(
+                    "Đã cập nhật chương %s của lớp %s với thứ tự %d",
+                    req.getClassChapterName(),
+                    classEntity.getClassName(),
+                    req.getOrderNumber()
+            );
+            classHistoryService.saveClassHistory(
+                    classId,
+                    actionDetails,
+                    actionByUserId,
+                    ActionType.UPDATE_CHAPTER.name(),
+                    visibleToRoles
+            );
         }
 
         // Process CREATE
@@ -216,6 +253,21 @@ public class ClassChapterServiceImpl implements ClassChapterService {
             newChapter.setCreatedAt(now);
             newChapter.setUpdatedAt(now);
             result.add(classChapterMapper.toClassChapterDTO(classChapterRepository.save(newChapter)));
+
+            // Ghi lịch sử
+            String actionDetails = String.format(
+                    "Đã tạo chương %s cho lớp %s với thứ tự %d",
+                    req.getClassChapterName(),
+                    classEntity.getClassName(),
+                    req.getOrderNumber()
+            );
+            classHistoryService.saveClassHistory(
+                    classId,
+                    actionDetails,
+                    actionByUserId,
+                    ActionType.CREATE_CHAPTER.name(),
+                    visibleToRoles
+            );
         }
 
         return result;

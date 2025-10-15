@@ -1,5 +1,7 @@
 package com.learning.progress.service.impl;
 
+import com.learning.progress.common.ActionType;
+import com.learning.progress.common.RoleName;
 import com.learning.progress.dto.clazz.ClassLessonDTO;
 import com.learning.progress.dto.clazz.SyncClassLessonRequest;
 import com.learning.progress.dto.response.DataResponse;
@@ -10,6 +12,7 @@ import com.learning.progress.exception.ApiException;
 import com.learning.progress.mapper.ClassLessonMapper;
 import com.learning.progress.repository.ClassChapterRepository;
 import com.learning.progress.repository.ClassLessonRepository;
+import com.learning.progress.service.ClassHistoryService;
 import com.learning.progress.service.ClassLessonService;
 import com.learning.progress.util.JwtUtil;
 import jakarta.validation.ConstraintViolation;
@@ -39,6 +42,8 @@ public class ClassLessonServiceImpl implements ClassLessonService {
     @Autowired
     private ClassChapterRepository classChapterRepository;
     @Autowired
+    private ClassHistoryService classHistoryService;
+    @Autowired
     private ClassLessonMapper classLessonMapper;
     @Autowired
     private JwtUtil jwtUtil;
@@ -52,6 +57,7 @@ public class ClassLessonServiceImpl implements ClassLessonService {
         ClassChapter classChapter = classChapterRepository.findById(classChapterId)
                 .filter(c -> c.getDeletedAt() == null)
                 .orElseThrow(() -> new ApiException("Class chapter không tồn tại hoặc không thuộc lớp này", HttpStatus.NOT_FOUND.value()));
+        Long classId = classChapter.getClazz().getId();
 
         // Load existing active class lessons
         List<ClassLesson> existingActiveLessons = classLessonRepository
@@ -68,8 +74,6 @@ public class ClassLessonServiceImpl implements ClassLessonService {
                 .filter(req -> !req.isToBeDeleted())
                 .collect(Collectors.toList());
 
-
-
         // Validate DELETE request
         for (SyncClassLessonRequest deleteReq : deleteRequests) {
             Set<ConstraintViolation<SyncClassLessonRequest>> violations = validator.validate(deleteReq, SyncClassLessonRequest.Deleted.class);
@@ -81,7 +85,6 @@ public class ClassLessonServiceImpl implements ClassLessonService {
                 throw new ApiException("Class lesson ID không tồn tại: " + deleteId, HttpStatus.BAD_REQUEST.value());
             }
         }
-
 
         // Bước 5: Validate EXISTING IDs - Strict Matching
         Set<Long> requestExistingIds = nonDeletedRequests.stream()
@@ -135,7 +138,6 @@ public class ClassLessonServiceImpl implements ClassLessonService {
             );
         }
 
-
         // Validate non-deleted
         for (SyncClassLessonRequest req : nonDeletedRequests) {
             Set<ConstraintViolation<SyncClassLessonRequest>> violations = validator.validate(req, SyncClassLessonRequest.NotDeleted.class);
@@ -162,7 +164,9 @@ public class ClassLessonServiceImpl implements ClassLessonService {
 
         String currentUser = jwtUtil.extractUsernameFromCurrentRequest();
         OffsetDateTime now = OffsetDateTime.now();
+        Long actionByUserId = jwtUtil.extractUserIdFromCurrentRequest();
         List<ClassLessonDTO> result = new ArrayList<>();
+        String visibleToRoles = String.format("%s,%s,%s", RoleName.MANAGER.name(), RoleName.TEACHER.name(), RoleName.TEACHING_ASSISTANT.name());
 
         // Process DELETE
         for (SyncClassLessonRequest deleteReq : deleteRequests) {
@@ -172,6 +176,22 @@ public class ClassLessonServiceImpl implements ClassLessonService {
             classLesson.setDeletedBy(currentUser);
             classLesson.setDeletedAt(now);
             classLessonRepository.save(classLesson);
+
+            // Ghi lịch sử
+            String actionDetails = String.format(
+                    "Đã xóa bài học %s của chương %s, lớp %s",
+                    classLesson.getClassLessonName(),
+                    classChapter.getClassChapterName(),
+                    classChapter.getClazz().getClassName()
+            );
+            classHistoryService.saveClassHistory(
+                    classId,
+                    actionDetails,
+                    actionByUserId,
+                    ActionType.DELETE_LESSON.name(),
+                    visibleToRoles
+            );
+
         }
 
         // Process UPDATE
@@ -188,6 +208,23 @@ public class ClassLessonServiceImpl implements ClassLessonService {
             classLesson.setUpdatedBy(currentUser);
             classLesson.setUpdatedAt(now);
             result.add(classLessonMapper.toClassLessonDTO(classLessonRepository.save(classLesson)));
+
+
+            // Ghi lịch sử
+            String actionDetails = String.format(
+                    "Đã cập nhật bài học %s của chương %s, lớp %s với thứ tự %d",
+                    req.getClassLessonName(),
+                    classChapter.getClassChapterName(),
+                    classChapter.getClazz().getClassName(),
+                    req.getOrderNumber()
+            );
+            classHistoryService.saveClassHistory(
+                    classId,
+                    actionDetails,
+                    actionByUserId,
+                    ActionType.UPDATE_LESSON.name(),
+                    visibleToRoles
+            );
         }
 
         // Process CREATE
@@ -205,6 +242,23 @@ public class ClassLessonServiceImpl implements ClassLessonService {
             newLesson.setCreatedAt(now);
             newLesson.setUpdatedAt(now);
             result.add(classLessonMapper.toClassLessonDTO(classLessonRepository.save(newLesson)));
+
+
+            // Ghi lịch sử
+            String actionDetails = String.format(
+                    "Đã tạo bài học %s cho chương %s, lớp %s với thứ tự %d",
+                    req.getClassLessonName(),
+                    classChapter.getClassChapterName(),
+                    classChapter.getClazz().getClassName(),
+                    req.getOrderNumber()
+            );
+            classHistoryService.saveClassHistory(
+                    classId,
+                    actionDetails,
+                    actionByUserId,
+                    ActionType.CREATE_LESSON.name(),
+                    visibleToRoles
+            );
         }
 
         return result;
