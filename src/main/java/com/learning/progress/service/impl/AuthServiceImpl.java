@@ -23,6 +23,7 @@ import com.learning.progress.util.JwtUtil;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.mail.javamail.JavaMailSender;
@@ -36,7 +37,6 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.Map;
 import java.util.UUID;
-import java.util.regex.Pattern;
 
 @Service
 public class AuthServiceImpl implements AuthService {
@@ -69,6 +69,7 @@ public class AuthServiceImpl implements AuthService {
 
     @Autowired
     private EmailService emailService;
+
     /**
      * Authenticates a user and generates access and refresh tokens.
      * Validates username, password, user status, and role permissions.
@@ -78,172 +79,290 @@ public class AuthServiceImpl implements AuthService {
      */
     @Override
     public LoginResponse login(LoginRequest loginRequest) {
+        String traceId = MDC.get("traceId");
+        log.info("[{}] Login attempt for username: {}, role: {}", traceId, loginRequest.getUsername(), loginRequest.getLoginRole());
 
+        // Fetch user by username
         User user = userRepository.findByUserName(loginRequest.getUsername())
-                .orElseThrow(() -> new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.UNAUTHORIZED.value()));
+                .orElseThrow(() -> {
+                    log.error("[{}] User not found: {}", traceId, loginRequest.getUsername());
+                    return new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.UNAUTHORIZED.value());
+                });
 
+        // Validate password
         if (!passwordEncoder.matches(loginRequest.getPassword(), user.getPassword())) {
+            log.error("[{}] Invalid credentials for username: {}", traceId, loginRequest.getUsername());
             throw new ApiException(Const.AUTH.INVALID_CREDENTIALS, HttpStatus.UNAUTHORIZED.value());
         }
 
+        // Check user status
         if (user.getStatus() != UserStatus.ACTIVE) {
+            log.error("[{}] User inactive: {}", traceId, loginRequest.getUsername());
             throw new ApiException(Const.USER.USER_INACTIVE, HttpStatus.FORBIDDEN.value());
         }
 
         // Validate login role
         String roleInput = loginRequest.getLoginRole();
-
         String roleUpper = roleInput.trim().toUpperCase();
+        log.debug("[{}] Validating role: {}", traceId, roleUpper);
 
-        RoleName loginRole = RoleName.valueOf(roleUpper);
+        RoleName loginRole;
+        try {
+            loginRole = RoleName.valueOf(roleUpper);
+        } catch (IllegalArgumentException e) {
+            log.error("[{}] Invalid login role: {}", traceId, roleUpper);
+            throw new ApiException(Const.ROLE.INVALID_LOGIN_ROLE, HttpStatus.BAD_REQUEST.value());
+        }
+
         RoleName userRole = RoleName.valueOf(user.getRole().getName().toString().toUpperCase());
 
+        // Check role permissions
         switch (loginRole) {
             case TEACHER -> {
-                if (!(userRole == RoleName.ADMIN
-                        || userRole == RoleName.MANAGER
-                        || userRole == RoleName.TEACHER
-                        || userRole == RoleName.TEACHING_ASSISTANT)) {
+                if (!(userRole == RoleName.ADMIN || userRole == RoleName.MANAGER
+                        || userRole == RoleName.TEACHER || userRole == RoleName.TEACHING_ASSISTANT)) {
+                    log.error("[{}] Forbidden role for teacher login: {}", traceId, userRole);
                     throw new ApiException(Const.SECURITY.FORBIDDEN_ROLE, HttpStatus.FORBIDDEN.value());
                 }
             }
             case STUDENT -> {
                 if (!(userRole == RoleName.STUDENT || userRole == RoleName.TEST_TAKER)) {
+                    log.error("[{}] Forbidden role for student login: {}", traceId, userRole);
                     throw new ApiException(Const.SECURITY.FORBIDDEN_ROLE, HttpStatus.FORBIDDEN.value());
                 }
             }
-            default -> throw new ApiException(Const.ROLE.INVALID_LOGIN_ROLE, HttpStatus.BAD_REQUEST.value());
+            default -> {
+                log.error("[{}] Invalid login role: {}", traceId, loginRole);
+                throw new ApiException(Const.ROLE.INVALID_LOGIN_ROLE, HttpStatus.BAD_REQUEST.value());
+            }
         }
 
+        // Generate tokens
         String accessToken = jwtUtil.generateToken(user.getUserName(), user.getRole().getName().toString(), user.getId());
         RefreshToken refreshToken = tokenService.createRefreshToken(user);
         boolean mustChangePassword = user.isMustChangePassword();
         boolean mustUpdateProfile = user.isMustUpdateProfile();
 
+        log.info("[{}] Login successful for username: {}", traceId, loginRequest.getUsername());
         return authMapper.toLoginResponse(user, refreshToken, accessToken, mustChangePassword, mustUpdateProfile);
     }
 
+    /**
+     * Initiates a password reset by sending an email with a reset token.
+     *
+     * @param request The reset password request containing the username.
+     * @return Masked email address of the user.
+     */
     @Override
     public String resetPasswordByEmail(ResetPasswordRequest request) {
+        String traceId = MDC.get("traceId");
+        log.info("[{}] Password reset requested for username: {}", traceId, request.getUserName());
 
+        // Fetch user by username
         User user = userRepository.findByUserName(request.getUserName())
-                .orElseThrow(() -> new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> {
+                    log.error("[{}] User not found: {}", traceId, request.getUserName());
+                    return new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value());
+                });
 
-        // Kiểm tra trạng thái hoạt động của người dùng
+        // Check user status
         if (user.getStatus() != UserStatus.ACTIVE) {
+            log.error("[{}] User inactive: {}", traceId, request.getUserName());
             throw new ApiException(Const.USER.USER_INACTIVE, HttpStatus.FORBIDDEN.value());
         }
 
-        // Tạo token đặt lại mật khẩu
+        // Generate and save reset token
         String resetToken = UUID.randomUUID().toString();
         user.setResetPasswordToken(resetToken);
         user.setResetPasswordExpires(OffsetDateTime.now().plusHours(24));
         user.setMustChangePassword(true);
         userRepository.save(user);
+        log.debug("[{}] Reset token generated for username: {}", traceId, request.getUserName());
 
+        // Send reset email
         try {
             emailService.sendForgotPasswordEmail(user, request, resetToken);
+            log.info("[{}] Password reset email sent to: {}", traceId, user.getEmail());
             return DataUtil.maskEmail(user.getEmail());
         } catch (Exception e) {
+            log.error("[{}] Failed to send reset email for username: {}, error: {}",
+                    traceId, request.getUserName(), e.getMessage());
             throw new ApiException(Const.AUTH.EMAIL_SEND_FAILED, HttpStatus.INTERNAL_SERVER_ERROR.value());
         }
     }
 
+    /**
+     * Confirms a password reset using the provided token and new password.
+     *
+     * @param request The request containing the reset token and new password.
+     * @return Masked email address of the user.
+     */
+    @Override
     public String confirmResetPassword(ConfirmResetPasswordRequest request) {
-        User user = userRepository.findByResetPasswordToken(request.getToken())
-                .orElseThrow(() -> new ApiException(Const.AUTH.INVALID_CREDENTIALS, HttpStatus.BAD_REQUEST.value()));
+        String traceId = MDC.get("traceId");
+        log.info("[{}] Confirming password reset with token: {}", traceId, request.getToken());
 
-        // Kiểm tra token hết hạn
+        // Fetch user by reset token
+        User user = userRepository.findByResetPasswordToken(request.getToken())
+                .orElseThrow(() -> {
+                    log.error("[{}] Invalid reset token: {}", traceId, request.getToken());
+                    return new ApiException(Const.AUTH.INVALID_CREDENTIALS, HttpStatus.BAD_REQUEST.value());
+                });
+
+        // Check token expiration
         if (user.getResetPasswordExpires().isBefore(OffsetDateTime.now())) {
+            log.error("[{}] Reset token expired for user: {}", traceId, user.getUserName());
             throw new ApiException(Const.TOKEN.EXPIRED, HttpStatus.BAD_REQUEST.value());
         }
 
-        // Cập nhật mật khẩu mới
+        // Update password
         user.setPassword(passwordEncoder.encode(request.getNewPassword()));
         user.setResetPasswordToken(null);
         user.setResetPasswordExpires(null);
         user.setMustChangePassword(false);
         userRepository.save(user);
+        log.info("[{}] Password reset successful for user: {}", traceId, user.getUserName());
 
         return DataUtil.maskEmail(user.getEmail());
     }
 
+    /**
+     * Changes a user's password after validating the old password and confirming the new one.
+     *
+     * @param request The change password request containing old and new passwords.
+     * @return LoginResponse with new tokens and user details.
+     */
+    @Override
     public LoginResponse changePassword(ChangePasswordRequest request) {
-
+        String traceId = MDC.get("traceId");
         String username = jwtUtil.extractUsernameFromCurrentRequest();
+        log.info("[{}] Password change requested for username: {}", traceId, username);
 
+        // Validate password match
         if (!request.getNewPassword().equals(request.getConfirmPassword())) {
+            log.error("[{}] New password and confirm password do not match for username: {}", traceId, username);
             throw new ApiException(Const.AUTH.PASSWORDS_DO_NOT_MATCH, HttpStatus.BAD_REQUEST.value());
         }
 
+        // Fetch user
         User user = userRepository.findByUserName(username)
-                .orElseThrow(() -> new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> {
+                    log.error("[{}] User not found: {}", traceId, username);
+                    return new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value());
+                });
 
+        // Validate old password
         if (!passwordEncoder.matches(request.getOldPassword(), user.getPassword())) {
+            log.error("[{}] Invalid old password for username: {}", traceId, username);
             throw new ApiException(Const.AUTH.INVALID_OLD_PASSWORD, HttpStatus.BAD_REQUEST.value());
         }
 
+        // Check if new password is same as old
         if (passwordEncoder.matches(request.getNewPassword(), user.getPassword())) {
+            log.error("[{}] New password same as old for username: {}", traceId, username);
             throw new ApiException(Const.AUTH.NEW_PASSWORD_SAME_AS_OLD, HttpStatus.BAD_REQUEST.value());
         }
 
+        // Update password and logout
         user.setPassword(passwordEncoder.encode(request.getNewPassword()));
         user.setMustChangePassword(false);
         userRepository.save(user);
+        log.debug("[{}] Password updated for username: {}", traceId, username);
 
         logout(request.getRefreshToken());
+        log.debug("[{}] User logged out after password change: {}", traceId, username);
 
+        // Generate new tokens
         String accessToken = jwtUtil.generateToken(user.getUserName(), user.getRole().getName().toString(), user.getId());
         RefreshToken refreshToken = tokenService.createRefreshToken(user);
         boolean mustChangePassword = user.isMustChangePassword();
         boolean mustUpdateProfile = user.isMustUpdateProfile();
 
+        log.info("[{}] Password change successful for username: {}", traceId, username);
         return authMapper.toLoginResponse(user, refreshToken, accessToken, mustChangePassword, mustUpdateProfile);
     }
 
+    /**
+     * Resets a student's password by a teacher, generating a random password.
+     *
+     * @param username The username of the student.
+     * @return ResetPasswordByTeacherResponse with user details and new password.
+     */
+    @Override
     public ResetPasswordByTeacherResponse resetPasswordByTeacher(String username) {
+        String traceId = MDC.get("traceId");
+        log.info("[{}] Teacher password reset requested for username: {}", traceId, username);
+
         // Validate username
         if (username == null || username.trim().isEmpty()) {
+            log.error("[{}] Username is required", traceId);
             throw new ApiException(Const.USERNAME.REQUIRED, HttpStatus.BAD_REQUEST.value());
         }
 
+        // Fetch user
         User user = userRepository.findByUserName(username)
-                .orElseThrow(() -> new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> {
+                    log.error("[{}] User not found: {}", traceId, username);
+                    return new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value());
+                });
 
-        // Added: Check user active
+        // Check user status
         if (user.getStatus() != UserStatus.ACTIVE) {
+            log.error("[{}] User inactive: {}", traceId, username);
             throw new ApiException(Const.USER.USER_INACTIVE, HttpStatus.FORBIDDEN.value());
         }
 
+        // Validate role
         RoleName userRole = RoleName.valueOf(user.getRole().getName().toString().toUpperCase());
         if (!(userRole == RoleName.STUDENT || userRole == RoleName.TEST_TAKER)) {
+            log.error("[{}] Forbidden role for reset: {}", traceId, userRole);
             throw new ApiException(Const.SECURITY.FORBIDDEN_ROLE_STUDENT_ONLY, HttpStatus.FORBIDDEN.value());
         }
 
+        // Generate and set new password
         String newPassword = DataUtil.generateRandomPassword(8);
-
         user.setPassword(passwordEncoder.encode(newPassword));
         user.setMustChangePassword(true);
         userRepository.save(user);
+        log.info("[{}] Password reset by teacher for username: {}", traceId, username);
 
         return authMapper.toResetPasswordByTeacherResponse(user, newPassword);
     }
 
+    /**
+     * Refreshes an access token using a valid refresh token.
+     *
+     * @param refreshToken The refresh token.
+     * @return Map containing new access token and the same refresh token.
+     */
+    @Override
     public Map<String, String> refreshAccessToken(String refreshToken) {
+        String traceId = MDC.get("traceId");
+        log.info("[{}] Refresh token request", traceId);
+
         // Validate refresh token
         if (refreshToken == null || refreshToken.trim().isEmpty()) {
+            log.error("[{}] Refresh token required", traceId);
             throw new ApiException(Const.VALIDATION.REFRESH_TOKEN_REQUIRED, HttpStatus.BAD_REQUEST.value());
         }
 
+        // Fetch refresh token
         RefreshToken token = refreshTokenRepository.findByTokenAndRevokedFalse(refreshToken)
-                .orElseThrow(() -> new ApiException(Const.AUTH.INVALID_REFRESH_TOKEN, HttpStatus.UNAUTHORIZED.value()));
+                .orElseThrow(() -> {
+                    log.error("[{}] Invalid refresh token: {}", traceId, refreshToken);
+                    return new ApiException(Const.AUTH.INVALID_REFRESH_TOKEN, HttpStatus.UNAUTHORIZED.value());
+                });
 
+        // Check token expiration
         if (token.getExpiresAt().isBefore(Instant.now())) {
+            log.error("[{}] Refresh token expired", traceId);
             throw new ApiException(Const.AUTH.REFRESH_TOKEN_EXPIRED, HttpStatus.UNAUTHORIZED.value());
         }
 
+        // Generate new access token
         User user = token.getUser();
         String newAccessToken = jwtUtil.generateToken(user.getUserName(), user.getRole().getName().toString(), user.getId());
+        log.info("[{}] Access token refreshed for username: {}", traceId, user.getUserName());
 
         return Map.of(
                 "accessToken", newAccessToken,
@@ -251,40 +370,62 @@ public class AuthServiceImpl implements AuthService {
         );
     }
 
+    /**
+     * Logs out a user by blacklisting the access token and revoking the refresh token.
+     *
+     * @param refreshTokenParam The refresh token to revoke.
+     */
+    @Override
     public void logout(String refreshTokenParam) {
-        // Validate refresh token param
+        String traceId = MDC.get("traceId");
+        log.info("[{}] Logout request", traceId);
+
+        // Validate refresh token
         if (refreshTokenParam == null || refreshTokenParam.trim().isEmpty()) {
+            log.error("[{}] Refresh token required for logout", traceId);
             throw new ApiException(Const.TOKEN.REFRESH_TOKEN_REQUIRED, HttpStatus.BAD_REQUEST.value());
         }
 
+        // Get request attributes
         ServletRequestAttributes attributes = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
         if (attributes == null) {
+            log.error("[{}] Request attributes not found", traceId);
             throw new ApiException(Const.SECURITY.OPERATION_FAILED, HttpStatus.INTERNAL_SERVER_ERROR.value());
         }
 
+        // Extract access token
         HttpServletRequest request = attributes.getRequest();
         String authHeader = request.getHeader("Authorization");
-
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            log.error("[{}] Bearer token required", traceId);
             throw new ApiException(Const.SECURITY.AUTH_BEARER_REQUIRED, HttpStatus.UNAUTHORIZED.value());
         }
 
         String accessToken = authHeader.substring(7);
-        // Added: Check access token after extract
         if (accessToken == null || accessToken.trim().isEmpty()) {
+            log.error("[{}] Access token required", traceId);
             throw new ApiException(Const.SECURITY.ACCESS_TOKEN_REQUIRED, HttpStatus.UNAUTHORIZED.value());
         }
 
+        // Check if access token is blacklisted
         if (tokenService.isAccessTokenBlacklisted(accessToken)) {
+            log.error("[{}] Access token blacklisted: {}", traceId, accessToken);
             throw new ApiException(Const.AUTH.ACCESS_TOKEN_BLACKLISTED, HttpStatus.UNAUTHORIZED.value());
         }
 
+        // Blacklist access token
         Instant expiry = jwtUtil.getExpirationDateFromToken(accessToken).toInstant();
         tokenService.blacklistAccessToken(accessToken, expiry);
+        log.debug("[{}] Access token blacklisted: {}", traceId, accessToken);
 
+        // Revoke refresh token
         RefreshToken refreshToken = refreshTokenRepository.findByTokenAndRevokedFalse(refreshTokenParam)
-                .orElseThrow(() -> new ApiException(Const.AUTH.INVALID_REFRESH_TOKEN, HttpStatus.UNAUTHORIZED.value()));
+                .orElseThrow(() -> {
+                    log.error("[{}] Invalid refresh token: {}", traceId, refreshTokenParam);
+                    return new ApiException(Const.AUTH.INVALID_REFRESH_TOKEN, HttpStatus.UNAUTHORIZED.value());
+                });
         refreshToken.setRevoked(true);
         refreshTokenRepository.save(refreshToken);
+        log.info("[{}] Logout successful, refresh token revoked", traceId);
     }
 }
