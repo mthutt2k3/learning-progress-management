@@ -93,14 +93,19 @@ public class ClassServiceImpl implements ClassService {
         Clazz savedClass = classRepository.saveAndFlush(clazz);
 
         // Ghi lịch sử
+        String actionDetails = String.format(
+                "Đã tạo lớp %s với giáo trình %s",
+                request.getClassName(),
+                syllabus.getSyllabusName()
+        );
         classHistoryService.saveClassHistory(
                 savedClass.getId(),
-                String.format("{\"className\": \"%s\", \"syllabus\": %s, \"avatarUrl\": \"%s\"}",
-                        request.getClassName(), syllabus.getSyllabusName(), request.getAvatarUrl()),
+                actionDetails,
                 actionByUserId,
                 ActionType.CREATE_CLASS.name(),
                 RoleName.MANAGER.name()
         );
+
         // Sao chép chapters
         List<Chapter> chapters = chapterRepository.findBySyllabusIdAndDeletedAtIsNullOrderByOrderNumberAsc(syllabus.getId());
         List<ClassChapter> classChapters = new ArrayList<>();
@@ -176,15 +181,20 @@ public class ClassServiceImpl implements ClassService {
         String currentUser = jwtUtil.extractUsernameFromCurrentRequest();
         OffsetDateTime now = OffsetDateTime.now();
         Long actionByUserId = jwtUtil.extractUserIdFromCurrentRequest();
-        // Ghi lịch sử trước khi cập nhật
+        // Ghi lịch sử
+        String actionDetails = String.format(
+                "Đã cập nhật lớp %s với avatar %s",
+                request.getClassName(),
+                request.getAvatarUrl()
+        );
         classHistoryService.saveClassHistory(
                 id,
-                String.format("{\"className\": \"%s\", \"avatarUrl\": \"%s\"}",
-                        request.getClassName(), request.getAvatarUrl()),
+                actionDetails,
                 actionByUserId,
                 ActionType.UPDATE_CLASS.name(),
                 RoleName.MANAGER.name()
         );
+
         clazz.setClassName(request.getClassName());
         clazz.setAvatarUrl(request.getAvatarUrl());
         clazz.setUpdatedBy(currentUser);
@@ -203,12 +213,17 @@ public class ClassServiceImpl implements ClassService {
         Long actionByUserId = jwtUtil.extractUserIdFromCurrentRequest();
 
         // Ghi lịch sử
+        String actionDetails = String.format(
+                "Đã %s lớp %s",
+                isActive ? "kích hoạt" : "hủy kích hoạt",
+                clazz.getClassName()
+        );
         classHistoryService.saveClassHistory(
                 id,
-                String.format("{\"isActive\": %b}", isActive),
+                actionDetails,
                 actionByUserId,
                 ActionType.TOGGLE_CLASS_ACTIVATION.name(),
-                "MANAGER"
+                RoleName.MANAGER.name()
         );
 
         clazz.setIsActive(isActive);
@@ -227,12 +242,16 @@ public class ClassServiceImpl implements ClassService {
         Long actionByUserId = jwtUtil.extractUserIdFromCurrentRequest();
 
         // Ghi lịch sử
+        String actionDetails = String.format(
+                "Đã xóa lớp %s",
+                clazz.getClassName()
+        );
         classHistoryService.saveClassHistory(
                 id,
-                "{\"action\": \"deleted\"}",
+                actionDetails,
                 actionByUserId,
                 ActionType.DELETE_CLASS.name(),
-                "MANAGER"
+                RoleName.MANAGER.name()
         );
 
         OffsetDateTime now = OffsetDateTime.now();

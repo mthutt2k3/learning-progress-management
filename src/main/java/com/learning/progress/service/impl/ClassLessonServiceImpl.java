@@ -1,6 +1,7 @@
 package com.learning.progress.service.impl;
 
 import com.learning.progress.common.ActionType;
+import com.learning.progress.common.RoleName;
 import com.learning.progress.dto.clazz.ClassLessonDTO;
 import com.learning.progress.dto.clazz.SyncClassLessonRequest;
 import com.learning.progress.dto.response.DataResponse;
@@ -73,8 +74,6 @@ public class ClassLessonServiceImpl implements ClassLessonService {
                 .filter(req -> !req.isToBeDeleted())
                 .collect(Collectors.toList());
 
-
-
         // Validate DELETE request
         for (SyncClassLessonRequest deleteReq : deleteRequests) {
             Set<ConstraintViolation<SyncClassLessonRequest>> violations = validator.validate(deleteReq, SyncClassLessonRequest.Deleted.class);
@@ -86,7 +85,6 @@ public class ClassLessonServiceImpl implements ClassLessonService {
                 throw new ApiException("Class lesson ID không tồn tại: " + deleteId, HttpStatus.BAD_REQUEST.value());
             }
         }
-
 
         // Bước 5: Validate EXISTING IDs - Strict Matching
         Set<Long> requestExistingIds = nonDeletedRequests.stream()
@@ -140,7 +138,6 @@ public class ClassLessonServiceImpl implements ClassLessonService {
             );
         }
 
-
         // Validate non-deleted
         for (SyncClassLessonRequest req : nonDeletedRequests) {
             Set<ConstraintViolation<SyncClassLessonRequest>> violations = validator.validate(req, SyncClassLessonRequest.NotDeleted.class);
@@ -169,6 +166,7 @@ public class ClassLessonServiceImpl implements ClassLessonService {
         OffsetDateTime now = OffsetDateTime.now();
         Long actionByUserId = jwtUtil.extractUserIdFromCurrentRequest();
         List<ClassLessonDTO> result = new ArrayList<>();
+        String visibleToRoles = String.format("%s,%s,%s", RoleName.MANAGER.name(), RoleName.TEACHER.name(), RoleName.TEACHING_ASSISTANT.name());
 
         // Process DELETE
         for (SyncClassLessonRequest deleteReq : deleteRequests) {
@@ -180,12 +178,18 @@ public class ClassLessonServiceImpl implements ClassLessonService {
             classLessonRepository.save(classLesson);
 
             // Ghi lịch sử
+            String actionDetails = String.format(
+                    "Đã xóa bài học %s của chương %s, lớp %s",
+                    classLesson.getClassLessonName(),
+                    classChapter.getClassChapterName(),
+                    classChapter.getClazz().getClassName()
+            );
             classHistoryService.saveClassHistory(
                     classId,
-                    String.format("{\"lessonId\": %d, \"action\": \"deleted\"}", deleteReq.getId()),
+                    actionDetails,
                     actionByUserId,
                     ActionType.DELETE_LESSON.name(),
-                    "MANAGER,TEACHER"
+                    visibleToRoles
             );
 
         }
@@ -205,14 +209,21 @@ public class ClassLessonServiceImpl implements ClassLessonService {
             classLesson.setUpdatedAt(now);
             result.add(classLessonMapper.toClassLessonDTO(classLessonRepository.save(classLesson)));
 
+
             // Ghi lịch sử
+            String actionDetails = String.format(
+                    "Đã cập nhật bài học %s của chương %s, lớp %s với thứ tự %d",
+                    req.getClassLessonName(),
+                    classChapter.getClassChapterName(),
+                    classChapter.getClazz().getClassName(),
+                    req.getOrderNumber()
+            );
             classHistoryService.saveClassHistory(
                     classId,
-                    String.format("{\"lessonId\": %d, \"classLessonName\": \"%s\", \"orderNumber\": %d}",
-                            req.getId(), req.getClassLessonName(), req.getOrderNumber()),
+                    actionDetails,
                     actionByUserId,
                     ActionType.UPDATE_LESSON.name(),
-                    "MANAGER,TEACHER"
+                    visibleToRoles
             );
         }
 
@@ -232,14 +243,21 @@ public class ClassLessonServiceImpl implements ClassLessonService {
             newLesson.setUpdatedAt(now);
             result.add(classLessonMapper.toClassLessonDTO(classLessonRepository.save(newLesson)));
 
+
             // Ghi lịch sử
+            String actionDetails = String.format(
+                    "Đã tạo bài học %s cho chương %s, lớp %s với thứ tự %d",
+                    req.getClassLessonName(),
+                    classChapter.getClassChapterName(),
+                    classChapter.getClazz().getClassName(),
+                    req.getOrderNumber()
+            );
             classHistoryService.saveClassHistory(
                     classId,
-                    String.format("{\"classLessonName\": \"%s\", \"orderNumber\": %d}",
-                            req.getClassLessonName(), req.getOrderNumber()),
+                    actionDetails,
                     actionByUserId,
                     ActionType.CREATE_LESSON.name(),
-                    "MANAGER,TEACHER"
+                    visibleToRoles
             );
         }
 
