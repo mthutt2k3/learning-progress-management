@@ -35,7 +35,7 @@ public class UserController {
     @Operation(summary = "Create a new student", description = "Create a new user student profile (MANAGER only)")
     public ResponseEntity<DataResponse<StudentProfileDTO>> createStudent(@Valid @RequestBody CreateStudentRequest request) {
         var response = userService.createStudent(request);
-        return new ResponseEntity<>(DataResponse.success(response, Const.CRUD_MESSAGE_CODE.CREATE_SUCCESSFUL), HttpStatus.CREATED);
+        return new ResponseEntity<>(DataResponse.success(response, Const.RESULT_MESSAGE_CODE.CREATE_SUCCESSFUL), HttpStatus.CREATED);
     }
 
     @PutMapping("students/{userId}")
@@ -43,9 +43,9 @@ public class UserController {
     @Operation(summary = "Update a student", description = "Update an existing student profile (MANAGER only)")
     public ResponseEntity<DataResponse<StudentProfileDTO>> updateStudent(
             @Parameter(description = "User ID of the student to update") @PathVariable Long userId,
-            @Valid @RequestBody CreateStudentRequest request) {
+            @Valid @RequestBody UpdateStudentRequest request) {
         var response = userService.updateStudent(userId, request);
-        return new ResponseEntity<>(DataResponse.success(response, Const.CRUD_MESSAGE_CODE.UPDATE_SUCCESSFUL), HttpStatus.OK);
+        return new ResponseEntity<>(DataResponse.success(response, Const.RESULT_MESSAGE_CODE.UPDATE_SUCCESSFUL), HttpStatus.OK);
     }
 
     @PatchMapping("students/{userId}/status")
@@ -55,7 +55,7 @@ public class UserController {
             @Parameter(description = "User ID of the student to update status") @PathVariable Long userId,
             @Parameter(description = "New status (e.g., ACTIVE, INACTIVE)") @RequestParam String status) {
         var response = userService.updateStudentStatus(userId, status);
-        return new ResponseEntity<>(DataResponse.success(response, Const.CRUD_MESSAGE_CODE.UPDATE_SUCCESSFUL), HttpStatus.OK);
+        return new ResponseEntity<>(DataResponse.success(response, Const.RESULT_MESSAGE_CODE.UPDATE_SUCCESSFUL), HttpStatus.OK);
     }
 
     @PostMapping("teachers")
@@ -63,7 +63,7 @@ public class UserController {
     @Operation(summary = "Create a new teacher", description = "Create a new user teacher profile (MANAGER only)")
     public ResponseEntity<DataResponse<TeacherProfileDTO>> createTeacher(@Valid @RequestBody CreateUserRequest request) {
         var response = userService.createTeacher(request);
-        return new ResponseEntity<>(DataResponse.success(response, Const.CRUD_MESSAGE_CODE.CREATE_SUCCESSFUL), HttpStatus.CREATED);
+        return new ResponseEntity<>(DataResponse.success(response, Const.RESULT_MESSAGE_CODE.CREATE_SUCCESSFUL), HttpStatus.CREATED);
     }
 
     @PutMapping("teachers/{userId}")
@@ -71,9 +71,9 @@ public class UserController {
     @Operation(summary = "Update a teacher", description = "Update an existing teacher profile (MANAGER only)")
     public ResponseEntity<DataResponse<TeacherProfileDTO>> updateTeacher(
             @Parameter(description = "User ID of the teacher to update") @PathVariable Long userId,
-            @Valid @RequestBody CreateUserRequest request) {
+            @Valid @RequestBody UpdateUserRequest request) {
         var response = userService.updateTeacher(userId, request);
-        return new ResponseEntity<>(DataResponse.success(response, Const.CRUD_MESSAGE_CODE.UPDATE_SUCCESSFUL), HttpStatus.OK);
+        return new ResponseEntity<>(DataResponse.success(response, Const.RESULT_MESSAGE_CODE.UPDATE_SUCCESSFUL), HttpStatus.OK);
     }
 
     @PatchMapping("teachers/{userId}/status")
@@ -83,7 +83,7 @@ public class UserController {
             @Parameter(description = "User ID of the teacher to update status") @PathVariable Long userId,
             @Parameter(description = "New status (e.g., ACTIVE, INACTIVE)") @RequestParam String status) {
         var response = userService.updateTeacherStatus(userId, status);
-        return new ResponseEntity<>(DataResponse.success(response, Const.CRUD_MESSAGE_CODE.UPDATE_SUCCESSFUL), HttpStatus.OK);
+        return new ResponseEntity<>(DataResponse.success(response, Const.RESULT_MESSAGE_CODE.UPDATE_SUCCESSFUL), HttpStatus.OK);
     }
 
     @GetMapping("students")
@@ -121,7 +121,7 @@ public class UserController {
             @Parameter(description = "User ID of the user (optional, defaults to current user)") @PathVariable(required = false) Long userId) {
         boolean isCurrentUser = userId == null;
         var response = userService.getUserProfile(userId, isCurrentUser);
-        return ResponseEntity.ok(DataResponse.success(response, Const.CRUD_MESSAGE_CODE.RETRIEVE_SUCCESSFUL));
+        return ResponseEntity.ok(DataResponse.success(response, Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL));
     }
 
     @PutMapping("profile/{userId}")
@@ -129,9 +129,9 @@ public class UserController {
     @Operation(summary = "Update current user profile", description = "Update profile of the currently authenticated user")
     public ResponseEntity<DataResponse<?>> updateUserProfile(
             @Parameter(description = "User ID of the current user") @PathVariable Long userId,
-            @RequestBody @Valid UpdateUserProfileDTO updateUserProfileDTO) {
-        var response = userService.updateUserProfile(userId, updateUserProfileDTO);
-        return ResponseEntity.ok(DataResponse.success(response, Const.CRUD_MESSAGE_CODE.UPDATE_SUCCESSFUL));
+            @RequestBody @Valid UpdateProfileDTO updateProfileDTO) {
+        var response = userService.updateUserProfile(userId, updateProfileDTO);
+        return ResponseEntity.ok(DataResponse.success(response, Const.RESULT_MESSAGE_CODE.UPDATE_SUCCESSFUL));
     }
 
     @PostMapping("/change-email")
@@ -141,7 +141,7 @@ public class UserController {
             @Parameter(description = "User ID of the current user") @RequestParam Long userId,
             @Valid @RequestBody ChangeEmailRequest request) {
         userService.requestChangeEmail(userId, request);
-        return new ResponseEntity<>(DataResponse.success("Email change confirmation sent", Const.CRUD_MESSAGE_CODE.REQUEST_SENT), HttpStatus.OK);
+        return new ResponseEntity<>(DataResponse.success("Email change confirmation sent", Const.RESULT_MESSAGE_CODE.REQUEST_SENT), HttpStatus.OK);
     }
 
     @GetMapping("/confirm-email-change")
@@ -149,7 +149,7 @@ public class UserController {
     public ResponseEntity<DataResponse<UserProfileDTO>> confirmChangeEmail(
             @Parameter(description = "JWT token for email change confirmation") @RequestParam String token) {
         UserProfileDTO response = userService.confirmChangeEmail(token);
-        return new ResponseEntity<>(DataResponse.success(response, Const.CRUD_MESSAGE_CODE.UPDATE_SUCCESSFUL), HttpStatus.OK);
+        return new ResponseEntity<>(DataResponse.success(response, Const.RESULT_MESSAGE_CODE.UPDATE_SUCCESSFUL), HttpStatus.OK);
     }
 
     @GetMapping("/students/download-template")
@@ -171,7 +171,7 @@ public class UserController {
     public ResponseEntity<DataResponse<String>> importStudentsFromExcel(
             @Parameter(description = "Excel file containing student data") @RequestParam("file") MultipartFile file) {
         userService.importStudentsFromExcel(file);
-        return new ResponseEntity<>(DataResponse.success("Students imported successfully", Const.CRUD_MESSAGE_CODE.IMPORT_SUCCESSFUL), HttpStatus.OK);
+        return new ResponseEntity<>(DataResponse.success("Students imported successfully", Const.RESULT_MESSAGE_CODE.IMPORT_SUCCESSFUL), HttpStatus.OK);
     }
 
     @GetMapping("/teachers/download-template")
@@ -193,6 +193,6 @@ public class UserController {
     public ResponseEntity<DataResponse<String>> importTeachersFromExcel(
             @Parameter(description = "Excel file containing teacher data") @RequestParam("file") MultipartFile file) {
         userService.importTeachersFromExcel(file);
-        return new ResponseEntity<>(DataResponse.success("Teachers imported successfully", Const.CRUD_MESSAGE_CODE.IMPORT_SUCCESSFUL), HttpStatus.OK);
+        return new ResponseEntity<>(DataResponse.success("Teachers imported successfully", Const.RESULT_MESSAGE_CODE.IMPORT_SUCCESSFUL), HttpStatus.OK);
     }
 }

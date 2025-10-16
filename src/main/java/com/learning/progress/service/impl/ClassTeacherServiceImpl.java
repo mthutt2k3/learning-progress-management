@@ -14,6 +14,7 @@ import com.learning.progress.repository.ClassRepository;
 import com.learning.progress.repository.ClassTeacherRepository;
 import com.learning.progress.repository.UserRepository;
 import com.learning.progress.service.ClassTeacherService;
+import com.learning.progress.util.AppValidator;
 import com.learning.progress.util.JwtUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
@@ -46,24 +47,13 @@ public class ClassTeacherServiceImpl implements ClassTeacherService {
     @Autowired
     private JwtUtil jwtUtil;
 
+    @Autowired
+    private AppValidator appValidator;
     @Override
     public DataResponse<List<ClassTeacherResponse>> getTeachersInClass(Long classId, int page, int size, String text, ClassTeacherStatus status, String sortBy, String sortDir) {
-        if (page < 0) throw new ApiException(Const.ERROR_MESSAGE.INVALID_PAGE, HttpStatus.BAD_REQUEST.value());
-        if (size < 1 || size > 100) throw new ApiException(Const.ERROR_MESSAGE.INVALID_SIZE, HttpStatus.BAD_REQUEST.value());
-
-        String[] validSortFields = {"id", "userName", "firstName", "lastName", "email", "joinedAt", "status"};
-        boolean isValidSortField = false;
-        for (String field : validSortFields) {
-            if (field.equalsIgnoreCase(sortBy)) {
-                isValidSortField = true;
-                break;
-            }
-        }
-        if (!isValidSortField) throw new ApiException(Const.ERROR_MESSAGE.INVALID_SORT_BY, HttpStatus.BAD_REQUEST.value());
-
-        if (!sortDir.equalsIgnoreCase("asc") && !sortDir.equalsIgnoreCase("desc")) {
-            throw new ApiException(Const.ERROR_MESSAGE.INVALID_SORT_DIR, HttpStatus.BAD_REQUEST.value());
-        }
+        // Validate pagination and sort parameters
+        appValidator.validatePaginationParams(page, size);
+        appValidator.validateSortParams(List.of("id", "userName", "firstName", "lastName", "email", "joinedAt", "status"), sortBy, sortDir);
 
         Sort sort = Sort.by(sortDir.equalsIgnoreCase("asc") ? Sort.Direction.ASC : Sort.Direction.DESC, sortBy);
         Pageable pageable = PageRequest.of(page, size, sort);
@@ -98,13 +88,6 @@ public class ClassTeacherServiceImpl implements ClassTeacherService {
     @Override
     @Transactional
     public void addTeacherToClass(Long classId, AddTeacherToClassRequest request) {
-        if (classId == null) {
-            throw new ApiException(Const.CLASS.INVALID_ID, HttpStatus.BAD_REQUEST.value());
-        }
-        if (request == null || request.getUserId() == null) {
-            throw new ApiException(Const.USER.INVALID_ID, HttpStatus.BAD_REQUEST.value());
-        }
-
         Clazz clazz = classRepository.findById(classId)
                 .orElseThrow(() -> new ApiException(Const.CLASS.CLASS_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
@@ -152,13 +135,6 @@ public class ClassTeacherServiceImpl implements ClassTeacherService {
     @Override
     @Transactional
     public void removeTeacherFromClass(Long classId, Long userId) {
-        if (classId == null) {
-            throw new ApiException(Const.CLASS.INVALID_ID, HttpStatus.BAD_REQUEST.value());
-        }
-        if (userId == null) {
-            throw new ApiException(Const.USER.INVALID_ID, HttpStatus.BAD_REQUEST.value());
-        }
-
         Clazz clazz = classRepository.findById(classId)
                 .orElseThrow(() -> new ApiException(Const.CLASS.CLASS_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 

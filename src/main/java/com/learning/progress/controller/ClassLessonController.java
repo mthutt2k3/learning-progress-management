@@ -35,14 +35,14 @@ public class ClassLessonController {
             @Valid @RequestBody List<SyncClassLessonRequest> request) {
         return ResponseEntity.ok(DataResponse.success(
                 classLessonService.syncClassLessons(classChapterId, request),
-                Const.CRUD_MESSAGE_CODE.UPDATE_SUCCESSFUL));
+                Const.RESULT_MESSAGE_CODE.UPDATE_SUCCESSFUL));
     }
 
     @GetMapping("/{id}")
     @PreAuthorize("hasRole('MANAGER') or hasRole('TEACHER')")
     @Operation(summary = "Lấy class lesson", description = "Lấy thông tin class lesson theo ID")
     public ResponseEntity<DataResponse<ClassLessonDTO>> getClassLesson(@PathVariable Long id) {
-        return ResponseEntity.ok(DataResponse.success(classLessonService.getClassLesson(id), Const.CRUD_MESSAGE_CODE.RETRIEVE_SUCCESSFUL));
+        return ResponseEntity.ok(DataResponse.success(classLessonService.getClassLesson(id), Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL));
     }
 
     @GetMapping
@@ -71,7 +71,7 @@ public class ClassLessonController {
     public ResponseEntity<DataResponse<Void>> importClassLessons(
             @RequestParam Long classChapterId, @RequestParam("file") MultipartFile file) throws IOException {
         classLessonService.importClassLessonsFromExcel(classChapterId, file.getInputStream());
-        return ResponseEntity.ok(DataResponse.success(null, Const.CRUD_MESSAGE_CODE.IMPORT_SUCCESSFUL));
+        return ResponseEntity.ok(DataResponse.success(null, Const.RESULT_MESSAGE_CODE.IMPORT_SUCCESSFUL));
     }
 
     @GetMapping("/template")

@@ -4,7 +4,6 @@ import com.learning.progress.common.Const;
 import com.learning.progress.common.RoleName;
 import com.learning.progress.common.UserStatus;
 import com.learning.progress.dto.AccountDTO;
-import com.learning.progress.dto.request.CreateAccountRequest;
 import com.learning.progress.dto.request.CreateNewAccountRequest;
 import com.learning.progress.dto.response.DataResponse;
 import com.learning.progress.entity.Role;
@@ -17,7 +16,6 @@ import com.learning.progress.service.AccountService;
 import com.learning.progress.service.EmailService;
 import com.learning.progress.util.AppValidator;
 import com.learning.progress.util.DataUtil;
-import com.learning.progress.util.EnumUtil;
 import jakarta.persistence.EntityManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -128,7 +126,7 @@ public class AccountServiceImpl implements AccountService {
         return DataResponse.<List<AccountDTO>>builder()
                 .traceId(traceId)
                 .success(true)
-                .message(Const.CRUD_MESSAGE_CODE.RETRIEVE_SUCCESSFUL)
+                .message(Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL)
                 .data(accounts)
                 .timestamp(java.time.LocalDateTime.now())
                 .page(page)

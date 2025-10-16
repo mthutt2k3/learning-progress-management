@@ -357,7 +357,7 @@ public class AuthServiceImpl implements AuthService {
         // Check token expiration
         if (token.getExpiresAt().isBefore(Instant.now())) {
             log.error("[{}] Refresh token expired", traceId);
-            throw new ApiException(Const.AUTH.REFRESH_TOKEN_EXPIRED, HttpStatus.UNAUTHORIZED.value());
+            throw new ApiException(Const.RESULT_MESSAGE_CODE.REFRESH_TOKEN_EXPIRED, HttpStatus.UNAUTHORIZED.value());
         }
 
         // Generate new access token

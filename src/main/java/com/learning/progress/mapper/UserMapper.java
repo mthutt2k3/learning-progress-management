@@ -33,7 +33,9 @@ public interface UserMapper {
 
     User toUser(CreateNewAccountRequest request);
 
-    User toUser(UpdateUserProfileDTO updateDTO);
+    User toUser(UpdateProfileDTO updateDTO);
+
+    User toUser(UpdateUserRequest request);
 
     @Mapping(source = "role.name", target = "roleName")
     CreateUserResponse toCreateUserResponse(User user);

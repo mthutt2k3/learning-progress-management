@@ -105,7 +105,7 @@ public class UserServiceImpl implements UserService {
 
     @Override
     @Transactional
-    public StudentProfileDTO updateStudent(Long userId, CreateStudentRequest request) {
+    public StudentProfileDTO updateStudent(Long userId, UpdateStudentRequest request) {
         appValidator.validateEnumValue(Gender.class, request.getGender());
 
         appValidator.validateAllowedEnumValue(
@@ -119,7 +119,7 @@ public class UserServiceImpl implements UserService {
 
 
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ApiException(Const.AUTH.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         User updatedUser = userMapper.toUser(request);
         user.setRole(role);
@@ -151,7 +151,7 @@ public class UserServiceImpl implements UserService {
 
         appValidator.validateEnumValue(UserStatus.class, status);
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ApiException(Const.AUTH.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         appValidator.validateAllowedEnumValue(
                 RoleName.class,
@@ -287,7 +287,7 @@ public class UserServiceImpl implements UserService {
 
     @Override
     @Transactional
-    public TeacherProfileDTO updateTeacher(Long userId, CreateUserRequest request) {
+    public TeacherProfileDTO updateTeacher(Long userId, UpdateUserRequest request) {
         appValidator.validateEnumValue(Gender.class, request.getGender());
 
         appValidator.validateAllowedEnumValue(
@@ -300,7 +300,7 @@ public class UserServiceImpl implements UserService {
                 .orElseThrow(() -> new ApiException(Const.ROLE.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ApiException(Const.AUTH.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         User updatedUser = userMapper.toUser(request);
         user.setRole(role);
@@ -328,7 +328,7 @@ public class UserServiceImpl implements UserService {
         }
 
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ApiException(Const.AUTH.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
         appValidator.validateAllowedEnumValue(
                 RoleName.class,
                 user.getRole().getName().name(),
@@ -350,10 +350,10 @@ public class UserServiceImpl implements UserService {
                 throw new ApiException(Const.AUTH.INVALID_TOKEN_USERNAME, HttpStatus.UNAUTHORIZED.value());
             }
             user = userRepository.findByUserName(username)
-                    .orElseThrow(() -> new ApiException(Const.AUTH.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+                    .orElseThrow(() -> new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
         } else {
             user = userRepository.findById(userId)
-                    .orElseThrow(() -> new ApiException(Const.AUTH.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+                    .orElseThrow(() -> new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
         }
 
         RoleName roleName = user.getRole().getName();
@@ -400,14 +400,14 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
-    public UserProfileDTO updateUserProfile(Long userId, UpdateUserProfileDTO updateDTO) {
+    public UserProfileDTO updateUserProfile(Long userId, UpdateProfileDTO updateDTO) {
         String username = jwtUtil.extractUsernameFromCurrentRequest();
         if (username == null || username.trim().isEmpty()) {
             throw new ApiException(Const.AUTH.INVALID_TOKEN_USERNAME, HttpStatus.UNAUTHORIZED.value());
         }
 
         User user = userRepository.findByUserName(username)
-                .orElseThrow(() -> new ApiException(Const.AUTH.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         if (!user.getId().equals(userId)) {
             throw new ApiException(Const.SECURITY.NOT_MATCH_CURRENT_USER, HttpStatus.FORBIDDEN.value());
@@ -445,11 +445,11 @@ public class UserServiceImpl implements UserService {
             throw new ApiException(Const.AUTH.INVALID_TOKEN_USERNAME, HttpStatus.UNAUTHORIZED.value());
         }
         User currentUser  = userRepository.findByUserName(username)
-                .orElseThrow(() -> new ApiException(Const.AUTH.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         // Lấy user mục tiêu dựa trên userId được truyền vào
         User targetUser = userRepository.findById(userId)
-                .orElseThrow(() -> new ApiException(Const.AUTH.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         boolean isSelf = currentUser.getId().equals(userId);
 
@@ -473,7 +473,7 @@ public class UserServiceImpl implements UserService {
             throw new ApiException(Const.VALIDATION.EMAIL_REQUIRED, HttpStatus.BAD_REQUEST.value());
         }
         if (!DataUtil.isValidEmail(newEmail)) {
-            throw new ApiException(Const.USER.EMAIL_INVALID, HttpStatus.BAD_REQUEST.value());
+            throw new ApiException(Const.EMAIL.INVALID, HttpStatus.BAD_REQUEST.value());
         }
 
         String token = jwtUtil.generateChangeEmailToken(targetUser.getUserName(), newEmail, targetUser.getId());
@@ -489,7 +489,7 @@ public class UserServiceImpl implements UserService {
         String newEmail = claims.getNewEmail();
 
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ApiException(Const.AUTH.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         user.setEmail(newEmail);
         userRepository.save(user);
