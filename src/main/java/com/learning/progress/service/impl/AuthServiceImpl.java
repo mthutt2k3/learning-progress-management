@@ -97,7 +97,7 @@ public class AuthServiceImpl implements AuthService {
         }
 
         // Check user status
-        if (user.getStatus() != UserStatus.ACTIVE) {
+        if (user.getStatus() == UserStatus.INACTIVE) {
             log.error("[{}] User inactive: {}", traceId, loginRequest.getUsername());
             throw new ApiException(Const.USER.USER_INACTIVE, HttpStatus.FORBIDDEN.value());
         }
@@ -139,10 +139,13 @@ public class AuthServiceImpl implements AuthService {
         }
 
         // Generate tokens
-        String accessToken = jwtUtil.generateAuthToken(user.getUserName(), user.getRole().getName().toString(), user.getId());
         RefreshToken refreshToken = tokenService.createRefreshToken(user);
         boolean mustChangePassword = user.isMustChangePassword();
         boolean mustUpdateProfile = user.isMustUpdateProfile();
+
+        String accessToken = mustChangePassword ?
+                jwtUtil.generateResetPasswordToken(user.getUserName(), user.getRole().getName().toString(), user.getId()) :
+                jwtUtil.generateAuthToken(user.getUserName(), user.getRole().getName().toString(), user.getId());
 
         log.info("[{}] Login successful for username: {}", traceId, loginRequest.getUsername());
         return authMapper.toLoginResponse(user, refreshToken, accessToken, mustChangePassword, mustUpdateProfile);
@@ -173,16 +176,12 @@ public class AuthServiceImpl implements AuthService {
         }
 
         // Generate and save reset token
-        String resetToken = UUID.randomUUID().toString();
-        user.setResetPasswordToken(resetToken);
-        user.setResetPasswordExpires(OffsetDateTime.now().plusHours(24));
-        user.setMustChangePassword(true);
-        userRepository.save(user);
-        log.debug("[{}] Reset token generated for username: {}", traceId, request.getUserName());
+        String resetPasswordToken = jwtUtil.generateResetPasswordToken(user.getUserName(), user.getRole().getName().toString(), user.getId());
+        log.debug("[{}] Reset token generated for user is {}", traceId, resetPasswordToken);
 
         // Send reset email
         try {
-            emailService.sendForgotPasswordEmail(user, request, resetToken);
+            emailService.sendForgotPasswordEmail(user, request, resetPasswordToken);
             log.info("[{}] Password reset email sent to: {}", traceId, user.getEmail());
             return DataUtil.maskEmail(user.getEmail());
         } catch (Exception e) {
@@ -203,23 +202,25 @@ public class AuthServiceImpl implements AuthService {
         String traceId = MDC.get("traceId");
         log.info("[{}] Confirming password reset with token: {}", traceId, request.getToken());
 
+        // ✅ Validate token + user
+        Long userId = jwtUtil.validateAndGetUserIdFromResetPasswordToken(request.getToken());
+
         // Fetch user by reset token
-        User user = userRepository.findByResetPasswordToken(request.getToken())
+        User user = userRepository.findById(userId)
                 .orElseThrow(() -> {
                     log.error("[{}] Invalid reset token: {}", traceId, request.getToken());
-                    return new ApiException(Const.AUTH.INVALID_CREDENTIALS, HttpStatus.BAD_REQUEST.value());
+                    return new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.BAD_REQUEST.value());
                 });
-
-        // Check token expiration
-        if (user.getResetPasswordExpires().isBefore(OffsetDateTime.now())) {
-            log.error("[{}] Reset token expired for user: {}", traceId, user.getUserName());
-            throw new ApiException(Const.TOKEN.EXPIRED, HttpStatus.BAD_REQUEST.value());
+        if (user.getStatus() == UserStatus.INACTIVE) {
+            log.error("[{}] User inactive: {}", traceId, user.getUserName());
+            throw new ApiException(Const.USER.USER_INACTIVE, HttpStatus.FORBIDDEN.value());
+        }
+        if (user.getStatus() == UserStatus.PENDING) {
+            user.setStatus(UserStatus.ACTIVE);
         }
 
         // Update password
         user.setPassword(passwordEncoder.encode(request.getNewPassword()));
-        user.setResetPasswordToken(null);
-        user.setResetPasswordExpires(null);
         user.setMustChangePassword(false);
         userRepository.save(user);
         log.info("[{}] Password reset successful for user: {}", traceId, user.getUserName());
@@ -357,7 +358,7 @@ public class AuthServiceImpl implements AuthService {
         // Check token expiration
         if (token.getExpiresAt().isBefore(Instant.now())) {
             log.error("[{}] Refresh token expired", traceId);
-            throw new ApiException(Const.AUTH.REFRESH_TOKEN_EXPIRED, HttpStatus.UNAUTHORIZED.value());
+            throw new ApiException(Const.RESULT_MESSAGE_CODE.REFRESH_TOKEN_EXPIRED, HttpStatus.UNAUTHORIZED.value());
         }
 
         // Generate new access token

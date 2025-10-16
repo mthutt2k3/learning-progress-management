@@ -1,6 +1,5 @@
 package com.learning.progress.controller;
 import com.learning.progress.common.Const;
-import com.learning.progress.dto.ChangeEmailRequestDTO;
 import com.learning.progress.dto.request.ChangePasswordRequest;
 import com.learning.progress.dto.request.ConfirmResetPasswordRequest;
 import com.learning.progress.dto.request.LoginRequest;
@@ -11,7 +10,6 @@ import com.learning.progress.service.AuthService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotBlank;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
@@ -36,7 +34,7 @@ public class AuthController {
     public ResponseEntity<?> loginStudent(@Valid @RequestBody LoginRequest loginRequest) {
             var response = authService.login(loginRequest);
             return ResponseEntity.ok(
-                    DataResponse.success(response, Const.AUTH.LOGIN_SUCCESS)
+                    DataResponse.success(response, Const.RESULT_MESSAGE_CODE.LOGIN_SUCCESS)
             );
     }
 
@@ -44,21 +42,21 @@ public class AuthController {
     @PostMapping("/refresh-token")
     public ResponseEntity<?> refreshToken(@RequestParam String refreshToken) {
         Map<String, String> response = authService.refreshAccessToken(refreshToken);
-        return ResponseEntity.ok(DataResponse.success(response, Const.AUTH.TOKEN_REFRESH_SUCCESS));
+        return ResponseEntity.ok(DataResponse.success(response, Const.RESULT_MESSAGE_CODE.TOKEN_REFRESH_SUCCESS));
     }
 
     @PreAuthorize("isAuthenticated()")
     @PostMapping("/logout")
     public ResponseEntity<?> logout(@RequestParam String refreshToken) {
         authService.logout(refreshToken);
-        return ResponseEntity.ok(DataResponse.success(Const.AUTH.LOGOUT_SUCCESS, Const.AUTH.LOGOUT_SUCCESS));
+        return ResponseEntity.ok(DataResponse.success(null, Const.RESULT_MESSAGE_CODE.LOGOUT_SUCCESS));
     }
 
     @PostMapping("/reset-password")
     @Operation(summary = "reset password by sent default pass word to email", description = "reset password by sent default pass word to ")
     public ResponseEntity<?> resetPassword(@RequestBody ResetPasswordRequest request) {
         String response = authService.resetPasswordByEmail(request);
-        return ResponseEntity.ok(DataResponse.success(response, Const.AUTH.PASSWORD_RESET_EMAIL_SENT));
+        return ResponseEntity.ok(DataResponse.success(response, Const.RESULT_MESSAGE_CODE.PASSWORD_RESET_EMAIL_SENT));
     }
 
     @PostMapping("/confirm-reset-password")
@@ -76,7 +74,7 @@ public class AuthController {
     )
     public ResponseEntity<?> changePassword(@RequestBody ChangePasswordRequest request) {
         var response = authService.changePassword(request);
-        return ResponseEntity.ok(DataResponse.success(response, Const.AUTH.PASSWORD_CHANGED));
+        return ResponseEntity.ok(DataResponse.success(response, Const.RESULT_MESSAGE_CODE.UPDATE_SUCCESSFUL));
     }
 
     @PreAuthorize("hasRole('MANAGER') or hasRole('TEACHER')")
@@ -87,7 +85,7 @@ public class AuthController {
     )
     public ResponseEntity<?> resetPasswordByTeacher(@RequestParam(required = false) String username) {
         ResetPasswordByTeacherResponse response = authService.resetPasswordByTeacher(username);
-        return ResponseEntity.ok(DataResponse.success(response, Const.AUTH.PASSWORD_RESET_BY_TEACHER));
+        return ResponseEntity.ok(DataResponse.success(response, Const.RESULT_MESSAGE_CODE.PASSWORD_RESET_BY_TEACHER));
     }
 
 }

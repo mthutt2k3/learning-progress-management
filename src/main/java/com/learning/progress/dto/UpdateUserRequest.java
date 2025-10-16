@@ -4,12 +4,22 @@ import com.fasterxml.jackson.annotation.JsonFormat;
 import com.learning.progress.common.Const;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
-import jakarta.validation.constraints.Size;
+import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.NoArgsConstructor;
+import lombok.experimental.SuperBuilder;
+
 import java.util.Date;
 
 @Data
-public class UpdateUserProfileDTO {
+@SuperBuilder
+@NoArgsConstructor
+@AllArgsConstructor
+public class UpdateUserRequest {
+
+    @NotBlank(message = Const.NAME.ROLE_NAME_REQUIRED)
+    private String roleName;
+
     @NotBlank(message = Const.NAME.FIRST_NAME_REQUIRED)
     private String firstName;
 
@@ -27,10 +37,7 @@ public class UpdateUserProfileDTO {
             regexp = Const.VALIDATE_INPUT.regexPhone,
             message = Const.PHONE_NUMBER.INVALID_PHONE_FORMAT
     )
-    @NotBlank(message = Const.PHONE_NUMBER.REQUIRED)
-    private String phoneNumber;
+    private String phoneNumber; // có thể optional
 
-    @NotBlank(message = Const.GENDER.REQUIRED)
     private String gender;
-
 }

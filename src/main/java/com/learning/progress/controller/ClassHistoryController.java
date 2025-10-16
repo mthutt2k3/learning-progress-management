@@ -4,7 +4,6 @@ import com.learning.progress.common.Const;
 import com.learning.progress.dto.ClassHistoryDTO;
 import com.learning.progress.dto.clazz.CreateClassHistoryRequest;
 import com.learning.progress.dto.response.DataResponse;
-import com.learning.progress.entity.ClassHistory;
 import com.learning.progress.service.ClassHistoryService;
 import com.learning.progress.util.JwtUtil;
 import io.swagger.v3.oas.annotations.Operation;
@@ -44,7 +43,7 @@ public class ClassHistoryController {
                 request.getVisibleToRoles()
         );
         return new ResponseEntity<>(
-                DataResponse.success("Class history saved successfully", Const.CRUD_MESSAGE_CODE.CREATE_SUCCESSFUL),
+                DataResponse.success("Class history saved successfully", Const.RESULT_MESSAGE_CODE.CREATE_SUCCESSFUL),
                 HttpStatus.OK
         );
     }

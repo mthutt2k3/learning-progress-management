@@ -51,22 +51,22 @@ public class AccountController {
     @Operation(summary = "Create a new account from scratch", description = "Create a new account without an existing user (ADMIN only)")
     public ResponseEntity<DataResponse<AccountDTO>> createNewAccount(@Valid @RequestBody CreateNewAccountRequest request) {
         AccountDTO response = accountService.createNewAccount(request);
-        return new ResponseEntity<>(DataResponse.success(response, Const.CRUD_MESSAGE_CODE.CREATE_SUCCESSFUL), HttpStatus.CREATED);
+        return new ResponseEntity<>(DataResponse.success(response, Const.RESULT_MESSAGE_CODE.CREATE_SUCCESSFUL), HttpStatus.CREATED);
     }
 
 
     @PutMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Update account", description = "Update account (ADMIN only)")
-    public ResponseEntity<DataResponse<?>> updateAccount(@PathVariable Long id, @Valid @RequestBody CreateNewAccountRequest request) {
-        return new ResponseEntity<>(DataResponse.success(accountService.updateAccount(id, request), Const.CRUD_MESSAGE_CODE.UPDATE_SUCCESSFUL), HttpStatus.OK);
+    public ResponseEntity<DataResponse<?>> updateAccount(@PathVariable Long id, @Valid @RequestParam String email) {
+        return new ResponseEntity<>(DataResponse.success(accountService.updateAccount(id, email), Const.RESULT_MESSAGE_CODE.UPDATE_SUCCESSFUL), HttpStatus.OK);
     }
 
     @PutMapping("/{id}/status")
     @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Update account status", description = "Update status of an account (ADMIN only)")
     public ResponseEntity<DataResponse<?>> updateStatusAccount(@PathVariable Long id, @Valid @RequestParam UserStatus userStatus) {
-        return new ResponseEntity<>(DataResponse.success(accountService.updateStatusAccount(id, userStatus), Const.CRUD_MESSAGE_CODE.UPDATE_SUCCESSFUL), HttpStatus.OK);
+        return new ResponseEntity<>(DataResponse.success(accountService.updateStatusAccount(id, userStatus), Const.RESULT_MESSAGE_CODE.UPDATE_SUCCESSFUL), HttpStatus.OK);
     }
 
 }

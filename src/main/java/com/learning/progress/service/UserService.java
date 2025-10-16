@@ -10,16 +10,16 @@ import java.util.List;
 
 public interface UserService {
     StudentProfileDTO createStudent(CreateStudentRequest request);
-    StudentProfileDTO updateStudent(Long userId, CreateStudentRequest request);
+    StudentProfileDTO updateStudent(Long userId, UpdateStudentRequest request);
     StudentProfileDTO updateStudentStatus(Long userId, String status);
     DataResponse<List<StudentProfileDTO>> getStudentList(int page, int size, String searchText, List<String> status, List<String> roleName, String sortBy, String sortDir);
     TeacherProfileDTO createTeacher(CreateUserRequest request);
-    TeacherProfileDTO updateTeacher(Long userId, CreateUserRequest request);
+    TeacherProfileDTO updateTeacher(Long userId, UpdateUserRequest request);
     TeacherProfileDTO updateTeacherStatus(Long userId, String status);
     DataResponse<List<TeacherProfileDTO>> getTeacherList(int page, int size, String searchText, List<String> status, List<String> roleName, String sortBy, String sortDir);
     UserProfileDTO getUserProfile(Long userId, boolean isCurrentUser);
 
-    Object updateUserProfile(Long userId, UpdateUserProfileDTO updateUserProfileDTO);
+    Object updateUserProfile(Long userId, UpdateProfileDTO updateProfileDTO);
 
     void requestChangeEmail(Long userId, ChangeEmailRequest request);
     UserProfileDTO confirmChangeEmail(String token);

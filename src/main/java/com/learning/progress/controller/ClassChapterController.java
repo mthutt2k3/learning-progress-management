@@ -31,14 +31,14 @@ public class ClassChapterController {
     @Operation(summary = "Đồng bộ class chapters", description = "Đồng bộ danh sách class chapters")
     public ResponseEntity<DataResponse<List<ClassChapterDTO>>> syncClassChapters(
             @PathVariable Long classId, @Valid @RequestBody List<SyncClassChapterRequest> request) {
-        return ResponseEntity.ok(DataResponse.success(classChapterService.syncClassChapters(classId, request), Const.CRUD_MESSAGE_CODE.UPDATE_SUCCESSFUL));
+        return ResponseEntity.ok(DataResponse.success(classChapterService.syncClassChapters(classId, request), Const.RESULT_MESSAGE_CODE.UPDATE_SUCCESSFUL));
     }
 
     @GetMapping("/{id}")
     @PreAuthorize("hasRole('MANAGER') or hasRole('TEACHER')")
     @Operation(summary = "Lấy class chapter", description = "Lấy thông tin class chapter theo ID")
     public ResponseEntity<DataResponse<ClassChapterDTO>> getClassChapter(@PathVariable Long id) {
-        return ResponseEntity.ok(DataResponse.success(classChapterService.getClassChapter(id), Const.CRUD_MESSAGE_CODE.RETRIEVE_SUCCESSFUL));
+        return ResponseEntity.ok(DataResponse.success(classChapterService.getClassChapter(id), Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL));
     }
 
     @GetMapping
@@ -67,7 +67,7 @@ public class ClassChapterController {
     public ResponseEntity<DataResponse<Void>> importClassChapters(
             @RequestParam Long classId, @RequestParam("file") MultipartFile file) throws IOException {
 //        classChapterService.importClassChaptersFromExcel(classId, file.getInputStream());
-        return ResponseEntity.ok(DataResponse.success(null, Const.CRUD_MESSAGE_CODE.IMPORT_SUCCESSFUL));
+        return ResponseEntity.ok(DataResponse.success(null, Const.RESULT_MESSAGE_CODE.IMPORT_SUCCESSFUL));
     }
 
     @GetMapping("/template")

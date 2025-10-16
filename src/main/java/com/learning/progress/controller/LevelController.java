@@ -33,7 +33,7 @@ public class LevelController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(required = false) String text,
-            @RequestParam(required = false) List<Boolean> status,
+            @RequestParam(required = true) List<Boolean> status,
             @RequestParam(defaultValue = "orderNumber") String sortBy,
             @RequestParam(defaultValue = "asc") String sortDir) {
         return new ResponseEntity<>(

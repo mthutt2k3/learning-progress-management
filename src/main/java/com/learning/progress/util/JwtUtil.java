@@ -38,10 +38,10 @@ public class JwtUtil {
     @Value("${jwt.email-change.expiration}")
     private Long emailChangeExpiration;
 
-    @Value("${jwt.reset-password.secret:}") // ví dụ nếu có thêm reset
+    @Value("${jwt.reset-pw.secret:}") // ví dụ nếu có thêm reset
     private String resetPasswordSecret;
 
-    @Value("${jwt.reset-password.expiration:0}")
+    @Value("${jwt.reset-pw.expiration:0}")
     private Long resetPasswordExpiration;
 
     private final Map<JwtTokenType, String> secretMap = new HashMap<>();
@@ -122,6 +122,46 @@ public class JwtUtil {
 
     public boolean validateAuthToken(String token, String username) {
         return username.equals(getUsernameFromAuthToken(token)) && !isTokenExpired(token, JwtTokenType.AUTH);
+    }
+
+    // ---------------- Reset Password JWT Methods ----------------
+
+    public String generateResetPasswordToken(String username, String roleName, Long userId) {
+        return generateToken(
+                Map.of("userId", userId, "roleName", roleName),
+                username,
+                JwtTokenType.RESET_PASSWORD
+        );
+    }
+
+    public String getUsernameFromResetPasswordToken(String token) {
+        return getClaim(token, JwtTokenType.RESET_PASSWORD, Claims::getSubject);
+    }
+
+    public Long getUserIdFromResetPasswordToken(String token) {
+        return getClaim(token, JwtTokenType.RESET_PASSWORD,
+                claims -> ((Number) claims.get("userId")).longValue()
+        );
+    }
+
+    public boolean validateResetPasswordToken(String token, String username) {
+        return username.equals(getUsernameFromResetPasswordToken(token))
+                && !isTokenExpired(token, JwtTokenType.RESET_PASSWORD);
+    }
+
+    public Long validateAndGetUserIdFromResetPasswordToken(String token) {
+        if (isTokenExpired(token, JwtTokenType.RESET_PASSWORD)) {
+            throw new ApiException("Reset password token has expired", HttpStatus.BAD_REQUEST.value());
+        }
+
+        Claims claims = getAllClaims(token, JwtTokenType.RESET_PASSWORD);
+        Long userId = ((Number) claims.get("userId")).longValue();
+
+        if (userId == null) {
+            throw new ApiException("Invalid token: missing userId", HttpStatus.BAD_REQUEST.value());
+        }
+
+        return userId;
     }
 
     // ---------------- Email Change JWT Methods ----------------

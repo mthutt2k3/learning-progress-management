@@ -61,7 +61,7 @@ public class ClassHistoryServiceImpl implements ClassHistoryService {
                 .orElseThrow(() -> new ApiException("Class not found", HttpStatus.NOT_FOUND.value()));
 
         User actionBy = userRepository.findById(actionByUserId)
-                .orElseThrow(() -> new ApiException(Const.AUTH.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         if (!EnumUtil.isValidEnum(com.learning.progress.common.ActionType.class, actionType)) {
             throw new ApiException("Invalid action type: " + actionType, HttpStatus.BAD_REQUEST.value());
@@ -98,7 +98,7 @@ public class ClassHistoryServiceImpl implements ClassHistoryService {
 
         String username = jwtUtil.extractUsernameFromCurrentRequest();
         User user = userRepository.findByUserName(username)
-                .orElseThrow(() -> new ApiException(Const.AUTH.USER_NOT_FOUND, HttpStatus.UNAUTHORIZED.value()));
+                .orElseThrow(() -> new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.UNAUTHORIZED.value()));
 
         RoleName role = user.getRole().getName();
         if (role != RoleName.MANAGER) {
@@ -141,14 +141,14 @@ public class ClassHistoryServiceImpl implements ClassHistoryService {
 
         String currentUsername = jwtUtil.extractUsernameFromCurrentRequest();
         User currentUser = userRepository.findByUserName(currentUsername)
-                .orElseThrow(() -> new ApiException(Const.AUTH.USER_NOT_FOUND, HttpStatus.UNAUTHORIZED.value()));
+                .orElseThrow(() -> new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.UNAUTHORIZED.value()));
 
         if (!currentUser.getId().equals(userId) && currentUser.getRole().getName() != RoleName.MANAGER) {
             throw new ApiException("You are not authorized to view this user's class history", HttpStatus.FORBIDDEN.value());
         }
 
         User targetUser = userRepository.findById(userId)
-                .orElseThrow(() -> new ApiException(Const.AUTH.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         RoleName role = targetUser.getRole().getName();
         List<Long> classIds;

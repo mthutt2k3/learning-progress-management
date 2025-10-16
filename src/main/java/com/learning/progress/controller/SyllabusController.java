@@ -31,7 +31,7 @@ public class SyllabusController {
     @Operation(summary = "Create a new syllabus", description = "Create a new syllabus (MANAGER only)")
     public ResponseEntity<DataResponse<SyllabusDTO>> createSyllabus(@Valid @RequestBody CreateSyllabusRequest request) {
         var response = syllabusService.createSyllabus(request);
-        return new ResponseEntity<>(DataResponse.success(response, Const.CRUD_MESSAGE_CODE.CREATE_SUCCESSFUL), HttpStatus.CREATED);
+        return new ResponseEntity<>(DataResponse.success(response, Const.RESULT_MESSAGE_CODE.CREATE_SUCCESSFUL), HttpStatus.CREATED);
     }
 
     @PutMapping("/{id}")
@@ -41,7 +41,7 @@ public class SyllabusController {
             @Parameter(description = "Syllabus ID") @PathVariable Long id,
             @Valid @RequestBody UpdateSyllabusRequest request) {
         var response = syllabusService.updateSyllabus(id, request);
-        return new ResponseEntity<>(DataResponse.success(response, Const.CRUD_MESSAGE_CODE.UPDATE_SUCCESSFUL), HttpStatus.OK);
+        return new ResponseEntity<>(DataResponse.success(response, Const.RESULT_MESSAGE_CODE.UPDATE_SUCCESSFUL), HttpStatus.OK);
     }
 
     @DeleteMapping("/{id}")
@@ -50,7 +50,7 @@ public class SyllabusController {
     public ResponseEntity<DataResponse<Void>> deleteSyllabus(
             @Parameter(description = "Syllabus ID") @PathVariable Long id) {
         syllabusService.deleteSyllabus(id);
-        return new ResponseEntity<>(DataResponse.success(null, Const.CRUD_MESSAGE_CODE.DELETE_SUCCESSFUL), HttpStatus.OK);
+        return new ResponseEntity<>(DataResponse.success(null, Const.RESULT_MESSAGE_CODE.DELETE_SUCCESSFUL), HttpStatus.OK);
     }
 
     @GetMapping("/{id}")
@@ -61,7 +61,7 @@ public class SyllabusController {
             @Parameter(description = "Include chapters, lessons, or both (CHAPTERS, LESSONS, ALL)")
             @RequestParam(defaultValue = "ALL") String include) {
         var response = syllabusService.getSyllabusDetail(id, include);
-        return ResponseEntity.ok(DataResponse.success(response, Const.CRUD_MESSAGE_CODE.RETRIEVE_SUCCESSFUL));
+        return ResponseEntity.ok(DataResponse.success(response, Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL));
     }
 
     @GetMapping

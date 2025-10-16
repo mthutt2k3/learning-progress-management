@@ -37,7 +37,7 @@ public class LessonController {
             @Parameter(description = "Chapter ID") @PathVariable Long chapterId,
             @Valid @RequestBody List<SyncLessonRequest> request) {
         var response = lessonService.syncLessons(chapterId, request);
-        return ResponseEntity.ok(DataResponse.success(response, Const.CRUD_MESSAGE_CODE.UPDATE_SUCCESSFUL));
+        return ResponseEntity.ok(DataResponse.success(response, Const.RESULT_MESSAGE_CODE.UPDATE_SUCCESSFUL));
     }
 
     @GetMapping("/{id}")
@@ -46,7 +46,7 @@ public class LessonController {
     public ResponseEntity<DataResponse<LessonDTO>> getLesson(
             @Parameter(description = "Lesson ID") @PathVariable Long id) {
         var response = lessonService.getLesson(id);
-        return ResponseEntity.ok(DataResponse.success(response, Const.CRUD_MESSAGE_CODE.RETRIEVE_SUCCESSFUL));
+        return ResponseEntity.ok(DataResponse.success(response, Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL));
     }
 
     @GetMapping
@@ -79,6 +79,6 @@ public class LessonController {
     public ResponseEntity<DataResponse<List<LessonDTO>>> importLessonsFromExcel(
             @Parameter(description = "Excel file containing lesson data") @RequestParam("file") MultipartFile file) {
         var response = lessonService.importLessonsFromExcel(file);
-        return new ResponseEntity<>(DataResponse.success(response, Const.CRUD_MESSAGE_CODE.IMPORT_SUCCESSFUL), HttpStatus.OK);
+        return new ResponseEntity<>(DataResponse.success(response, Const.RESULT_MESSAGE_CODE.IMPORT_SUCCESSFUL), HttpStatus.OK);
     }
 }

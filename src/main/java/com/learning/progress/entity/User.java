@@ -85,9 +85,4 @@ public class User extends BaseEntity {
     @Column(name = "language", nullable = false)
     private Language language = Language.VI;
 
-    @Column(name = "reset_password_token")
-    private String resetPasswordToken;
-
-    @Column(name = "reset_password_expires")
-    private OffsetDateTime resetPasswordExpires;
 }
