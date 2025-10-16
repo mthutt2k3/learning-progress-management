@@ -459,10 +459,7 @@ public class UserServiceImpl implements UserService {
             throw new ApiException(Const.USER.EMAIL_INVALID, HttpStatus.BAD_REQUEST.value());
         }
 
-        Map<String, Object> claims = new HashMap<>();
-        claims.put("userId", user.getId());
-        claims.put("newEmail", newEmail);
-        String token = jwtUtil.generateToken(user.getUserName(), user.getRole().getName().toString(), user.getId());
+        String token = jwtUtil.generateChangeEmailToken(user.getUserName(), newEmail, user.getId());
         // Gửi email xác nhận bất đồng bộ
         emailService.sendChangeEmailConfirmation(user, newEmail, token, request.getDomain(), request.getPath());
     }

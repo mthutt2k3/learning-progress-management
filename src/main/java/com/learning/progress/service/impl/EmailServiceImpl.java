@@ -66,7 +66,7 @@ public class EmailServiceImpl implements EmailService {
             templateVariables.put("confirmLink", confirmLink);
 
             String subject = "🔄 Xác nhận thay đổi email tài khoản học tập";
-            String templatePath = "email/change-email-confirmation";
+            String templatePath = "email/confirm-change-email";
 
             this.sendEmail(newEmail, subject, templatePath, templateVariables);
         } catch (Exception e) {

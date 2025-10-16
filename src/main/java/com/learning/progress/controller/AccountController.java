@@ -69,5 +69,4 @@ public class AccountController {
         return new ResponseEntity<>(DataResponse.success(accountService.updateStatusAccount(id, userStatus), Const.CRUD_MESSAGE_CODE.UPDATE_SUCCESSFUL), HttpStatus.OK);
     }
 
-
 }
