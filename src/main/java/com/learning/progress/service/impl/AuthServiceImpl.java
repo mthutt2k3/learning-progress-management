@@ -1,6 +1,7 @@
 package com.learning.progress.service.impl;
 
 import com.learning.progress.common.Const;
+import com.learning.progress.common.JwtTokenType;
 import com.learning.progress.common.RoleName;
 import com.learning.progress.common.UserStatus;
 import com.learning.progress.dto.request.ChangePasswordRequest;
@@ -138,7 +139,7 @@ public class AuthServiceImpl implements AuthService {
         }
 
         // Generate tokens
-        String accessToken = jwtUtil.generateToken(user.getUserName(), user.getRole().getName().toString(), user.getId());
+        String accessToken = jwtUtil.generateAuthToken(user.getUserName(), user.getRole().getName().toString(), user.getId());
         RefreshToken refreshToken = tokenService.createRefreshToken(user);
         boolean mustChangePassword = user.isMustChangePassword();
         boolean mustUpdateProfile = user.isMustUpdateProfile();
@@ -273,7 +274,7 @@ public class AuthServiceImpl implements AuthService {
         log.debug("[{}] User logged out after password change: {}", traceId, username);
 
         // Generate new tokens
-        String accessToken = jwtUtil.generateToken(user.getUserName(), user.getRole().getName().toString(), user.getId());
+        String accessToken = jwtUtil.generateAuthToken(user.getUserName(), user.getRole().getName().toString(), user.getId());
         RefreshToken refreshToken = tokenService.createRefreshToken(user);
         boolean mustChangePassword = user.isMustChangePassword();
         boolean mustUpdateProfile = user.isMustUpdateProfile();
@@ -361,7 +362,7 @@ public class AuthServiceImpl implements AuthService {
 
         // Generate new access token
         User user = token.getUser();
-        String newAccessToken = jwtUtil.generateToken(user.getUserName(), user.getRole().getName().toString(), user.getId());
+        String newAccessToken = jwtUtil.generateAuthToken(user.getUserName(), user.getRole().getName().toString(), user.getId());
         log.info("[{}] Access token refreshed for username: {}", traceId, user.getUserName());
 
         return Map.of(
@@ -414,7 +415,7 @@ public class AuthServiceImpl implements AuthService {
         }
 
         // Blacklist access token
-        Instant expiry = jwtUtil.getExpirationDateFromToken(accessToken).toInstant();
+        Instant expiry = jwtUtil.getExpirationDate(accessToken, JwtTokenType.AUTH).toInstant();
         tokenService.blacklistAccessToken(accessToken, expiry);
         log.debug("[{}] Access token blacklisted: {}", traceId, accessToken);
 

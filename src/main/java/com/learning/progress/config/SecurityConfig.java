@@ -58,7 +58,8 @@ public class SecurityConfig {
                                 "/api/v1/auth/**",
                                 "/learning-progress-management/health/**",
                                 "/login",
-                                "/favicon.ico"
+                                "/favicon.ico",
+                                "/api/v1/user/confirm-email-change/**"
                         ).permitAll()
                         .anyRequest().authenticated()
                 )

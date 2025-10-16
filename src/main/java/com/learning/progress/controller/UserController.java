@@ -135,7 +135,7 @@ public class UserController {
     }
 
     @PostMapping("/change-email")
-    @PreAuthorize("@jwtUtil.isCurrentUser(#userId)")
+    @PreAuthorize("hasRole('MANAGER') or hasRole('TEACHER') or @jwtUtil.isCurrentUser(#userId)")
     @Operation(summary = "Request change email", description = "Request to change the email address of the current user")
     public ResponseEntity<DataResponse<String>> requestChangeEmail(
             @Parameter(description = "User ID of the current user") @RequestParam Long userId,

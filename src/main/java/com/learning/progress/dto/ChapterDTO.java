@@ -14,6 +14,7 @@ import java.time.OffsetDateTime;
 public class ChapterDTO {
     private Long id;
     private Long syllabusId;
+    private String syllabusCode;
     private String chapterName;
     private Integer orderNumber;
     private String createdBy;
