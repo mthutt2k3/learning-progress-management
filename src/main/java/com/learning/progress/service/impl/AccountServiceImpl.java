@@ -17,6 +17,7 @@ import com.learning.progress.service.EmailService;
 import com.learning.progress.util.AppValidator;
 import com.learning.progress.util.DataUtil;
 import jakarta.persistence.EntityManager;
+import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
@@ -170,14 +171,6 @@ public class AccountServiceImpl implements AccountService {
         String traceId = MDC.get("traceId");
         log.info("[{}] Creating new account with role: {}", traceId, request.getRoleName());
 
-        // Validate role name
-        appValidator.validateAllowedEnumValue(
-                RoleName.class,
-                request.getRoleName(),
-                Set.of(RoleName.ADMIN, RoleName.MANAGER)
-        );
-        log.debug("[{}] Role name validated: {}", traceId, request.getRoleName());
-
         // Fetch role
         Role role = roleRepository.findByName(RoleName.valueOf(request.getRoleName().toUpperCase()))
                 .orElseThrow(() -> {
@@ -189,7 +182,7 @@ public class AccountServiceImpl implements AccountService {
         User newUser = userMapper.toUser(request);
         newUser.setMustChangePassword(true);
         newUser.setRole(role);
-        newUser.setStatus(UserStatus.ACTIVE);
+        newUser.setStatus(UserStatus.PENDING);
         newUser.setMustUpdateProfile(true);
 
         // Save user and flush
@@ -203,17 +196,6 @@ public class AccountServiceImpl implements AccountService {
         String password = DataUtil.generateRandomPassword(8);
         this.createAccountForExistUser(newUser, username, password);
         log.debug("[{}] Generated username: {}, password for userId: {}", traceId, username, newUser.getId());
-
-        // Send notification email
-        try {
-            emailService.sendNewAccountEmail(newUser, username, password);
-            log.info("[{}] New account email sent to: {}", traceId, newUser.getEmail());
-        } catch (Exception e) {
-            log.error("[{}] Failed to send new account email for userId: {}, error: {}",
-                    traceId, newUser.getId(), e.getMessage());
-            throw new ApiException(Const.AUTH.EMAIL_SEND_FAILED, HttpStatus.INTERNAL_SERVER_ERROR.value());
-        }
-
         // Map to DTO
         AccountDTO accountDTO = userMapper.toAccountDTO(newUser);
         accountDTO.setUserName(newUser.getUserName());
@@ -250,20 +232,20 @@ public class AccountServiceImpl implements AccountService {
         userRepository.save(user);
         log.info("[{}] Account created for existing user with username: {}", traceId, username);
 
+        emailService.sendNewAccountEmail(user, username, password);
+
         return user;
     }
 
-    /**
-     * Updates an existing account's details, including first name, last name, email, and role.
-     *
-     * @param id      The ID of the user to update.
-     * @param request The request containing updated account details.
-     * @return Updated AccountDTO.
-     */
+
     @Override
-    public AccountDTO updateAccount(Long id, CreateNewAccountRequest request) {
+    @Transactional
+    public AccountDTO updateAccount(Long id, @Valid String email) {
         String traceId = MDC.get("traceId");
-        log.info("[{}] Updating account for userId: {}, role: {}", traceId, id, request.getRoleName());
+
+        if(!DataUtil.isValidEmail(email)){
+            throw new ApiException(Const.EMAIL.INVALID, HttpStatus.BAD_REQUEST.value());
+        }
 
         // Fetch user by ID
         User user = userRepository.findById(id)
@@ -271,31 +253,20 @@ public class AccountServiceImpl implements AccountService {
                     log.error("[{}] User not found for userId: {}", traceId, id);
                     return new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value());
                 });
+        if (!UserStatus.PENDING.equals(user.getStatus())) {
+            throw new ApiException(Const.ACCOUNT.FORBIDDEN_EMAIL_CHANGE_ACTIVE_USER, HttpStatus.FORBIDDEN.value());
+        }
 
-        // Validate role name
-        appValidator.validateAllowedEnumValue(
-                RoleName.class,
-                request.getRoleName(),
-                Set.of(RoleName.ADMIN, RoleName.MANAGER)
-        );
-        log.debug("[{}] Role name validated: {}", traceId, request.getRoleName());
-
-        // Fetch role
-        Role role = roleRepository.findByName(RoleName.valueOf(request.getRoleName().toUpperCase()))
-                .orElseThrow(() -> {
-                    log.error("[{}] Role not found: {}", traceId, request.getRoleName());
-                    return new ApiException(Const.ROLE.NOT_FOUND, HttpStatus.NOT_FOUND.value());
-                });
+        String password = DataUtil.generateRandomPassword(8);
 
         // Update user fields
-        user.setFirstName(request.getFirstName());
-        user.setLastName(request.getLastName());
-        user.setEmail(request.getEmail());
-        user.setRole(role);
-
+        user.setEmail(email);
+        user.setPassword(passwordEncoder.encode(password));
         // Save updates
         userRepository.save(user);
         log.info("[{}] Successfully updated account for userId: {}", traceId, id);
+
+        emailService.sendNewAccountEmail(user, user.getUserName(), password);
 
         return userMapper.toAccountDTO(user);
     }
@@ -319,6 +290,9 @@ public class AccountServiceImpl implements AccountService {
                     return new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.BAD_REQUEST.value());
                 });
 
+        if (UserStatus.PENDING.equals(user.getStatus())) {
+            throw new ApiException(Const.ACCOUNT.CANNOT_CHANGE_STATUS_TO_PENDING, HttpStatus.FORBIDDEN.value());
+        }
         // Update status
         user.setStatus(userStatus);
         userRepository.save(user);

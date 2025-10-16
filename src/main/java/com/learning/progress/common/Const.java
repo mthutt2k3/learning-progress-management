@@ -123,6 +123,10 @@ public class Const {
     }
     public static class ACCOUNT {
         public static final String ACCOUNT_NOT_FOUND = "Account does not exist in the system";
+        public static final String FORBIDDEN_EMAIL_CHANGE_ACTIVE_USER =
+                "You don't have permission to change email of an active account.";
+        public static final String CANNOT_CHANGE_STATUS_TO_PENDING =
+                "Cannot change account status to PENDING";
 
     }
     public static class VALIDATION {

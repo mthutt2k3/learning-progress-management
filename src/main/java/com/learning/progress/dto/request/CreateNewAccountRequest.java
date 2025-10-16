@@ -10,11 +10,6 @@ import org.checkerframework.checker.regex.qual.Regex;
 
 @Data
 public class CreateNewAccountRequest {
-    @NotBlank(message = Const.NAME.FIRST_NAME_REQUIRED)
-    private String firstName;
-
-    @NotBlank(message = Const.NAME.LAST_NAME_REQUIRED)
-    private String lastName;
 
     @NotBlank(message = Const.EMAIL.REQUIRED)
     @Pattern(regexp = Const.VALIDATE_INPUT.regexEmail, message = Const.EMAIL.INVALID)

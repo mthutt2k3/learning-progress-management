@@ -98,7 +98,6 @@ public class UserServiceImpl implements UserService {
         String username = DataUtil.generateUsername(request.getRoleName(), user.getId());
         String password = DataUtil.generateRandomPassword(8);
         accountService.createAccountForExistUser(user, username, password);
-        emailService.sendNewAccountEmail(user, username, password);
 
         return mapToStudentProfileDTO(user);
     }
@@ -280,7 +279,6 @@ public class UserServiceImpl implements UserService {
         String username = DataUtil.generateUsername(request.getRoleName(), user.getId());
         String password = DataUtil.generateRandomPassword(8);
         accountService.createAccountForExistUser(user, username, password);
-        emailService.sendNewAccountEmail(user, username, password);
 
         return mapToTeacherProfileDTO(user);
     }

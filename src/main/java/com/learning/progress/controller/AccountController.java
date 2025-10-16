@@ -58,8 +58,8 @@ public class AccountController {
     @PutMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Update account", description = "Update account (ADMIN only)")
-    public ResponseEntity<DataResponse<?>> updateAccount(@PathVariable Long id, @Valid @RequestBody CreateNewAccountRequest request) {
-        return new ResponseEntity<>(DataResponse.success(accountService.updateAccount(id, request), Const.RESULT_MESSAGE_CODE.UPDATE_SUCCESSFUL), HttpStatus.OK);
+    public ResponseEntity<DataResponse<?>> updateAccount(@PathVariable Long id, @Valid @RequestParam String email) {
+        return new ResponseEntity<>(DataResponse.success(accountService.updateAccount(id, email), Const.RESULT_MESSAGE_CODE.UPDATE_SUCCESSFUL), HttpStatus.OK);
     }
 
     @PutMapping("/{id}/status")
