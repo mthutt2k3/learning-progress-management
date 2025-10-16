@@ -65,6 +65,7 @@ server:
 jwt:
   secret: ${JWT_SECRET}
   expiration: 7200000
+  email-change-expiration: 86400000 # Thời gian hết hạn token đổi email (24 giờ)
 
 logging:
   level:
@@ -83,3 +84,7 @@ azure:
   storage:
     connection-string: ${CONNECTION_STRING}
     container-name: ${CONTAINER_NAME}
+
+app:
+  pagination:
+    max-size: 100
