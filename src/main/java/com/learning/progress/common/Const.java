@@ -127,6 +127,9 @@ public class Const {
                 "You don't have permission to change email of an active account.";
         public static final String CANNOT_CHANGE_STATUS_TO_PENDING =
                 "Cannot change account status to PENDING";
+        public static final String CANNOT_CHANGE_STATUS_TO_ACTIVE_MANUALLY =
+                "Cannot change account status to ACTIVE manually";
+
 
     }
     public static class VALIDATION {

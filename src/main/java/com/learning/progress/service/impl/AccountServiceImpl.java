@@ -16,6 +16,7 @@ import com.learning.progress.service.AccountService;
 import com.learning.progress.service.EmailService;
 import com.learning.progress.util.AppValidator;
 import com.learning.progress.util.DataUtil;
+import com.learning.progress.util.JwtUtil;
 import jakarta.persistence.EntityManager;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
@@ -27,6 +28,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -61,6 +63,8 @@ public class AccountServiceImpl implements AccountService {
     @Autowired
     private AppValidator appValidator;
 
+    @Autowired
+    private JwtUtil jwtUtil;
     /**
      * Retrieves a paginated list of accounts based on search criteria, status, role, and sorting parameters.
      *
@@ -271,33 +275,49 @@ public class AccountServiceImpl implements AccountService {
         return userMapper.toAccountDTO(user);
     }
 
-    /**
-     * Updates the status of an existing account.
-     *
-     * @param id         The ID of the user to update.
-     * @param userStatus The new status to set.
-     * @return Updated AccountDTO.
-     */
     @Override
-    public AccountDTO updateStatusAccount(Long id, UserStatus userStatus) {
+    public AccountDTO updateStatusAccount(Long id, UserStatus newStatus) {
         String traceId = MDC.get("traceId");
-        log.info("[{}] Updating status for userId: {} to {}", traceId, id, userStatus);
+        log.info("[{}] Updating status for userId: {} to {}", traceId, id, newStatus);
 
-        // Fetch user by ID
-        User user = userRepository.findById(id)
+        User targetUser = userRepository.findById(id)
                 .orElseThrow(() -> {
                     log.error("[{}] User not found for userId: {}", traceId, id);
                     return new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.BAD_REQUEST.value());
                 });
 
-        if (UserStatus.PENDING.equals(user.getStatus())) {
-            throw new ApiException(Const.ACCOUNT.CANNOT_CHANGE_STATUS_TO_PENDING, HttpStatus.FORBIDDEN.value());
-        }
-        // Update status
-        user.setStatus(userStatus);
-        userRepository.save(user);
-        log.info("[{}] Successfully updated status for userId: {} to {}", traceId, id, userStatus);
+        Long userIdFromCurrentRequest = jwtUtil.extractUserIdFromCurrentRequest();
 
-        return userMapper.toAccountDTO(user);
+        // Lấy thông tin admin đang thao tác
+        User currentUser = userRepository.findById(userIdFromCurrentRequest)
+                .orElseThrow(() -> new ApiException("Current user not found", HttpStatus.UNAUTHORIZED.value()));
+
+        UserStatus oldStatus = targetUser.getStatus();
+
+        // Quy tắc trạng thái
+        if (UserStatus.PENDING.equals(oldStatus)) {
+            if (!UserStatus.ACTIVE.equals(newStatus)) {
+                throw new ApiException(Const.ACCOUNT.CANNOT_CHANGE_STATUS_TO_ACTIVE_MANUALLY, HttpStatus.FORBIDDEN.value());
+            }
+        } else { // ACTIVE hoặc INACTIVE
+            if (UserStatus.PENDING.equals(newStatus)) {
+                throw new ApiException(Const.ACCOUNT.CANNOT_CHANGE_STATUS_TO_PENDING, HttpStatus.FORBIDDEN.value());
+            }
+        }
+
+        // Quy tắc Admin
+        if (RoleName.ADMIN.equals(targetUser.getRole().getName())) {
+            if (RoleName.ADMIN.equals(currentUser.getRole().getName())) {
+                throw new ApiException("Admin cannot change status of other Admins or themselves", HttpStatus.FORBIDDEN.value());
+            }
+        }
+
+        // Update status
+        targetUser.setStatus(newStatus);
+        userRepository.save(targetUser);
+        log.info("[{}] Successfully updated status for userId: {} to {}", traceId, id, newStatus);
+
+        return userMapper.toAccountDTO(targetUser);
     }
+
 }
