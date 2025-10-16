@@ -68,6 +68,9 @@ jwt:
   email-change:
     secret: ${JWT_EMAIL_CHANGE_SECRET}
     expiration: 86400000
+  reset-pw:
+    secret: ${JWT_RESET_PW_SECRET}
+    expiration: 7200000
 
 logging:
   level:
