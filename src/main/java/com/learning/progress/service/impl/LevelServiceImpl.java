@@ -12,6 +12,7 @@ import com.learning.progress.exception.ApiException;
 import com.learning.progress.mapper.LevelMapper;
 import com.learning.progress.repository.LevelRepository;
 import com.learning.progress.service.LevelService;
+import com.learning.progress.util.AppValidator;
 import com.learning.progress.util.JwtUtil;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validator;
@@ -45,6 +46,9 @@ public class LevelServiceImpl implements LevelService {
     @Autowired
     private JwtUtil jwtUtil;
 
+    @Autowired
+    private AppValidator appValidator;
+
     private void validateDifficulty(String difficulty) {
         // Kiểm tra null hoặc rỗng
         if (difficulty == null || difficulty.trim().isEmpty()) {
@@ -67,50 +71,12 @@ public class LevelServiceImpl implements LevelService {
 
     @Override
     public DataResponse<List<LevelDetailsResponse>> getAllLevels(int page, int size, String text, List<Boolean> status, String sortBy, String sortDir) {
-        // Validate page
-        if (page < 0) {
-            throw new ApiException(Const.ERROR_MESSAGE.INVALID_PAGE, 400);
-        }
-
-        // Validate size
-        if (size < 1 || size > 100) {
-            throw new ApiException(Const.ERROR_MESSAGE.INVALID_SIZE, 400);
-        }
-
-        // Validate status
-        if (status != null && status.isEmpty()) {
-            throw new ApiException(Const.ERROR_MESSAGE.INVALID_STATUS, 400);
-        }
-
-        // Validate sortBy
-        String[] validSortFields = {"id", "levelName", "difficulty", "estimatedDurationWeeks", "orderNumber", "isActive"};
-        boolean isValidSortField = false;
-        for (String field : validSortFields) {
-            if (field.equalsIgnoreCase(sortBy)) {
-                isValidSortField = true;
-                break;
-            }
-        }
-        if (!isValidSortField) {
-            throw new ApiException(Const.ERROR_MESSAGE.INVALID_SORT_BY, 400);
-        }
-
-        // Validate sortDir
-        if (!sortDir.equalsIgnoreCase("asc") && !sortDir.equalsIgnoreCase("desc")) {
-            throw new ApiException(Const.ERROR_MESSAGE.INVALID_SORT_DIR, 400);
-        }
-
-        // Map sortBy to database column names
-        String sortField = switch (sortBy.toLowerCase()) {
-            case "levelname" -> "levelName";
-            case "estimateddurationweeks" -> "estimatedDurationWeeks";
-            case "ordernumber" -> "orderNumber";
-            case "isactive" -> "isActive";
-            default -> sortBy;
-        };
+        // Validate pagination and sort parameters
+        appValidator.validatePaginationParams(page, size);
+        appValidator.validateSortParams(List.of("id", "levelName", "difficulty", "estimatedDurationWeeks", "orderNumber", "isActive"), sortBy, sortDir);
 
         // Create Sort object
-        Sort sort = Sort.by(sortDir.equalsIgnoreCase("asc") ? Sort.Direction.ASC : Sort.Direction.DESC, sortField);
+        Sort sort = Sort.by(sortDir.equalsIgnoreCase("asc") ? Sort.Direction.ASC : Sort.Direction.DESC, sortBy);
         Pageable pageable = PageRequest.of(page, size, sort);
         Page<Level> levelPage;
 

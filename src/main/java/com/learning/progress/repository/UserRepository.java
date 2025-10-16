@@ -18,8 +18,6 @@ import java.util.Optional;
 @Repository
 public interface UserRepository extends JpaRepository<User, Long> {
     Optional<User> findByUserName(String username);
-    Optional<User> findByEmail(String email);
-    Optional<User> findByResetPasswordToken(String resetPasswordToken);
     Optional<User> findByUserNameIgnoreCase(String userName);
 
     @Query("""
@@ -71,4 +69,5 @@ public interface UserRepository extends JpaRepository<User, Long> {
             "FROM ClassStudent cs WHERE cs.user.id = :userId AND cs.status = 'ACTIVE' AND cs.clazz.isActive = true")
     Optional<ClassInfo> findActiveClassInfoByUserId(Long userId);
 
+    Optional<User> findByIdAndStatus(Long id, UserStatus userStatus);
 }

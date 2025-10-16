@@ -2,11 +2,10 @@ package com.learning.progress.service;
 
 import com.learning.progress.common.UserStatus;
 import com.learning.progress.dto.AccountDTO;
-import com.learning.progress.dto.request.CreateAccountRequest;
 import com.learning.progress.dto.request.CreateNewAccountRequest;
-import com.learning.progress.dto.response.CreateAccountResponse;
 import com.learning.progress.dto.response.DataResponse;
 import com.learning.progress.entity.User;
+import jakarta.validation.Valid;
 
 import java.util.List;
 
@@ -19,7 +18,7 @@ public interface AccountService {
 
     User createAccountForExistUser(User user, String username, String password);
 
-    AccountDTO updateAccount(Long id, CreateNewAccountRequest updateAccountRequest);
+    AccountDTO updateAccount(Long id, String email);
 
     AccountDTO updateStatusAccount(Long id, UserStatus userStatus);
 }

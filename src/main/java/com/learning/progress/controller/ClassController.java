@@ -32,14 +32,14 @@ public class ClassController {
     @PreAuthorize("hasRole('MANAGER')")
     @Operation(summary = "Tạo class", description = "Tạo class mới và tự động sao chép chapters, lessons")
     public ResponseEntity<DataResponse<ClassDTO>> createClass(@Valid @RequestBody CreateClassRequest request) {
-        return ResponseEntity.ok(DataResponse.success(classService.createClass(request), Const.CRUD_MESSAGE_CODE.CREATE_SUCCESSFUL));
+        return ResponseEntity.ok(DataResponse.success(classService.createClass(request), Const.RESULT_MESSAGE_CODE.CREATE_SUCCESSFUL));
     }
 
     @GetMapping("/{id}")
     @PreAuthorize("hasRole('MANAGER') or hasRole('TEACHER')")
     @Operation(summary = "Lấy class", description = "Lấy thông tin class theo ID")
     public ResponseEntity<DataResponse<ClassDTO>> getClass(@PathVariable Long id) {
-        return ResponseEntity.ok(DataResponse.success(classService.getClass(id), Const.CRUD_MESSAGE_CODE.RETRIEVE_SUCCESSFUL));
+        return ResponseEntity.ok(DataResponse.success(classService.getClass(id), Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL));
     }
 
     @GetMapping
@@ -57,7 +57,7 @@ public class ClassController {
     @Operation(summary = "Cập nhật class", description = "Cập nhật thông tin class")
     public ResponseEntity<DataResponse<ClassDTO>> updateClass(
             @PathVariable Long id, @Valid @RequestBody UpdateClassRequest request) {
-        return ResponseEntity.ok(DataResponse.success(classService.updateClass(id, request), Const.CRUD_MESSAGE_CODE.UPDATE_SUCCESSFUL));
+        return ResponseEntity.ok(DataResponse.success(classService.updateClass(id, request), Const.RESULT_MESSAGE_CODE.UPDATE_SUCCESSFUL));
     }
 
     @PatchMapping("/{id}/toggle")
@@ -66,7 +66,7 @@ public class ClassController {
     public ResponseEntity<DataResponse<Void>> toggleClassActivation(
             @PathVariable Long id, @RequestParam boolean isActive) {
         classService.toggleClassActivation(id, isActive);
-        return ResponseEntity.ok(DataResponse.success(null, Const.CRUD_MESSAGE_CODE.UPDATE_SUCCESSFUL));
+        return ResponseEntity.ok(DataResponse.success(null, Const.RESULT_MESSAGE_CODE.UPDATE_SUCCESSFUL));
     }
 
     @DeleteMapping("/{id}")
@@ -75,7 +75,7 @@ public class ClassController {
     public ResponseEntity<DataResponse<Void>> deleteClass(
             @Parameter(description = "Class ID") @PathVariable Long id) {
         classService.deleteClass(id);
-        return ResponseEntity.ok(DataResponse.success(null, Const.CRUD_MESSAGE_CODE.DELETE_SUCCESSFUL));
+        return ResponseEntity.ok(DataResponse.success(null, Const.RESULT_MESSAGE_CODE.DELETE_SUCCESSFUL));
     }
 
     @GetMapping("/export")
@@ -92,7 +92,7 @@ public class ClassController {
     @Operation(summary = "Import classes", description = "Import classes từ Excel")
     public ResponseEntity<DataResponse<Void>> importClasses(@RequestParam("file") MultipartFile file) throws IOException {
         classService.importClassesFromExcel(file.getInputStream());
-        return ResponseEntity.ok(DataResponse.success(null, Const.CRUD_MESSAGE_CODE.IMPORT_SUCCESSFUL));
+        return ResponseEntity.ok(DataResponse.success(null, Const.RESULT_MESSAGE_CODE.IMPORT_SUCCESSFUL));
     }
 
     @GetMapping("/template")

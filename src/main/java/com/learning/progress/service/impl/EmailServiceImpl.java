@@ -66,7 +66,7 @@ public class EmailServiceImpl implements EmailService {
             templateVariables.put("confirmLink", confirmLink);
 
             String subject = "🔄 Xác nhận thay đổi email tài khoản học tập";
-            String templatePath = "email/change-email-confirmation";
+            String templatePath = "email/confirm-change-email";
 
             this.sendEmail(newEmail, subject, templatePath, templateVariables);
         } catch (Exception e) {
@@ -105,7 +105,7 @@ public class EmailServiceImpl implements EmailService {
             throw new ApiException(Const.VALIDATION.EMAIL_REQUIRED, HttpStatus.BAD_REQUEST.value());
         }
         if (!Pattern.matches(Const.VALIDATE_INPUT.regexEmail, toEmail)) {
-            throw new ApiException(Const.USER.EMAIL_INVALID, HttpStatus.BAD_REQUEST.value());
+            throw new ApiException(Const.EMAIL.INVALID, HttpStatus.BAD_REQUEST.value());
         }
         if (subject == null || subject.trim().isEmpty()) {
             throw new ApiException(Const.VALIDATION.SUBJECT_REQUIRED, HttpStatus.BAD_REQUEST.value());

@@ -1,5 +1,6 @@
 package com.learning.progress.util;
 
+import com.learning.progress.common.JwtTokenType;
 import com.learning.progress.dto.EmailChangeTokenClaims;
 import com.learning.progress.exception.ApiException;
 import io.jsonwebtoken.Claims;
@@ -7,6 +8,7 @@ import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.security.Keys;
+import jakarta.annotation.PostConstruct;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
@@ -23,140 +25,199 @@ import java.util.function.Function;
 @Component
 public class JwtUtil {
 
+    // ---------------- JWT configuration ----------------
     @Value("${jwt.secret}")
-    private String secret;
+    private String authSecret;
 
     @Value("${jwt.expiration}")
-    private Long expiration;
+    private Long authExpiration;
 
-    public String getUsernameFromToken(String token) {
-        return getClaimFromToken(token, Claims::getSubject);
+    @Value("${jwt.email-change.secret}")
+    private String emailChangeSecret;
+
+    @Value("${jwt.email-change.expiration}")
+    private Long emailChangeExpiration;
+
+    @Value("${jwt.reset-pw.secret:}") // ví dụ nếu có thêm reset
+    private String resetPasswordSecret;
+
+    @Value("${jwt.reset-pw.expiration:0}")
+    private Long resetPasswordExpiration;
+
+    private final Map<JwtTokenType, String> secretMap = new HashMap<>();
+    private final Map<JwtTokenType, Long> expirationMap = new HashMap<>();
+
+    @PostConstruct
+    private void initMaps() {
+        secretMap.put(JwtTokenType.AUTH, authSecret);
+        secretMap.put(JwtTokenType.EMAIL_CHANGE, emailChangeSecret);
+        secretMap.put(JwtTokenType.RESET_PASSWORD, resetPasswordSecret);
+
+        expirationMap.put(JwtTokenType.AUTH, authExpiration);
+        expirationMap.put(JwtTokenType.EMAIL_CHANGE, emailChangeExpiration);
+        expirationMap.put(JwtTokenType.RESET_PASSWORD, resetPasswordExpiration);
     }
 
-    public Date getExpirationDateFromToken(String token) {
-        return getClaimFromToken(token, Claims::getExpiration);
+    // ---------------- Generic JWT Methods ----------------
+
+    private Key keyFromType(JwtTokenType type) {
+        String secret = secretMap.get(type);
+        if (secret == null) throw new ApiException("Secret for token type " + type + " is not configured", HttpStatus.INTERNAL_SERVER_ERROR.value());
+        return Keys.hmacShaKeyFor(secret.getBytes());
     }
 
-    public <T> T getClaimFromToken(String token, Function<Claims, T> claimsResolver) {
-        final Claims claims = getAllClaimsFromToken(token);
-        return claimsResolver.apply(claims);
-    }
-
-    private Claims getAllClaimsFromToken(String token) {
-        return Jwts.parserBuilder()
-                .setSigningKey(secret.getBytes())
-                .build()
-                .parseClaimsJws(token)
-                .getBody();
-    }
-
-    public String generateToken(String username, String role, Long userId) {
-        Map<String, Object> claims = new HashMap<>();
-        claims.put("role", role);
-        claims.put("userId", userId);
-        return doGenerateToken(claims, username, this.expiration);
-    }
-
-    private String doGenerateToken(Map<String, Object> claims, String subject, Long expiration) {
-        Key key = Keys.hmacShaKeyFor(secret.getBytes());
-        return Jwts.builder()
-                .setClaims(claims)
-                .setSubject(subject)
-                .setIssuedAt(new Date(System.currentTimeMillis()))
-                .setExpiration(new Date(System.currentTimeMillis() + expiration))
-                .signWith(key, SignatureAlgorithm.HS512)
-                .compact();
-    }
-
-    public Boolean validateToken(String token, String username) {
-        final String tokenUsername = getUsernameFromToken(token);
-        return (tokenUsername.equals(username) && !isTokenExpired(token));
-    }
-
-    private Boolean isTokenExpired(String token) {
-        final Date expiration = getExpirationDateFromToken(token);
-        return expiration.before(new Date());
-    }
-
-    public String extractUsernameFromCurrentRequest() {
-        ServletRequestAttributes attributes = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
-        if (attributes == null) {
-            throw new RuntimeException("Cannot access current request context");
-        }
-
-        HttpServletRequest request = attributes.getRequest();
-        String authHeader = request.getHeader("Authorization");
-
-        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-            throw new RuntimeException("Missing or invalid Authorization header");
-        }
-
-        String token = authHeader.substring(7);
-        return getUsernameFromToken(token);
-    }
-    public boolean isCurrentUser(Long userId) {
+    private Claims getAllClaims(String token, JwtTokenType type) {
         try {
-            // Lấy request hiện tại
-            ServletRequestAttributes attributes = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
-            if (attributes == null) {
-                return false;
-            }
-
-            HttpServletRequest request = attributes.getRequest();
-            String authHeader = request.getHeader("Authorization");
-
-            if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-                return false;
-            }
-
-            String token = authHeader.substring(7);
-
-            // Lấy userId từ JWT
-            Claims claims = getAllClaimsFromToken(token);
-            Long currentUserId = ((Number) claims.get("userId")).longValue();
-
-            return currentUserId.equals(userId);
-        } catch (Exception e) {
-            return false;
-        }
-    }
-    public EmailChangeTokenClaims validateEmailChangeToken(String token) {
-        try {
-            Claims claims = getAllClaimsFromToken(token);
-            if (isTokenExpired(token)) {
-                throw new ApiException("Token has expired", HttpStatus.BAD_REQUEST.value());
-            }
-
-            Long userId = ((Number) claims.get("userId")).longValue();
-            String newEmail = (String) claims.get("newEmail");
-
-            if (userId == null || newEmail == null) {
-                throw new ApiException("Invalid token: missing userId or newEmail", HttpStatus.BAD_REQUEST.value());
-            }
-
-            return EmailChangeTokenClaims.builder()
-                    .userId(userId).newEmail(newEmail).build();
+            return Jwts.parserBuilder()
+                    .setSigningKey(keyFromType(type))
+                    .build()
+                    .parseClaimsJws(token)
+                    .getBody();
         } catch (JwtException e) {
             throw new ApiException("Invalid token", HttpStatus.BAD_REQUEST.value());
         }
     }
 
+    private <T> T getClaim(String token, JwtTokenType type, Function<Claims, T> resolver) {
+        return resolver.apply(getAllClaims(token, type));
+    }
 
-    public Long extractUserIdFromCurrentRequest() {
-        ServletRequestAttributes attributes = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
-        if (attributes == null) {
-            throw new ApiException("Cannot access current request context", HttpStatus.UNAUTHORIZED.value());
+    public boolean isTokenExpired(String token, JwtTokenType type) {
+        Date exp = getClaim(token, type, Claims::getExpiration);
+        return exp.before(new Date());
+    }
+
+    public String generateToken(Map<String, Object> claims, String subject, JwtTokenType type) {
+        Long expMs = expirationMap.get(type);
+        if (expMs == null) throw new ApiException("Expiration for token type " + type + " is not configured", HttpStatus.INTERNAL_SERVER_ERROR.value());
+
+        return Jwts.builder()
+                .setClaims(claims)
+                .setSubject(subject)
+                .setIssuedAt(new Date())
+                .setExpiration(new Date(System.currentTimeMillis() + expMs))
+                .signWith(keyFromType(type), SignatureAlgorithm.HS512)
+                .compact();
+    }
+
+    // ---------------- Normal JWT Methods ----------------
+    public Date getExpirationDate(String token, JwtTokenType type) {
+        return getClaim(token, type, Claims::getExpiration);
+    }
+
+    public String generateAuthToken(String username, String role, Long userId) {
+        return generateToken(Map.of("role", role, "userId", userId), username, JwtTokenType.AUTH);
+    }
+    public String generateChangeEmailToken(String username, String newEmail, Long userId) {
+        return generateToken(Map.of("newEmail", newEmail, "userId", userId), username, JwtTokenType.EMAIL_CHANGE);
+    }
+
+    public String getUsernameFromAuthToken(String token) {
+        return getClaim(token, JwtTokenType.AUTH, Claims::getSubject);
+    }
+
+    public Long getUserIdFromAuthToken(String token) {
+        return getClaim(token, JwtTokenType.AUTH, claims -> ((Number) claims.get("userId")).longValue());
+    }
+
+    public boolean validateAuthToken(String token, String username) {
+        return username.equals(getUsernameFromAuthToken(token)) && !isTokenExpired(token, JwtTokenType.AUTH);
+    }
+
+    // ---------------- Reset Password JWT Methods ----------------
+
+    public String generateResetPasswordToken(String username, String roleName, Long userId) {
+        return generateToken(
+                Map.of("userId", userId, "roleName", roleName),
+                username,
+                JwtTokenType.RESET_PASSWORD
+        );
+    }
+
+    public String getUsernameFromResetPasswordToken(String token) {
+        return getClaim(token, JwtTokenType.RESET_PASSWORD, Claims::getSubject);
+    }
+
+    public Long getUserIdFromResetPasswordToken(String token) {
+        return getClaim(token, JwtTokenType.RESET_PASSWORD,
+                claims -> ((Number) claims.get("userId")).longValue()
+        );
+    }
+
+    public boolean validateResetPasswordToken(String token, String username) {
+        return username.equals(getUsernameFromResetPasswordToken(token))
+                && !isTokenExpired(token, JwtTokenType.RESET_PASSWORD);
+    }
+
+    public Long validateAndGetUserIdFromResetPasswordToken(String token) {
+        if (isTokenExpired(token, JwtTokenType.RESET_PASSWORD)) {
+            throw new ApiException("Reset password token has expired", HttpStatus.BAD_REQUEST.value());
         }
 
-        HttpServletRequest request = attributes.getRequest();
-        String authHeader = request.getHeader("Authorization");
+        Claims claims = getAllClaims(token, JwtTokenType.RESET_PASSWORD);
+        Long userId = ((Number) claims.get("userId")).longValue();
 
+        if (userId == null) {
+            throw new ApiException("Invalid token: missing userId", HttpStatus.BAD_REQUEST.value());
+        }
+
+        return userId;
+    }
+
+    // ---------------- Email Change JWT Methods ----------------
+
+    public String generateEmailChangeToken(String username, String newEmail, Long userId) {
+        return generateToken(Map.of("newEmail", newEmail, "userId", userId), username, JwtTokenType.EMAIL_CHANGE);
+    }
+
+    public EmailChangeTokenClaims validateEmailChangeToken(String token) {
+        if (isTokenExpired(token, JwtTokenType.EMAIL_CHANGE)) {
+            throw new ApiException("Email change token has expired", HttpStatus.BAD_REQUEST.value());
+        }
+
+        Claims claims = getAllClaims(token, JwtTokenType.EMAIL_CHANGE);
+        Long userId = ((Number) claims.get("userId")).longValue();
+        String newEmail = (String) claims.get("newEmail");
+
+        if (userId == null || newEmail == null) {
+            throw new ApiException("Invalid token: missing userId or newEmail", HttpStatus.BAD_REQUEST.value());
+        }
+
+        return EmailChangeTokenClaims.builder()
+                .userId(userId)
+                .newEmail(newEmail)
+                .build();
+    }
+
+    // ---------------- Request Utilities ----------------
+
+    private HttpServletRequest getCurrentRequest() {
+        ServletRequestAttributes attrs = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+        if (attrs == null) throw new ApiException("Cannot access current request context", HttpStatus.UNAUTHORIZED.value());
+        return attrs.getRequest();
+    }
+
+    private String extractTokenFromRequest(HttpServletRequest request) {
+        String authHeader = request.getHeader("Authorization");
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
             throw new ApiException("Missing or invalid Authorization header", HttpStatus.UNAUTHORIZED.value());
         }
+        return authHeader.substring(7);
+    }
 
-        String token = authHeader.substring(7);
-        Claims claims = getAllClaimsFromToken(token);
-        return ((Number) claims.get("userId")).longValue();
+    public String extractUsernameFromCurrentRequest() {
+        return getUsernameFromAuthToken(extractTokenFromRequest(getCurrentRequest()));
+    }
+
+    public Long extractUserIdFromCurrentRequest() {
+        return getUserIdFromAuthToken(extractTokenFromRequest(getCurrentRequest()));
+    }
+
+    public boolean isCurrentUser(Long userId) {
+        try {
+            return userId.equals(extractUserIdFromCurrentRequest());
+        } catch (Exception e) {
+            return false;
+        }
     }
 }

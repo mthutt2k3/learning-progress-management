@@ -7,18 +7,21 @@ spring:
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
     driver-class-name: org.postgresql.Driver
-    jpa:
+
+  jpa:
+    hibernate:
+      ddl-auto: none
+    properties:
       hibernate:
-        ddl-auto: none
-      properties:
-        hibernate:
-          dialect: org.hibernate.dialect.PostgreSQLDialect
-          show_sql: true
-          format_sql: true
-          generate_statistics: false
-          jdbc.batch_size: 500
-          order_inserts: true
-          order_updates: true
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        show_sql: false
+        format_sql: false
+        generate_statistics: false
+        jdbc.batch_size: 500
+        order_inserts: false
+        order_updates: false
+        jdbc.time_zone: Asia/Ho_Chi_Minh
+
 
   liquibase:
     enabled: false
@@ -39,6 +42,12 @@ spring:
           starttls:
             enable: true
             required: true
+  thymeleaf:
+    prefix: classpath:/templates/
+    suffix: .html
+    mode: HTML
+    encoding: UTF-8
+    cache: false
 
 server:
   port: 8080
@@ -53,11 +62,12 @@ server:
   servlet:
     context-path: /learning-progress-management
 
-application-context-name: /learning-progress-management
-
 jwt:
   secret: ${JWT_SECRET}
-  expiration: 3600000
+  expiration: 7200000
+  email-change:
+    secret: ${JWT_EMAIL_CHANGE_SECRET}
+    expiration: 86400000
 
 logging:
   level:
@@ -71,3 +81,12 @@ logging:
 
 mapping:
   max-message-per-sub-batch: 1000
+
+azure:
+  storage:
+    connection-string: ${CONNECTION_STRING}
+    container-name: ${CONTAINER_NAME}
+
+app:
+  pagination:
+    max-size: 100

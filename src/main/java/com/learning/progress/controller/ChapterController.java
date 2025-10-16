@@ -36,7 +36,7 @@ public class ChapterController {
             @Parameter(description = "Syllabus ID") @RequestParam Long syllabusId,
             @Valid @RequestBody List<SyncChapterRequest> request) {
         var response = chapterService.syncChapters(syllabusId, request);
-        return new ResponseEntity<>(DataResponse.success(response, Const.CRUD_MESSAGE_CODE.UPDATE_SUCCESSFUL), HttpStatus.OK);
+        return new ResponseEntity<>(DataResponse.success(response, Const.RESULT_MESSAGE_CODE.UPDATE_SUCCESSFUL), HttpStatus.OK);
     }
 
     @GetMapping("/{id}")
@@ -45,7 +45,7 @@ public class ChapterController {
     public ResponseEntity<DataResponse<ChapterDTO>> getChapter(
             @Parameter(description = "Chapter ID") @PathVariable Long id) {
         var response = chapterService.getChapter(id);
-        return ResponseEntity.ok(DataResponse.success(response, Const.CRUD_MESSAGE_CODE.RETRIEVE_SUCCESSFUL));
+        return ResponseEntity.ok(DataResponse.success(response, Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL));
     }
 
     @GetMapping
@@ -78,6 +78,6 @@ public class ChapterController {
     public ResponseEntity<DataResponse<List<ChapterDTO>>> importChaptersFromExcel(
             @Parameter(description = "Excel file containing chapter data") @RequestParam("file") MultipartFile file) {
         var response = chapterService.importChaptersFromExcel(file);
-        return new ResponseEntity<>(DataResponse.success(response, Const.CRUD_MESSAGE_CODE.IMPORT_SUCCESSFUL), HttpStatus.OK);
+        return new ResponseEntity<>(DataResponse.success(response, Const.RESULT_MESSAGE_CODE.IMPORT_SUCCESSFUL), HttpStatus.OK);
     }
 }
