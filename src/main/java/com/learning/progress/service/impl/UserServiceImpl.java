@@ -444,24 +444,41 @@ public class UserServiceImpl implements UserService {
         if (username == null || username.trim().isEmpty()) {
             throw new ApiException(Const.AUTH.INVALID_TOKEN_USERNAME, HttpStatus.UNAUTHORIZED.value());
         }
-        User user = userRepository.findByUserName(username)
+        User currentUser  = userRepository.findByUserName(username)
                 .orElseThrow(() -> new ApiException(Const.AUTH.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
-        if (!user.getId().equals(userId)) {
-            throw new ApiException(Const.SECURITY.NOT_MATCH_CURRENT_USER, HttpStatus.FORBIDDEN.value());
+        // Lấy user mục tiêu dựa trên userId được truyền vào
+        User targetUser = userRepository.findById(userId)
+                .orElseThrow(() -> new ApiException(Const.AUTH.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+
+        boolean isSelf = currentUser.getId().equals(userId);
+
+        if (!isSelf) {
+            RoleName currentRole = currentUser.getRole().getName();
+            RoleName targetRole = targetUser.getRole().getName();
+
+            // Chỉ các role này mới được đổi email cho người khác
+            if (!List.of(RoleName.TEACHER, RoleName.TEACHING_ASSISTANT, RoleName.MANAGER).contains(currentRole)) {
+                throw new ApiException(Const.SECURITY.FORBIDDEN_ROLE, HttpStatus.FORBIDDEN.value());
+            }
+
+            // Nhưng chỉ được đổi cho STUDENT hoặc TEST_TAKER
+            if (!List.of(RoleName.STUDENT, RoleName.TEST_TAKER).contains(targetRole)) {
+                throw new ApiException(Const.SECURITY.FORBIDDEN_ROLE, HttpStatus.FORBIDDEN.value());
+            }
         }
 
         String newEmail = request.getNewEmail();
         if (newEmail == null || newEmail.trim().isEmpty()) {
             throw new ApiException(Const.VALIDATION.EMAIL_REQUIRED, HttpStatus.BAD_REQUEST.value());
         }
-        if (!Pattern.matches(Const.VALIDATE_INPUT.regexEmail, newEmail)) {
+        if (!DataUtil.isValidEmail(newEmail)) {
             throw new ApiException(Const.USER.EMAIL_INVALID, HttpStatus.BAD_REQUEST.value());
         }
 
-        String token = jwtUtil.generateChangeEmailToken(user.getUserName(), newEmail, user.getId());
+        String token = jwtUtil.generateChangeEmailToken(targetUser.getUserName(), newEmail, targetUser.getId());
         // Gửi email xác nhận bất đồng bộ
-        emailService.sendChangeEmailConfirmation(user, newEmail, token, request.getDomain(), request.getPath());
+        emailService.sendChangeEmailConfirmation(targetUser, newEmail, token, request.getDomain(), request.getPath());
     }
 
     @Override
