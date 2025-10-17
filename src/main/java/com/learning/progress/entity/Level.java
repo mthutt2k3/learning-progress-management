@@ -1,10 +1,8 @@
 package com.learning.progress.entity;
 
+import com.learning.progress.common.LevelEnum;
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.*;
 import lombok.experimental.SuperBuilder;
 import org.hibernate.annotations.ColumnDefault;
 
@@ -39,9 +37,10 @@ public class Level extends BaseEntity{
     @Column(name = "order_number", nullable = false)
     private Integer orderNumber;
 
-    @ColumnDefault("true")
-    @Column(name = "is_active")
-    private Boolean isActive;
+    @Column(name = "status")
+    @Builder.Default
+    @Enumerated(EnumType.STRING)
+    private LevelEnum status = LevelEnum.DRAFT;
 
     @Column(name = "level_code", length = 20)
     private String levelCode;

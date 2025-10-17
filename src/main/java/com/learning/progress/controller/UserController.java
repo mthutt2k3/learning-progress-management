@@ -152,10 +152,10 @@ public class UserController {
         return new ResponseEntity<>(DataResponse.success(response, Const.RESULT_MESSAGE_CODE.UPDATE_SUCCESSFUL), HttpStatus.OK);
     }
 
-    @GetMapping("/students/download-template")
+    @GetMapping("/students/upload-template")
     @PreAuthorize("hasRole('MANAGER')")
-    @Operation(summary = "Download Student Import Template", description = "Download Excel template for importing students")
-    public ResponseEntity<ByteArrayResource> downloadStudentImportTemplate() {
+    @Operation(summary = "upload Student Import Template", description = "upload Excel template for importing students")
+    public ResponseEntity<ByteArrayResource> uploadStudentImportTemplate() {
         byte[] template = userService.generateStudentImportTemplate();
         ByteArrayResource resource = new ByteArrayResource(template);
         return ResponseEntity.ok()
@@ -163,6 +163,19 @@ public class UserController {
                 .contentType(MediaType.APPLICATION_OCTET_STREAM)
                 .contentLength(template.length)
                 .body(resource);
+    }
+
+    @PreAuthorize("hasRole('MANAGER')")
+    @GetMapping("/students/download-template")
+    @Operation(summary = "Download Student Import Template", description = "Get SAS URL for downloading student import template")
+    public ResponseEntity<String> downloadStudentImportTemplate() {
+        try {
+            String sasUrl = userService.getStudentTemplateSasUrl();
+            return ResponseEntity.ok(sasUrl);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("Error generating SAS URL: " + e.getMessage());
+        }
     }
 
     @PostMapping("/students/import")
@@ -174,10 +187,10 @@ public class UserController {
         return new ResponseEntity<>(DataResponse.success("Students imported successfully", Const.RESULT_MESSAGE_CODE.IMPORT_SUCCESSFUL), HttpStatus.OK);
     }
 
-    @GetMapping("/teachers/download-template")
+    @GetMapping("/teachers/upload-template")
     @PreAuthorize("hasRole('MANAGER')")
-    @Operation(summary = "Download Teacher Import Template", description = "Download Excel template for importing teachers")
-    public ResponseEntity<ByteArrayResource> downloadTeacherImportTemplate() {
+    @Operation(summary = "upload Teacher Import Template", description = "upload Excel template for importing teachers")
+    public ResponseEntity<ByteArrayResource> uploadTeacherImportTemplate() {
         byte[] template = userService.generateTeacherImportTemplate();
         ByteArrayResource resource = new ByteArrayResource(template);
         return ResponseEntity.ok()
@@ -185,6 +198,19 @@ public class UserController {
                 .contentType(MediaType.APPLICATION_OCTET_STREAM)
                 .contentLength(template.length)
                 .body(resource);
+    }
+
+    @PreAuthorize("hasRole('MANAGER')")
+    @GetMapping("/teachers/download-template")
+    @Operation(summary = "Download Student Import Template", description = "Get SAS URL for downloading student import template")
+    public ResponseEntity<String> downloadImportTemplate() {
+        try {
+            String sasUrl = userService.getTeacherTemplateSasUrl();
+            return ResponseEntity.ok(sasUrl);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("Error generating SAS URL: " + e.getMessage());
+        }
     }
 
     @PostMapping("/teachers/import")

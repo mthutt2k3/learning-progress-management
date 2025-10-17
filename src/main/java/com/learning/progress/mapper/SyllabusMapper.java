@@ -5,11 +5,9 @@ import com.learning.progress.dto.SyllabusDetailDTO;
 import com.learning.progress.dto.syllabus.CreateSyllabusRequest;
 import com.learning.progress.dto.syllabus.UpdateSyllabusRequest;
 import com.learning.progress.entity.Syllabus;
-import com.learning.progress.util.JsonUtil;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.ReportingPolicy;
-import org.mapstruct.factory.Mappers;
 
 @Mapper(
         componentModel = "spring",

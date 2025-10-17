@@ -23,8 +23,6 @@ public class UpdateLevelOrderRequest {
 
     private String description;
 
-    private Long prerequisiteId;
-
     private String promotionCriteria;
 
     private String learningObjectives;

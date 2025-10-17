@@ -1,9 +1,7 @@
 package com.learning.progress.mapper;
 
 import com.learning.progress.dto.request.UpdateLevelOrderRequest;
-import com.learning.progress.dto.request.UpdateLevelRequest;
 import com.learning.progress.dto.response.LevelDetailsResponse;
-import com.learning.progress.dto.response.LevelListResponse;
 import com.learning.progress.entity.Level;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
@@ -21,13 +19,13 @@ public interface LevelMapper {
 
     @Mapping(source = "id", target = "id")
     @Mapping(source = "levelName", target = "levelName")
+    @Mapping(source = "levelCode", target = "levelCode")
     @Mapping(source = "description", target = "description")
     @Mapping(source = "prerequisite", target = "prerequisite")
     @Mapping(source = "promotionCriteria", target = "promotionCriteria")
     @Mapping(source = "learningObjectives", target = "learningObjectives")
     @Mapping(source = "estimatedDurationWeeks", target = "estimatedDurationWeeks")
     @Mapping(source = "orderNumber", target = "orderNumber")
-    @Mapping(source = "isActive", target = "isActive")
     LevelDetailsResponse toLevelDetailsResponse(Level level);
 
     @Mapping(target = "id", ignore = true)

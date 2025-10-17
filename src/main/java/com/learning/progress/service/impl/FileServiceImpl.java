@@ -7,15 +7,18 @@ import com.learning.progress.dto.excel.ExcelColumn;
 import com.learning.progress.dto.excel.ExcelSheetSpec;
 import com.learning.progress.dto.syllabus.ImportChapterDTO;
 import com.learning.progress.dto.syllabus.ImportLessonDTO;
+import com.learning.progress.dto.syllabus.ImportSyllabusDTO;
+import com.learning.progress.service.BlobSasService;
 import com.learning.progress.service.FileService;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.lang.reflect.Field;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
@@ -23,6 +26,27 @@ import java.util.*;
 
 @Service
 public class FileServiceImpl implements FileService {
+
+    @Autowired
+    BlobSasService blobSasService;
+
+    @Value("${azure.storage.student-to-class-template}")
+    private String studentToClassTemplate;
+
+    @Value("${azure.storage.student-template}")
+    private String studentTemplate;
+
+    @Value("${azure.storage.teacher-template}")
+    private String teacherTemplate;
+
+    @Value("${azure.storage.syllabus-template}")
+    private String syllabusTemplate;
+
+    @Value("${azure.storage.chapter-template}")
+    private String chapterTemplate;
+
+    @Value("${azure.storage.lesson-template}")
+    private String lessonTemplate;
 
     @Override
     public byte[] generateStudentImportTemplate() {
@@ -57,7 +81,11 @@ public class FileServiceImpl implements FileService {
                 List.of("student2@example.com", "Alice", "Smith", "TEST_TAKER", "parent2@example.com","Le Duc Dung", "0987654321", "Mẹ", "http://example.com/avatar1.jpg", "2000-01-01", "123 Main St", "0123456789", "MALE", "LEVEL_CODE")
         ));
 
-        return generateTemplate(List.of(sampleSheet, importSheet));
+        byte[] templateFile = generateTemplate(List.of(sampleSheet, importSheet));
+
+        blobSasService.uploadFile(templateFile, studentTemplate);
+
+        return templateFile;
     }
 
     @Override
@@ -91,7 +119,11 @@ public class FileServiceImpl implements FileService {
                 List.of("teacher2@example.com", "Bob", "Johnson", "TEACHING_ASSISTANT", "http://example.com/avatar2.jpg", "1980-01-01", "456 Elm St", "0987654321", "MALE")
         ));
 
-        return generateTemplate(List.of(sampleSheet, importSheet));
+        byte[] templateFile = generateTemplate(List.of(sampleSheet, importSheet));
+
+        blobSasService.uploadFile(templateFile, teacherTemplate);
+
+        return templateFile;
     }
 
     @Override
@@ -120,16 +152,54 @@ public class FileServiceImpl implements FileService {
         ExcelSheetSpec importSheet = new ExcelSheetSpec("Import Data", columns);
         importSheet.setSampleData(List.of(
                 List.of(
-                        "C01",
+                        "CL01",
                         "test5"
                 ),
                 List.of(
-                        "C01",
+                        "CL01",
                         "test6"
                 )
         ));
 
-        return generateTemplate(List.of(sampleSheet, importSheet));
+        byte[] templateFile = generateTemplate(List.of(sampleSheet, importSheet));
+
+        blobSasService.uploadFile(templateFile, studentToClassTemplate);
+
+        return templateFile;
+    }
+
+    @Override
+    public byte[] generateSyllabusImportTemplate() {
+        List<ExcelColumn> columns = fromClass(ImportSyllabusDTO.class);
+
+        ExcelSheetSpec sampleSheet = new ExcelSheetSpec("Sample Data", List.of(new ExcelColumn("Guide", "Guide")));
+        List<List<Object>> guideRows = List.of(
+                List.of("📘 HƯỚNG DẪN SỬ DỤNG SHEET"),
+                List.of("1. Điền thông tin vào sheet 'Import Data' theo các cột:"),
+                List.of("- syllabusName: Tên syllabus (bắt buộc, tối đa 100 ký tự)."),
+                List.of("- levelCode: Mã level (bắt buộc, ví dụ: LVL000001)."),
+                List.of("- description: Mô tả syllabus (tùy chọn, không giới hạn độ dài)."),
+                List.of("- syllabusCode: Mã syllabus (tùy chọn, tối đa 20 ký tự, ví dụ: SYL000001)."),
+                List.of("2. Không sửa đổi sheet 'Sample Data'."),
+                List.of("3. Đảm bảo levelCode tồn tại trong hệ thống.")
+        );
+        List<List<Object>> sheetData = new ArrayList<>();
+        sheetData.addAll(guideRows);
+        sheetData.add(List.of());
+        sampleSheet.setSampleData(sheetData);
+        sampleSheet.setProtected(true);
+
+        ExcelSheetSpec importSheet = new ExcelSheetSpec("Import Data", columns);
+        importSheet.setSampleData(List.of(
+                List.of("Syllabus Math 101", "LVL000001", "Basic Mathematics Course"),
+                List.of("Syllabus Physics 101", "LVL000002", "Introduction to Physics")
+        ));
+
+        byte[] templateFile = generateTemplate(List.of(sampleSheet, importSheet));
+
+        blobSasService.uploadFile(templateFile, syllabusTemplate);
+
+        return templateFile;
     }
 
     @Override
@@ -155,12 +225,16 @@ public class FileServiceImpl implements FileService {
 
         ExcelSheetSpec importSheet = new ExcelSheetSpec("Import Data", columns);
         importSheet.setSampleData(List.of(
-                List.of("SYLLABUS_CODE", "Chapter 1", 1), // Create new
-                List.of("SYLLABUS_CODE", "Chapter 2", 2), // Update existing
-                List.of("SYLLABUS_CODE", "Chapter 3", 3) // Delete existing
+                List.of("SYLLABUS_CODE", "Chapter 1", 1),
+                List.of("SYLLABUS_CODE", "Chapter 2", 2),
+                List.of("SYLLABUS_CODE", "Chapter 3", 3)
         ));
 
-        return generateTemplate(List.of(sampleSheet, importSheet));
+        byte[] templateFile = generateTemplate(List.of(sampleSheet, importSheet));
+
+        blobSasService.uploadFile(templateFile, chapterTemplate);
+
+        return templateFile;
     }
 
     @Override
@@ -189,7 +263,11 @@ public class FileServiceImpl implements FileService {
                 List.of("CHAP001", "Lesson 2", "Advanced concepts", 2)
         ));
 
-        return generateTemplate(List.of(sampleSheet, importSheet));
+        byte[] templateFile = generateTemplate(List.of(sampleSheet, importSheet));
+
+        blobSasService.uploadFile(templateFile, lessonTemplate);
+
+        return templateFile;
     }
 
     public byte[] generateTemplate(List<ExcelSheetSpec> sheets) {
@@ -277,114 +355,6 @@ public class FileServiceImpl implements FileService {
         }
         sb.setCharAt(0, Character.toUpperCase(sb.charAt(0)));
         return sb.toString();
-    }
-
-    public <T> List<T> importFromExcel(InputStream fileInputStream, Class<T> clazz) {
-        try (Workbook workbook = new XSSFWorkbook(fileInputStream)) {
-            Sheet sheet = workbook.getSheet("Import Data");
-            if (sheet == null) {
-                throw new RuntimeException("Không tìm thấy sheet 'Import Data'");
-            }
-
-            // 1️⃣ Lấy danh sách cột theo class (field name)
-            List<ExcelColumn> columns = fromClass(clazz);
-
-            // 2️⃣ Đọc header dòng đầu tiên
-            Row headerRow = sheet.getRow(0);
-            if (headerRow == null) {
-                throw new RuntimeException("File import không có header.");
-            }
-
-            // Map index -> field name (theo header)
-            List<String> fieldOrder = new ArrayList<>();
-            for (int i = 0; i < headerRow.getLastCellNum(); i++) {
-                Cell cell = headerRow.getCell(i);
-                String headerName = cell != null ? cell.getStringCellValue().trim() : "";
-                ExcelColumn col = columns.stream()
-                        .filter(c -> c.getHeader().equalsIgnoreCase(headerName))
-                        .findFirst()
-                        .orElse(null);
-                if (col != null) {
-                    fieldOrder.add(col.getField());
-                } else {
-                    fieldOrder.add(null); // giữ vị trí cho cột trống
-                }
-            }
-
-            // 3️⃣ Đọc từng dòng dữ liệu
-            List<T> result = new ArrayList<>();
-            for (int i = 1; i <= sheet.getLastRowNum(); i++) {
-                Row row = sheet.getRow(i);
-                if (row == null) continue;
-
-                T instance = clazz.getDeclaredConstructor().newInstance();
-
-                for (int j = 0; j < fieldOrder.size(); j++) {
-                    String fieldName = fieldOrder.get(j);
-                    if (fieldName == null) continue;
-
-                    Cell cell = row.getCell(j);
-                    String value = cell != null ? getCellValueAsString(cell) : null;
-
-                    Field field = clazz.getDeclaredField(fieldName);
-                    field.setAccessible(true);
-                    if (value != null) {
-                        Object converted = convertValue(field, value);
-                        field.set(instance, converted);
-                    }
-                }
-
-                result.add(instance);
-            }
-
-            return result;
-
-        } catch (Exception e) {
-            throw new RuntimeException("Lỗi khi đọc file Excel: " + e.getMessage(), e);
-        }
-    }
-    private String getCellValueAsString(Cell cell) {
-        if (cell == null) return null;
-        switch (cell.getCellType()) {
-            case STRING:
-                return cell.getStringCellValue().trim();
-            case NUMERIC:
-                if (DateUtil.isCellDateFormatted(cell)) {
-                    return cell.getLocalDateTimeCellValue().toLocalDate().toString();
-                } else {
-                    return String.valueOf((long) cell.getNumericCellValue());
-                }
-            case BOOLEAN:
-                return String.valueOf(cell.getBooleanCellValue());
-            default:
-                return null;
-        }
-    }
-    private Object convertValue(Field field, String value) {
-        Class<?> type = field.getType();
-
-        if (type.equals(String.class)) {
-            return value;
-        } else if (type.equals(Integer.class) || type.equals(int.class)) {
-            return Integer.parseInt(value);
-        } else if (type.equals(Long.class) || type.equals(long.class)) {
-            return Long.parseLong(value);
-        } else if (type.equals(Boolean.class) || type.equals(boolean.class)) {
-            return Boolean.parseBoolean(value);
-        } else if (type.equals(java.util.Date.class)) {
-            try {
-                return java.sql.Date.valueOf(value);
-            } catch (Exception e) {
-                return null;
-            }
-        } else {
-            // Nếu là enum
-            if (type.isEnum()) {
-                return Enum.valueOf((Class<Enum>) type, value.toUpperCase());
-            }
-        }
-
-        return null;
     }
 
 

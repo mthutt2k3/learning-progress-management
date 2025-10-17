@@ -10,12 +10,15 @@ import com.learning.progress.exception.ApiException;
 import com.learning.progress.mapper.ChapterMapper;
 import com.learning.progress.repository.ChapterRepository;
 import com.learning.progress.repository.SyllabusRepository;
+import com.learning.progress.service.BlobSasService;
 import com.learning.progress.service.ChapterService;
 import com.learning.progress.service.FileService;
+import com.learning.progress.util.DataUtil;
 import com.learning.progress.util.JwtUtil;
 import jakarta.validation.ConstraintViolation;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -25,6 +28,7 @@ import org.springframework.transaction.annotation.Transactional;
 import jakarta.validation.Validator;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -51,6 +55,12 @@ public class ChapterServiceImpl implements ChapterService {
 
     @Autowired
     private FileService fileService;
+
+    @Autowired
+    private BlobSasService blobSasService;
+
+    @Value("${azure.storage.chapter-template}")
+    private String chapterTemplate;
 
     @Override
     public ChapterDTO getChapter(Long id) {
@@ -278,7 +288,12 @@ public class ChapterServiceImpl implements ChapterService {
             newChapter.setCreatedBy(currentUser);
             newChapter.setUpdatedBy(currentUser);
             newChapter.setUpdatedAt(now);
-            Chapter saved = chapterRepository.save(newChapter);
+
+            Chapter saved = chapterRepository.saveAndFlush(newChapter);
+            String chapterCode = DataUtil.generateChapterCode(saved.getId());
+            saved.setChapterCode(chapterCode);
+
+            saved = chapterRepository.save(saved);
             result.add(chapterMapper.toChapterDTO(saved));
         }
 
@@ -288,6 +303,11 @@ public class ChapterServiceImpl implements ChapterService {
     @Override
     public byte[] generateChapterImportTemplate() {
         return fileService.generateChapterImportTemplate();
+    }
+
+    @Override
+    public String getChapterTemplateSasUrl() {
+        return blobSasService.generateSasUrl(chapterTemplate, Duration.ofMinutes(30));
     }
 
     @Override
@@ -352,7 +372,11 @@ public class ChapterServiceImpl implements ChapterService {
                 newChapter.setCreatedBy(currentUser);
                 newChapter.setUpdatedBy(currentUser);
                 newChapter.setUpdatedAt(now);
-                Chapter saved = chapterRepository.save(newChapter);
+                Chapter saved = chapterRepository.saveAndFlush(newChapter);
+                String chapterCode = DataUtil.generateChapterCode(saved.getId());
+                saved.setChapterCode(chapterCode);
+
+                saved = chapterRepository.save(saved);
                 result.add(chapterMapper.toChapterDTO(saved));
             }
         }

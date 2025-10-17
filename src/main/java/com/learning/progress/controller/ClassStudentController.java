@@ -89,9 +89,9 @@ public class ClassStudentController {
     }
 
     @PreAuthorize("hasRole('MANAGER')")
-    @GetMapping("/download-template")
-    @Operation(summary = "Download Student Import Template", description = "Download Excel template for importing students")
-    public ResponseEntity<ByteArrayResource> downloadImportTemplate() {
+    @GetMapping("/upload-template")
+    @Operation(summary = "Upload Student Import Template", description = "Download Excel template for importing students")
+    public ResponseEntity<ByteArrayResource> uploadImportTemplate() {
         byte[] template = classStudentService.generateStudentImportTemplate();
         ByteArrayResource resource = new ByteArrayResource(template);
         return ResponseEntity.ok()
@@ -99,6 +99,19 @@ public class ClassStudentController {
                 .contentType(MediaType.APPLICATION_OCTET_STREAM)
                 .contentLength(template.length)
                 .body(resource);
+    }
+
+    @PreAuthorize("hasRole('MANAGER')")
+    @GetMapping("/download-template")
+    @Operation(summary = "Download Student Import Template", description = "Get SAS URL for downloading student import template")
+    public ResponseEntity<String> downloadImportTemplate() {
+        try {
+            String sasUrl = classStudentService.getStudentTemplateSasUrl();
+            return ResponseEntity.ok(sasUrl);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("Error generating SAS URL: " + e.getMessage());
+        }
     }
 
     @PreAuthorize("hasRole('MANAGER')")
