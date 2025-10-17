@@ -1,29 +1,48 @@
 package com.learning.progress.dto.response;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
-import com.learning.progress.common.UserStatus;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDateTime;
-import java.util.Date;
-
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-
 public class LevelDetailsResponse {
     private Long id;
     private String levelName;
     private String description;
-    private String difficulty;
-    private String prerequisite;
+    private LevelPrerequisite prerequisite;
     private String promotionCriteria;
     private String learningObjectives;
     private Integer estimatedDurationWeeks;
     private Integer orderNumber;
     private Boolean isActive;
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class LevelPrerequisite{
+        private Long id;
+        private String levelName;
+    }
+    public LevelDetailsResponse(Long id, String levelName, String description,
+                                Long prerequisiteId, String prerequisiteName,
+                                String promotionCriteria, String learningObjectives,
+                                Integer estimatedDurationWeeks, Integer orderNumber, Boolean isActive) {
+        this.id = id;
+        this.levelName = levelName;
+        this.description = description;
+        if (prerequisiteId != null && prerequisiteName != null) {
+            this.prerequisite = new LevelPrerequisite(prerequisiteId, prerequisiteName);
+        }
+        this.promotionCriteria = promotionCriteria;
+        this.learningObjectives = learningObjectives;
+        this.estimatedDurationWeeks = estimatedDurationWeeks;
+        this.orderNumber = orderNumber;
+        this.isActive = isActive;
+    }
+
 }
