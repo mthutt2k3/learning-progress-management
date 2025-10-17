@@ -14,6 +14,7 @@ import java.time.OffsetDateTime;
 public class ClassDTO {
     private Long id;
     private String className;
+    private String classCode;
     private Long syllabusId;
     private String avatarUrl;
     private Boolean isActive;

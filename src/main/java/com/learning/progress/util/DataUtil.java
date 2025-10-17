@@ -1763,6 +1763,12 @@ public class DataUtil {
 
         return sb.toString();
     }
+
+    public static String generateClassCode(Long id) {
+        String prefix = "CL";
+        return prefix + String.format("%06d", id);
+    }
+
     public static String generateImageUrl(String imageUrlCheck) {
         if (DataUtil.isNullOrEmpty(imageUrlCheck)) {
             return null;

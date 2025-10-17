@@ -17,6 +17,7 @@ import com.learning.progress.mapper.ClassMapper;
 import com.learning.progress.repository.*;
 import com.learning.progress.service.ClassHistoryService;
 import com.learning.progress.service.ClassService;
+import com.learning.progress.util.DataUtil;
 import com.learning.progress.util.JwtUtil;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validator;
@@ -91,6 +92,10 @@ public class ClassServiceImpl implements ClassService {
         clazz.setCreatedAt(now);
         clazz.setUpdatedAt(now);
         Clazz savedClass = classRepository.saveAndFlush(clazz);
+
+        String classCode = DataUtil.generateClassCode(savedClass.getId());
+        savedClass.setClassCode(classCode);
+        savedClass = classRepository.saveAndFlush(savedClass);
 
         // Ghi lịch sử
         String actionDetails = String.format(
