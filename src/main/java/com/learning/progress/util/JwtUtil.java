@@ -105,8 +105,8 @@ public class JwtUtil {
         return getClaim(token, type, Claims::getExpiration);
     }
 
-    public String generateAuthToken(String username, String role, Long userId) {
-        return generateToken(Map.of("role", role, "userId", userId), username, JwtTokenType.AUTH);
+    public String generateAuthToken(String username, String role, Long userId, String email) {
+        return generateToken(Map.of("role", role, "userId", userId,"email", email), username, JwtTokenType.AUTH);
     }
     public String generateChangeEmailToken(String username, String newEmail, Long userId) {
         return generateToken(Map.of("newEmail", newEmail, "userId", userId), username, JwtTokenType.EMAIL_CHANGE);
@@ -212,6 +212,9 @@ public class JwtUtil {
     public Long extractUserIdFromCurrentRequest() {
         return getUserIdFromAuthToken(extractTokenFromRequest(getCurrentRequest()));
     }
+    public String extractEmailFromCurrentRequest() {
+        return getEmailFromAuthToken(extractTokenFromRequest(getCurrentRequest()));
+    }
 
     public boolean isCurrentUser(Long userId) {
         try {
@@ -219,5 +222,8 @@ public class JwtUtil {
         } catch (Exception e) {
             return false;
         }
+    }
+    public String getEmailFromAuthToken(String token) {
+        return getClaim(token, JwtTokenType.AUTH, claims -> (String) claims.get("email"));
     }
 }

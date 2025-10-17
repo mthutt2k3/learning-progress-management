@@ -40,7 +40,16 @@ import java.util.stream.Collectors;
 
 @Slf4j
 public class DataUtil {
-
+    /**
+     * Lấy toàn bộ phần trước dấu @ của email
+     * Ví dụ: user@example.com -> user
+     */
+    public static String getEmailPrefix(String email) {
+        if (email == null || !email.contains("@")) {
+            return null; // hoặc "" tùy nhu cầu
+        }
+        return email.substring(0, email.indexOf('@'));
+    }
     public static String maskEmail(String email) {
         if (email == null || !email.contains("@")) {
             return email; // hoặc throw exception tuỳ bạn xử lý
