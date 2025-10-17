@@ -276,6 +276,7 @@ public class AccountServiceImpl implements AccountService {
     }
 
     @Override
+    @Transactional
     public AccountDTO updateStatusAccount(Long id, UserStatus newStatus) {
         String traceId = MDC.get("traceId");
         log.info("[{}] Updating status for userId: {} to {}", traceId, id, newStatus);

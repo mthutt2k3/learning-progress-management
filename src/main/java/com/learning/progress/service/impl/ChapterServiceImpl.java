@@ -269,8 +269,6 @@ public class ChapterServiceImpl implements ChapterService {
 
             chapter.setChapterName(req.getChapterName());
             chapter.setOrderNumber(req.getOrderNumber());
-            chapter.setUpdatedBy(currentUser);
-            chapter.setUpdatedAt(now);
             Chapter saved = chapterRepository.save(chapter);
             result.add(chapterMapper.toChapterDTO(saved));
         }
@@ -285,9 +283,6 @@ public class ChapterServiceImpl implements ChapterService {
             newChapter.setSyllabus(syllabus);
             newChapter.setChapterName(req.getChapterName());
             newChapter.setOrderNumber(req.getOrderNumber());
-            newChapter.setCreatedBy(currentUser);
-            newChapter.setUpdatedBy(currentUser);
-            newChapter.setUpdatedAt(now);
 
             Chapter saved = chapterRepository.saveAndFlush(newChapter);
             String chapterCode = DataUtil.generateChapterCode(saved.getId());
@@ -369,9 +364,6 @@ public class ChapterServiceImpl implements ChapterService {
                 newChapter.setSyllabus(syllabus);
                 newChapter.setChapterName(req.getChapterName());
                 newChapter.setOrderNumber(req.getOrderNumber());
-                newChapter.setCreatedBy(currentUser);
-                newChapter.setUpdatedBy(currentUser);
-                newChapter.setUpdatedAt(now);
                 Chapter saved = chapterRepository.saveAndFlush(newChapter);
                 String chapterCode = DataUtil.generateChapterCode(saved.getId());
                 saved.setChapterCode(chapterCode);

@@ -67,7 +67,6 @@ public class SyllabusServiceImpl implements SyllabusService {
 
         Syllabus syllabus = syllabusMapper.toSyllabus(request);
         syllabus.setLevel(level);
-        syllabus.setCreatedBy(jwtUtil.extractUsernameFromCurrentRequest());
         syllabusRepository.save(syllabus);
 
         String syllabusCode = DataUtil.generateSyllabusCode(syllabus.getId());
@@ -91,8 +90,6 @@ public class SyllabusServiceImpl implements SyllabusService {
         syllabus.setSyllabusName(updatedSyllabus.getSyllabusName());
         syllabus.setLevel(level);
         syllabus.setDescription(updatedSyllabus.getDescription());
-        syllabus.setUpdatedBy(jwtUtil.extractUsernameFromCurrentRequest());
-        syllabus.setUpdatedAt(OffsetDateTime.now());
         syllabusRepository.save(syllabus);
 
         return syllabusMapper.toSyllabusDTO(syllabus);

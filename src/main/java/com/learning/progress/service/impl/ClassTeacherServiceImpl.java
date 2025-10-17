@@ -124,11 +124,6 @@ public class ClassTeacherServiceImpl implements ClassTeacherService {
         classTeacher.setStatus(ClassTeacherStatus.ACTIVE);
         classTeacher.setJoinedAt(OffsetDateTime.now());
 
-        classTeacher.setCreatedBy(jwtUtil.extractUsernameFromCurrentRequest());
-        classTeacher.setCreatedAt(OffsetDateTime.now());
-        classTeacher.setUpdatedBy(jwtUtil.extractUsernameFromCurrentRequest());
-        classTeacher.setUpdatedAt(OffsetDateTime.now());
-
         classTeacherRepository.save(classTeacher);
     }
 
@@ -170,8 +165,6 @@ public class ClassTeacherServiceImpl implements ClassTeacherService {
 
         classTeacher.setStatus(ClassTeacherStatus.INACTIVE);
         classTeacher.setLeftAt(OffsetDateTime.now());
-        classTeacher.setUpdatedBy(jwtUtil.extractUsernameFromCurrentRequest());
-        classTeacher.setUpdatedAt(OffsetDateTime.now());
 
         classTeacherRepository.save(classTeacher);
     }

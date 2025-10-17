@@ -239,8 +239,6 @@ public class ClassChapterServiceImpl implements ClassChapterService {
                     .orElseThrow(() -> new ApiException("Clazz chapter không tồn tại", HttpStatus.NOT_FOUND.value()));
             classChapter.setClassChapterName(req.getClassChapterName());
             classChapter.setOrderNumber(req.getOrderNumber());
-            classChapter.setUpdatedBy(currentUser);
-            classChapter.setUpdatedAt(now);
             result.add(classChapterMapper.toClassChapterDTO(classChapterRepository.save(classChapter)));
 
             // Ghi lịch sử
@@ -268,10 +266,7 @@ public class ClassChapterServiceImpl implements ClassChapterService {
             newChapter.setClazz(classEntity);
             newChapter.setClassChapterName(req.getClassChapterName());
             newChapter.setOrderNumber(req.getOrderNumber());
-            newChapter.setCreatedBy(currentUser);
-            newChapter.setUpdatedBy(currentUser);
-            newChapter.setCreatedAt(now);
-            newChapter.setUpdatedAt(now);
+            result.add(classChapterMapper.toClassChapterDTO(classChapterRepository.save(newChapter)));
 
             ClassChapter saved = classChapterRepository.saveAndFlush(newChapter);
             String chapterCode = DataUtil.generateClassChapterCode(saved.getId(), saved.getClazz().getId());
@@ -450,6 +445,4 @@ public class ClassChapterServiceImpl implements ClassChapterService {
 
         return result;
     }
-
-
 }
