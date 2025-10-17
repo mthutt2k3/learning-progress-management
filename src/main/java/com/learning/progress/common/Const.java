@@ -107,6 +107,7 @@ public class Const {
         public static final String ACCESS_TOKEN_BLACKLISTED = "Access token is blacklisted and cannot be used";
         public static final String INVALID_REFRESH_TOKEN = "Invalid or revoked refresh token";
         public static final String INVALID_TOKEN_USERNAME = "Cannot extract username from JWT token. Token may be invalid or missing";
+        public static final String HAVE_CHANGED_PASSWORD = "Your account have changed password";
     }
 
     public static class USER {

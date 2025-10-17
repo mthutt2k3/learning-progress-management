@@ -3,6 +3,7 @@ package com.learning.progress.service;
 import com.learning.progress.dto.clazz.ClassChapterDTO;
 import com.learning.progress.dto.clazz.SyncClassChapterRequest;
 import com.learning.progress.dto.response.DataResponse;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -18,7 +19,9 @@ public interface ClassChapterService {
 
     void exportClassChaptersToExcel(Long classId, OutputStream outputStream);
 
-    void importClassChaptersFromExcel(Long classId, InputStream inputStream);
+    byte[] generateClassChaptersImportTemplate();
 
-    void downloadImportTemplate(OutputStream outputStream);
+    String getClassChaptersTemplateSasUrl();
+
+    List<ClassChapterDTO> importClassChaptersFromExcel(Long classId, MultipartFile file);
 }
