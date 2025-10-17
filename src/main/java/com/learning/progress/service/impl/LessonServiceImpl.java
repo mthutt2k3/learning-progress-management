@@ -1,5 +1,6 @@
 package com.learning.progress.service.impl;
 
+import com.learning.progress.common.Const;
 import com.learning.progress.dto.LessonDTO;
 import com.learning.progress.dto.response.DataResponse;
 import com.learning.progress.dto.syllabus.ImportLessonDTO;
@@ -13,6 +14,7 @@ import com.learning.progress.repository.LessonRepository;
 import com.learning.progress.service.BlobSasService;
 import com.learning.progress.service.FileService;
 import com.learning.progress.service.LessonService;
+import com.learning.progress.util.AppValidator;
 import com.learning.progress.util.JwtUtil;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validator;
@@ -21,6 +23,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -30,6 +33,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -51,6 +55,10 @@ public class LessonServiceImpl implements LessonService {
     private FileService fileService;
     @Autowired
     private BlobSasService blobSasService;
+
+    @Autowired
+    private AppValidator appValidator;
+
     @Value("${azure.storage.lesson-template}")
     private String lessonTemplate;
 
@@ -216,6 +224,35 @@ public class LessonServiceImpl implements LessonService {
         return result;
     }
 
+    @Override
+    public DataResponse<List<LessonDTO>> getLessonListBySyllabus(Long syllabusId, int page, int size, String searchText) {
+        appValidator.validatePaginationParams(page, size);
+
+        Pageable pageable = PageRequest.of(page, size);
+        Page<Lesson> lessonPage = lessonRepository.findBySyllabusOrdered(syllabusId, searchText, pageable);
+
+        AtomicInteger counter = new AtomicInteger(1);
+
+        List<LessonDTO> lessonDTOs = lessonPage.getContent().stream()
+                .map(lesson -> {
+                    LessonDTO dto = lessonMapper.toLessonDTO(lesson);
+                    dto.setGlobalOrder(counter.getAndIncrement());
+                    return dto;
+                })
+                .collect(Collectors.toList());
+
+        return DataResponse.<List<LessonDTO>>builder()
+                .success(true)
+                .message(Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL)
+                .data(lessonDTOs)
+                .page(page)
+                .size(size)
+                .totalElements(lessonPage.getTotalElements())
+                .totalPages(lessonPage.getTotalPages())
+                .build();
+    }
+
+
     // ✅ Giữ lại READ methods
     @Override
     public LessonDTO getLesson(Long id) {
@@ -226,7 +263,7 @@ public class LessonServiceImpl implements LessonService {
     }
 
     @Override
-    public DataResponse<List<LessonDTO>> getLessonList(Long chapterId, int page, int size, String searchText) {
+    public DataResponse<List<LessonDTO>> getLessonListByChapter(Long chapterId, int page, int size, String searchText) {
         chapterRepository.findById(chapterId)
                 .filter(c -> c.getDeletedAt() == null)
                 .orElseThrow(() -> new ApiException("Chapter not found", HttpStatus.NOT_FOUND.value()));

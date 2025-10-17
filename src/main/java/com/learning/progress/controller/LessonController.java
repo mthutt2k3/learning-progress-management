@@ -28,6 +28,17 @@ public class LessonController {
 
     @Autowired
     private LessonService lessonService;
+    @GetMapping("/by-syllabus")
+    @PreAuthorize("hasRole('MANAGER') or hasRole('TEACHER') or hasRole('TEACHING_ASSISTANT')")
+    @Operation(summary = "Get lessons by syllabus", description = "Retrieve paginated lessons under a syllabus with optional search")
+    public ResponseEntity<DataResponse<List<LessonDTO>>> getLessonListBySyllabus(
+            @Parameter(description = "Syllabus ID") @RequestParam Long syllabusId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) String searchText) {
+        var response = lessonService.getLessonListBySyllabus(syllabusId, page, size, searchText);
+        return ResponseEntity.ok(response);
+    }
 
     @PutMapping("/sync/{chapterId}")
     @PreAuthorize("hasRole('MANAGER')")
@@ -52,12 +63,12 @@ public class LessonController {
     @GetMapping
     @PreAuthorize("hasRole('MANAGER') or hasRole('TEACHER') or hasRole('TEACHING_ASSISTANT')")
     @Operation(summary = "Get lesson list", description = "Retrieve paginated lessons with search")
-    public ResponseEntity<DataResponse<List<LessonDTO>>> getLessonList(
+    public ResponseEntity<DataResponse<List<LessonDTO>>> getLessonListByChapter(
             @Parameter(description = "Chapter ID") @RequestParam Long chapterId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(required = false) String searchText) {
-        return ResponseEntity.ok(lessonService.getLessonList(chapterId, page, size, searchText));
+        return ResponseEntity.ok(lessonService.getLessonListByChapter(chapterId, page, size, searchText));
     }
 
     @GetMapping("/upload-template")
