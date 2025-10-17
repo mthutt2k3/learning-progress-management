@@ -145,7 +145,7 @@ public class AuthServiceImpl implements AuthService {
 
         String accessToken = mustChangePassword ?
                 jwtUtil.generateResetPasswordToken(user.getUserName(), user.getRole().getName().toString(), user.getId()) :
-                jwtUtil.generateAuthToken(user.getUserName(), user.getRole().getName().toString(), user.getId());
+                jwtUtil.generateAuthToken(user.getUserName(), user.getRole().getName().toString(), user.getId(), user.getEmail());
 
         log.info("[{}] Login successful for username: {}", traceId, loginRequest.getUsername());
         return authMapper.toLoginResponse(user, refreshToken, accessToken, mustChangePassword, mustUpdateProfile);
@@ -275,7 +275,7 @@ public class AuthServiceImpl implements AuthService {
         log.debug("[{}] User logged out after password change: {}", traceId, username);
 
         // Generate new tokens
-        String accessToken = jwtUtil.generateAuthToken(user.getUserName(), user.getRole().getName().toString(), user.getId());
+        String accessToken = jwtUtil.generateAuthToken(user.getUserName(), user.getRole().getName().toString(), user.getId(), user.getEmail());
         RefreshToken refreshToken = tokenService.createRefreshToken(user);
         boolean mustChangePassword = user.isMustChangePassword();
         boolean mustUpdateProfile = user.isMustUpdateProfile();
@@ -363,7 +363,7 @@ public class AuthServiceImpl implements AuthService {
 
         // Generate new access token
         User user = token.getUser();
-        String newAccessToken = jwtUtil.generateAuthToken(user.getUserName(), user.getRole().getName().toString(), user.getId());
+        String newAccessToken = jwtUtil.generateAuthToken(user.getUserName(), user.getRole().getName().toString(), user.getId(), user.getEmail());
         log.info("[{}] Access token refreshed for username: {}", traceId, user.getUserName());
 
         return Map.of(
