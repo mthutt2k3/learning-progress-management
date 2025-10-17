@@ -1,33 +1,43 @@
 package com.learning.progress.service.impl;
 
 import com.learning.progress.common.ActionType;
+import com.learning.progress.common.ClassTeacherStatus;
 import com.learning.progress.common.RoleName;
 import com.learning.progress.dto.clazz.ClassChapterDTO;
 import com.learning.progress.dto.clazz.SyncClassChapterRequest;
 import com.learning.progress.dto.response.DataResponse;
+import com.learning.progress.dto.syllabus.ImportChapterInClassDTO;
 import com.learning.progress.dto.syllabus.SyncChapterRequest;
+import com.learning.progress.entity.Chapter;
 import com.learning.progress.entity.ClassChapter;
 import com.learning.progress.entity.Clazz;
 import com.learning.progress.exception.ApiException;
 import com.learning.progress.mapper.ClassChapterMapper;
 import com.learning.progress.repository.ClassChapterRepository;
 import com.learning.progress.repository.ClassRepository;
+import com.learning.progress.repository.ClassTeacherRepository;
+import com.learning.progress.service.BlobSasService;
 import com.learning.progress.service.ClassChapterService;
 import com.learning.progress.service.ClassHistoryService;
+import com.learning.progress.service.FileService;
+import com.learning.progress.util.DataUtil;
 import com.learning.progress.util.JwtUtil;
 import jakarta.transaction.Transactional;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validator;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -42,6 +52,8 @@ public class ClassChapterServiceImpl implements ClassChapterService {
     @Autowired
     private ClassRepository classRepository;
     @Autowired
+    private ClassTeacherRepository classTeacherRepository;
+    @Autowired
     private ClassHistoryService classHistoryService;
     @Autowired
     private ClassChapterMapper classChapterMapper;
@@ -49,6 +61,14 @@ public class ClassChapterServiceImpl implements ClassChapterService {
     private JwtUtil jwtUtil;
     @Autowired
     private Validator validator;
+    @Autowired
+    private FileService fileService;
+
+    @Autowired
+    private BlobSasService blobSasService;
+
+    @Value("${azure.storage.chapter-in-class-template}")
+    private String chapterInClassTemplate;
 
     @Transactional
     @Override
@@ -248,6 +268,12 @@ public class ClassChapterServiceImpl implements ClassChapterService {
             newChapter.setOrderNumber(req.getOrderNumber());
             result.add(classChapterMapper.toClassChapterDTO(classChapterRepository.save(newChapter)));
 
+            ClassChapter saved = classChapterRepository.saveAndFlush(newChapter);
+            String chapterCode = DataUtil.generateClassChapterCode(saved.getId(), saved.getClazz().getId());
+            saved.setClassChapterCode(chapterCode);
+
+            result.add(classChapterMapper.toClassChapterDTO(classChapterRepository.save(saved)));
+
             // Ghi lịch sử
             String actionDetails = String.format(
                     "Đã tạo chương %s cho lớp %s với thứ tự %d",
@@ -300,11 +326,123 @@ public class ClassChapterServiceImpl implements ClassChapterService {
         // Logic export class chapters sang Excel
     }
 
-    public void importClassChaptersFromExcel(Long classId, InputStream inputStream) {
-        // Logic import class chapters từ Excel
+    @Override
+    public byte[] generateClassChaptersImportTemplate() {
+        return fileService.generateChapterInClassImportTemplate();
     }
 
-    public void downloadImportTemplate(OutputStream outputStream) {
-        // Tạo template Excel
+    @Override
+    public String getClassChaptersTemplateSasUrl() {
+        return blobSasService.generateSasUrl(chapterInClassTemplate, Duration.ofMinutes(30));
+    }
+
+    @Override
+    @Transactional
+    public List<ClassChapterDTO> importClassChaptersFromExcel(Long classId, MultipartFile file) {
+        // Validate class
+        Clazz classEntity = classRepository.findById(classId)
+                .filter(c -> c.getDeletedAt() == null)
+                .orElseThrow(() -> new ApiException("Class không tồn tại", HttpStatus.NOT_FOUND.value()));
+
+        // Validate teacher assignment
+        Long currentUserId = jwtUtil.extractUserIdFromCurrentRequest();
+        if ( !classTeacherRepository.existsByClazz_IdAndUser_IdAndStatus(classId, currentUserId, ClassTeacherStatus.ACTIVE)) {
+            throw new ApiException("Giáo viên không được phân công cho lớp này", HttpStatus.FORBIDDEN.value());
+        }
+
+        // Read Excel data
+        List<ImportChapterInClassDTO> importList = fileService.readExcelData(
+                file, "Import Data", ImportChapterInClassDTO.class);
+
+        List<ClassChapterDTO> result = new ArrayList<>();
+        String currentUser = jwtUtil.extractUsernameFromCurrentRequest();
+        OffsetDateTime now = OffsetDateTime.now();
+        Long actionByUserId = jwtUtil.extractUserIdFromCurrentRequest();
+        String visibleToRoles = String.format("%s,%s,%s",
+                RoleName.MANAGER.name(),
+                RoleName.TEACHER.name(),
+                RoleName.TEACHING_ASSISTANT.name());
+
+        // Group by classCode
+        Map<String, List<ImportChapterInClassDTO>> chaptersByClass = importList.stream()
+                .collect(Collectors.groupingBy(ImportChapterInClassDTO::getClassCode));
+
+        for (Map.Entry<String, List<ImportChapterInClassDTO>> entry : chaptersByClass.entrySet()) {
+            String classCode = entry.getKey();
+            List<ImportChapterInClassDTO> chapters = entry.getValue();
+
+            // Validate classCode
+            if (!classEntity.getClassCode().equals(classCode)) {
+                throw new ApiException("Class code không khớp: " + classCode, HttpStatus.BAD_REQUEST.value());
+            }
+
+            // Validate chapters
+            for (ImportChapterInClassDTO req : chapters) {
+                if (req.getChapterName() == null || req.getChapterName().trim().isEmpty()) {
+                    throw new ApiException("Chapter name là bắt buộc: " + req.getChapterName(),
+                            HttpStatus.BAD_REQUEST.value());
+                }
+                if (req.getChapterName().length() > 255) {
+                    throw new ApiException("Chapter name vượt quá 255 ký tự: " + req.getChapterName(),
+                            HttpStatus.BAD_REQUEST.value());
+                }
+                if (req.getOrderNumber() == null || req.getOrderNumber() < 1) {
+                    throw new ApiException("Order number phải là số dương: " + req.getOrderNumber(),
+                            HttpStatus.BAD_REQUEST.value());
+                }
+            }
+
+            // Validate order numbers
+            Set<Integer> orderNumbers = chapters.stream()
+                    .map(ImportChapterInClassDTO::getOrderNumber)
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toSet());
+            int chapterSize = chapters.size();
+            Set<Integer> expectedOrders = IntStream.rangeClosed(1, chapterSize).boxed().collect(Collectors.toSet());
+            if (orderNumbers.size() != chapterSize || !orderNumbers.equals(expectedOrders)) {
+                throw new ApiException(
+                        String.format("Order numbers phải tuần tự từ 1 đến %d, không trùng lặp và không có gap. Current: %s",
+                                chapterSize, orderNumbers),
+                        HttpStatus.BAD_REQUEST.value()
+                );
+            }
+
+            log.info("Validation passed for classCode={}: total chapters={}", classCode, chapterSize);
+
+            // Create new class chapters
+            for (ImportChapterInClassDTO req : chapters) {
+                ClassChapter newChapter = new ClassChapter();
+                newChapter.setClazz(classEntity);
+                newChapter.setClassChapterName(req.getChapterName());
+                newChapter.setOrderNumber(req.getOrderNumber());
+                newChapter.setCreatedBy(currentUser);
+                newChapter.setUpdatedBy(currentUser);
+                newChapter.setCreatedAt(now);
+                newChapter.setUpdatedAt(now);
+
+                ClassChapter saved = classChapterRepository.saveAndFlush(newChapter);
+                String chapterCode = DataUtil.generateClassChapterCode(saved.getId(), saved.getClazz().getId());
+                saved.setClassChapterCode(chapterCode);
+                saved = classChapterRepository.save(saved);
+                result.add(classChapterMapper.toClassChapterDTO(saved));
+
+                // Record history
+                String actionDetails = String.format(
+                        "Đã tạo chương %s cho lớp %s với thứ tự %d",
+                        req.getChapterName(),
+                        classEntity.getClassName(),
+                        req.getOrderNumber()
+                );
+                classHistoryService.saveClassHistory(
+                        classId,
+                        actionDetails,
+                        actionByUserId,
+                        ActionType.CREATE_CHAPTER.name(),
+                        visibleToRoles
+                );
+            }
+        }
+
+        return result;
     }
 }

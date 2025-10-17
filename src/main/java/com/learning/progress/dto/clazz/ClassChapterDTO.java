@@ -14,7 +14,8 @@ import java.time.OffsetDateTime;
 public class ClassChapterDTO {
     private Long id;
     private Long classId;
-    private Long chapterId; // Tham chiếu chapter gốc, có thể null
+    private Long chapterId;
+    private String classChapterCode;
     private String classChapterName;
     private Integer orderNumber;
     private String createdBy;

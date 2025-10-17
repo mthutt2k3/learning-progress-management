@@ -14,6 +14,7 @@ import org.mapstruct.ReportingPolicy;
 public interface ClassChapterMapper {
 
     @Mapping(target = "classId", source = "clazz.id")
+    @Mapping(target = "classChapterCode", source = "classChapterCode")
     ClassChapterDTO toClassChapterDTO(ClassChapter classChapter);
 
 
