@@ -27,7 +27,6 @@ public interface LevelMapper {
     @Mapping(source = "learningObjectives", target = "learningObjectives")
     @Mapping(source = "estimatedDurationWeeks", target = "estimatedDurationWeeks")
     @Mapping(source = "orderNumber", target = "orderNumber")
-    @Mapping(source = "isActive", target = "isActive")
     LevelDetailsResponse toLevelDetailsResponse(Level level);
 
     @Mapping(target = "id", ignore = true)

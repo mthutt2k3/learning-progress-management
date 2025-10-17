@@ -1,6 +1,7 @@
 package com.learning.progress.service.impl;
 
 import com.learning.progress.common.Const;
+import com.learning.progress.common.LevelEnum;
 import com.learning.progress.dto.request.UpdateLevelOrderRequest;
 import com.learning.progress.dto.request.UpdateLevelRequest;
 import com.learning.progress.dto.response.DataResponse;
@@ -47,14 +48,13 @@ public class LevelServiceImpl implements LevelService {
     private AppValidator appValidator;
 
     @Override
-    public DataResponse<List<LevelDetailsResponse>> getAllLevels(int page, int size, String text, List<Boolean> status) {
+    public DataResponse<List<LevelDetailsResponse>> getAllLevels(int page, int size, String text) {
         // Validate pagination and sort parameters
         appValidator.validatePaginationParams(page, size);
 
         Pageable pageable = PageRequest.of(page, size);
         Page<LevelDetailsResponse> levelPage = levelRepository.findAllWithFilters(
                 (text == null || text.isBlank()) ? null : text,
-                (status == null || status.isEmpty()) ? null : status,
                 pageable
         );
 
@@ -86,20 +86,24 @@ public class LevelServiceImpl implements LevelService {
                 .filter(l -> l.getDeletedAt() == null)
                 .orElseThrow(() -> new ApiException(Const.LEVEL.LEVEL_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
-        // Kiểm tra trùng lặp levelName và orderNumber
-        boolean duplicate = levelRepository.findByLevelNameAndDeletedAtIsNull(request.getLevelName())
-                .stream()
-                .anyMatch(l -> !l.getId().equals(id));
-        if (duplicate) {
-            throw new ApiException(Const.LEVEL.DUPLICATE_LEVEL_NAME, HttpStatus.CONFLICT.value());
+        if (level.getStatus() == LevelEnum.DRAFT) {
+            // Kiểm tra trùng lặp levelName và orderNumber
+            boolean duplicate = levelRepository.findByLevelNameAndDeletedAtIsNull(request.getLevelName())
+                    .stream()
+                    .anyMatch(l -> !l.getId().equals(id));
+            if (duplicate) {
+                throw new ApiException(Const.LEVEL.DUPLICATE_LEVEL_NAME, HttpStatus.CONFLICT.value());
+            }
+
+            level.setLevelName(request.getLevelName());
+            level.setEstimatedDurationWeeks(request.getEstimatedDurationWeeks());
+
         }
 
-
-        level.setLevelName(request.getLevelName());
+        // Các field chung cho cả DRAFT và PUBLISHED
         level.setDescription(request.getDescription());
         level.setPromotionCriteria(request.getPromotionCriteria());
         level.setLearningObjectives(request.getLearningObjectives());
-        level.setEstimatedDurationWeeks(request.getEstimatedDurationWeeks());
 
         // 5. Update audit fields nếu có
         String currentUser = jwtUtil.extractUsernameFromCurrentRequest();
@@ -115,7 +119,18 @@ public class LevelServiceImpl implements LevelService {
     public List<LevelDetailsResponse> bulkUpdateLevels(List<UpdateLevelOrderRequest> requests) {
 
         // Step 1: Load existing active levels
-        List<Level> existingActiveLevels = levelRepository.findAllByIsActiveIsTrueOrderByOrderNumberAsc();
+        List<Level> existingActiveLevels = levelRepository.findAllActiveOrderByOrderNumberAsc();
+
+        // Check if any level is PUBLISHED
+        boolean hasPublished = existingActiveLevels.stream()
+                .anyMatch(level -> level.getStatus() == LevelEnum.PUBLISHED);
+        if (hasPublished) {
+            throw new ApiException(
+                    Const.LEVEL.LEVEL_BULK_UPDATE_FORBIDDEN,
+                    HttpStatus.FORBIDDEN.value()
+            );
+        }
+
         Map<Long, Level> existingMap = existingActiveLevels.stream()
                 .collect(Collectors.toMap(Level::getId, l -> l));
 
@@ -257,10 +272,10 @@ public class LevelServiceImpl implements LevelService {
         // Process DELETE
         for (Long deleteId : requestDeleteIds) {
             Level level = levelRepository.findById(deleteId)
-                    .filter(Level::getIsActive)
+                    .filter(l -> l.getDeletedAt() == null)
                     .orElseThrow(() -> new ApiException("Level not found to delete: " + deleteId, HttpStatus.NOT_FOUND.value()));
             level.setDeletedAt(now);
-            level.setIsActive(false);
+            level.setDeletedBy(currentUser);
             level.setUpdatedBy(currentUser);
             level.setUpdatedAt(now);
             levelsToSave.add(level);
@@ -288,7 +303,6 @@ public class LevelServiceImpl implements LevelService {
                 }
                 level = levelMapper.toEntity(req);
                 level.setOrderNumber(req.getOrderNumber());
-                level.setIsActive(true);
                 level.setCreatedBy(currentUser);
                 level.setUpdatedBy(currentUser);
                 level.setUpdatedAt(now);
@@ -307,19 +321,29 @@ public class LevelServiceImpl implements LevelService {
         return result;
     }
 
-    @Override
-    public void toggleLevelStatus(Long id) {
-        Level level = levelRepository.findById(id)
-                .orElseThrow(() -> new ApiException(Const.LEVEL.LEVEL_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+    @Transactional
+    public void publishAllLevels() {
+        List<Level> draftLevels = levelRepository.findAllByStatus(LevelEnum.DRAFT)
+                .stream()
+                .filter(level -> level.getDeletedAt() == null)
+                .collect(Collectors.toList());
 
-        level.setIsActive(!level.getIsActive());
 
-        Integer maxOrderNumber = levelRepository.findMaxOrderNumber().orElse(0);
+        if (draftLevels.isEmpty()) {
+            throw new ApiException("No DRAFT levels to publish", HttpStatus.BAD_REQUEST.value());
+        }
 
-        Integer requestedOrderNumber = maxOrderNumber + 1;
+        String currentUser = jwtUtil.extractUsernameFromCurrentRequest();
+        OffsetDateTime now = OffsetDateTime.now();
 
-        level.setOrderNumber(requestedOrderNumber);
+        for (Level level : draftLevels) {
+            level.setStatus(LevelEnum.PUBLISHED);
+            level.setUpdatedBy(currentUser);
+            level.setUpdatedAt(now);
+        }
 
-        levelRepository.save(level);
+        levelRepository.saveAll(draftLevels);
     }
+
+
 }

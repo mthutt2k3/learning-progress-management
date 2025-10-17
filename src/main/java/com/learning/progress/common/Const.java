@@ -158,10 +158,10 @@ public class Const {
 
         public static final String LEVEL_NOT_FOUND = "Level does not exist in the system";
         public static final String DUPLICATE_LEVEL_NAME = "Level name already exists";
+        public static final String LEVEL_BULK_UPDATE_FORBIDDEN = "Cannot bulk update levels because one or more levels are already PUBLISHED";
 
         public static final String LIST_RETRIEVED = "Level list retrieved successfully";
         public static final String DETAILS_RETRIEVED = "Level details retrieved successfully";
-        public static final String LEVEL_CREATED = "Level created successfully";
         public static final String LEVEL_UPDATED = "Level updated successfully";
         public static final String STATUS_UPDATED = "Level status updated successfully";
         public static final String DUPLICATE_ORDER_NUMBER = "Order number already exists";

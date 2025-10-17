@@ -1,5 +1,6 @@
 package com.learning.progress.dto.response;
 
+import com.learning.progress.common.LevelEnum;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -18,7 +19,7 @@ public class LevelDetailsResponse {
     private String learningObjectives;
     private Integer estimatedDurationWeeks;
     private Integer orderNumber;
-    private Boolean isActive;
+    private LevelEnum status;
 
     @Data
     @Builder
@@ -28,21 +29,4 @@ public class LevelDetailsResponse {
         private Long id;
         private String levelName;
     }
-    public LevelDetailsResponse(Long id, String levelName, String description,
-                                Long prerequisiteId, String prerequisiteName,
-                                String promotionCriteria, String learningObjectives,
-                                Integer estimatedDurationWeeks, Integer orderNumber, Boolean isActive) {
-        this.id = id;
-        this.levelName = levelName;
-        this.description = description;
-        if (prerequisiteId != null && prerequisiteName != null) {
-            this.prerequisite = new LevelPrerequisite(prerequisiteId, prerequisiteName);
-        }
-        this.promotionCriteria = promotionCriteria;
-        this.learningObjectives = learningObjectives;
-        this.estimatedDurationWeeks = estimatedDurationWeeks;
-        this.orderNumber = orderNumber;
-        this.isActive = isActive;
-    }
-
 }

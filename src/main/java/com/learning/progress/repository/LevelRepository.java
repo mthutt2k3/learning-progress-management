@@ -1,5 +1,6 @@
 package com.learning.progress.repository;
 
+import com.learning.progress.common.LevelEnum;
 import com.learning.progress.dto.response.LevelDetailsResponse;
 import com.learning.progress.entity.Level;
 import org.springframework.data.domain.Page;
@@ -20,9 +21,9 @@ public interface LevelRepository extends JpaRepository<Level, Long> {
 
     boolean existsByLevelNameAndIdNot(String levelName, Long id);
 
-    // Find all active levels (not deleted) ordered by orderNumber
-    @Query("SELECT l FROM Level l WHERE l.isActive IS true ORDER BY l.orderNumber ASC")
-    List<Level> findAllByIsActiveIsTrueOrderByOrderNumberAsc();
+    @Query("SELECT l FROM Level l WHERE l.deletedAt IS NULL ORDER BY l.orderNumber ASC")
+    List<Level> findAllActiveOrderByOrderNumberAsc();
+
 
     @Query("SELECT MAX(l.orderNumber) FROM Level l WHERE l.deletedAt IS NULL")
     Optional<Integer> findMaxOrderNumber();
@@ -59,7 +60,6 @@ public interface LevelRepository extends JpaRepository<Level, Long> {
             nativeQuery = true)
     Page<LevelDetailsResponse> findAllWithFilters(
             @Param("text") String text,
-            @Param("status") List<Boolean> status,
             Pageable pageable
     );
 
@@ -71,4 +71,6 @@ public interface LevelRepository extends JpaRepository<Level, Long> {
     boolean existsActiveLevelNameExceptId(@Param("levelName") String levelName, @Param("id") Long id);
 
     Collection<Level> findByLevelNameAndDeletedAtIsNull(String levelName);
+
+    List<Level> findAllByStatus(LevelEnum levelEnum);
 }
