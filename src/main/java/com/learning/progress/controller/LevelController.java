@@ -31,10 +31,9 @@ public class LevelController {
     public ResponseEntity<DataResponse<List<LevelDetailsResponse>>> viewLevelList(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
-            @RequestParam(required = false) String text,
-            @RequestParam(required = true) List<Boolean> status) {
+            @RequestParam(required = false) String text) {
         return new ResponseEntity<>(
-                levelService.getAllLevels(page, size, text, status),
+                levelService.getAllLevels(page, size, text),
                 HttpStatus.OK
         );
     }
@@ -64,10 +63,12 @@ public class LevelController {
     }
 
     @PreAuthorize("hasRole('MANAGER')")
-    @PatchMapping("/{id}/activate-deactivate")
-    @Operation(summary = "Activate/Deactivate Level", description = "Toggle the active status of a level by ID")
-    public ResponseEntity<?> activateDeactivateLevel(@PathVariable Long id) {
-        levelService.toggleLevelStatus(id);
-        return ResponseEntity.ok(DataResponse.success(Const.LEVEL.STATUS_UPDATED, Const.LEVEL.STATUS_UPDATED));
+    @PatchMapping("/publish-all")
+    @Operation(summary = "Publish all levels", description = "Publish all levels currently in DRAFT status")
+    public ResponseEntity<?> publishAllLevels() {
+        levelService.publishAllLevels();
+        return ResponseEntity.ok(DataResponse.success("All levels have been published", "All levels have been published"));
     }
+
+
 }
