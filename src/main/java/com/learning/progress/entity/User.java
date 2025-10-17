@@ -85,4 +85,7 @@ public class User extends BaseEntity {
     @Column(name = "language", nullable = false)
     private Language language = Language.VI;
 
+    @Builder.Default
+    @Column(name = "is_forgot_password", nullable = false)
+    private boolean isForgotPassword = false;
 }
