@@ -90,6 +90,8 @@ azure:
     connection-string: ${CONNECTION_STRING}
     container-name: ${CONTAINER_NAME}
     student-to-class-template: student-to-class-template.xlsx
+    student-template: student-template.xlsx
+    teacher-template: teacher-template.xlsx
 
 app:
   pagination:

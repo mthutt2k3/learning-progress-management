@@ -1768,6 +1768,11 @@ public class DataUtil {
         String prefix = "CL";
         return prefix + String.format("%06d", id);
     }
+    public static String generateLevelCode(Long id) {
+        String prefix = "LV";
+        return prefix + String.format("%06d", id);
+    }
+
 
     public static String generateImageUrl(String imageUrlCheck) {
         if (DataUtil.isNullOrEmpty(imageUrlCheck)) {

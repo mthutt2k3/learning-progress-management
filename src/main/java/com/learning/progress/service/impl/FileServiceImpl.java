@@ -18,7 +18,6 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.lang.reflect.Field;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
@@ -32,6 +31,13 @@ public class FileServiceImpl implements FileService {
 
     @Value("${azure.storage.student-to-class-template}")
     private String studentToClassTemplate;
+
+    @Value("${azure.storage.student-template}")
+    private String studentTemplate;
+
+    @Value("${azure.storage.teacher-template}")
+    private String teacherTemplate;
+
 
     @Override
     public byte[] generateStudentImportTemplate() {
@@ -66,11 +72,11 @@ public class FileServiceImpl implements FileService {
                 List.of("student2@example.com", "Alice", "Smith", "TEST_TAKER", "parent2@example.com","Le Duc Dung", "0987654321", "Mẹ", "http://example.com/avatar1.jpg", "2000-01-01", "123 Main St", "0123456789", "MALE", "LEVEL_CODE")
         ));
 
-        byte[] templatefile = generateTemplate(List.of(sampleSheet, importSheet));
+        byte[] templateFile = generateTemplate(List.of(sampleSheet, importSheet));
 
+        blobSasService.uploadFile(templateFile, studentTemplate);
 
-
-        return templatefile;
+        return templateFile;
     }
 
     @Override
@@ -104,7 +110,11 @@ public class FileServiceImpl implements FileService {
                 List.of("teacher2@example.com", "Bob", "Johnson", "TEACHING_ASSISTANT", "http://example.com/avatar2.jpg", "1980-01-01", "456 Elm St", "0987654321", "MALE")
         ));
 
-        return generateTemplate(List.of(sampleSheet, importSheet));
+        byte[] templateFile = generateTemplate(List.of(sampleSheet, importSheet));
+
+        blobSasService.uploadFile(templateFile, teacherTemplate);
+
+        return templateFile;
     }
 
     @Override
@@ -142,11 +152,11 @@ public class FileServiceImpl implements FileService {
                 )
         ));
 
-        byte[] templatefile = generateTemplate(List.of(sampleSheet, importSheet));
+        byte[] templateFile = generateTemplate(List.of(sampleSheet, importSheet));
 
-        blobSasService.uploadFile(templatefile, studentToClassTemplate);
+        blobSasService.uploadFile(templateFile, studentToClassTemplate);
 
-        return templatefile;
+        return templateFile;
     }
 
     @Override

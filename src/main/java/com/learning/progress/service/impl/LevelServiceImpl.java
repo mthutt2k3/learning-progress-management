@@ -11,6 +11,7 @@ import com.learning.progress.mapper.LevelMapper;
 import com.learning.progress.repository.LevelRepository;
 import com.learning.progress.service.LevelService;
 import com.learning.progress.util.AppValidator;
+import com.learning.progress.util.DataUtil;
 import com.learning.progress.util.JwtUtil;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validator;
@@ -292,6 +293,10 @@ public class LevelServiceImpl implements LevelService {
                 level.setCreatedBy(currentUser);
                 level.setUpdatedBy(currentUser);
                 level.setUpdatedAt(now);
+
+                level = levelRepository.saveAndFlush(level);
+                String levelCode = DataUtil.generateLevelCode(level.getId()); // Sinh levelCode
+                level.setLevelCode(levelCode);
             }
 
             // Auto map prerequisite

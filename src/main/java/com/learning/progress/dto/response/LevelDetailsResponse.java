@@ -12,6 +12,7 @@ import lombok.NoArgsConstructor;
 public class LevelDetailsResponse {
     private Long id;
     private String levelName;
+    private String levelCode;
     private String description;
     private LevelPrerequisite prerequisite;
     private String promotionCriteria;
@@ -28,12 +29,13 @@ public class LevelDetailsResponse {
         private Long id;
         private String levelName;
     }
-    public LevelDetailsResponse(Long id, String levelName, String description,
+    public LevelDetailsResponse(Long id, String levelName, String levelCode, String description,
                                 Long prerequisiteId, String prerequisiteName,
                                 String promotionCriteria, String learningObjectives,
                                 Integer estimatedDurationWeeks, Integer orderNumber, Boolean isActive) {
         this.id = id;
         this.levelName = levelName;
+        this.levelCode = levelCode;
         this.description = description;
         if (prerequisiteId != null && prerequisiteName != null) {
             this.prerequisite = new LevelPrerequisite(prerequisiteId, prerequisiteName);

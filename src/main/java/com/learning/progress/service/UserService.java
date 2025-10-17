@@ -27,5 +27,7 @@ public interface UserService {
     byte[] generateTeacherImportTemplate();
     byte[] generateStudentImportTemplate();
     void importTeachersFromExcel(MultipartFile file);
+    String getTeacherTemplateSasUrl();
     void importStudentsFromExcel(MultipartFile file);
+    String getStudentTemplateSasUrl();
 }
