@@ -55,7 +55,7 @@ public class LevelServiceImpl implements LevelService {
 
         Pageable pageable = PageRequest.of(page, size);
         Page<LevelDetailsResponse> levelPage = levelRepository.findAllWithFilters(
-                (text == null || text.isBlank()) ? null : text,
+                (text == null || text.isBlank()) ? "" : text,
                 pageable
         );
 

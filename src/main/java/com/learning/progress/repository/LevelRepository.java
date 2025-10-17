@@ -30,39 +30,22 @@ public interface LevelRepository extends JpaRepository<Level, Long> {
 
     Optional<Level> findByLevelCodeIgnoreCase(String levelCode);
 
+    @Query("""
+    SELECT new com.learning.progress.dto.response.LevelDetailsResponse(
+        l.id, l.levelName, l.levelCode, l.description,
+        p.id, p.levelName,
+        l.promotionCriteria, l.learningObjectives,
+        l.estimatedDurationWeeks, l.orderNumber,
+        l.status
+    )
+    FROM Level l
+    LEFT JOIN l.prerequisite p
+    WHERE (:text IS NULL OR LOWER(l.levelName) LIKE LOWER(CONCAT('%', :text, '%')))
+    AND l.deletedAt IS NULL
+""")
+    Page<LevelDetailsResponse> findAllWithFilters(@Param("text") String text, Pageable pageable);
 
-    @Query(value = """
-        SELECT 
-            l.id AS id, 
-            l.level_name AS levelName, 
-            l.level_code AS levelCode,
-            l.description AS description, 
-            p.id AS prerequisiteId, 
-            p.level_name AS prerequisiteName, 
-            l.promotion_criteria AS promotionCriteria, 
-            l.learning_objectives AS learningObjectives, 
-            l.estimated_duration_weeks AS estimatedDurationWeeks, 
-            l.order_number AS orderNumber, 
-            l.is_active AS isActive
-        FROM levels l
-        LEFT JOIN levels p ON p.id = l.prerequisite_id
-        WHERE (:text IS NULL OR LOWER(l.level_name) LIKE LOWER(CONCAT('%', :text, '%')))
-        AND (:status IS NULL OR l.is_active IN :status)
-        AND l.deleted_at IS NULL
-        """,
-            countQuery = """
-        SELECT COUNT(*) 
-        FROM levels l
-        LEFT JOIN levels p ON p.id = l.prerequisite_id
-        WHERE (:text IS NULL OR LOWER(l.level_name) LIKE LOWER(CONCAT('%', :text, '%')))
-        AND (:status IS NULL OR l.is_active IN :status)
-        AND l.deleted_at IS NULL
-        """,
-            nativeQuery = true)
-    Page<LevelDetailsResponse> findAllWithFilters(
-            @Param("text") String text,
-            Pageable pageable
-    );
+
 
     @Query("SELECT l FROM Level l LEFT JOIN FETCH l.prerequisite WHERE l.id = :id AND l.deletedAt IS NULL")
     Optional<Level> findByIdWithPrerequisite(@Param("id") Long id);
