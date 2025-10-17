@@ -14,6 +14,7 @@ import org.mapstruct.ReportingPolicy;
 public interface ClassMapper {
 
     @Mapping(target = "syllabusId", source = "syllabus.id")
+    @Mapping(target = "classCode", source = "classCode")
     ClassDTO toClassDTO(Clazz clazzEntity);
 
     Clazz toClassEntity(CreateClassRequest createClassRequest);

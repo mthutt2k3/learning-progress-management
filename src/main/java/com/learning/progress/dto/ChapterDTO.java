@@ -16,6 +16,7 @@ public class ChapterDTO {
     private Long syllabusId;
     private String syllabusCode;
     private String chapterName;
+    private String chapterCode;
     private Integer orderNumber;
     private String createdBy;
     private OffsetDateTime createdAt;

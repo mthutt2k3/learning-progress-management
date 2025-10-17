@@ -13,6 +13,7 @@ import lombok.NoArgsConstructor;
 public class LevelDetailsResponse {
     private Long id;
     private String levelName;
+    private String levelCode;
     private String description;
     private LevelPrerequisite prerequisite;
     private String promotionCriteria;

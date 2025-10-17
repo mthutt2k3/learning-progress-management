@@ -13,6 +13,7 @@ import org.mapstruct.ReportingPolicy;
 public interface ChapterMapper {
 
     @Mapping(target = "syllabusId", source = "syllabus.id")
+    @Mapping(target = "chapterCode", source = "chapterCode")
     ChapterDTO toChapterDTO(Chapter chapter);
 
 }

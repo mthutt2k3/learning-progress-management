@@ -60,10 +60,10 @@ public class LessonController {
         return ResponseEntity.ok(lessonService.getLessonList(chapterId, page, size, searchText));
     }
 
-    @GetMapping("/download-template")
+    @GetMapping("/upload-template")
     @PreAuthorize("hasRole('MANAGER')")
-    @Operation(summary = "Download Lesson Import Template", description = "Download Excel template for importing lessons")
-    public ResponseEntity<ByteArrayResource> downloadLessonImportTemplate() {
+    @Operation(summary = "upload Lesson Import Template", description = "upload Excel template for importing lessons")
+    public ResponseEntity<ByteArrayResource> uploadLessonImportTemplate() {
         byte[] template = lessonService.generateLessonImportTemplate();
         ByteArrayResource resource = new ByteArrayResource(template);
         return ResponseEntity.ok()
@@ -71,6 +71,19 @@ public class LessonController {
                 .contentType(MediaType.APPLICATION_OCTET_STREAM)
                 .contentLength(template.length)
                 .body(resource);
+    }
+
+    @GetMapping("/download-template")
+    @PreAuthorize("hasRole('MANAGER')")
+    @Operation(summary = "Get SAS URL for Lesson Import Template", description = "Get SAS URL for downloading Lesson import template from Azure Blob Storage")
+    public ResponseEntity<String> downloadLessonImportTemplate() {
+        try {
+            String sasUrl = lessonService.getLessonTemplateSasUrl();
+            return ResponseEntity.ok(sasUrl);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("Error generating SAS URL: " + e.getMessage());
+        }
     }
 
     @PostMapping("/import")

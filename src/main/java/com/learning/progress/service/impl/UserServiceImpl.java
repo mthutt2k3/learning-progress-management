@@ -15,6 +15,7 @@ import com.learning.progress.util.*;
 import jakarta.persistence.EntityManager;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -24,6 +25,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.*;
 import java.util.regex.Pattern;
@@ -68,6 +70,15 @@ public class UserServiceImpl implements UserService {
 
     @Autowired
     private AppValidator appValidator;
+
+    @Autowired
+    private BlobSasService blobSasService;
+
+    @Value("${azure.storage.student-template}")
+    private String studentTemplate;
+
+    @Value("${azure.storage.teacher-template}")
+    private String teacherTemplate;
     //=============================================STUDENT========================================================
 
     @Override
@@ -615,7 +626,17 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    public String getStudentTemplateSasUrl() {
+        return blobSasService.generateSasUrl(studentTemplate, Duration.ofMinutes(30));
+    }
+
+    @Override
     public byte[] generateTeacherImportTemplate() {
         return fileService.generateTeacherImportTemplate();
+    }
+
+    @Override
+    public String getTeacherTemplateSasUrl() {
+        return blobSasService.generateSasUrl(teacherTemplate, Duration.ofMinutes(30));
     }
 }

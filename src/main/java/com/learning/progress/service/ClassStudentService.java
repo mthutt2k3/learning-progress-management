@@ -15,5 +15,6 @@ public interface ClassStudentService {
     void addStudentToClass(Long classId, AddStudentToClassRequest request);
     void removeStudentFromClass(Long classId, Long userId);
     byte[] generateStudentImportTemplate();
+    String getStudentTemplateSasUrl();
     void importStudentsFromExcel(MultipartFile file);
 }

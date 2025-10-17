@@ -35,6 +35,7 @@ public interface LevelRepository extends JpaRepository<Level, Long> {
         SELECT 
             l.id AS id, 
             l.level_name AS levelName, 
+            l.level_code AS levelCode,
             l.description AS description, 
             p.id AS prerequisiteId, 
             p.level_name AS prerequisiteName, 
