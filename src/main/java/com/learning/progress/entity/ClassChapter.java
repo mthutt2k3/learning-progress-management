@@ -28,4 +28,6 @@ public class ClassChapter extends BaseEntity{
     @Column(name = "order_number", nullable = false)
     private Integer orderNumber;
 
+    @Column(name = "class_chapter_code", length = 20)
+    private String classChapterCode;
 }

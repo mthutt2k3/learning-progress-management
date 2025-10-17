@@ -11,5 +11,7 @@ public interface FileService {
     byte[] generateSyllabusImportTemplate();
     byte[] generateChapterImportTemplate();
     byte[] generateLessonImportTemplate();
+    byte[] generateChapterInClassImportTemplate();
+    byte[] generateClassLessonImportTemplate();
     <T> List<T> readExcelData(MultipartFile file, String sheetName, Class<T> clazz);
 }

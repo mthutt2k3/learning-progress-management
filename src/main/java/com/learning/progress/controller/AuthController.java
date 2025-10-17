@@ -63,7 +63,7 @@ public class AuthController {
     @Operation(summary = "Xác nhận và đặt lại mật khẩu", description = "Xác nhận token và cập nhật mật khẩu mới")
     public ResponseEntity<?> confirmResetPassword(@RequestBody ConfirmResetPasswordRequest request) {
         String response = authService.confirmResetPassword(request);
-        return ResponseEntity.ok(DataResponse.success(response, "Đặt lại mật khẩu thành công"));
+        return ResponseEntity.ok(DataResponse.success(response, Const.RESULT_MESSAGE_CODE.UPDATE_SUCCESSFUL));
     }
 
     @PreAuthorize("isAuthenticated()")

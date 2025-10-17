@@ -372,7 +372,7 @@ public class LevelServiceImpl implements LevelService {
         }
 
         for (Level level : publishLevels) {
-            level.setStatus(LevelEnum.PUBLISHED);
+            level.setStatus(LevelEnum.DRAFT);
         }
 
         levelRepository.saveAll(publishLevels);

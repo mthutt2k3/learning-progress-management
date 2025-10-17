@@ -1789,6 +1789,11 @@ public class DataUtil {
         String prefix = "CH";
         return prefix + String.format("%06d", id);
     }
+    public static String generateClassChapterCode(Long chapterId, Long classId) {
+        String prefixChapter = "-CH";
+        String prefixClass = "CL";
+        return prefixClass + String.format("%06d", classId) + prefixChapter + String.format("%03d", chapterId);
+    }
 
 
     public static String generateImageUrl(String imageUrlCheck) {

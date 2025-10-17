@@ -1,5 +1,5 @@
 package com.learning.progress.common;
 
 public enum ChallengeType {
-    QUIZ, ASSIGNMENT, DISCUSSION
+    GV, RE, LI, WR, SP
 }
