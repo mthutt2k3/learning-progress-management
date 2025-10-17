@@ -13,6 +13,9 @@ public class SyllabusDTO {
     private Long id;
     private String syllabusName;
     private String syllabusCode;
-    private Long levelId;
+    // ✅ Thay vì để levelId riêng lẻ
+    private LevelInfo level;
     private String description;
+    private Integer chapterCount;
+    private Integer lessonCount;
 }

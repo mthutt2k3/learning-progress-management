@@ -8,10 +8,13 @@ import org.springframework.web.multipart.MultipartFile;
 import java.util.List;
 
 public interface LessonService {
+    DataResponse<List<LessonDTO>> getLessonListBySyllabus(Long syllabusId, int page, int size, String searchText);
+
     LessonDTO getLesson(Long id);
-    DataResponse<List<LessonDTO>> getLessonList(Long chapterId, int page, int size, String searchText);
+    DataResponse<List<LessonDTO>> getLessonListByChapter(Long chapterId, int page, int size, String searchText);
     List<LessonDTO> syncLessons(Long chapterId, List<SyncLessonRequest> request);
     List<LessonDTO> importLessonsFromExcel(MultipartFile file);
     byte[] generateLessonImportTemplate();
     String getLessonTemplateSasUrl();
+
 }

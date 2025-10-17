@@ -26,6 +26,20 @@ public class LevelController {
     private LevelService levelService;
 
     @PreAuthorize("hasRole('MANAGER')")
+    @GetMapping("/publish")
+    @Operation(summary = "View Level List", description = "Retrieve a list of all levels that published")
+    public ResponseEntity<DataResponse<List<LevelDetailsResponse>>> viewPublishedLevelList(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) String text) {
+        return new ResponseEntity<>(
+                levelService.getAllPublishLevels(page, size, text),
+                HttpStatus.OK
+        );
+    }
+
+
+    @PreAuthorize("hasRole('MANAGER')")
     @GetMapping
     @Operation(summary = "View Level List", description = "Retrieve a list of all levels")
     public ResponseEntity<DataResponse<List<LevelDetailsResponse>>> viewLevelList(
