@@ -1,6 +1,5 @@
 package com.learning.progress.entity;
 
-import com.learning.progress.common.LevelDifficulty;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -24,12 +23,9 @@ public class Level extends BaseEntity{
     @Column(name = "description", length = Integer.MAX_VALUE)
     private String description;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "difficulty")
-    private LevelDifficulty difficulty;
-
-    @Column(name = "prerequisite", length = Integer.MAX_VALUE)
-    private String prerequisite;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "prerequisite_id")
+    private Level prerequisite;
 
     @Column(name = "promotion_criteria", length = Integer.MAX_VALUE)
     private String promotionCriteria;

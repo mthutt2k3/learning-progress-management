@@ -1,7 +1,6 @@
 package com.learning.progress.controller;
 
 import com.learning.progress.common.Const;
-import com.learning.progress.dto.request.CreateLevelRequest;
 import com.learning.progress.dto.request.UpdateLevelOrderRequest;
 import com.learning.progress.dto.request.UpdateLevelRequest;
 import com.learning.progress.dto.response.DataResponse;
@@ -33,11 +32,9 @@ public class LevelController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(required = false) String text,
-            @RequestParam(required = true) List<Boolean> status,
-            @RequestParam(defaultValue = "orderNumber") String sortBy,
-            @RequestParam(defaultValue = "asc") String sortDir) {
+            @RequestParam(required = true) List<Boolean> status) {
         return new ResponseEntity<>(
-                levelService.getAllLevels(page, size, text, status, sortBy, sortDir),
+                levelService.getAllLevels(page, size, text, status),
                 HttpStatus.OK
         );
     }
@@ -48,14 +45,6 @@ public class LevelController {
     public ResponseEntity<?> viewLevelDetails(@PathVariable Long id) {
         LevelDetailsResponse response = levelService.getLevelDetails(id);
         return ResponseEntity.ok(DataResponse.success(response, Const.LEVEL.DETAILS_RETRIEVED));
-    }
-
-    @PreAuthorize("hasRole('MANAGER')")
-    @PostMapping
-    @Operation(summary = "Create Level", description = "Create a new level")
-    public ResponseEntity<?> createLevel(@Valid @RequestBody CreateLevelRequest request) {
-        levelService.createLevel(request);
-        return ResponseEntity.ok(DataResponse.success(Const.LEVEL.LEVEL_CREATED, Const.LEVEL.LEVEL_CREATED));
     }
 
     @PreAuthorize("hasRole('MANAGER')")

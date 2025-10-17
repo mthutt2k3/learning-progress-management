@@ -23,10 +23,7 @@ public class UpdateLevelOrderRequest {
 
     private String description;
 
-    @NotBlank(message = "Difficulty is required", groups = NotDeleted.class)
-    private String difficulty;
-
-    private String prerequisite;
+    private Long prerequisiteId;
 
     private String promotionCriteria;
 
