@@ -7,6 +7,7 @@ import com.learning.progress.dto.excel.ExcelColumn;
 import com.learning.progress.dto.excel.ExcelSheetSpec;
 import com.learning.progress.dto.syllabus.ImportChapterDTO;
 import com.learning.progress.dto.syllabus.ImportLessonDTO;
+import com.learning.progress.dto.syllabus.ImportSyllabusDTO;
 import com.learning.progress.service.BlobSasService;
 import com.learning.progress.service.FileService;
 import org.apache.poi.ss.usermodel.*;
@@ -37,6 +38,9 @@ public class FileServiceImpl implements FileService {
 
     @Value("${azure.storage.teacher-template}")
     private String teacherTemplate;
+
+    @Value("${azure.storage.syllabus-template}")
+    private String syllabusTemplate;
 
 
     @Override
@@ -155,6 +159,40 @@ public class FileServiceImpl implements FileService {
         byte[] templateFile = generateTemplate(List.of(sampleSheet, importSheet));
 
         blobSasService.uploadFile(templateFile, studentToClassTemplate);
+
+        return templateFile;
+    }
+
+    @Override
+    public byte[] generateSyllabusImportTemplate() {
+        List<ExcelColumn> columns = fromClass(ImportSyllabusDTO.class);
+
+        ExcelSheetSpec sampleSheet = new ExcelSheetSpec("Sample Data", List.of(new ExcelColumn("Guide", "Guide")));
+        List<List<Object>> guideRows = List.of(
+                List.of("📘 HƯỚNG DẪN SỬ DỤNG SHEET"),
+                List.of("1. Điền thông tin vào sheet 'Import Data' theo các cột:"),
+                List.of("- syllabusName: Tên syllabus (bắt buộc, tối đa 100 ký tự)."),
+                List.of("- levelCode: Mã level (bắt buộc, ví dụ: LVL000001)."),
+                List.of("- description: Mô tả syllabus (tùy chọn, không giới hạn độ dài)."),
+                List.of("- syllabusCode: Mã syllabus (tùy chọn, tối đa 20 ký tự, ví dụ: SYL000001)."),
+                List.of("2. Không sửa đổi sheet 'Sample Data'."),
+                List.of("3. Đảm bảo levelCode tồn tại trong hệ thống.")
+        );
+        List<List<Object>> sheetData = new ArrayList<>();
+        sheetData.addAll(guideRows);
+        sheetData.add(List.of());
+        sampleSheet.setSampleData(sheetData);
+        sampleSheet.setProtected(true);
+
+        ExcelSheetSpec importSheet = new ExcelSheetSpec("Import Data", columns);
+        importSheet.setSampleData(List.of(
+                List.of("Syllabus Math 101", "LVL000001", "Basic Mathematics Course"),
+                List.of("Syllabus Physics 101", "LVL000002", "Introduction to Physics")
+        ));
+
+        byte[] templateFile = generateTemplate(List.of(sampleSheet, importSheet));
+
+        blobSasService.uploadFile(templateFile, syllabusTemplate);
 
         return templateFile;
     }

@@ -5,8 +5,6 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.time.OffsetDateTime;
-
 @Data
 @Builder
 @NoArgsConstructor
@@ -14,6 +12,7 @@ import java.time.OffsetDateTime;
 public class SyllabusDTO {
     private Long id;
     private String syllabusName;
+    private String syllabusCode;
     private Long levelId;
     private String description;
 }
