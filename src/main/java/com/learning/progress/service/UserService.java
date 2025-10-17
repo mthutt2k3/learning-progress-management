@@ -1,5 +1,6 @@
 package com.learning.progress.service;
 
+import com.learning.progress.common.UserStatus;
 import com.learning.progress.dto.*;
 import com.learning.progress.dto.request.CreateStudentRequest;
 import com.learning.progress.dto.request.CreateUserRequest;
@@ -11,7 +12,7 @@ import java.util.List;
 public interface UserService {
     StudentProfileDTO createStudent(CreateStudentRequest request);
     StudentProfileDTO updateStudent(Long userId, UpdateStudentRequest request);
-    StudentProfileDTO updateStudentStatus(Long userId, String status);
+    StudentProfileDTO updateStudentStatus(Long userId, UserStatus status);
     DataResponse<List<StudentProfileDTO>> getStudentList(int page, int size, String searchText, List<String> status, List<String> roleName, String sortBy, String sortDir);
     TeacherProfileDTO createTeacher(CreateUserRequest request);
     TeacherProfileDTO updateTeacher(Long userId, UpdateUserRequest request);
@@ -30,4 +31,6 @@ public interface UserService {
     String getTeacherTemplateSasUrl();
     void importStudentsFromExcel(MultipartFile file);
     String getStudentTemplateSasUrl();
+
+    String updateUserAvatar(Long userId, MultipartFile file);
 }

@@ -9,7 +9,22 @@ public class Const {
         public static final String regexGender = "MALE|FEMALE|OTHER";
         public static final String dateOfbirth = "yyyy-MM-dd";
     }
+    public static class STUDENT {
+        public static final String LEVEL_ID_REQUIRED = "Level is required for student";
+        public static final String PARENT_NAME_REQUIRED = "Parent name is required";
+        public static final String PARENT_PHONE_REQUIRED = "Parent phone number is required";
 
+        public static final String INVALID_ROLE_UPDATE = "Role update from STUDENT to TEST_TAKER is not allowed.";
+
+    }
+    public static class DOB {
+        public static final String DOB_IN_FUTURE = "Date of birth cannot be in the future.";
+        public static final String DOB_UNDER_AGE = "User must be at least %d years old.";
+    }
+    public static class FILE {
+        public static final String AVATAR_REQUIRED = "Avatar file is required.";
+        public static final String AVATAR_UPLOAD_FAILED = "Failed to upload avatar.";
+    }
     public static class PATH {
         public static final String REQUIRED = "Path is required";
     }
@@ -75,8 +90,8 @@ public class Const {
     }
 
     public static class SORT {
-        public static final String INVALID_SORT_BY = "Invalid sortBy: %s";
-        public static final String INVALID_SORT_DIR = "Invalid sortDir: must be asc or desc";
+        public static final String INVALID_SORT_BY = "Invalid sort field: %s. Valid fields are: %s";
+        public static final String INVALID_SORT_DIR = "Invalid sort direction: %s. Valid values are: asc, desc";
     }
 
     public static class RESULT_MESSAGE_CODE {
@@ -160,6 +175,7 @@ public class Const {
         public static final String LEVEL_NOT_FOUND = "Level does not exist in the system";
         public static final String DUPLICATE_LEVEL_NAME = "Level name already exists";
         public static final String LEVEL_BULK_UPDATE_FORBIDDEN = "Cannot bulk update levels because one or more levels are already PUBLISHED";
+        public static final String NOT_PUBLISHED = "Level is not published";
 
         public static final String LIST_RETRIEVED = "Level list retrieved successfully";
         public static final String DETAILS_RETRIEVED = "Level details retrieved successfully";

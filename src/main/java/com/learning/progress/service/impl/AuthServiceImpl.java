@@ -141,14 +141,13 @@ public class AuthServiceImpl implements AuthService {
         // Generate tokens
         RefreshToken refreshToken = tokenService.createRefreshToken(user);
         boolean mustChangePassword = user.isMustChangePassword();
-        boolean mustUpdateProfile = user.isMustUpdateProfile();
 
         String accessToken = mustChangePassword ?
                 jwtUtil.generateResetPasswordToken(user.getUserName(), user.getRole().getName().toString(), user.getId()) :
                 jwtUtil.generateAuthToken(user.getUserName(), user.getRole().getName().toString(), user.getId(), user.getEmail());
 
         log.info("[{}] Login successful for username: {}", traceId, loginRequest.getUsername());
-        return authMapper.toLoginResponse(user, refreshToken, accessToken, mustChangePassword, mustUpdateProfile);
+        return authMapper.toLoginResponse(user, refreshToken, accessToken, mustChangePassword);
     }
 
     /**
@@ -285,10 +284,9 @@ public class AuthServiceImpl implements AuthService {
         String accessToken = jwtUtil.generateAuthToken(user.getUserName(), user.getRole().getName().toString(), user.getId(), user.getEmail());
         RefreshToken refreshToken = tokenService.createRefreshToken(user);
         boolean mustChangePassword = user.isMustChangePassword();
-        boolean mustUpdateProfile = user.isMustUpdateProfile();
 
         log.info("[{}] Password change successful for username: {}", traceId, username);
-        return authMapper.toLoginResponse(user, refreshToken, accessToken, mustChangePassword, mustUpdateProfile);
+        return authMapper.toLoginResponse(user, refreshToken, accessToken, mustChangePassword);
     }
 
     /**
