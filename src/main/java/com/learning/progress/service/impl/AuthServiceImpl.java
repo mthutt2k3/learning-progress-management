@@ -183,6 +183,8 @@ public class AuthServiceImpl implements AuthService {
         try {
             emailService.sendForgotPasswordEmail(user, request, resetPasswordToken);
             log.info("[{}] Password reset email sent to: {}", traceId, user.getEmail());
+            user.setForgotPassword(true);
+            userRepository.save(user);
             return DataUtil.maskEmail(user.getEmail());
         } catch (Exception e) {
             log.error("[{}] Failed to send reset email for username: {}, error: {}",
@@ -218,10 +220,15 @@ public class AuthServiceImpl implements AuthService {
         if (user.getStatus() == UserStatus.PENDING) {
             user.setStatus(UserStatus.ACTIVE);
         }
+        if (!user.isForgotPassword()) {
+            log.error("[{}] Have changed password: {}", traceId, user.getUserName());
+            throw new ApiException(Const.AUTH.HAVE_CHANGED_PASSWORD, HttpStatus.FORBIDDEN.value());
+        }
 
         // Update password
         user.setPassword(passwordEncoder.encode(request.getNewPassword()));
         user.setMustChangePassword(false);
+        user.setForgotPassword(false);
         userRepository.save(user);
         log.info("[{}] Password reset successful for user: {}", traceId, user.getUserName());
 
