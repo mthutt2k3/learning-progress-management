@@ -11,6 +11,7 @@ import org.hibernate.annotations.OnDelete;
 import org.hibernate.annotations.OnDeleteAction;
 
 import java.time.OffsetDateTime;
+import java.util.List;
 
 @SuperBuilder
 @NoArgsConstructor
@@ -34,4 +35,8 @@ public class Chapter extends BaseEntity{
 
     @Column(name = "chapter_code", length = 20)
     private String chapterCode;
+
+    @OneToMany(mappedBy = "chapter", fetch = FetchType.LAZY, cascade = CascadeType.ALL)
+    private List<Lesson> lessons;
+
 }

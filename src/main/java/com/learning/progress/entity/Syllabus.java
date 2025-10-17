@@ -35,4 +35,8 @@ public class Syllabus extends BaseEntity{
 
     @Column(name = "syllabus_code", length = 20)
     private String syllabusCode;
+
+    @OneToMany(mappedBy = "syllabus", fetch = FetchType.LAZY, cascade = CascadeType.ALL)
+    private List<Chapter> chapters;
+
 }

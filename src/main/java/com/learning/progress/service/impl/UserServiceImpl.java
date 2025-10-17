@@ -26,7 +26,6 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.Duration;
-import java.time.OffsetDateTime;
 import java.util.*;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -84,7 +83,7 @@ public class UserServiceImpl implements UserService {
     @Override
     public StudentProfileDTO createStudent(CreateStudentRequest request) {
         appValidator.validateEnumValue(Gender.class, request.getGender());
-
+        DataUtil.validateDateOfBirth(request.getDateOfBirth());
         appValidator.validateAllowedEnumValue(
                 RoleName.class,
                 request.getRoleName(),
@@ -93,6 +92,10 @@ public class UserServiceImpl implements UserService {
 
         Role role = roleRepository.findByName(RoleName.valueOf(request.getRoleName().toUpperCase()))
                 .orElseThrow(() -> new ApiException(Const.ROLE.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+
+        if (role.getName() == RoleName.STUDENT && request.getLevelId() == null) {
+            throw new ApiException(Const.STUDENT.LEVEL_ID_REQUIRED, HttpStatus.BAD_REQUEST.value());
+        }
 
         User user = userMapper.toUser(request);
         user.setRole(role);
@@ -116,7 +119,10 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional
     public StudentProfileDTO updateStudent(Long userId, UpdateStudentRequest request) {
+
         appValidator.validateEnumValue(Gender.class, request.getGender());
+
+        DataUtil.validateDateOfBirth(request.getDateOfBirth());
 
         appValidator.validateAllowedEnumValue(
                 RoleName.class,
@@ -126,10 +132,21 @@ public class UserServiceImpl implements UserService {
 
         Role role = roleRepository.findByName(RoleName.valueOf(request.getRoleName().toUpperCase()))
                 .orElseThrow(() -> new ApiException(Const.ROLE.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
-
+        RoleName newRoleName = role.getName();
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+        RoleName oldRoleName = user.getRole().getName();
+
+        // ✅ Chặn STUDENT -> TEST_TAKER
+        if (oldRoleName == RoleName.STUDENT && newRoleName == RoleName.TEST_TAKER) {
+            throw new ApiException(Const.STUDENT.INVALID_ROLE_UPDATE, HttpStatus.BAD_REQUEST.value());
+        }
+
+        // ✅ Nếu đổi sang STUDENT thì phải có levelId
+        if (newRoleName == RoleName.STUDENT && request.getLevelId() == null) {
+            throw new ApiException(Const.STUDENT.LEVEL_ID_REQUIRED, HttpStatus.BAD_REQUEST.value());
+        }
 
         User updatedUser = userMapper.toUser(request);
         user.setRole(role);
@@ -157,9 +174,7 @@ public class UserServiceImpl implements UserService {
 
     @Override
     @Transactional
-    public StudentProfileDTO updateStudentStatus(Long userId, String status) {
-
-        appValidator.validateEnumValue(UserStatus.class, status);
+    public StudentProfileDTO updateStudentStatus(Long userId, UserStatus status) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
@@ -169,7 +184,7 @@ public class UserServiceImpl implements UserService {
                 Set.of(RoleName.STUDENT, RoleName.TEST_TAKER)
         );
 
-        user.setStatus(UserStatus.valueOf(status));
+        user.setStatus(status);
         userRepository.save(user);
 
         return mapToStudentProfileDTO(user);
@@ -210,7 +225,7 @@ public class UserServiceImpl implements UserService {
         return DataResponse.<List<StudentProfileDTO>>builder()
                 .traceId(org.slf4j.MDC.get("traceId"))
                 .success(true)
-                .message("Successful")
+                .message(Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL)
                 .data(responses)
                 .timestamp(java.time.LocalDateTime.now())
                 .page(page)
@@ -272,6 +287,7 @@ public class UserServiceImpl implements UserService {
     public TeacherProfileDTO createTeacher(CreateUserRequest request) {
         appValidator.validateEnumValue(Gender.class, request.getGender());
 
+        DataUtil.validateDateOfBirth(request.getDateOfBirth());
         appValidator.validateAllowedEnumValue(
                 RoleName.class,
                 request.getRoleName(),
@@ -298,6 +314,8 @@ public class UserServiceImpl implements UserService {
     @Transactional
     public TeacherProfileDTO updateTeacher(Long userId, UpdateUserRequest request) {
         appValidator.validateEnumValue(Gender.class, request.getGender());
+
+        DataUtil.validateDateOfBirth(request.getDateOfBirth());
 
         appValidator.validateAllowedEnumValue(
                 RoleName.class,
@@ -410,6 +428,11 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public UserProfileDTO updateUserProfile(Long userId, UpdateProfileDTO updateDTO) {
+
+        appValidator.validateEnumValue(Gender.class, updateDTO.getGender());
+
+        DataUtil.validateDateOfBirth(updateDTO.getDateOfBirth());
+
         String username = jwtUtil.extractUsernameFromCurrentRequest();
         if (username == null || username.trim().isEmpty()) {
             throw new ApiException(Const.AUTH.INVALID_TOKEN_USERNAME, HttpStatus.UNAUTHORIZED.value());
@@ -424,19 +447,11 @@ public class UserServiceImpl implements UserService {
 
         if (updateDTO.getFirstName() != null) user.setFirstName(updateDTO.getFirstName());
         if (updateDTO.getLastName() != null) user.setLastName(updateDTO.getLastName());
-        if (updateDTO.getPhoneNumber() != null &&
-                !DataUtil.isValidPhoneNumber(updateDTO.getPhoneNumber())) {
-            throw new ApiException("Invalid phone number format", HttpStatus.BAD_REQUEST.value());
-        }
-
-        if (updateDTO.getGender() != null &&
-                !DataUtil.isValidGender(updateDTO.getGender())) {
-            throw new ApiException("Invalid gender format", HttpStatus.BAD_REQUEST.value());
-        }
-
         if (updateDTO.getDateOfBirth() != null) user.setDateOfBirth(updateDTO.getDateOfBirth());
         if (updateDTO.getAvatarUrl() != null) user.setAvatarUrl(updateDTO.getAvatarUrl());
         if (updateDTO.getAddress() != null) user.setAddress(updateDTO.getAddress());
+        if (updateDTO.getPhoneNumber() != null) user.setPhoneNumber(updateDTO.getPhoneNumber());
+        if (updateDTO.getGender() != null) user.setGender(updateDTO.getGender());
 
         userRepository.save(user);
         return userMapper.toUserProfileDTO(user);
@@ -475,16 +490,23 @@ public class UserServiceImpl implements UserService {
         }
 
         String newEmail = request.getNewEmail();
-        if (newEmail == null || newEmail.trim().isEmpty()) {
-            throw new ApiException(Const.VALIDATION.EMAIL_REQUIRED, HttpStatus.BAD_REQUEST.value());
-        }
-        if (!DataUtil.isValidEmail(newEmail)) {
-            throw new ApiException(Const.EMAIL.INVALID, HttpStatus.BAD_REQUEST.value());
+        switch (targetUser.getStatus()) {
+            case PENDING:
+                String password = DataUtil.generateRandomPassword(8);
+                emailService.sendNewAccountEmail(targetUser, targetUser.getUserName(), password);
+                break;
+
+            case ACTIVE:
+                String token = jwtUtil.generateChangeEmailToken(targetUser.getUserName(), newEmail, targetUser.getId());
+                // Gửi email xác nhận bất đồng bộ
+                emailService.sendChangeEmailConfirmation(targetUser, newEmail, token, request.getDomain(), request.getPath());
+                break;
+
+            case INACTIVE:
+            default:
+                throw new ApiException(Const.USER.USER_INACTIVE, HttpStatus.BAD_REQUEST.value());
         }
 
-        String token = jwtUtil.generateChangeEmailToken(targetUser.getUserName(), newEmail, targetUser.getId());
-        // Gửi email xác nhận bất đồng bộ
-        emailService.sendChangeEmailConfirmation(targetUser, newEmail, token, request.getDomain(), request.getPath());
     }
 
     @Override
@@ -509,7 +531,6 @@ public class UserServiceImpl implements UserService {
             return userMapper.toUserProfileDTO(user);
         }
     }
-
 
 
     @Override
@@ -625,6 +646,27 @@ public class UserServiceImpl implements UserService {
     @Override
     public String getStudentTemplateSasUrl() {
         return blobSasService.generateSasUrl(studentTemplate, Duration.ofMinutes(30));
+    }
+
+    @Override
+    public String updateUserAvatar(Long userId, MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw new ApiException(Const.FILE.AVATAR_REQUIRED, HttpStatus.BAD_REQUEST.value());
+        }
+
+        // Tìm user
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+
+        // Upload ảnh lên Blob
+        String fileName = blobSasService.uploadFile(file);
+        String blobUrl = blobSasService.generateSasUrl(fileName, Duration.ofMinutes(30));
+
+        // Lưu URL avatar vào user
+        user.setAvatarUrl(blobUrl);
+        userRepository.save(user);
+
+        return blobUrl;
     }
 
     @Override
