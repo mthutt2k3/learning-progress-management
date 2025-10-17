@@ -69,6 +69,13 @@ public class LevelController {
         levelService.publishAllLevels();
         return ResponseEntity.ok(DataResponse.success("All levels have been published", "All levels have been published"));
     }
+    @PreAuthorize("hasRole('MANAGER')")
+    @PatchMapping("/draft-all")
+    @Operation(summary = "DRAFT all levels", description = "DRAFT all levels currently in DRAFT status")
+    public ResponseEntity<?> draftAllLevels() {
+        levelService.draftAllLevels();
+        return ResponseEntity.ok(DataResponse.success("All levels have been DRAFT", "All levels have been DRAFT"));
+    }
 
 
 }

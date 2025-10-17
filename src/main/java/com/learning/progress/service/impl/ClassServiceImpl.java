@@ -87,10 +87,6 @@ public class ClassServiceImpl implements ClassService {
         clazz.setSyllabus(syllabus);
         clazz.setAvatarUrl(request.getAvatarUrl());
         clazz.setIsActive(true);
-        clazz.setCreatedBy(currentUser);
-        clazz.setUpdatedBy(currentUser);
-        clazz.setCreatedAt(now);
-        clazz.setUpdatedAt(now);
         Clazz savedClass = classRepository.saveAndFlush(clazz);
 
         String classCode = DataUtil.generateClassCode(savedClass.getId());
@@ -119,10 +115,6 @@ public class ClassServiceImpl implements ClassService {
             classChapter.setClazz(savedClass);
             classChapter.setClassChapterName(chapter.getChapterName());
             classChapter.setOrderNumber(chapter.getOrderNumber());
-            classChapter.setCreatedBy(currentUser);
-            classChapter.setUpdatedBy(currentUser);
-            classChapter.setCreatedAt(now);
-            classChapter.setUpdatedAt(now);
             classChapters.add(classChapterRepository.save(classChapter));
 
             // Sao chép lessons
@@ -133,10 +125,6 @@ public class ClassServiceImpl implements ClassService {
                 classLesson.setClassLessonName(lesson.getLessonName());
                 classLesson.setClassLessonContent(lesson.getContent());
                 classLesson.setOrderNumber(lesson.getOrderNumber());
-                classLesson.setCreatedBy(currentUser);
-                classLesson.setUpdatedBy(currentUser);
-                classLesson.setCreatedAt(now);
-                classLesson.setUpdatedAt(now);
                 classLessonRepository.save(classLesson);
             }
         }
@@ -202,9 +190,6 @@ public class ClassServiceImpl implements ClassService {
 
         clazz.setClassName(request.getClassName());
         clazz.setAvatarUrl(request.getAvatarUrl());
-        clazz.setUpdatedBy(currentUser);
-        clazz.setUpdatedAt(now);
-
 
         return classMapper.toClassDTO(classRepository.save(clazz));
     }
@@ -232,8 +217,6 @@ public class ClassServiceImpl implements ClassService {
         );
 
         clazz.setIsActive(isActive);
-        clazz.setUpdatedBy(jwtUtil.extractUsernameFromCurrentRequest());
-        clazz.setUpdatedAt(OffsetDateTime.now());
         classRepository.save(clazz);
     }
 

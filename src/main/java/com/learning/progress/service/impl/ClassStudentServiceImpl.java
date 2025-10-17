@@ -189,12 +189,6 @@ public class ClassStudentServiceImpl implements ClassStudentService {
         classStudent.setStatus(ClassStudentStatus.ACTIVE);
         classStudent.setJoinedAt(OffsetDateTime.now());
 
-        // Set audit fields
-        classStudent.setCreatedBy(jwtUtil.extractUsernameFromCurrentRequest()); // Assuming a method to get current user
-        classStudent.setCreatedAt(OffsetDateTime.now());
-        classStudent.setUpdatedBy(jwtUtil.extractUsernameFromCurrentRequest());
-        classStudent.setUpdatedAt(OffsetDateTime.now());
-
         // Save the class-student relationship
         classStudentRepository.save(classStudent);
     }
@@ -247,8 +241,6 @@ public class ClassStudentServiceImpl implements ClassStudentService {
         // Update class-student status and audit fields
         classStudent.setStatus(ClassStudentStatus.INACTIVE);
         classStudent.setLeftAt(OffsetDateTime.now());
-        classStudent.setUpdatedBy(jwtUtil.extractUsernameFromCurrentRequest());
-        classStudent.setUpdatedAt(OffsetDateTime.now());
 
         // Save the updated class-student relationship
         classStudentRepository.save(classStudent);
