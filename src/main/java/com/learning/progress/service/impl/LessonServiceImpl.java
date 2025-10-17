@@ -324,6 +324,10 @@ public class LessonServiceImpl implements LessonService {
                 newLesson.setLessonName(req.getLessonName());
                 newLesson.setContent(req.getContent());
                 newLesson.setOrderNumber(req.getOrderNumber());
+                newLesson.setCreatedBy(currentUser);
+                newLesson.setCreatedAt(now);
+                newLesson.setUpdatedBy(currentUser);
+                newLesson.setUpdatedAt(now);
                 Lesson saved = lessonRepository.save(newLesson);
                 result.add(lessonMapper.toLessonDTO(saved));
             }
