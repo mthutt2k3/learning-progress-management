@@ -94,6 +94,7 @@ azure:
     teacher-template: teacher-template.xlsx
     syllabus-template: syllabus-template.xlsx
     chapter-template: chapter-template.xlsx
+    lesson-template: lesson-template.xlsx
 
 app:
   pagination:

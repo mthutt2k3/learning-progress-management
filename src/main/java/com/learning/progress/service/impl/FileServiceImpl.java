@@ -45,6 +45,9 @@ public class FileServiceImpl implements FileService {
     @Value("${azure.storage.chapter-template}")
     private String chapterTemplate;
 
+    @Value("${azure.storage.lesson-template}")
+    private String lessonTemplate;
+
     @Override
     public byte[] generateStudentImportTemplate() {
         List<ExcelColumn> columns = fromClass(ImportStudentDTO.class);
@@ -260,7 +263,11 @@ public class FileServiceImpl implements FileService {
                 List.of("CHAP001", "Lesson 2", "Advanced concepts", 2)
         ));
 
-        return generateTemplate(List.of(sampleSheet, importSheet));
+        byte[] templateFile = generateTemplate(List.of(sampleSheet, importSheet));
+
+        blobSasService.uploadFile(templateFile, lessonTemplate);
+
+        return templateFile;
     }
 
     public byte[] generateTemplate(List<ExcelSheetSpec> sheets) {
