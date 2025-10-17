@@ -15,11 +15,13 @@ import com.learning.progress.repository.ClassRepository;
 import com.learning.progress.repository.ClassStudentRepository;
 import com.learning.progress.repository.SubmissionDailyChallengeRepository;
 import com.learning.progress.repository.UserRepository;
+import com.learning.progress.service.BlobSasService;
 import com.learning.progress.service.ClassStudentService;
 import com.learning.progress.service.FileService;
 import com.learning.progress.util.AppValidator;
 import com.learning.progress.util.JwtUtil;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -29,6 +31,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -61,6 +64,12 @@ public class ClassStudentServiceImpl implements ClassStudentService {
 
     @Autowired
     private AppValidator appValidator;
+
+    @Autowired
+    private BlobSasService blobSasService;
+
+    @Value("${azure.storage.student-to-class-template}")
+    private String studentToClassTemplate;
 
     @Override
     public DataResponse<List<ClassStudentResponse>> getStudentsInClass(Long classId, int page, int size, String text, ClassStudentStatus status, String sortBy, String sortDir) {
@@ -287,6 +296,11 @@ public class ClassStudentServiceImpl implements ClassStudentService {
     @Override
     public byte[] generateStudentImportTemplate() {
         return fileService.generateStudentToClassImportTemplate();
+    }
+
+    @Override
+    public String getStudentTemplateSasUrl() {
+        return blobSasService.generateSasUrl(studentToClassTemplate, Duration.ofMinutes(30));
     }
 
     @Override
