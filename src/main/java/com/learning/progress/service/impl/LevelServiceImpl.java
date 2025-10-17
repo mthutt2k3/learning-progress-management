@@ -108,8 +108,6 @@ public class LevelServiceImpl implements LevelService {
 
         // 5. Update audit fields nếu có
         String currentUser = jwtUtil.extractUsernameFromCurrentRequest();
-        level.setUpdatedBy(currentUser);
-        level.setUpdatedAt(java.time.OffsetDateTime.now());
 
         levelRepository.save(level);
     }
@@ -277,8 +275,6 @@ public class LevelServiceImpl implements LevelService {
                     .orElseThrow(() -> new ApiException("Level not found to delete: " + deleteId, HttpStatus.NOT_FOUND.value()));
             level.setDeletedAt(now);
             level.setDeletedBy(currentUser);
-            level.setUpdatedBy(currentUser);
-            level.setUpdatedAt(now);
             levelsToSave.add(level);
         }
 
@@ -295,8 +291,6 @@ public class LevelServiceImpl implements LevelService {
                 level = existingMap.get(req.getId());
                 levelMapper.updateOrderFromRequest(level, req);
                 level.setOrderNumber(req.getOrderNumber());
-                level.setUpdatedBy(currentUser);
-                level.setUpdatedAt(now);
             } else {
                 // Create new
                 if (levelRepository.existsByLevelName(req.getLevelName())) {
@@ -304,9 +298,6 @@ public class LevelServiceImpl implements LevelService {
                 }
                 level = levelMapper.toEntity(req);
                 level.setOrderNumber(req.getOrderNumber());
-                level.setCreatedBy(currentUser);
-                level.setUpdatedBy(currentUser);
-                level.setUpdatedAt(now);
 
                 level = levelRepository.saveAndFlush(level);
                 String levelCode = DataUtil.generateLevelCode(level.getId()); // Sinh levelCode
@@ -338,16 +329,30 @@ public class LevelServiceImpl implements LevelService {
             throw new ApiException("No DRAFT levels to publish", HttpStatus.BAD_REQUEST.value());
         }
 
-        String currentUser = jwtUtil.extractUsernameFromCurrentRequest();
-        OffsetDateTime now = OffsetDateTime.now();
-
         for (Level level : draftLevels) {
             level.setStatus(LevelEnum.PUBLISHED);
-            level.setUpdatedBy(currentUser);
-            level.setUpdatedAt(now);
         }
 
         levelRepository.saveAll(draftLevels);
+    }
+
+    @Override
+    public void draftAllLevels() {
+        List<Level> publishLevels = levelRepository.findAllByStatus(LevelEnum.PUBLISHED)
+                .stream()
+                .filter(level -> level.getDeletedAt() == null)
+                .collect(Collectors.toList());
+
+
+        if (publishLevels.isEmpty()) {
+            throw new ApiException("No Publish levels to draft", HttpStatus.BAD_REQUEST.value());
+        }
+
+        for (Level level : publishLevels) {
+            level.setStatus(LevelEnum.PUBLISHED);
+        }
+
+        levelRepository.saveAll(publishLevels);
     }
 
 
