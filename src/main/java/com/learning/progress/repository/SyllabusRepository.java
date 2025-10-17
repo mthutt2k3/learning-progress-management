@@ -24,4 +24,7 @@ public interface SyllabusRepository extends JpaRepository<Syllabus, Long> {
     List<Lesson> findLessonsBySyllabusId(Long syllabusId);
 
     Optional<Syllabus> findBySyllabusCode(String syllabusId);
+
+    boolean existsBySyllabusName(String syllabusName);
+
 }

@@ -59,10 +59,10 @@ public class ChapterController {
         return ResponseEntity.ok(chapterService.getChapterList(syllabusId, page, size, searchText));
     }
 
-    @GetMapping("/download-template")
+    @GetMapping("/upload-template")
     @PreAuthorize("hasRole('MANAGER')")
-    @Operation(summary = "Download Chapter Import Template", description = "Download Excel template for importing chapters")
-    public ResponseEntity<ByteArrayResource> downloadChapterImportTemplate() {
+    @Operation(summary = "upload Chapter Import Template", description = "upload Excel template for importing chapters")
+    public ResponseEntity<ByteArrayResource> uploadChapterImportTemplate() {
         byte[] template = chapterService.generateChapterImportTemplate();
         ByteArrayResource resource = new ByteArrayResource(template);
         return ResponseEntity.ok()
@@ -70,6 +70,19 @@ public class ChapterController {
                 .contentType(MediaType.APPLICATION_OCTET_STREAM)
                 .contentLength(template.length)
                 .body(resource);
+    }
+
+    @GetMapping("/download-template")
+    @PreAuthorize("hasRole('MANAGER')")
+    @Operation(summary = "Get SAS URL for Chapter Import Template", description = "Get SAS URL for downloading chapter import template from Azure Blob Storage")
+    public ResponseEntity<String> downloadChapterImportTemplate() {
+        try {
+            String sasUrl = chapterService.getChapterTemplateSasUrl();
+            return ResponseEntity.ok(sasUrl);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("Error generating SAS URL: " + e.getMessage());
+        }
     }
 
     @PostMapping("/import")

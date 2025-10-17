@@ -13,6 +13,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.ByteArrayInputStream;
 import java.time.Duration;
 import java.time.OffsetDateTime;
 
@@ -42,6 +43,28 @@ public class BlobSasServiceImpl implements BlobSasService {
 
         try {
             blobClient.upload(file.getInputStream(), file.getSize(), true);
+        } catch (Exception e) {
+            throw new RuntimeException("Upload failed: " + e.getMessage(), e);
+        }
+
+        return blobClient.getBlobName();
+    }
+
+    @Override
+    public String uploadFile(byte[] data, String fileName) {
+        BlobServiceClient serviceClient = new BlobServiceClientBuilder()
+                .connectionString(connectionString)
+                .buildClient();
+
+        BlobContainerClient containerClient = serviceClient.getBlobContainerClient(containerName);
+        if (!containerClient.exists()) {
+            containerClient.create();
+        }
+
+        BlobClient blobClient = containerClient.getBlobClient(fileName);
+
+        try {
+            blobClient.upload(new ByteArrayInputStream(data), data.length, true);
         } catch (Exception e) {
             throw new RuntimeException("Upload failed: " + e.getMessage(), e);
         }

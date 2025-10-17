@@ -13,4 +13,5 @@ public interface LessonService {
     List<LessonDTO> syncLessons(Long chapterId, List<SyncLessonRequest> request);
     List<LessonDTO> importLessonsFromExcel(MultipartFile file);
     byte[] generateLessonImportTemplate();
+    String getLessonTemplateSasUrl();
 }

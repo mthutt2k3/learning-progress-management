@@ -18,8 +18,6 @@ public interface LevelRepository extends JpaRepository<Level, Long> {
 
     boolean existsByLevelName(String levelName);
 
-    boolean existsByLevelNameAndIdNot(String levelName, Long id);
-
     // Find all active levels (not deleted) ordered by orderNumber
     @Query("SELECT l FROM Level l WHERE l.isActive IS true ORDER BY l.orderNumber ASC")
     List<Level> findAllByIsActiveIsTrueOrderByOrderNumberAsc();
@@ -34,6 +32,7 @@ public interface LevelRepository extends JpaRepository<Level, Long> {
         SELECT 
             l.id AS id, 
             l.level_name AS levelName, 
+            l.level_code AS levelCode,
             l.description AS description, 
             p.id AS prerequisiteId, 
             p.level_name AS prerequisiteName, 
