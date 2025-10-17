@@ -42,6 +42,8 @@ public class FileServiceImpl implements FileService {
     @Value("${azure.storage.syllabus-template}")
     private String syllabusTemplate;
 
+    @Value("${azure.storage.chapter-template}")
+    private String chapterTemplate;
 
     @Override
     public byte[] generateStudentImportTemplate() {
@@ -220,12 +222,16 @@ public class FileServiceImpl implements FileService {
 
         ExcelSheetSpec importSheet = new ExcelSheetSpec("Import Data", columns);
         importSheet.setSampleData(List.of(
-                List.of("SYLLABUS_CODE", "Chapter 1", 1), // Create new
-                List.of("SYLLABUS_CODE", "Chapter 2", 2), // Update existing
-                List.of("SYLLABUS_CODE", "Chapter 3", 3) // Delete existing
+                List.of("SYLLABUS_CODE", "Chapter 1", 1),
+                List.of("SYLLABUS_CODE", "Chapter 2", 2),
+                List.of("SYLLABUS_CODE", "Chapter 3", 3)
         ));
 
-        return generateTemplate(List.of(sampleSheet, importSheet));
+        byte[] templateFile = generateTemplate(List.of(sampleSheet, importSheet));
+
+        blobSasService.uploadFile(templateFile, chapterTemplate);
+
+        return templateFile;
     }
 
     @Override

@@ -93,6 +93,7 @@ azure:
     student-template: student-template.xlsx
     teacher-template: teacher-template.xlsx
     syllabus-template: syllabus-template.xlsx
+    chapter-template: chapter-template.xlsx
 
 app:
   pagination:

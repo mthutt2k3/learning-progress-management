@@ -1776,6 +1776,10 @@ public class DataUtil {
         String prefix = "SY";
         return prefix + String.format("%06d", id);
     }
+    public static String generateChapterCode(Long id) {
+        String prefix = "CH";
+        return prefix + String.format("%06d", id);
+    }
 
 
     public static String generateImageUrl(String imageUrlCheck) {
