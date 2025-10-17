@@ -16,4 +16,6 @@ public interface LevelService {
     void publishAllLevels();
 
     void draftAllLevels();
+
+    DataResponse<List<LevelDetailsResponse>> getAllPublishLevels(int page, int size, String text);
 }

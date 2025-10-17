@@ -61,10 +61,6 @@ public class User extends BaseEntity {
     private UserStatus status = UserStatus.ACTIVE;
 
     @Builder.Default
-    @Column(name = "must_update_profile", nullable = false)
-    private boolean mustUpdateProfile = false;
-
-    @Builder.Default
     @Column(name = "must_change_pw", nullable = false)
     private boolean mustChangePassword = false;
 

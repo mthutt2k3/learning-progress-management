@@ -8,11 +8,13 @@ import com.google.common.base.Supplier;
 import com.google.common.collect.Lists;
 import com.google.gson.Gson;
 import com.learning.progress.common.Const;
+import com.learning.progress.exception.ApiException;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.BeanUtils;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpStatus;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
@@ -40,6 +42,27 @@ import java.util.stream.Collectors;
 
 @Slf4j
 public class DataUtil {
+
+    public static void validateDateOfBirth(Date dateOfBirth) {
+        if (dateOfBirth == null) return;
+
+        LocalDate dob = dateOfBirth.toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
+        LocalDate today = LocalDate.now();
+
+        // ❌ Không được chọn ngày tương lai
+        if (dob.isAfter(today)) {
+            throw new ApiException(Const.DOB.DOB_IN_FUTURE, HttpStatus.BAD_REQUEST.value());
+        }
+
+        // ✅ Check tuổi tối thiểu
+        int minimumAge = 3;
+        if (dob.isAfter(today.minusYears(minimumAge))) {
+            throw new ApiException(
+                    String.format(Const.DOB.DOB_UNDER_AGE, minimumAge),
+                    HttpStatus.BAD_REQUEST.value()
+            );
+        }
+    }
     /**
      * Lấy toàn bộ phần trước dấu @ của email
      * Ví dụ: user@example.com -> user

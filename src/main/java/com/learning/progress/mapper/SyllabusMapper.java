@@ -1,13 +1,13 @@
 package com.learning.progress.mapper;
 
+import com.learning.progress.dto.LevelInfo;
 import com.learning.progress.dto.SyllabusDTO;
 import com.learning.progress.dto.SyllabusDetailDTO;
 import com.learning.progress.dto.syllabus.CreateSyllabusRequest;
 import com.learning.progress.dto.syllabus.UpdateSyllabusRequest;
+import com.learning.progress.entity.Level;
 import com.learning.progress.entity.Syllabus;
-import org.mapstruct.Mapper;
-import org.mapstruct.Mapping;
-import org.mapstruct.ReportingPolicy;
+import org.mapstruct.*;
 
 @Mapper(
         componentModel = "spring",
@@ -15,8 +15,21 @@ import org.mapstruct.ReportingPolicy;
 )
 public interface SyllabusMapper {
 
-    @Mapping(target = "levelId", source = "level.id")
+    @Mapping(target = "level", source = "level")
+    @Mapping(target = "chapterCount", expression = "java(countChapters(syllabus))")
+    @Mapping(target = "lessonCount", expression = "java(countLessons(syllabus))")
     SyllabusDTO toSyllabusDTO(Syllabus syllabus);
+
+    default int countChapters(Syllabus syllabus) {
+        return syllabus.getChapters() != null ? syllabus.getChapters().size() : 0;
+    }
+
+    default int countLessons(Syllabus syllabus) {
+        if (syllabus.getChapters() == null) return 0;
+        return syllabus.getChapters().stream()
+                .mapToInt(ch -> ch.getLessons() != null ? ch.getLessons().size() : 0)
+                .sum();
+    }
 
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "level", ignore = true)
@@ -28,4 +41,5 @@ public interface SyllabusMapper {
 
     @Mapping(target = "level", source = "level")
     SyllabusDetailDTO toSyllabusDetailDTO(Syllabus syllabus);
+
 }

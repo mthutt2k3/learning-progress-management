@@ -1,6 +1,8 @@
 package com.learning.progress.controller;
 
 import com.learning.progress.common.Const;
+import com.learning.progress.common.RoleName;
+import com.learning.progress.common.UserStatus;
 import com.learning.progress.dto.*;
 import com.learning.progress.dto.request.CreateStudentRequest;
 import com.learning.progress.dto.request.CreateUserRequest;
@@ -53,7 +55,7 @@ public class UserController {
     @Operation(summary = "Update student status", description = "Update status of an existing student profile (MANAGER only)")
     public ResponseEntity<DataResponse<StudentProfileDTO>> updateStudentStatus(
             @Parameter(description = "User ID of the student to update status") @PathVariable Long userId,
-            @Parameter(description = "New status (e.g., ACTIVE, INACTIVE)") @RequestParam String status) {
+            @Parameter(description = "New status (e.g., ACTIVE, INACTIVE)") @RequestParam UserStatus status) {
         var response = userService.updateStudentStatus(userId, status);
         return new ResponseEntity<>(DataResponse.success(response, Const.RESULT_MESSAGE_CODE.UPDATE_SUCCESSFUL), HttpStatus.OK);
     }
@@ -152,6 +154,22 @@ public class UserController {
         return new ResponseEntity<>(DataResponse.success(response, Const.RESULT_MESSAGE_CODE.UPDATE_SUCCESSFUL), HttpStatus.OK);
     }
 
+    @PatchMapping("profile/{userId}/avatar")
+    @PreAuthorize("@jwtUtil.isCurrentUser(#userId) or hasRole('MANAGER')")
+    @Operation(
+            summary = "Update user avatar",
+            description = "Upload or update avatar for the specified user"
+    )
+    public ResponseEntity<DataResponse<String>> updateUserAvatar(
+            @Parameter(description = "User ID to update avatar")
+            @PathVariable Long userId,
+            @RequestParam("file") MultipartFile file) {
+
+        String response = userService.updateUserAvatar(userId, file);
+        return ResponseEntity.ok(DataResponse.success(response, Const.RESULT_MESSAGE_CODE.UPDATE_SUCCESSFUL));
+    }
+
+
     @GetMapping("/students/upload-template")
     @PreAuthorize("hasRole('MANAGER')")
     @Operation(summary = "upload Student Import Template", description = "upload Excel template for importing students")
@@ -221,4 +239,5 @@ public class UserController {
         userService.importTeachersFromExcel(file);
         return new ResponseEntity<>(DataResponse.success("Teachers imported successfully", Const.RESULT_MESSAGE_CODE.IMPORT_SUCCESSFUL), HttpStatus.OK);
     }
+
 }

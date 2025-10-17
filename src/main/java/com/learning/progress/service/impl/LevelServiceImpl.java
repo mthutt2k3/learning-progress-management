@@ -49,6 +49,29 @@ public class LevelServiceImpl implements LevelService {
     private AppValidator appValidator;
 
     @Override
+    public DataResponse<List<LevelDetailsResponse>> getAllPublishLevels(int page, int size, String text) {
+        // Validate pagination and sort parameters
+        appValidator.validatePaginationParams(page, size);
+
+        Pageable pageable = PageRequest.of(page, size);
+        Page<LevelDetailsResponse> levelPage = levelRepository.findAllPublishedWithFilters(
+                (text == null || text.isBlank()) ? "" : text,
+                pageable
+        );
+
+        return DataResponse.<List<LevelDetailsResponse>>builder()
+                .traceId(org.slf4j.MDC.get("traceId"))
+                .success(true)
+                .message(Const.LEVEL.LIST_RETRIEVED)
+                .data(levelPage.getContent())
+                .timestamp(java.time.LocalDateTime.now())
+                .page(page)
+                .size(size)
+                .totalElements(levelPage.getTotalElements())
+                .totalPages(levelPage.getTotalPages())
+                .build();
+    }
+    @Override
     public DataResponse<List<LevelDetailsResponse>> getAllLevels(int page, int size, String text) {
         // Validate pagination and sort parameters
         appValidator.validatePaginationParams(page, size);
@@ -354,6 +377,7 @@ public class LevelServiceImpl implements LevelService {
 
         levelRepository.saveAll(publishLevels);
     }
+
 
 
 }

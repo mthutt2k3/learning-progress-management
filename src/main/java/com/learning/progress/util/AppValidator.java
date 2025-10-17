@@ -63,13 +63,13 @@ public class AppValidator {
     public void validateSortParams(List<String> validSortFields, String sortBy, String sortDir) {
         if (!validSortFields.contains(sortBy)) {
             throw new ApiException(
-                    String.format(Const.SORT.INVALID_SORT_BY, sortBy),
+                    String.format(Const.SORT.INVALID_SORT_BY, sortBy, String.join(", ", validSortFields)),
                     HttpStatus.BAD_REQUEST.value()
             );
         }
         if (!List.of("asc", "desc").contains(sortDir.toLowerCase())) {
             throw new ApiException(
-                    Const.SORT.INVALID_SORT_DIR,
+                    String.format(Const.SORT.INVALID_SORT_DIR, sortDir),
                     HttpStatus.BAD_REQUEST.value()
             );
         }
