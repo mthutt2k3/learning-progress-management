@@ -52,6 +52,9 @@ public class FileServiceImpl implements FileService {
     @Value("${azure.storage.chapter-in-class-template}")
     private String chapterInClassTemplate;
 
+    @Value("${azure.storage.lesson-in-class-template}")
+    private String lessonInClassTemplate;
+
     @Override
     public byte[] generateStudentImportTemplate() {
         List<ExcelColumn> columns = fromClass(ImportStudentDTO.class);
@@ -273,6 +276,39 @@ public class FileServiceImpl implements FileService {
 
         return templateFile;
     }
+    @Override
+    public byte[] generateClassLessonImportTemplate() {
+        List<ExcelColumn> columns = fromClass(ImportLessonDTO.class);
+        ExcelSheetSpec sampleSheet = new ExcelSheetSpec("Sample Data", List.of(new ExcelColumn("Guide", "Guide")));
+        List<List<Object>> guideRows = List.of(
+                List.of("📘 HƯỚNG DẪN SỬ DỤNG SHEET"),
+                List.of("Sheet này dùng để import thông tin lesson mới cho một chapter vào hệ thống."),
+                List.of("Mỗi dòng tương ứng với một lesson mới."),
+                List.of("Cần đảm bảo đúng định dạng và tuân theo các giá trị quy định bên dưới:"),
+                List.of("- Chapter Code: Mã chapter (bắt buộc, phải tồn tại trong hệ thống)"),
+                List.of("- Lesson Name: Tên lesson, tối đa 255 ký tự (bắt buộc)"),
+                List.of("- Content: Nội dung lesson, tối đa 1000 ký tự (tùy chọn)"),
+                List.of("- Order Number: Số thứ tự lesson, từ 1 đến n, không trùng lặp, không gap (bắt buộc)")
+        );
+        List<List<Object>> sheetData = new ArrayList<>();
+        sheetData.addAll(guideRows);
+        sheetData.add(List.of());
+        sampleSheet.setSampleData(sheetData);
+        sampleSheet.setProtected(true);
+
+        ExcelSheetSpec importSheet = new ExcelSheetSpec("Import Data", columns);
+        importSheet.setSampleData(List.of(
+                List.of("CHAP001", "Lesson 1", "Introduction to topic", 1),
+                List.of("CHAP001", "Lesson 2", "Advanced concepts", 2)
+        ));
+
+        byte[] templateFile = generateTemplate(List.of(sampleSheet, importSheet));
+
+        blobSasService.uploadFile(templateFile, lessonInClassTemplate);
+
+        return templateFile;
+    }
+
 
     @Override
     public byte[] generateChapterInClassImportTemplate() {
