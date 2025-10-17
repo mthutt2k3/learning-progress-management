@@ -14,4 +14,6 @@ public interface LevelService {
     List<LevelDetailsResponse> bulkUpdateLevels(List<UpdateLevelOrderRequest> requests);
 
     void publishAllLevels();
+
+    void draftAllLevels();
 }

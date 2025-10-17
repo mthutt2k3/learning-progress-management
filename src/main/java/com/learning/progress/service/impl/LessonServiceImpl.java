@@ -196,8 +196,6 @@ public class LessonServiceImpl implements LessonService {
             lesson.setLessonName(req.getLessonName());
             lesson.setContent(req.getContent());
             lesson.setOrderNumber(req.getOrderNumber());
-            lesson.setUpdatedBy(currentUser);
-            lesson.setUpdatedAt(now);
             result.add(lessonMapper.toLessonDTO(lessonRepository.save(lesson)));
         }
 
@@ -212,9 +210,6 @@ public class LessonServiceImpl implements LessonService {
             newLesson.setLessonName(req.getLessonName());
             newLesson.setContent(req.getContent());
             newLesson.setOrderNumber(req.getOrderNumber());
-            newLesson.setCreatedBy(currentUser);
-            newLesson.setUpdatedBy(currentUser);
-            newLesson.setUpdatedAt(now);
             result.add(lessonMapper.toLessonDTO(lessonRepository.save(newLesson)));
         }
 
@@ -329,9 +324,6 @@ public class LessonServiceImpl implements LessonService {
                 newLesson.setLessonName(req.getLessonName());
                 newLesson.setContent(req.getContent());
                 newLesson.setOrderNumber(req.getOrderNumber());
-                newLesson.setCreatedBy(currentUser);
-                newLesson.setUpdatedBy(currentUser);
-                newLesson.setUpdatedAt(now);
                 Lesson saved = lessonRepository.save(newLesson);
                 result.add(lessonMapper.toLessonDTO(saved));
             }

@@ -438,9 +438,6 @@ public class UserServiceImpl implements UserService {
         if (updateDTO.getAvatarUrl() != null) user.setAvatarUrl(updateDTO.getAvatarUrl());
         if (updateDTO.getAddress() != null) user.setAddress(updateDTO.getAddress());
 
-        user.setUpdatedAt(OffsetDateTime.now());
-        user.setUpdatedBy(username); // nếu có tracking
-
         userRepository.save(user);
         return userMapper.toUserProfileDTO(user);
     }
