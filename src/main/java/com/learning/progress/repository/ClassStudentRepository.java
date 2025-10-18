@@ -30,4 +30,6 @@ public interface ClassStudentRepository extends JpaRepository<ClassStudent, Long
     @Query("SELECT cs FROM ClassStudent cs WHERE cs.clazz.id = :classId ORDER BY cs.user.firstName, cs.user.lastName")
     List<ClassStudent> findByClazzId(@Param("classId") Long classId);
 
+    @Query("SELECT cs FROM ClassStudent cs WHERE cs.user.id = :userId")
+    List<ClassStudent> findByUserId(@Param("userId") Long userId);
 }

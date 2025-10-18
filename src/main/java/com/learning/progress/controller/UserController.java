@@ -246,7 +246,7 @@ public class UserController {
     @PreAuthorize("hasRole('MANAGER') or hasRole('TEACHER') or hasRole('TEACHING_ASSISTANT')")
     @Operation(
             summary = "Export Students to Excel",
-            description = "Export all students or filtered students to Excel file with beautiful formatting"
+            description = "Export students to Excel. Can filter by class (TEACHER/TA must be teaching that class)"
     )
     public ResponseEntity<ByteArrayResource> exportStudents(
             @Parameter(description = "Search keyword (email, firstName, lastName)")
@@ -254,36 +254,14 @@ public class UserController {
             @Parameter(description = "Filter by status (e.g., ACTIVE, INACTIVE)")
             @RequestParam(required = false) List<String> status,
             @Parameter(description = "Filter by role (e.g., STUDENT, TEST_TAKER)")
-            @RequestParam(required = false) List<String> roleName) {
+            @RequestParam(required = false) List<String> roleName,
+            @Parameter(description = "Filter by class IDs (if empty, export all)")
+            @RequestParam(required = false) List<Long> classIds) {
 
-        byte[] excelFile = userService.exportAllStudents(text, status, roleName);
+        byte[] excelFile = userService.exportStudents(text, status, roleName, classIds);
         ByteArrayResource resource = new ByteArrayResource(excelFile);
 
         String filename = "Students_Export_" +
-                new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date()) +
-                ".xlsx";
-
-        return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=" + filename)
-                .contentType(MediaType.APPLICATION_OCTET_STREAM)
-                .contentLength(excelFile.length)
-                .body(resource);
-    }
-
-    @GetMapping("/students/export/class/{classId}")
-    @PreAuthorize("hasRole('MANAGER') or hasRole('TEACHER') or hasRole('TEACHING_ASSISTANT')")
-    @Operation(
-            summary = "Export Students by Class",
-            description = "Export all students in a specific class to Excel file"
-    )
-    public ResponseEntity<ByteArrayResource> exportStudentsByClass(
-            @Parameter(description = "ID of the class")
-            @PathVariable Long classId) {
-
-        byte[] excelFile = userService.exportStudentsByClass(classId);
-        ByteArrayResource resource = new ByteArrayResource(excelFile);
-
-        String filename = "Class_Students_Export_" +
                 new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date()) +
                 ".xlsx";
 

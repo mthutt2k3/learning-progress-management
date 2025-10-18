@@ -689,9 +689,22 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
-    public byte[] exportAllStudents(String searchText,
-                                    List<String> status,
-                                    List<String> roleName) {
+    public byte[] exportStudents(String searchText,
+                                 List<String> status,
+                                 List<String> roleName,
+                                 List<Long> classIds) {
+        // Lấy thông tin user hiện tại
+        String currentUsername = jwtUtil.extractUsernameFromCurrentRequest();
+        User currentUser = userRepository.findByUserName(currentUsername)
+                .orElseThrow(() -> new ApiException(Const.AUTH.INVALID_TOKEN_USERNAME, HttpStatus.UNAUTHORIZED.value()));
+
+        RoleName currentRole = currentUser.getRole().getName();
+
+        // Nếu có classIds, validate quyền truy cập
+        if (classIds != null && !classIds.isEmpty()) {
+            validateClassAccess(currentUser, currentRole, classIds);
+        }
+
         // Xác định roles
         List<RoleName> roles;
         if (roleName == null || roleName.isEmpty()) {
@@ -711,73 +724,120 @@ public class UserServiceImpl implements UserService {
             statuses = appValidator.validateAndConvertEnums(status, UserStatus.class);
         }
 
-        // Lấy tất cả students (không phân trang)
-        List<User> students = userRepository.findByRoleNameInAndStatusInAndSearchText(
-                roles, statuses, searchText
-        );
+        // Lấy danh sách students
+        List<User> students;
+        Map<Long, String> classNameMap = new HashMap<>();
 
-        // Convert sang ExportDataDTO
-        List<ExportStudentDTO> exportData = students.stream()
-                .map(this::convertToExportDTO)
-                .collect(Collectors.toList());
+        if (classIds == null || classIds.isEmpty()) {
+            // Export tất cả students
+            students = userRepository.findByRoleNameInAndStatusInAndSearchText(
+                    roles, statuses, searchText
+            );
+        } else {
+            // Export students theo classes
+            students = new ArrayList<>();
+            for (Long classId : classIds) {
+                Clazz clazz = classRepository.findById(classId)
+                        .orElseThrow(() -> new ApiException(Const.CLASS.CLASS_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
-        // Tạo summary info
-        Map<String, String> summaryInfo = new LinkedHashMap<>();
-        summaryInfo.put("Ngày xuất", new SimpleDateFormat("dd/MM/yyyy HH:mm:ss").format(new Date()));
-        summaryInfo.put("Tổng số học sinh", String.valueOf(exportData.size()));
-        summaryInfo.put("Điều kiện lọc", buildFilterDescription(searchText, status, roleName));
+                classNameMap.put(classId, clazz.getClassName());
 
-        // Export
-        return fileService.exportStudentsData(
-                exportData,
-                "BÁO CÁO DANH SÁCH HỌC SINH",
-                summaryInfo
-        );
-    }
+                List<ClassStudent> classStudents = classStudentRepository.findByClazzId(classId);
 
-    @Override
-    public byte[] exportStudentsByClass(Long classId) {
-        // Kiểm tra class tồn tại
-        Clazz clazz = classRepository.findById(classId)
-                .orElseThrow(() -> new ApiException(Const.CLASS.CLASS_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+                // Filter theo roles, statuses, searchText
+                List<User> filteredStudents = classStudents.stream()
+                        .map(ClassStudent::getUser)
+                        .filter(user -> roles.contains(user.getRole().getName()))
+                        .filter(user -> statuses.contains(user.getStatus()))
+                        .filter(user -> {
+                            if (searchText == null || searchText.trim().isEmpty()) {
+                                return true;
+                            }
+                            String search = searchText.toLowerCase();
+                            return user.getEmail().toLowerCase().contains(search) ||
+                                    user.getFirstName().toLowerCase().contains(search) ||
+                                    user.getLastName().toLowerCase().contains(search) ||
+                                    user.getUserName().toLowerCase().contains(search);
+                        })
+                        .collect(Collectors.toList());
 
-        // Lấy danh sách học sinh trong class
-        List<ClassStudent> classStudents = classStudentRepository.findByClazzId(classId);
+                students.addAll(filteredStudents);
+            }
 
-        // Convert sang ExportDataDTO
-        List<ExportStudentDTO> exportData = classStudents.stream()
-                .map(cs -> {
-                    ExportStudentDTO dto = convertToExportDTO(cs.getUser());
-                    dto.setClassName(clazz.getClassName());
-                    return dto;
-                })
-                .collect(Collectors.toList());
-
-        // Tạo summary info
-        Map<String, String> summaryInfo = new LinkedHashMap<>();
-        summaryInfo.put("Ngày xuất", new SimpleDateFormat("dd/MM/yyyy HH:mm:ss").format(new Date()));
-        summaryInfo.put("Tên lớp", clazz.getClassName());
-        summaryInfo.put("Mã lớp", clazz.getClassCode());
-        summaryInfo.put("Tổng số học sinh", String.valueOf(exportData.size()));
-
-        // Thêm thông tin giáo viên
-        List<ClassTeacher> teachers = classTeacherRepository.findByClazzId(classId);
-        if (!teachers.isEmpty()) {
-            String teacherNames = teachers.stream()
-                    .map(ct -> ct.getUser().getFirstName() + " " + ct.getUser().getLastName())
-                    .collect(Collectors.joining(", "));
-            summaryInfo.put("Giáo viên", teacherNames);
+            // Remove duplicates nếu student thuộc nhiều class
+            students = students.stream()
+                    .distinct()
+                    .collect(Collectors.toList());
         }
 
+        // Convert sang ExportStudentDTO
+        List<ExportStudentDTO> exportData = students.stream()
+                .map(user -> convertToExportStudentDTO(user, classIds, classNameMap))
+                .collect(Collectors.toList());
+
+        // Tạo summary info
+        Map<String, String> summaryInfo = new LinkedHashMap<>();
+        summaryInfo.put("Ngày xuất", new SimpleDateFormat("dd/MM/yyyy HH:mm:ss").format(new Date()));
+        summaryInfo.put("Tổng số học sinh", String.valueOf(exportData.size()));
+
+        if (classIds != null && !classIds.isEmpty()) {
+            String classNames = classNameMap.values().stream()
+                    .collect(Collectors.joining(", "));
+            summaryInfo.put("Lớp", classNames);
+
+            // Thêm thông tin giáo viên
+            for (Long classId : classIds) {
+                List<ClassTeacher> teachers = classTeacherRepository.findByClazzId(classId);
+                if (!teachers.isEmpty()) {
+                    String teacherNames = teachers.stream()
+                            .map(ct -> ct.getUser().getFirstName() + " " + ct.getUser().getLastName())
+                            .collect(Collectors.joining(", "));
+                    summaryInfo.put("Giáo viên (" + classNameMap.get(classId) + ")", teacherNames);
+                }
+            }
+        }
+
+        summaryInfo.put("Điều kiện lọc", buildFilterDescription(searchText, status, roleName));
+
+        // Tạo title động
+        String title = (classIds != null && !classIds.isEmpty())
+                ? "DANH SÁCH HỌC SINH LỚP " + classNameMap.values().stream().collect(Collectors.joining(", ")).toUpperCase()
+                : "BÁO CÁO DANH SÁCH HỌC SINH";
+
         // Export
-        return fileService.exportStudentsData(
-                exportData,
-                "DANH SÁCH HỌC SINH LỚP " + clazz.getClassName().toUpperCase(),
-                summaryInfo
-        );
+        return fileService.exportStudentsData(exportData, title, summaryInfo);
     }
 
-    private ExportStudentDTO convertToExportDTO(User user) {
+    private void validateClassAccess(User currentUser, RoleName currentRole, List<Long> classIds) {
+        // MANAGER được phép tất cả
+        if (currentRole == RoleName.MANAGER) {
+            return;
+        }
+
+        // TEACHER hoặc TEACHING_ASSISTANT phải check
+        if (currentRole == RoleName.TEACHER || currentRole == RoleName.TEACHING_ASSISTANT) {
+            // Lấy danh sách class mà user đang dạy
+            List<Long> teachingClassIds = classTeacherRepository.findActiveClassesByUserId(currentUser.getId())
+                    .stream()
+                    .map(ct -> ct.getClazz().getId())
+                    .collect(Collectors.toList());
+
+            // Check xem tất cả classIds có trong danh sách class đang dạy không
+            for (Long classId : classIds) {
+                if (!teachingClassIds.contains(classId)) {
+                    throw new ApiException(
+                            "You don't have permission to export students from class ID: " + classId,
+                            HttpStatus.FORBIDDEN.value()
+                    );
+                }
+            }
+        } else {
+            // Các role khác không được phép
+            throw new ApiException(Const.SECURITY.FORBIDDEN_ROLE, HttpStatus.FORBIDDEN.value());
+        }
+    }
+
+    private ExportStudentDTO convertToExportStudentDTO(User user, List<Long> classIds, Map<Long, String> classNameMap) {
         SimpleDateFormat dateFormat = new SimpleDateFormat("dd/MM/yyyy");
         SimpleDateFormat dateTimeFormat = new SimpleDateFormat("dd/MM/yyyy HH:mm");
 
@@ -797,6 +857,26 @@ public class UserServiceImpl implements UserService {
                         ? dateTimeFormat.format(Date.from(user.getCreatedAt().toInstant()))
                         : "")
                 .build();
+
+        // LUÔN LUÔN lấy thông tin className của student
+        List<ClassStudent> userClasses = classStudentRepository.findByUserId(user.getId());
+
+        if (classIds != null && !classIds.isEmpty()) {
+            // Nếu export theo class cụ thể, chỉ lấy những class được chọn
+            String className = userClasses.stream()
+                    .filter(cs -> classIds.contains(cs.getClazz().getId()))
+                    .map(cs -> cs.getClazz().getClassName())
+                    .distinct()
+                    .collect(Collectors.joining(", "));
+            dto.setClassName(className);
+        } else {
+            // Nếu export tất cả, lấy TẤT CẢ các class mà student thuộc về
+            String className = userClasses.stream()
+                    .map(cs -> cs.getClazz().getClassName())
+                    .distinct()
+                    .collect(Collectors.joining(", "));
+            dto.setClassName(className.isEmpty() ? "Chưa có lớp" : className);
+        }
 
         // Lấy thông tin level
         userRepository.findActiveLevelInfoByUserId(user.getId()).ifPresent(levelInfo -> {
