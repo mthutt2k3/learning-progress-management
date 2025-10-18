@@ -159,7 +159,7 @@ public class UserServiceImpl implements UserService {
 
         User updatedUser = userMapper.toUser(request);
         user.setRole(role);
-        user.setEmail(updatedUser.getEmail());
+        user.setEmail(user.getEmail());
         user.setFirstName(updatedUser.getFirstName());
         user.setLastName(updatedUser.getLastName());
         user.setAvatarUrl(updatedUser.getAvatarUrl());
@@ -340,7 +340,7 @@ public class UserServiceImpl implements UserService {
 
         User updatedUser = userMapper.toUser(request);
         user.setRole(role);
-        user.setEmail(updatedUser.getEmail());
+        user.setEmail(user.getEmail());
         user.setFirstName(updatedUser.getFirstName());
         user.setLastName(updatedUser.getLastName());
         user.setAvatarUrl(updatedUser.getAvatarUrl());
