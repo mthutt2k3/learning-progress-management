@@ -493,7 +493,7 @@ public class UserServiceImpl implements UserService {
             }
 
             // Nhưng chỉ được đổi cho STUDENT hoặc TEST_TAKER
-            if (!List.of(RoleName.STUDENT, RoleName.TEST_TAKER).contains(targetRole)) {
+            if (!List.of(RoleName.STUDENT, RoleName.TEST_TAKER, RoleName.TEACHER, RoleName.TEACHING_ASSISTANT).contains(targetRole)) {
                 throw new ApiException(Const.SECURITY.FORBIDDEN_ROLE, HttpStatus.FORBIDDEN.value());
             }
         }
