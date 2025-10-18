@@ -33,4 +33,12 @@ public interface UserService {
     String getStudentTemplateSasUrl();
 
     String updateUserAvatar(Long userId, MultipartFile file);
+    byte[] exportStudents(String searchText,
+                          List<String> status,
+                          List<String> roleName,
+                          List<Long> classIds);
+
+    byte[] exportAllTeachers(String searchText,
+                             List<String> status,
+                             List<String> roleName);
 }

@@ -6,7 +6,9 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
+import java.util.List;
 import java.util.Optional;
 
 public interface ClassStudentRepository extends JpaRepository<ClassStudent, Long> {
@@ -24,4 +26,10 @@ public interface ClassStudentRepository extends JpaRepository<ClassStudent, Long
 
     @Query("SELECT COUNT(cs) > 0 FROM ClassStudent cs WHERE cs.clazz.id = :clazzId AND cs.user.id = :userId")
     boolean existsByClassIdAndUserId(Long clazzId, Long userId);
+
+    @Query("SELECT cs FROM ClassStudent cs WHERE cs.clazz.id = :classId ORDER BY cs.user.firstName, cs.user.lastName")
+    List<ClassStudent> findByClazzId(@Param("classId") Long classId);
+
+    @Query("SELECT cs FROM ClassStudent cs WHERE cs.user.id = :userId")
+    List<ClassStudent> findByUserId(@Param("userId") Long userId);
 }
