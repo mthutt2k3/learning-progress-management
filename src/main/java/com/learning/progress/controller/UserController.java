@@ -22,6 +22,8 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.List;
 
 @RestController
@@ -240,4 +242,61 @@ public class UserController {
         return new ResponseEntity<>(DataResponse.success("Teachers imported successfully", Const.RESULT_MESSAGE_CODE.IMPORT_SUCCESSFUL), HttpStatus.OK);
     }
 
+    @GetMapping("/students/export")
+    @PreAuthorize("hasRole('MANAGER') or hasRole('TEACHER') or hasRole('TEACHING_ASSISTANT')")
+    @Operation(
+            summary = "Export Students to Excel",
+            description = "Export students to Excel. Can filter by class (TEACHER/TA must be teaching that class)"
+    )
+    public ResponseEntity<ByteArrayResource> exportStudents(
+            @Parameter(description = "Search keyword (email, firstName, lastName)")
+            @RequestParam(required = false) String text,
+            @Parameter(description = "Filter by status (e.g., ACTIVE, INACTIVE)")
+            @RequestParam(required = false) List<String> status,
+            @Parameter(description = "Filter by role (e.g., STUDENT, TEST_TAKER)")
+            @RequestParam(required = false) List<String> roleName,
+            @Parameter(description = "Filter by class IDs (if empty, export all)")
+            @RequestParam(required = false) List<Long> classIds) {
+
+        byte[] excelFile = userService.exportStudents(text, status, roleName, classIds);
+        ByteArrayResource resource = new ByteArrayResource(excelFile);
+
+        String filename = "Students_Export_" +
+                new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date()) +
+                ".xlsx";
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=" + filename)
+                .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                .contentLength(excelFile.length)
+                .body(resource);
+    }
+
+    @GetMapping("/teachers/export")
+    @PreAuthorize("hasRole('MANAGER')")
+    @Operation(
+            summary = "Export Teachers to Excel",
+            description = "Export all teachers or filtered teachers to Excel file with beautiful formatting"
+    )
+    public ResponseEntity<ByteArrayResource> exportTeachers(
+            @Parameter(description = "Search keyword (email, firstName, lastName)")
+            @RequestParam(required = false) String text,
+            @Parameter(description = "Filter by status (e.g., ACTIVE, INACTIVE)")
+            @RequestParam(required = false) List<String> status,
+            @Parameter(description = "Filter by role (e.g., TEACHER, TEACHING_ASSISTANT)")
+            @RequestParam(required = false) List<String> roleName) {
+
+        byte[] excelFile = userService.exportAllTeachers(text, status, roleName);
+        ByteArrayResource resource = new ByteArrayResource(excelFile);
+
+        String filename = "Teachers_Export_" +
+                new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date()) +
+                ".xlsx";
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=" + filename)
+                .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                .contentLength(excelFile.length)
+                .body(resource);
+    }
 }

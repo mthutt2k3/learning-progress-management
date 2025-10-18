@@ -3,8 +3,7 @@ package com.learning.progress.service.impl;
 import com.learning.progress.dto.ImportTeacherDTO;
 import com.learning.progress.dto.clazz.ImportStudentToClass;
 import com.learning.progress.dto.ImportStudentDTO;
-import com.learning.progress.dto.excel.ExcelColumn;
-import com.learning.progress.dto.excel.ExcelSheetSpec;
+import com.learning.progress.dto.excel.*;
 import com.learning.progress.dto.syllabus.ImportChapterDTO;
 import com.learning.progress.dto.syllabus.ImportChapterInClassDTO;
 import com.learning.progress.dto.syllabus.ImportLessonDTO;
@@ -538,5 +537,251 @@ public class FileServiceImpl implements FileService {
             default:
                 return null;
         }
+    }
+
+    @Override
+    public <T> byte[] exportToExcel(List<T> data,
+                                    List<ExcelColumn> columns,
+                                    String title,
+                                    Map<String, String> summaryInfo) {
+        try (Workbook workbook = new XSSFWorkbook();
+             ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+
+            Sheet sheet = workbook.createSheet("Data Export");
+            ExportStyleConfig styleConfig = ExportStyleConfig.createDefaultStyle(workbook);
+
+            int currentRow = 0;
+
+            // 1. Tạo tiêu đề chính
+            currentRow = createTitleSection(sheet, title, columns.size(),
+                    styleConfig.getTitleStyle(), currentRow);
+
+            // 2. Tạo thông tin tóm tắt
+            if (summaryInfo != null && !summaryInfo.isEmpty()) {
+                currentRow = createSummarySection(sheet, summaryInfo,
+                        styleConfig.getSummaryStyle(), currentRow);
+            }
+
+            // 3. Dòng trống
+            currentRow++;
+
+            // 4. Tạo header
+            currentRow = createExportHeader(sheet, columns,
+                    styleConfig.getHeaderStyle(), currentRow);
+
+            // 5. Tạo dữ liệu
+            currentRow = createExportData(sheet, data, columns,
+                    styleConfig.getDataStyle(),
+                    styleConfig.getDateStyle(), currentRow);
+
+            // 6. Auto-size columns
+            for (int i = 0; i < columns.size(); i++) {
+                sheet.autoSizeColumn(i);
+                // Thêm padding
+                int currentWidth = sheet.getColumnWidth(i);
+                sheet.setColumnWidth(i, currentWidth + 1000);
+            }
+
+            // 7. Freeze header row
+            sheet.createFreezePane(0, getSummaryRowCount(summaryInfo) + 2);
+
+            workbook.write(out);
+            return out.toByteArray();
+
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to export Excel file", e);
+        }
+    }
+
+    @Override
+    public byte[] exportStudentsData(List<ExportStudentDTO> students,
+                                     String title,
+                                     Map<String, String> summaryInfo) {
+        List<ExcelColumn> columns = List.of(
+                new ExcelColumn("STT", "index"),
+                new ExcelColumn("Username", "userName"),
+                new ExcelColumn("Email", "email"),
+                new ExcelColumn("Họ", "lastName"),
+                new ExcelColumn("Tên", "firstName"),
+                new ExcelColumn("Vai trò", "roleName"),
+                new ExcelColumn("Trạng thái", "status"),
+                new ExcelColumn("Ngày sinh", "dateOfBirth"),
+                new ExcelColumn("Giới tính", "gender"),
+                new ExcelColumn("Số điện thoại", "phoneNumber"),
+                new ExcelColumn("Địa chỉ", "address"),
+                new ExcelColumn("Level", "levelName"),
+                new ExcelColumn("Lớp", "className"),
+                new ExcelColumn("Email phụ huynh", "parentEmail"),
+                new ExcelColumn("Tên phụ huynh", "parentName"),
+                new ExcelColumn("SĐT phụ huynh", "parentPhone"),
+                new ExcelColumn("Quan hệ", "relationship"),
+                new ExcelColumn("Ngày tạo", "createdAt")
+        );
+
+        // Thêm STT vào data
+        for (int i = 0; i < students.size(); i++) {
+            // Do ExportDataDTO không có field index, ta sẽ xử lý riêng khi tạo cell
+        }
+
+        return exportToExcel(students, columns, title, summaryInfo);
+    }
+
+    @Override
+    public byte[] exportTeachersData(List<ExportTeacherDTO> teachers,
+                                     String title,
+                                     Map<String, String> summaryInfo) {
+        List<ExcelColumn> columns = List.of(
+                new ExcelColumn("STT", "index"),
+                new ExcelColumn("Username", "userName"),
+                new ExcelColumn("Email", "email"),
+                new ExcelColumn("Họ", "lastName"),
+                new ExcelColumn("Tên", "firstName"),
+                new ExcelColumn("Vai trò", "roleName"),
+                new ExcelColumn("Trạng thái", "status"),
+                new ExcelColumn("Ngày sinh", "dateOfBirth"),
+                new ExcelColumn("Giới tính", "gender"),
+                new ExcelColumn("Số điện thoại", "phoneNumber"),
+                new ExcelColumn("Địa chỉ", "address"),
+                new ExcelColumn("Các lớp giảng dạy", "classList"),
+                new ExcelColumn("Ngày tạo", "createdAt")
+        );
+
+        return exportToExcel(teachers, columns, title, summaryInfo);
+    }
+
+    private int createTitleSection(Sheet sheet, String title, int columnCount,
+                                   CellStyle titleStyle, int startRow) {
+        Row titleRow = sheet.createRow(startRow);
+        titleRow.setHeightInPoints(30);
+
+        Cell titleCell = titleRow.createCell(0);
+        titleCell.setCellValue(title);
+        titleCell.setCellStyle(titleStyle);
+
+        // Merge cells cho title
+        sheet.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(
+                startRow, startRow, 0, columnCount - 1
+        ));
+
+        return startRow + 1;
+    }
+
+    private int createSummarySection(Sheet sheet, Map<String, String> summaryInfo,
+                                     CellStyle summaryStyle, int startRow) {
+        int currentRow = startRow;
+        currentRow++; // Dòng trống
+
+        for (Map.Entry<String, String> entry : summaryInfo.entrySet()) {
+            Row row = sheet.createRow(currentRow);
+
+            Cell labelCell = row.createCell(0);
+            labelCell.setCellValue(entry.getKey() + ":");
+            labelCell.setCellStyle(summaryStyle);
+
+            Cell valueCell = row.createCell(1);
+            valueCell.setCellValue(entry.getValue());
+            valueCell.setCellStyle(summaryStyle);
+
+            currentRow++;
+        }
+
+        return currentRow;
+    }
+
+    private int createExportHeader(Sheet sheet, List<ExcelColumn> columns,
+                                   CellStyle headerStyle, int startRow) {
+        Row headerRow = sheet.createRow(startRow);
+        headerRow.setHeightInPoints(25);
+
+        for (int i = 0; i < columns.size(); i++) {
+            Cell cell = headerRow.createCell(i);
+            cell.setCellValue(columns.get(i).getHeader());
+            cell.setCellStyle(headerStyle);
+        }
+
+        return startRow + 1;
+    }
+
+    private <T> int createExportData(Sheet sheet, List<T> data,
+                                     List<ExcelColumn> columns,
+                                     CellStyle dataStyle,
+                                     CellStyle dateStyle,
+                                     int startRow) {
+        int currentRow = startRow;
+        int index = 1;
+
+        for (T item : data) {
+            Row row = sheet.createRow(currentRow);
+
+            for (int i = 0; i < columns.size(); i++) {
+                Cell cell = row.createCell(i);
+                ExcelColumn column = columns.get(i);
+
+                try {
+                    Object value;
+
+                    // Xử lý STT đặc biệt
+                    if ("index".equals(column.getField())) {
+                        value = index;
+                    } else {
+                        // Lấy giá trị từ field
+                        java.lang.reflect.Field field = item.getClass().getDeclaredField(column.getField());
+                        field.setAccessible(true);
+                        value = field.get(item);
+                    }
+
+                    // Set giá trị và style
+                    setCellValueAndStyle(cell, value, dataStyle, dateStyle);
+
+                } catch (NoSuchFieldException | IllegalAccessException e) {
+                    cell.setCellValue("");
+                    cell.setCellStyle(dataStyle);
+                }
+            }
+
+            currentRow++;
+            index++;
+        }
+
+        return currentRow;
+    }
+
+    private void setCellValueAndStyle(Cell cell, Object value,
+                                      CellStyle dataStyle,
+                                      CellStyle dateStyle) {
+        if (value == null) {
+            cell.setCellValue("");
+            cell.setCellStyle(dataStyle);
+            return;
+        }
+
+        // Kiểm tra xem có phải date format không
+        String strValue = value.toString();
+        if (isDateFormat(strValue)) {
+            cell.setCellValue(strValue);
+            cell.setCellStyle(dateStyle);
+        } else if (value instanceof Number) {
+            cell.setCellValue(((Number) value).doubleValue());
+            cell.setCellStyle(dataStyle);
+        } else {
+            cell.setCellValue(strValue);
+            cell.setCellStyle(dataStyle);
+        }
+    }
+
+    private boolean isDateFormat(String value) {
+        if (value == null || value.isEmpty()) {
+            return false;
+        }
+        // Kiểm tra format yyyy-MM-dd hoặc dd/MM/yyyy
+        return value.matches("\\d{4}-\\d{2}-\\d{2}") ||
+                value.matches("\\d{2}/\\d{2}/\\d{4}");
+    }
+
+    private int getSummaryRowCount(Map<String, String> summaryInfo) {
+        if (summaryInfo == null || summaryInfo.isEmpty()) {
+            return 1; // Title row
+        }
+        return 1 + 1 + summaryInfo.size(); // Title + blank + summary lines
     }
 }

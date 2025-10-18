@@ -38,4 +38,7 @@ public interface ClassTeacherRepository extends JpaRepository<ClassTeacher, Long
 
     boolean existsByClazz_IdAndUser_IdAndStatus(Long classId, Long userId, ClassTeacherStatus status);
 
+    @Query("SELECT ct FROM ClassTeacher ct WHERE ct.clazz.id = :classId")
+    List<ClassTeacher> findByClazzId(@Param("classId") Long classId);
+
 }
