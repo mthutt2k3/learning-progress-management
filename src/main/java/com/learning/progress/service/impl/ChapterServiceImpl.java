@@ -177,6 +177,18 @@ public class ChapterServiceImpl implements ChapterService {
                 .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
 
+        // 5b. Validate duplicate chapter names (case-insensitive)
+        Set<String> chapterNamesLower = new HashSet<>();
+        for (SyncChapterRequest req : nonDeletedRequests) {
+            String name = req.getChapterName().trim().toLowerCase();
+            if (!chapterNamesLower.add(name)) {
+                throw new ApiException(
+                        String.format("Tên chapter bị trùng (không phân biệt hoa thường): %s", req.getChapterName()),
+                        HttpStatus.BAD_REQUEST.value()
+                );
+            }
+        }
+        
         // Check 1: Tất cả request IDs phải tồn tại trong DB active chapters
         Set<Long> invalidRequestIds = new HashSet<>();
         invalidRequestIds.addAll(requestExistingIds.stream()

@@ -15,7 +15,17 @@ import java.util.Optional;
 
 @Repository
 public interface ChapterRepository extends JpaRepository<Chapter, Long> {
-    @Query("SELECT c FROM Chapter c WHERE c.syllabus.id = :syllabusId AND c.deletedAt IS NULL AND (:searchText IS NULL OR c.chapterName LIKE %:searchText%)")
+    @Query("""
+        SELECT c
+        FROM Chapter c
+        WHERE c.syllabus.id = :syllabusId
+          AND c.deletedAt IS NULL
+          AND (
+              :searchText IS NULL 
+              OR :searchText = '' 
+              OR LOWER(c.chapterName) LIKE LOWER(CONCAT('%', :searchText, '%'))
+          )
+    """)
     Page<Chapter> findBySyllabusIdAndSearchText(Long syllabusId, String searchText, Pageable pageable);
 
     @Modifying
