@@ -4,6 +4,8 @@ import com.learning.progress.common.RoleName;
 import com.learning.progress.common.UserStatus;
 import com.learning.progress.dto.ClassInfo;
 import com.learning.progress.dto.LevelInfo;
+import com.learning.progress.entity.ClassStudent;
+import com.learning.progress.entity.ClassTeacher;
 import com.learning.progress.entity.User;
 import org.springframework.data.domain.Page;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -70,4 +72,21 @@ public interface UserRepository extends JpaRepository<User, Long> {
     Optional<ClassInfo> findActiveClassInfoByUserId(Long userId);
 
     Optional<User> findByIdAndStatus(Long id, UserStatus userStatus);
+
+    @Query("""
+    SELECT u FROM User u 
+    WHERE u.role.name IN :roleNames 
+    AND u.status IN :statuses 
+    AND (:searchText IS NULL OR :searchText = '' OR 
+         LOWER(u.email) LIKE LOWER(CONCAT('%', :searchText, '%')) OR 
+         LOWER(u.firstName) LIKE LOWER(CONCAT('%', :searchText, '%')) OR 
+         LOWER(u.lastName) LIKE LOWER(CONCAT('%', :searchText, '%')) OR
+         LOWER(u.userName) LIKE LOWER(CONCAT('%', :searchText, '%')))
+    ORDER BY u.createdAt DESC
+""")
+    List<User> findByRoleNameInAndStatusInAndSearchText(
+            @Param("roleNames") List<RoleName> roleNames,
+            @Param("statuses") List<UserStatus> statuses,
+            @Param("searchText") String searchText
+    );
 }

@@ -3,6 +3,7 @@ package com.learning.progress.service.impl;
 import com.learning.progress.common.*;
 import com.learning.progress.dto.*;
 import com.learning.progress.dto.ImportStudentDTO;
+import com.learning.progress.dto.excel.ExportStudentDTO;
 import com.learning.progress.dto.request.CreateStudentRequest;
 import com.learning.progress.dto.request.CreateUserRequest;
 import com.learning.progress.dto.response.DataResponse;
@@ -25,6 +26,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.text.SimpleDateFormat;
 import java.time.Duration;
 import java.util.*;
 import java.util.regex.Pattern;
@@ -45,6 +47,12 @@ public class UserServiceImpl implements UserService {
 
     @Autowired
     private ClassTeacherRepository classTeacherRepository;
+
+    @Autowired
+    private ClassRepository classRepository;
+
+    @Autowired
+    private ClassStudentRepository classStudentRepository;
 
     @Autowired
     private AccountService accountService;
@@ -677,5 +685,156 @@ public class UserServiceImpl implements UserService {
     @Override
     public String getTeacherTemplateSasUrl() {
         return blobSasService.generateSasUrl(teacherTemplate, Duration.ofMinutes(30));
+    }
+
+    @Override
+    public byte[] exportAllStudents(String searchText,
+                                    List<String> status,
+                                    List<String> roleName) {
+        // Xác định roles
+        List<RoleName> roles;
+        if (roleName == null || roleName.isEmpty()) {
+            roles = Arrays.asList(RoleName.STUDENT, RoleName.TEST_TAKER);
+        } else {
+            roles = appValidator.validateAndConvertEnums(roleName, RoleName.class)
+                    .stream()
+                    .filter(r -> Arrays.asList(RoleName.STUDENT, RoleName.TEST_TAKER).contains(r))
+                    .collect(Collectors.toList());
+        }
+
+        // Xác định statuses
+        List<UserStatus> statuses;
+        if (status == null || status.isEmpty()) {
+            statuses = Arrays.asList(UserStatus.values());
+        } else {
+            statuses = appValidator.validateAndConvertEnums(status, UserStatus.class);
+        }
+
+        // Lấy tất cả students (không phân trang)
+        List<User> students = userRepository.findByRoleNameInAndStatusInAndSearchText(
+                roles, statuses, searchText
+        );
+
+        // Convert sang ExportDataDTO
+        List<ExportStudentDTO> exportData = students.stream()
+                .map(this::convertToExportDTO)
+                .collect(Collectors.toList());
+
+        // Tạo summary info
+        Map<String, String> summaryInfo = new LinkedHashMap<>();
+        summaryInfo.put("Ngày xuất", new SimpleDateFormat("dd/MM/yyyy HH:mm:ss").format(new Date()));
+        summaryInfo.put("Tổng số học sinh", String.valueOf(exportData.size()));
+        summaryInfo.put("Điều kiện lọc", buildFilterDescription(searchText, status, roleName));
+
+        // Export
+        return fileService.exportStudentsData(
+                exportData,
+                "BÁO CÁO DANH SÁCH HỌC SINH",
+                summaryInfo
+        );
+    }
+
+    @Override
+    public byte[] exportStudentsByClass(Long classId) {
+        // Kiểm tra class tồn tại
+        Clazz clazz = classRepository.findById(classId)
+                .orElseThrow(() -> new ApiException(Const.CLASS.CLASS_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+
+        // Lấy danh sách học sinh trong class
+        List<ClassStudent> classStudents = classStudentRepository.findByClazzId(classId);
+
+        // Convert sang ExportDataDTO
+        List<ExportStudentDTO> exportData = classStudents.stream()
+                .map(cs -> {
+                    ExportStudentDTO dto = convertToExportDTO(cs.getUser());
+                    dto.setClassName(clazz.getClassName());
+                    return dto;
+                })
+                .collect(Collectors.toList());
+
+        // Tạo summary info
+        Map<String, String> summaryInfo = new LinkedHashMap<>();
+        summaryInfo.put("Ngày xuất", new SimpleDateFormat("dd/MM/yyyy HH:mm:ss").format(new Date()));
+        summaryInfo.put("Tên lớp", clazz.getClassName());
+        summaryInfo.put("Mã lớp", clazz.getClassCode());
+        summaryInfo.put("Tổng số học sinh", String.valueOf(exportData.size()));
+
+        // Thêm thông tin giáo viên
+        List<ClassTeacher> teachers = classTeacherRepository.findByClazzId(classId);
+        if (!teachers.isEmpty()) {
+            String teacherNames = teachers.stream()
+                    .map(ct -> ct.getUser().getFirstName() + " " + ct.getUser().getLastName())
+                    .collect(Collectors.joining(", "));
+            summaryInfo.put("Giáo viên", teacherNames);
+        }
+
+        // Export
+        return fileService.exportStudentsData(
+                exportData,
+                "DANH SÁCH HỌC SINH LỚP " + clazz.getClassName().toUpperCase(),
+                summaryInfo
+        );
+    }
+
+    private ExportStudentDTO convertToExportDTO(User user) {
+        SimpleDateFormat dateFormat = new SimpleDateFormat("dd/MM/yyyy");
+        SimpleDateFormat dateTimeFormat = new SimpleDateFormat("dd/MM/yyyy HH:mm");
+
+        ExportStudentDTO dto = ExportStudentDTO.builder()
+                .email(user.getEmail())
+                .firstName(user.getFirstName())
+                .lastName(user.getLastName())
+                .userName(user.getUserName())
+                .roleName(user.getRole().getName().toString())
+                .status(user.getStatus().name())
+                .avatarUrl(user.getAvatarUrl())
+                .dateOfBirth(user.getDateOfBirth() != null ? dateFormat.format(user.getDateOfBirth()) : "")
+                .address(user.getAddress())
+                .phoneNumber(user.getPhoneNumber())
+                .gender(user.getGender() != null ? user.getGender() : "")
+                .createdAt(user.getCreatedAt() != null
+                        ? dateTimeFormat.format(Date.from(user.getCreatedAt().toInstant()))
+                        : "")
+                .build();
+
+        // Lấy thông tin level
+        userRepository.findActiveLevelInfoByUserId(user.getId()).ifPresent(levelInfo -> {
+            dto.setLevelName(levelInfo.getLevelName());
+        });
+
+        // Lấy thông tin parent
+        if (user.getAdditionalData() != null) {
+            try {
+                ParentInfo parentInfo = JsonUtil.jsonToObject(user.getAdditionalData(), ParentInfo.class);
+                dto.setParentEmail(parentInfo.getParentEmail());
+                dto.setParentName(parentInfo.getParentName());
+                dto.setParentPhone(parentInfo.getParentPhone());
+                dto.setRelationship(parentInfo.getRelationship());
+            } catch (Exception e) {
+                log.warn("Failed to parse parent info for user {}", user.getId(), e);
+            }
+        }
+
+        return dto;
+    }
+
+    private String buildFilterDescription(String searchText,
+                                          List<String> status,
+                                          List<String> roleName) {
+        List<String> filters = new ArrayList<>();
+
+        if (searchText != null && !searchText.trim().isEmpty()) {
+            filters.add("Từ khóa: " + searchText);
+        }
+
+        if (status != null && !status.isEmpty()) {
+            filters.add("Trạng thái: " + String.join(", ", status));
+        }
+
+        if (roleName != null && !roleName.isEmpty()) {
+            filters.add("Vai trò: " + String.join(", ", roleName));
+        }
+
+        return filters.isEmpty() ? "Tất cả" : String.join(" | ", filters);
     }
 }
