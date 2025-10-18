@@ -14,7 +14,16 @@ import java.util.Optional;
 
 @Repository
 public interface SyllabusRepository extends JpaRepository<Syllabus, Long> {
-    @Query("SELECT s FROM Syllabus s WHERE s.deletedAt IS NULL AND (:searchText IS NULL OR s.syllabusName LIKE %:searchText%)")
+    @Query("""
+        SELECT s
+        FROM Syllabus s
+        WHERE s.deletedAt IS NULL
+          AND (
+              :searchText IS NULL 
+              OR :searchText = '' 
+              OR LOWER(s.syllabusName) LIKE LOWER(CONCAT('%', :searchText, '%'))
+          )
+    """)
     Page<Syllabus> findBySearchText(String searchText, Pageable pageable);
 
     @Query("SELECT c FROM Chapter c WHERE c.syllabus.id = :syllabusId AND c.deletedAt IS NULL ORDER BY c.orderNumber ASC")
