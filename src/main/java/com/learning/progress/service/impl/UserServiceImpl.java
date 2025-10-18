@@ -660,7 +660,7 @@ public class UserServiceImpl implements UserService {
 
         // Upload ảnh lên Blob
         String fileName = blobSasService.uploadFile(file);
-        String blobUrl = blobSasService.generateSasUrl(fileName, Duration.ofMinutes(30));
+        String blobUrl = blobSasService.generateSasUrl(fileName, Duration.ofDays(90));
 
         // Lưu URL avatar vào user
         user.setAvatarUrl(blobUrl);
