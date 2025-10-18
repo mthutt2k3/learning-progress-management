@@ -20,6 +20,8 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.List;
 
 @RestController
@@ -111,5 +113,52 @@ public class SyllabusController {
             @Parameter(description = "Excel file containing syllabus data") @RequestParam("file") MultipartFile file) {
         List<SyllabusDTO> result = syllabusService.importSyllabusFromExcel(file);
         return new ResponseEntity<>(DataResponse.success(result, Const.RESULT_MESSAGE_CODE.IMPORT_SUCCESSFUL), HttpStatus.OK);
+    }
+
+    @GetMapping("/export")
+    @PreAuthorize("hasRole('MANAGER') or hasRole('TEACHER') or hasRole('TEACHING_ASSISTANT')")
+    @Operation(
+            summary = "Export Syllabuses to Excel",
+            description = "Export all syllabuses with chapters and lessons to multi-sheet Excel file"
+    )
+    public ResponseEntity<ByteArrayResource> exportSyllabuses(
+            @Parameter(description = "Search keyword")
+            @RequestParam(required = false) String searchText) {
+
+        byte[] excelFile = syllabusService.exportAllSyllabuses(searchText);
+        ByteArrayResource resource = new ByteArrayResource(excelFile);
+
+        String filename = "Syllabuses_Export_" +
+                new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date()) +
+                ".xlsx";
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=" + filename)
+                .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                .contentLength(excelFile.length)
+                .body(resource);
+    }
+
+    @GetMapping("/{id}/export")
+    @PreAuthorize("hasRole('MANAGER') or hasRole('TEACHER') or hasRole('TEACHING_ASSISTANT')")
+    @Operation(
+            summary = "Export Syllabus Detail to Excel",
+            description = "Export specific syllabus with full chapter and lesson details"
+    )
+    public ResponseEntity<ByteArrayResource> exportSyllabusDetail(
+            @Parameter(description = "Syllabus ID") @PathVariable Long id) {
+
+        byte[] excelFile = syllabusService.exportSyllabusDetail(id);
+        ByteArrayResource resource = new ByteArrayResource(excelFile);
+
+        String filename = "Syllabus_Detail_" + id + "_" +
+                new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date()) +
+                ".xlsx";
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=" + filename)
+                .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                .contentLength(excelFile.length)
+                .body(resource);
     }
 }

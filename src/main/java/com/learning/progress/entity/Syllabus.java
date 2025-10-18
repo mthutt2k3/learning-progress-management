@@ -6,11 +6,10 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.experimental.SuperBuilder;
-import org.hibernate.annotations.ColumnDefault;
 import org.hibernate.annotations.OnDelete;
 import org.hibernate.annotations.OnDeleteAction;
+import org.hibernate.annotations.Where;
 
-import java.time.OffsetDateTime;
 import java.util.List;
 
 @SuperBuilder
@@ -37,6 +36,7 @@ public class Syllabus extends BaseEntity{
     private String syllabusCode;
 
     @OneToMany(mappedBy = "syllabus", fetch = FetchType.LAZY, cascade = CascadeType.ALL)
+    @Where(clause = "deleted_at IS NULL")
     private List<Chapter> chapters;
 
 }

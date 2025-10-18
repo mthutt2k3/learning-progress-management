@@ -1,7 +1,6 @@
 package com.learning.progress.controller;
 
 import com.learning.progress.common.Const;
-import com.learning.progress.dto.clazz.ClassChapterDTO;
 import com.learning.progress.dto.clazz.ClassLessonDTO;
 import com.learning.progress.dto.clazz.SyncClassLessonRequest;
 import com.learning.progress.dto.response.DataResponse;
@@ -9,7 +8,6 @@ import com.learning.progress.service.ClassLessonService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.ByteArrayResource;
@@ -21,7 +19,6 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.IOException;
 import java.util.List;
 
 @RestController
@@ -59,15 +56,6 @@ public class ClassLessonController {
             @Parameter(description = "Kích thước trang") @RequestParam(defaultValue = "10") int size,
             @Parameter(description = "Từ khóa tìm kiếm") @RequestParam(required = false) String searchText) {
         return ResponseEntity.ok(classLessonService.getClassLessonList(classChapterId, page, size, searchText));
-    }
-
-    @GetMapping("/export")
-    @PreAuthorize("hasRole('MANAGER') or hasRole('TEACHER')")
-    @Operation(summary = "Export class lessons", description = "Export danh sách class lessons sang Excel")
-    public void exportClassLessons(@RequestParam Long classChapterId, HttpServletResponse response) throws IOException {
-        response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-        response.setHeader("Content-Disposition", "attachment; filename=class_lessons.xlsx");
-        classLessonService.exportClassLessonsToExcel(classChapterId, response.getOutputStream());
     }
 
     @PostMapping("/import")

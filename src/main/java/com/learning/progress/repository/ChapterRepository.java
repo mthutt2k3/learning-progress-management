@@ -1,6 +1,7 @@
 package com.learning.progress.repository;
 
 import com.learning.progress.entity.Chapter;
+import com.learning.progress.entity.Syllabus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -36,4 +37,7 @@ public interface ChapterRepository extends JpaRepository<Chapter, Long> {
     List<Chapter> findBySyllabusIdAndDeletedAtIsNullOrderByOrderNumberAsc(@Param("syllabusId") Long syllabusId);
 
     Optional<Chapter> findByChapterCode(String chapterCode);
+
+    boolean existsBySyllabusAndChapterNameAndDeletedAtIsNull(Syllabus syllabus, String chapterName);
+
 }

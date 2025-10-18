@@ -160,6 +160,34 @@ public class LessonServiceImpl implements LessonService {
             }
         }
 
+        // Bước 6b: Validate duplicate lesson names (case-insensitive)
+
+// Check trùng trong request
+        Set<String> lessonNamesLower = new HashSet<>();
+        for (SyncLessonRequest req : nonDeletedRequests) {
+            String name = req.getLessonName().trim().toLowerCase();
+            if (!lessonNamesLower.add(name)) {
+                throw new ApiException(
+                        String.format("Tên lesson bị trùng (không phân biệt hoa thường): %s", req.getLessonName()),
+                        HttpStatus.BAD_REQUEST.value()
+                );
+            }
+        }
+
+// Check trùng với DB (đối với lesson mới)
+        for (SyncLessonRequest req : nonDeletedRequests) {
+            if (req.getId() == null) { // chỉ check cho lesson mới
+                String trimmedName = req.getLessonName().trim();
+                boolean exists = lessonRepository.existsByChapterAndLessonNameIgnoreCaseAndDeletedAtIsNull(chapter, trimmedName);
+                if (exists) {
+                    throw new ApiException(
+                            String.format("Tên lesson '%s' đã tồn tại trong chapter này", trimmedName),
+                            HttpStatus.BAD_REQUEST.value()
+                    );
+                }
+            }
+        }
+
         // Bước 7: Validate Order Numbers (tuần tự từ 1)
         Set<Integer> orderNumbers = nonDeletedRequests.stream()
                 .map(SyncLessonRequest::getOrderNumber)

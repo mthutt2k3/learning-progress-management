@@ -7,8 +7,6 @@ import com.learning.progress.dto.clazz.ClassChapterDTO;
 import com.learning.progress.dto.clazz.SyncClassChapterRequest;
 import com.learning.progress.dto.response.DataResponse;
 import com.learning.progress.dto.syllabus.ImportChapterInClassDTO;
-import com.learning.progress.dto.syllabus.SyncChapterRequest;
-import com.learning.progress.entity.Chapter;
 import com.learning.progress.entity.ClassChapter;
 import com.learning.progress.entity.Clazz;
 import com.learning.progress.exception.ApiException;
@@ -35,8 +33,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.InputStream;
-import java.io.OutputStream;
 import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.*;
@@ -319,11 +315,6 @@ public class ClassChapterServiceImpl implements ClassChapterService {
                 .totalElements(chapterPage.getTotalElements())
                 .totalPages(chapterPage.getTotalPages())
                 .build();
-    }
-
-    // Import/Export Excel
-    public void exportClassChaptersToExcel(Long classId, OutputStream outputStream) {
-        // Logic export class chapters sang Excel
     }
 
     @Override

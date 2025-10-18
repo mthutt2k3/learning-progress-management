@@ -320,72 +320,194 @@ public class ChapterServiceImpl implements ChapterService {
     @Override
     @Transactional
     public List<ChapterDTO> importChaptersFromExcel(MultipartFile file) {
-        List<ImportChapterDTO> importList = fileService.readExcelData(file, "Import Data", ImportChapterDTO.class);
+        // Validate file
+        validateExcelFile(file);
+
+        List<ImportChapterDTO> importList = fileService.readExcelData(
+                file, "Import Data", ImportChapterDTO.class
+        );
+
+        if (importList.isEmpty()) {
+            throw new ApiException(
+                    "File không có dữ liệu để import",
+                    HttpStatus.BAD_REQUEST.value()
+            );
+        }
+
         List<ChapterDTO> result = new ArrayList<>();
-        String currentUser = jwtUtil.extractUsernameFromCurrentRequest();
-        OffsetDateTime now = OffsetDateTime.now();
 
         // Nhóm theo syllabusCode
-        Map<String, List<ImportChapterDTO>> chaptersBySyllabus = importList.stream()
-                .collect(Collectors.groupingBy(ImportChapterDTO::getSyllabusCode));
+        Map<String, List<ImportChapterDTO>> chaptersBySyllabus = new LinkedHashMap<>();
 
-        for (Map.Entry<String, List<ImportChapterDTO>> entry : chaptersBySyllabus.entrySet()) {
-            String syllabusCode = entry.getKey();
-            List<ImportChapterDTO> chapters = entry.getValue();
+        int rowIndex = 2; // Bắt đầu từ dòng 2 (sau header)
+        for (ImportChapterDTO dto : importList) {
+            String syllabusCode = dto.getSyllabusCode();
 
-            // 1. Kiểm tra syllabusCode
-            Syllabus syllabus = syllabusRepository.findBySyllabusCode(syllabusCode)
-                    .filter(s -> s.getDeletedAt() == null)
-                    .orElseThrow(() -> new ApiException("Syllabus không tìm thấy hoặc đã bị xóa với mã: " + syllabusCode, HttpStatus.NOT_FOUND.value()));
-
-            // 2. Validate chapters
-            for (ImportChapterDTO req : chapters) {
-                if (req.getChapterName() == null || req.getChapterName().trim().isEmpty()) {
-                    throw new ApiException("Chapter name là bắt buộc: " + req.getChapterName(), HttpStatus.BAD_REQUEST.value());
-                }
-                if (req.getChapterName().length() > 255) {
-                    throw new ApiException("Chapter name vượt quá 255 ký tự: " + req.getChapterName(), HttpStatus.BAD_REQUEST.value());
-                }
-                if (req.getOrderNumber() == null || req.getOrderNumber() < 1) {
-                    throw new ApiException("Order number phải là số dương: " + req.getOrderNumber(), HttpStatus.BAD_REQUEST.value());
-                }
-            }
-
-            // 3. Validate order numbers
-            Set<Integer> orderNumbers = chapters.stream()
-                    .map(ImportChapterDTO::getOrderNumber)
-                    .filter(Objects::nonNull)
-                    .collect(Collectors.toSet());
-
-            int chapterSize = chapters.size();
-            Set<Integer> expectedOrders = IntStream.rangeClosed(1, chapterSize).boxed().collect(Collectors.toSet());
-
-            if (orderNumbers.size() != chapterSize || !orderNumbers.equals(expectedOrders)) {
+            // Validate syllabusCode không null
+            if (syllabusCode == null || syllabusCode.trim().isEmpty()) {
                 throw new ApiException(
-                        String.format("Order numbers phải tuần tự từ 1 đến %d, không trùng lặp và không có gap. Current: %s",
-                                chapterSize, orderNumbers),
+                        String.format("Dòng %d, Cột 'Syllabus Code': Không được để trống", rowIndex),
                         HttpStatus.BAD_REQUEST.value()
                 );
             }
 
-            log.info("Validation passed for syllabusCode={}: total chapters={}", syllabusCode, chapterSize);
+            chaptersBySyllabus
+                    .computeIfAbsent(syllabusCode.trim(), k -> new ArrayList<>())
+                    .add(dto);
 
-            // 4. Tạo mới chapters
-            for (ImportChapterDTO req : chapters) {
+            rowIndex++;
+        }
+
+        // Xử lý từng syllabus
+        int currentRow = 2;
+        for (Map.Entry<String, List<ImportChapterDTO>> entry : chaptersBySyllabus.entrySet()) {
+            String syllabusCode = entry.getKey();
+            List<ImportChapterDTO> chapters = entry.getValue();
+
+            // 1. Validate Syllabus tồn tại
+            Syllabus syllabus = syllabusRepository.findBySyllabusCode(syllabusCode)
+                    .filter(s -> s.getDeletedAt() == null)
+                    .orElse(null);
+
+            if (syllabus == null) {
+                throw new ApiException(
+                        String.format("Dòng %d, Cột 'Syllabus Code': Syllabus '%s' không tồn tại hoặc đã bị xóa",
+                                currentRow, syllabusCode),
+                        HttpStatus.BAD_REQUEST.value()
+                );
+            }
+
+            // 2. Validate từng chapter
+            Set<Integer> usedOrderNumbers = new HashSet<>();
+            Set<String> usedChapterNames = new HashSet<>();
+
+            for (int i = 0; i < chapters.size(); i++) {
+                ImportChapterDTO dto = chapters.get(i);
+                int rowNumber = currentRow + i;
+
+                // Validate Chapter Name
+                if (dto.getChapterName() == null || dto.getChapterName().trim().isEmpty()) {
+                    throw new ApiException(
+                            String.format("Dòng %d, Cột 'Chapter Name': Không được để trống", rowNumber),
+                            HttpStatus.BAD_REQUEST.value()
+                    );
+                }
+
+                String trimmedName = dto.getChapterName().trim();
+
+                if (trimmedName.length() > 255) {
+                    throw new ApiException(
+                            String.format("Dòng %d, Cột 'Chapter Name': Vượt quá 255 ký tự (hiện tại: %d ký tự)",
+                                    rowNumber, trimmedName.length()),
+                            HttpStatus.BAD_REQUEST.value()
+                    );
+                }
+
+                // Kiểm tra trùng tên trong cùng batch
+                if (usedChapterNames.contains(trimmedName.toLowerCase())) {
+                    throw new ApiException(
+                            String.format("Dòng %d, Cột 'Chapter Name': Tên '%s' bị trùng lặp trong file",
+                                    rowNumber, trimmedName),
+                            HttpStatus.BAD_REQUEST.value()
+                    );
+                }
+                usedChapterNames.add(trimmedName.toLowerCase());
+
+                // Kiểm tra trùng tên với DB
+                boolean exists = chapterRepository.existsBySyllabusAndChapterNameAndDeletedAtIsNull(
+                        syllabus, trimmedName
+                );
+                if (exists) {
+                    throw new ApiException(
+                            String.format("Dòng %d, Cột 'Chapter Name': Tên '%s' đã tồn tại trong hệ thống cho syllabus '%s'",
+                                    rowNumber, trimmedName, syllabusCode),
+                            HttpStatus.BAD_REQUEST.value()
+                    );
+                }
+
+                // Validate Order Number
+                if (dto.getOrderNumber() == null) {
+                    throw new ApiException(
+                            String.format("Dòng %d, Cột 'Order Number': Không được để trống", rowNumber),
+                            HttpStatus.BAD_REQUEST.value()
+                    );
+                }
+
+                if (dto.getOrderNumber() < 1) {
+                    throw new ApiException(
+                            String.format("Dòng %d, Cột 'Order Number': Phải là số dương (>= 1), giá trị hiện tại: %d",
+                                    rowNumber, dto.getOrderNumber()),
+                            HttpStatus.BAD_REQUEST.value()
+                    );
+                }
+
+                // Kiểm tra trùng lặp order number
+                if (usedOrderNumbers.contains(dto.getOrderNumber())) {
+                    throw new ApiException(
+                            String.format("Dòng %d, Cột 'Order Number': Số thứ tự %d bị trùng lặp trong file",
+                                    rowNumber, dto.getOrderNumber()),
+                            HttpStatus.BAD_REQUEST.value()
+                    );
+                }
+                usedOrderNumbers.add(dto.getOrderNumber());
+            }
+
+            // 3. Validate order numbers tuần tự không gap
+            int maxOrder = Collections.max(usedOrderNumbers);
+            for (int i = 1; i <= maxOrder; i++) {
+                if (!usedOrderNumbers.contains(i)) {
+                    throw new ApiException(
+                            String.format("Syllabus '%s': Order Number phải tuần tự từ 1 đến %d không có gap. Thiếu số: %d",
+                                    syllabusCode, maxOrder, i),
+                            HttpStatus.BAD_REQUEST.value()
+                    );
+                }
+            }
+
+            // 4. Tạo mới chapters (nếu không có lỗi)
+            for (ImportChapterDTO dto : chapters) {
                 Chapter newChapter = new Chapter();
                 newChapter.setSyllabus(syllabus);
-                newChapter.setChapterName(req.getChapterName());
-                newChapter.setOrderNumber(req.getOrderNumber());
+                newChapter.setChapterName(dto.getChapterName().trim());
+                newChapter.setOrderNumber(dto.getOrderNumber());
+
                 Chapter saved = chapterRepository.saveAndFlush(newChapter);
                 String chapterCode = DataUtil.generateChapterCode(saved.getId());
                 saved.setChapterCode(chapterCode);
-
                 saved = chapterRepository.save(saved);
+
                 result.add(chapterMapper.toChapterDTO(saved));
             }
+
+            currentRow += chapters.size();
         }
 
         return result;
+    }
+
+    // Validate Excel File
+    private void validateExcelFile(MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw new ApiException("File không được để trống", HttpStatus.BAD_REQUEST.value());
+        }
+
+        String filename = file.getOriginalFilename();
+        if (filename == null ||
+                (!filename.endsWith(".xlsx") && !filename.endsWith(".xls"))) {
+            throw new ApiException(
+                    "File phải có định dạng Excel (.xlsx hoặc .xls)",
+                    HttpStatus.BAD_REQUEST.value()
+            );
+        }
+
+        // Validate file size (max 10MB)
+        long maxSize = 10 * 1024 * 1024; // 10MB
+        if (file.getSize() > maxSize) {
+            throw new ApiException(
+                    String.format("File vượt quá kích thước cho phép (Max: %dMB)", maxSize / (1024 * 1024)),
+                    HttpStatus.BAD_REQUEST.value()
+            );
+        }
     }
 
 }

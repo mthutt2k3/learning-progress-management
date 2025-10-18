@@ -1,5 +1,6 @@
 package com.learning.progress.repository;
 
+import com.learning.progress.entity.Chapter;
 import com.learning.progress.entity.Lesson;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -53,5 +54,7 @@ public interface LessonRepository extends JpaRepository<Lesson, Long> {
     ORDER BY c.orderNumber ASC, l.orderNumber ASC
 """)
     Page<Lesson> findBySyllabusOrdered(Long syllabusId, String searchText, Pageable pageable);
+
+    boolean existsByChapterAndLessonNameIgnoreCaseAndDeletedAtIsNull(Chapter chapter, String lessonName);
 
 }

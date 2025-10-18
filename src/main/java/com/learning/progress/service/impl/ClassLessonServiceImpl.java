@@ -3,12 +3,10 @@ package com.learning.progress.service.impl;
 import com.learning.progress.common.ActionType;
 import com.learning.progress.common.ClassTeacherStatus;
 import com.learning.progress.common.RoleName;
-import com.learning.progress.dto.LessonDTO;
 import com.learning.progress.dto.clazz.ClassLessonDTO;
 import com.learning.progress.dto.clazz.SyncClassLessonRequest;
 import com.learning.progress.dto.response.DataResponse;
 import com.learning.progress.dto.syllabus.ImportLessonDTO;
-import com.learning.progress.dto.syllabus.SyncLessonRequest;
 import com.learning.progress.entity.*;
 import com.learning.progress.exception.ApiException;
 import com.learning.progress.mapper.ClassLessonMapper;
@@ -34,8 +32,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.InputStream;
-import java.io.OutputStream;
 import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.*;
@@ -306,11 +302,6 @@ public class ClassLessonServiceImpl implements ClassLessonService {
                 .totalElements(lessonPage.getTotalElements())
                 .totalPages(lessonPage.getTotalPages())
                 .build();
-    }
-
-    @Override
-    public void exportClassLessonsToExcel(Long classChapterId, OutputStream outputStream) {
-        // Logic export class lessons sang Excel
     }
 
     @Override
