@@ -237,10 +237,13 @@ public class LevelServiceImpl implements LevelService {
                 String errorMsg = violations.stream().map(ConstraintViolation::getMessage).collect(Collectors.joining(", "));
                 throw new ApiException(errorMsg, HttpStatus.BAD_REQUEST.value());
             }
-            if (req.getLevelName() == null || req.getLevelName().trim().isEmpty()) {
+            String trimmedName = req.getLevelName() != null ? req.getLevelName().trim() : null;
+            req.setLevelName(trimmedName);
+
+            if (trimmedName == null || trimmedName.isEmpty()) {
                 throw new ApiException(Const.VALIDATION.MISSING_FIELD, HttpStatus.BAD_REQUEST.value());
             }
-            if (req.getLevelName().length() > 100) {
+            if (trimmedName.length() > 100) {
                 throw new ApiException(Const.VALIDATION.INVALID_FORMAT, HttpStatus.BAD_REQUEST.value());
             }
             if (req.getOrderNumber() == null || req.getOrderNumber() <= 0) {
@@ -265,7 +268,8 @@ public class LevelServiceImpl implements LevelService {
         // Step 7: Validate duplicate level names
         Map<String, List<Integer>> nameToOrders = new HashMap<>();
         for (UpdateLevelOrderRequest req : nonDeletedRequests) {
-            nameToOrders.computeIfAbsent(req.getLevelName(), k -> new ArrayList<>())
+            String normalizedName = req.getLevelName().trim().toLowerCase();
+            nameToOrders.computeIfAbsent(normalizedName, k -> new ArrayList<>())
                     .add(req.getOrderNumber());
         }
 
@@ -316,7 +320,7 @@ public class LevelServiceImpl implements LevelService {
                 level.setOrderNumber(req.getOrderNumber());
             } else {
                 // Create new
-                if (levelRepository.existsByLevelName(req.getLevelName())) {
+                if (levelRepository.existsByLevelName(req.getLevelName().trim())) {
                     throw new ApiException(Const.LEVEL.DUPLICATE_LEVEL_NAME, HttpStatus.CONFLICT.value());
                 }
                 level = levelMapper.toEntity(req);

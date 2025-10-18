@@ -7,6 +7,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -36,4 +37,14 @@ public interface SyllabusRepository extends JpaRepository<Syllabus, Long> {
 
     boolean existsBySyllabusName(String syllabusName);
 
+    @Query("""
+        SELECT s FROM Syllabus s 
+        WHERE s.deletedAt IS NULL 
+        AND (:searchText IS NULL OR :searchText = '' OR 
+             LOWER(s.syllabusName) LIKE LOWER(CONCAT('%', :searchText, '%')) OR 
+             LOWER(s.syllabusCode) LIKE LOWER(CONCAT('%', :searchText, '%')) OR
+             LOWER(s.level.levelName) LIKE LOWER(CONCAT('%', :searchText, '%')))
+        ORDER BY s.createdAt DESC
+    """)
+    List<Syllabus> findAllBySearchText(@Param("searchText") String searchText);
 }
