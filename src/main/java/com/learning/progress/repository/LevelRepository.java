@@ -42,10 +42,26 @@ public interface LevelRepository extends JpaRepository<Level, Long> {
     LEFT JOIN l.prerequisite p
     WHERE (:text IS NULL OR LOWER(l.levelName) LIKE LOWER(CONCAT('%', :text, '%')))
     AND l.deletedAt IS NULL
-    ORDER BY l.orderNumber ASC
+    order by l.orderNumber asc 
 """)
     Page<LevelDetailsResponse> findAllWithFilters(@Param("text") String text, Pageable pageable);
 
+    @Query("""
+    SELECT new com.learning.progress.dto.response.LevelDetailsResponse(
+        l.id, l.levelName, l.levelCode, l.description,
+        p.id, p.levelName,
+        l.promotionCriteria, l.learningObjectives,
+        l.estimatedDurationWeeks, l.orderNumber,
+        l.status
+    )
+    FROM Level l
+    LEFT JOIN l.prerequisite p
+    WHERE (:text IS NULL OR LOWER(l.levelName) LIKE LOWER(CONCAT('%', :text, '%')))
+    AND l.deletedAt IS NULL
+    AND l.status = com.learning.progress.common.LevelEnum.PUBLISHED
+    order by l.orderNumber asc 
+""")
+    Page<LevelDetailsResponse> findAllPublishedWithFilters(@Param("text") String text, Pageable pageable);
 
 
     @Query("SELECT l FROM Level l LEFT JOIN FETCH l.prerequisite WHERE l.id = :id AND l.deletedAt IS NULL")

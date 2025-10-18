@@ -27,7 +27,6 @@ public class UserProfileDTO {
     private String gender;
     private String roleName;
     private UserStatus status;
-    private boolean mustUpdateProfile;
     private boolean mustChangePassword;
     private boolean requestResetPasswordByTeacher;
     private Theme theme;

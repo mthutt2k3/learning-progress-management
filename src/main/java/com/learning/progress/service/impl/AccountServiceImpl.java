@@ -187,7 +187,6 @@ public class AccountServiceImpl implements AccountService {
         newUser.setMustChangePassword(true);
         newUser.setRole(role);
         newUser.setStatus(UserStatus.PENDING);
-        newUser.setMustUpdateProfile(true);
 
         // Save user and flush
         userRepository.saveAndFlush(newUser);
@@ -231,6 +230,7 @@ public class AccountServiceImpl implements AccountService {
         // Update user details
         user.setUserName(username);
         user.setPassword(passwordEncoder.encode(password));
+        user.setStatus(UserStatus.PENDING);
         user.setMustChangePassword(true);
 
         userRepository.save(user);

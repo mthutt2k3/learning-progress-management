@@ -30,7 +30,6 @@ public class AuditorAwareImpl implements AuditorAware<String> {
             return Optional.of("system");
         }
 
-
         // Giả sử principal chứa thông tin email của người dùng
         String email = jwtUtil.extractEmailFromCurrentRequest(); // Trích xuất phần trước @
 

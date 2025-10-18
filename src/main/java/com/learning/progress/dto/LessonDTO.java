@@ -16,7 +16,8 @@ public class LessonDTO {
     private Long chapterId;
     private String lessonName;
     private String content;
-    private Integer orderNumber;
+    private Integer orderNumber;   // số thứ tự trong chapter
+    private Integer globalOrder;   // ✅ số thứ tự liên tục trong syllabus
     private String createdBy;
     private OffsetDateTime createdAt;
     private String updatedBy;
