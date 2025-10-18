@@ -38,4 +38,8 @@ public interface UserService {
                              List<String> roleName);
 
     byte[] exportStudentsByClass(Long classId);
+
+    byte[] exportAllTeachers(String searchText,
+                             List<String> status,
+                             List<String> roleName);
 }

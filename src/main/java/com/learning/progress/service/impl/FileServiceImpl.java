@@ -3,10 +3,7 @@ package com.learning.progress.service.impl;
 import com.learning.progress.dto.ImportTeacherDTO;
 import com.learning.progress.dto.clazz.ImportStudentToClass;
 import com.learning.progress.dto.ImportStudentDTO;
-import com.learning.progress.dto.excel.ExcelColumn;
-import com.learning.progress.dto.excel.ExcelSheetSpec;
-import com.learning.progress.dto.excel.ExportStudentDTO;
-import com.learning.progress.dto.excel.ExportStyleConfig;
+import com.learning.progress.dto.excel.*;
 import com.learning.progress.dto.syllabus.ImportChapterDTO;
 import com.learning.progress.dto.syllabus.ImportChapterInClassDTO;
 import com.learning.progress.dto.syllabus.ImportLessonDTO;
@@ -627,6 +624,29 @@ public class FileServiceImpl implements FileService {
         }
 
         return exportToExcel(students, columns, title, summaryInfo);
+    }
+
+    @Override
+    public byte[] exportTeachersData(List<ExportTeacherDTO> teachers,
+                                     String title,
+                                     Map<String, String> summaryInfo) {
+        List<ExcelColumn> columns = List.of(
+                new ExcelColumn("STT", "index"),
+                new ExcelColumn("Username", "userName"),
+                new ExcelColumn("Email", "email"),
+                new ExcelColumn("Họ", "lastName"),
+                new ExcelColumn("Tên", "firstName"),
+                new ExcelColumn("Vai trò", "roleName"),
+                new ExcelColumn("Trạng thái", "status"),
+                new ExcelColumn("Ngày sinh", "dateOfBirth"),
+                new ExcelColumn("Giới tính", "gender"),
+                new ExcelColumn("Số điện thoại", "phoneNumber"),
+                new ExcelColumn("Địa chỉ", "address"),
+                new ExcelColumn("Các lớp giảng dạy", "classList"),
+                new ExcelColumn("Ngày tạo", "createdAt")
+        );
+
+        return exportToExcel(teachers, columns, title, summaryInfo);
     }
 
     private int createTitleSection(Sheet sheet, String title, int columnCount,

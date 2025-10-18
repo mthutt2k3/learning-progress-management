@@ -294,4 +294,31 @@ public class UserController {
                 .body(resource);
     }
 
+    @GetMapping("/teachers/export")
+    @PreAuthorize("hasRole('MANAGER')")
+    @Operation(
+            summary = "Export Teachers to Excel",
+            description = "Export all teachers or filtered teachers to Excel file with beautiful formatting"
+    )
+    public ResponseEntity<ByteArrayResource> exportTeachers(
+            @Parameter(description = "Search keyword (email, firstName, lastName)")
+            @RequestParam(required = false) String text,
+            @Parameter(description = "Filter by status (e.g., ACTIVE, INACTIVE)")
+            @RequestParam(required = false) List<String> status,
+            @Parameter(description = "Filter by role (e.g., TEACHER, TEACHING_ASSISTANT)")
+            @RequestParam(required = false) List<String> roleName) {
+
+        byte[] excelFile = userService.exportAllTeachers(text, status, roleName);
+        ByteArrayResource resource = new ByteArrayResource(excelFile);
+
+        String filename = "Teachers_Export_" +
+                new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date()) +
+                ".xlsx";
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=" + filename)
+                .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                .contentLength(excelFile.length)
+                .body(resource);
+    }
 }

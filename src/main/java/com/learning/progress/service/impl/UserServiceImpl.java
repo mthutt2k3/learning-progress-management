@@ -4,6 +4,7 @@ import com.learning.progress.common.*;
 import com.learning.progress.dto.*;
 import com.learning.progress.dto.ImportStudentDTO;
 import com.learning.progress.dto.excel.ExportStudentDTO;
+import com.learning.progress.dto.excel.ExportTeacherDTO;
 import com.learning.progress.dto.request.CreateStudentRequest;
 import com.learning.progress.dto.request.CreateUserRequest;
 import com.learning.progress.dto.response.DataResponse;
@@ -813,6 +814,88 @@ public class UserServiceImpl implements UserService {
             } catch (Exception e) {
                 log.warn("Failed to parse parent info for user {}", user.getId(), e);
             }
+        }
+
+        return dto;
+    }
+
+    @Override
+    public byte[] exportAllTeachers(String searchText,
+                                    List<String> status,
+                                    List<String> roleName) {
+        // Xác định roles
+        List<RoleName> roles;
+        if (roleName == null || roleName.isEmpty()) {
+            roles = Arrays.asList(RoleName.TEACHER, RoleName.TEACHING_ASSISTANT);
+        } else {
+            roles = appValidator.validateAndConvertEnums(roleName, RoleName.class)
+                    .stream()
+                    .filter(r -> Arrays.asList(RoleName.TEACHER, RoleName.TEACHING_ASSISTANT).contains(r))
+                    .collect(Collectors.toList());
+        }
+
+        // Xác định statuses
+        List<UserStatus> statuses;
+        if (status == null || status.isEmpty()) {
+            statuses = Arrays.asList(UserStatus.values());
+        } else {
+            statuses = appValidator.validateAndConvertEnums(status, UserStatus.class);
+        }
+
+        // Lấy tất cả teachers (không phân trang)
+        List<User> teachers = userRepository.findByRoleNameInAndStatusInAndSearchText(
+                roles, statuses, searchText
+        );
+
+        // Convert sang ExportTeacherDTO
+        List<ExportTeacherDTO> exportData = teachers.stream()
+                .map(this::convertToExportTeacherDTO)
+                .collect(Collectors.toList());
+
+        // Tạo summary info
+        Map<String, String> summaryInfo = new LinkedHashMap<>();
+        summaryInfo.put("Ngày xuất", new SimpleDateFormat("dd/MM/yyyy HH:mm:ss").format(new Date()));
+        summaryInfo.put("Tổng số giáo viên", String.valueOf(exportData.size()));
+        summaryInfo.put("Điều kiện lọc", buildFilterDescription(searchText, status, roleName));
+
+        // Export
+        return fileService.exportTeachersData(
+                exportData,
+                "BÁO CÁO DANH SÁCH GIÁO VIÊN",
+                summaryInfo
+        );
+    }
+
+    private ExportTeacherDTO convertToExportTeacherDTO(User user) {
+        SimpleDateFormat dateFormat = new SimpleDateFormat("dd/MM/yyyy");
+        SimpleDateFormat dateTimeFormat = new SimpleDateFormat("dd/MM/yyyy HH:mm");
+
+        ExportTeacherDTO dto = ExportTeacherDTO.builder()
+                .email(user.getEmail())
+                .firstName(user.getFirstName())
+                .lastName(user.getLastName())
+                .userName(user.getUserName())
+                .roleName(user.getRole().getName().toString())
+                .status(user.getStatus().name())
+                .avatarUrl(user.getAvatarUrl())
+                .dateOfBirth(user.getDateOfBirth() != null ? dateFormat.format(user.getDateOfBirth()) : "")
+                .address(user.getAddress())
+                .phoneNumber(user.getPhoneNumber())
+                .gender(user.getGender() != null ? user.getGender() : "")
+                .createdAt(user.getCreatedAt() != null
+                        ? dateTimeFormat.format(Date.from(user.getCreatedAt().toInstant()))
+                        : "")
+                .build();
+
+        // Lấy danh sách class giảng dạy
+        List<ClassTeacher> classTeachers = classTeacherRepository.findActiveClassesByUserId(user.getId());
+        if (!classTeachers.isEmpty()) {
+            String classList = classTeachers.stream()
+                    .map(ct -> ct.getClazz().getClassName() + " (" + ct.getRoleInClass().name() + ")")
+                    .collect(Collectors.joining(", "));
+            dto.setClassList(classList);
+        } else {
+            dto.setClassList("");
         }
 
         return dto;

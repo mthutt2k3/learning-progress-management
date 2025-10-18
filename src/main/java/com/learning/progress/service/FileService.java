@@ -2,6 +2,7 @@ package com.learning.progress.service;
 
 import com.learning.progress.dto.excel.ExcelColumn;
 import com.learning.progress.dto.excel.ExportStudentDTO;
+import com.learning.progress.dto.excel.ExportTeacherDTO;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
@@ -23,6 +24,10 @@ public interface FileService {
                              Map<String, String> summaryInfo);
 
     byte[] exportStudentsData(List<ExportStudentDTO> students,
+                              String title,
+                              Map<String, String> summaryInfo);
+
+    byte[] exportTeachersData(List<ExportTeacherDTO> teachers,
                               String title,
                               Map<String, String> summaryInfo);
 }
