@@ -47,4 +47,6 @@ public interface SyllabusRepository extends JpaRepository<Syllabus, Long> {
         ORDER BY s.createdAt DESC
     """)
     List<Syllabus> findAllBySearchText(@Param("searchText") String searchText);
+
+    boolean existsBySyllabusNameIgnoreCase(String syllabusName);
 }
