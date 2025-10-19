@@ -474,7 +474,8 @@ public class UserServiceImpl implements UserService {
         if (username == null || username.trim().isEmpty()) {
             throw new ApiException(Const.AUTH.INVALID_TOKEN_USERNAME, HttpStatus.UNAUTHORIZED.value());
         }
-        User currentUser  = userRepository.findByUserName(username)
+
+        User currentUser = userRepository.findByUserName(username)
                 .orElseThrow(() -> new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         // Lấy user mục tiêu dựa trên userId được truyền vào
@@ -482,41 +483,60 @@ public class UserServiceImpl implements UserService {
                 .orElseThrow(() -> new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         boolean isSelf = currentUser.getId().equals(userId);
+        RoleName currentRole = currentUser.getRole().getName();
+        RoleName targetRole = targetUser.getRole().getName();
 
+        // --- Validate quyền đổi email ---
         if (!isSelf) {
-            RoleName currentRole = currentUser.getRole().getName();
-            RoleName targetRole = targetUser.getRole().getName();
-
-            // Chỉ các role này mới được đổi email cho người khác
+            // Chỉ một số role nhất định được đổi email người khác
             if (!List.of(RoleName.TEACHER, RoleName.TEACHING_ASSISTANT, RoleName.MANAGER).contains(currentRole)) {
                 throw new ApiException(Const.SECURITY.FORBIDDEN_ROLE, HttpStatus.FORBIDDEN.value());
             }
 
-            // Nhưng chỉ được đổi cho STUDENT hoặc TEST_TAKER
+            // Chỉ được đổi cho các role này
             if (!List.of(RoleName.STUDENT, RoleName.TEST_TAKER, RoleName.TEACHER, RoleName.TEACHING_ASSISTANT).contains(targetRole)) {
                 throw new ApiException(Const.SECURITY.FORBIDDEN_ROLE, HttpStatus.FORBIDDEN.value());
             }
+
+            // 🎯 Validate riêng theo role của người thực hiện
+            if (currentRole == RoleName.MANAGER) {
+                // Manager chỉ được đổi email cho TEACHER/ASSISTANT ở trạng thái PENDING
+                if (List.of(RoleName.TEACHER, RoleName.TEACHING_ASSISTANT).contains(targetRole)) {
+                    if (targetUser.getStatus() != UserStatus.PENDING) {
+                        throw new ApiException(
+                                "Manager chỉ được đổi email cho TEACHER/TEACHING_ASSISTANT ở trạng thái PENDING",
+                                HttpStatus.FORBIDDEN.value()
+                        );
+                    }
+                }
+                // Manager có thể đổi email cho STUDENT/TEST_TAKER bất kỳ trạng thái nào
+            } else if (currentRole == RoleName.TEACHER || currentRole == RoleName.TEACHING_ASSISTANT) {
+                // Teacher/TA chỉ được đổi cho STUDENT/TEST_TAKER
+                if (!List.of(RoleName.STUDENT, RoleName.TEST_TAKER).contains(targetRole)) {
+                    throw new ApiException(
+                            "TEACHER/TEACHING_ASSISTANT chỉ được đổi email cho STUDENT/TEST_TAKER",
+                            HttpStatus.FORBIDDEN.value()
+                    );
+                }
+            }
+        }
+
+        // Validate trạng thái user trước khi xử lý
+        if (targetUser.getStatus() == UserStatus.INACTIVE) {
+            throw new ApiException(Const.USER.USER_INACTIVE, HttpStatus.BAD_REQUEST.value());
         }
 
         String newEmail = request.getNewEmail();
-        switch (targetUser.getStatus()) {
-            case PENDING:
-                String password = DataUtil.generateRandomPassword(8);
-                emailService.sendNewAccountEmail(targetUser, targetUser.getUserName(), password);
-                break;
 
-            case ACTIVE:
-                String token = jwtUtil.generateChangeEmailToken(targetUser.getUserName(), newEmail, targetUser.getId());
-                // Gửi email xác nhận bất đồng bộ
-                emailService.sendChangeEmailConfirmation(targetUser, newEmail, token, request.getDomain(), request.getPath());
-                break;
-
-            case INACTIVE:
-            default:
-                throw new ApiException(Const.USER.USER_INACTIVE, HttpStatus.BAD_REQUEST.value());
+        // Validate email mới không trùng với email hiện tại
+        if (newEmail.equals(targetUser.getEmail())) {
+            throw new ApiException("Email mới trùng với email hiện tại", HttpStatus.BAD_REQUEST.value());
         }
 
+        String token = jwtUtil.generateChangeEmailToken(targetUser.getUserName(), newEmail, targetUser.getId());
+        emailService.sendChangeEmailConfirmation(targetUser, newEmail, token, request.getDomain(), request.getPath());
     }
+
 
     @Override
     @Transactional
@@ -610,28 +630,70 @@ public class UserServiceImpl implements UserService {
     @Transactional
     public void importTeachersFromExcel(MultipartFile file) {
         List<ImportTeacherDTO> importList = fileService.readExcelData(file, "Import Data", ImportTeacherDTO.class);
-        for (ImportTeacherDTO record : importList) {
-            // Kiểm tra các trường bắt buộc
-            if (record.getEmail() == null || !Pattern.matches(Const.VALIDATE_INPUT.regexEmail, record.getEmail())) {
-                throw new ApiException("Invalid email format: " + record.getEmail(), HttpStatus.BAD_REQUEST.value());
-            }
-            if (record.getFirstName() == null || record.getFirstName().trim().isEmpty()) {
-                throw new ApiException("First name is required", HttpStatus.BAD_REQUEST.value());
-            }
-            if (record.getLastName() == null || record.getLastName().trim().isEmpty()) {
-                throw new ApiException("Last name is required", HttpStatus.BAD_REQUEST.value());
-            }
-            if (!EnumUtil.isAllowedEnumValue(RoleName.class, record.getRoleName(), Set.of(RoleName.TEACHER, RoleName.TEACHING_ASSISTANT))) {
-                throw new ApiException("Invalid role name: " + record.getRoleName(), HttpStatus.BAD_REQUEST.value());
-            }
-            // Kiểm tra các trường tùy chọn
-            if (record.getPhoneNumber() != null && !DataUtil.isValidPhoneNumber(record.getPhoneNumber())) {
-                throw new ApiException("Invalid phone number format: " + record.getPhoneNumber(), HttpStatus.BAD_REQUEST.value());
-            }
-            if (record.getGender() != null && !EnumUtil.isValidEnum(Gender.class, record.getGender())) {
-                throw new ApiException("Invalid gender format: " + record.getGender(), HttpStatus.BAD_REQUEST.value());
+
+        // Map để lưu tất cả lỗi theo từng dòng
+        Map<Integer, List<String>> errorsByRow = new LinkedHashMap<>();
+
+        // Validate toàn bộ file trước
+        for (int i = 0; i < importList.size(); i++) {
+            int rowNumber = i + 2; // +2 vì có header row và index bắt đầu từ 0
+            ImportTeacherDTO record = importList.get(i);
+            List<String> rowErrors = new ArrayList<>();
+
+            // Kiểm tra Email
+            if (record.getEmail() == null || record.getEmail().trim().isEmpty()) {
+                rowErrors.add("Email không được để trống");
+            } else if (!Pattern.matches(Const.VALIDATE_INPUT.regexEmail, record.getEmail())) {
+                rowErrors.add("Email không đúng định dạng: " + record.getEmail());
             }
 
+            // Kiểm tra First Name
+            if (record.getFirstName() == null || record.getFirstName().trim().isEmpty()) {
+                rowErrors.add("First Name không được để trống");
+            }
+
+            // Kiểm tra Last Name
+            if (record.getLastName() == null || record.getLastName().trim().isEmpty()) {
+                rowErrors.add("Last Name không được để trống");
+            }
+
+            // Kiểm tra Role Name
+            if (record.getRoleName() == null || record.getRoleName().trim().isEmpty()) {
+                rowErrors.add("Role Name không được để trống");
+            } else if (!EnumUtil.isAllowedEnumValue(RoleName.class, record.getRoleName(),
+                    Set.of(RoleName.TEACHER, RoleName.TEACHING_ASSISTANT))) {
+                rowErrors.add("Role Name không hợp lệ: " + record.getRoleName() +
+                        ". Chỉ chấp nhận: TEACHER, TEACHING_ASSISTANT");
+            }
+
+            // Kiểm tra Phone Number (tùy chọn nhưng phải đúng format nếu có)
+            if (record.getPhoneNumber() != null && !record.getPhoneNumber().trim().isEmpty()) {
+                if (!DataUtil.isValidPhoneNumber(record.getPhoneNumber())) {
+                    rowErrors.add("Số điện thoại không đúng định dạng: " + record.getPhoneNumber());
+                }
+            }
+
+            // Kiểm tra Gender (tùy chọn nhưng phải đúng format nếu có)
+            if (record.getGender() != null && !record.getGender().trim().isEmpty()) {
+                if (!EnumUtil.isValidEnum(Gender.class, record.getGender())) {
+                    rowErrors.add("Giới tính không hợp lệ: " + record.getGender());
+                }
+            }
+
+            // Nếu có lỗi thì thêm vào map
+            if (!rowErrors.isEmpty()) {
+                errorsByRow.put(rowNumber, rowErrors);
+            }
+        }
+
+        // Nếu có bất kỳ lỗi nào, throw exception với toàn bộ chi tiết
+        if (!errorsByRow.isEmpty()) {
+            String errorMessage = buildDetailedErrorMessage(errorsByRow, importList.size());
+            throw new ApiException(errorMessage, HttpStatus.BAD_REQUEST.value());
+        }
+
+        // Nếu không có lỗi, tiến hành import
+        for (ImportTeacherDTO record : importList) {
             CreateUserRequest request = CreateUserRequest.builder()
                     .email(record.getEmail())
                     .firstName(record.getFirstName())
@@ -645,6 +707,29 @@ public class UserServiceImpl implements UserService {
                     .build();
             createTeacher(request);
         }
+    }
+
+    /**
+     * Xây dựng thông báo lỗi chi tiết cho toàn bộ file
+     */
+    private String buildDetailedErrorMessage(Map<Integer, List<String>> errorsByRow, int totalRows) {
+        StringBuilder message = new StringBuilder();
+        message.append("❌ Import thất bại! Phát hiện ").append(errorsByRow.size())
+                .append(" dòng lỗi trong tổng số ").append(totalRows).append(" dòng dữ liệu:\n\n");
+
+        for (Map.Entry<Integer, List<String>> entry : errorsByRow.entrySet()) {
+            int rowNumber = entry.getKey();
+            List<String> errors = entry.getValue();
+
+            message.append("📍 Dòng ").append(rowNumber).append(":\n");
+            for (String error : errors) {
+                message.append("   • ").append(error).append("\n");
+            }
+            message.append("\n");
+        }
+
+        message.append("⚠️ Vui lòng sửa các lỗi trên và thử lại!");
+        return message.toString();
     }
 
     @Override
