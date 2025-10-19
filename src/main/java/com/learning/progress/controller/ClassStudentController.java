@@ -113,7 +113,7 @@ public class ClassStudentController {
     }
 
     @PreAuthorize("hasRole('MANAGER')")
-    @PostMapping("/{classId}/import-students")
+    @PostMapping("/import-students")
     @Operation(summary = "Import Students from Excel", description = "Import multiple students to a class from an Excel file")
     public ResponseEntity<?> importStudentsFromExcel(@RequestParam("file") MultipartFile file) {
         classStudentService.importStudentsFromExcel(file);

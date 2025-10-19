@@ -78,4 +78,8 @@ public interface UserRepository extends JpaRepository<User, Long> {
             @Param("statuses") List<UserStatus> statuses,
             @Param("searchText") String searchText
     );
+
+    @Query("SELECT u FROM User u WHERE LOWER(u.userName) IN :userNames")
+    List<User> findByUserNameInIgnoreCase(@Param("userNames") List<String> userNames);
+
 }

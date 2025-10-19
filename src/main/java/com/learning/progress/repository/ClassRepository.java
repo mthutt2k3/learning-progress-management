@@ -5,8 +5,10 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 
 @Repository
@@ -18,4 +20,8 @@ public interface ClassRepository extends JpaRepository<Clazz, Long> {
     Optional<Clazz> findByIdAndDeletedAtIsNull(Long id);
 
     Optional<Clazz> findByClassCodeIgnoreCase(String classCode);
+
+    @Query("SELECT c FROM Clazz c WHERE LOWER(c.classCode) IN :classCodes")
+    List<Clazz> findByClassCodeInIgnoreCase(@Param("classCodes") List<String> classCodes);
+
 }
