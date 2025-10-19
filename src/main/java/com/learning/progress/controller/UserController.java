@@ -299,4 +299,36 @@ public class UserController {
                 .contentLength(excelFile.length)
                 .body(resource);
     }
+
+    @PatchMapping("students/bulk-status")
+    @PreAuthorize("hasRole('MANAGER')")
+    @Operation(
+            summary = "Bulk update student status",
+            description = "Update status for multiple students at once. Cannot change from PENDING to ACTIVE. Only ACTIVE/INACTIVE can be changed."
+    )
+    public ResponseEntity<DataResponse<List<StudentProfileDTO>>> bulkUpdateStudentStatus(
+            @Valid @RequestBody BulkUpdateStatusRequest request) {
+
+        List<StudentProfileDTO> response = userService.bulkUpdateStudentStatus(request);
+
+        return ResponseEntity.ok(
+                DataResponse.success(response, Const.RESULT_MESSAGE_CODE.UPDATE_SUCCESSFUL)
+        );
+    }
+
+    @PatchMapping("teachers/bulk-status")
+    @PreAuthorize("hasRole('MANAGER')")
+    @Operation(
+            summary = "Bulk update teacher status",
+            description = "Update status for multiple teachers at once. Cannot change from PENDING to ACTIVE. Only ACTIVE/INACTIVE can be changed."
+    )
+    public ResponseEntity<DataResponse<List<TeacherProfileDTO>>> bulkUpdateTeacherStatus(
+            @Valid @RequestBody BulkUpdateStatusRequest request) {
+
+        List<TeacherProfileDTO> response = userService.bulkUpdateTeacherStatus(request);
+
+        return ResponseEntity.ok(
+                DataResponse.success(response, Const.RESULT_MESSAGE_CODE.UPDATE_SUCCESSFUL)
+        );
+    }
 }

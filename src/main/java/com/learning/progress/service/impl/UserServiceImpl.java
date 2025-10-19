@@ -1000,4 +1000,195 @@ public class UserServiceImpl implements UserService {
 
         return filters.isEmpty() ? "Tất cả" : String.join(" | ", filters);
     }
+
+
+    @Override
+    @Transactional
+    public List<StudentProfileDTO> bulkUpdateStudentStatus(BulkUpdateStatusRequest request) {
+        String traceId = org.slf4j.MDC.get("traceId");
+        log.info("[{}] Bulk updating student status for {} users to {}",
+                traceId, request.getUserIds().size(), request.getTargetStatus());
+
+        // Validate target status
+        UserStatus targetStatus = request.getTargetStatus();
+        if (targetStatus == UserStatus.PENDING) {
+            throw new ApiException(
+                    Const.ACCOUNT.CANNOT_CHANGE_STATUS_TO_PENDING,
+                    HttpStatus.BAD_REQUEST.value()
+            );
+        }
+
+        // Validate không có duplicate IDs
+        Set<Long> uniqueIds = new HashSet<>(request.getUserIds());
+        if (uniqueIds.size() != request.getUserIds().size()) {
+            throw new ApiException(
+                    "Duplicate user IDs found in request",
+                    HttpStatus.BAD_REQUEST.value()
+            );
+        }
+
+        // Lấy tất cả users cùng lúc
+        List<User> users = userRepository.findAllById(request.getUserIds());
+
+        // Validate tất cả IDs tồn tại
+        Set<Long> foundIds = users.stream()
+                .map(User::getId)
+                .collect(Collectors.toSet());
+
+        Set<Long> notFoundIds = request.getUserIds().stream()
+                .filter(id -> !foundIds.contains(id))
+                .collect(Collectors.toSet());
+
+        if (!notFoundIds.isEmpty()) {
+            throw new ApiException(
+                    "User IDs not found: " + notFoundIds,
+                    HttpStatus.NOT_FOUND.value()
+            );
+        }
+
+        // Validate tất cả là STUDENT hoặc TEST_TAKER
+        List<User> invalidRoleUsers = users.stream()
+                .filter(u -> !List.of(RoleName.STUDENT, RoleName.TEST_TAKER)
+                        .contains(u.getRole().getName()))
+                .collect(Collectors.toList());
+
+        if (!invalidRoleUsers.isEmpty()) {
+            String invalidIds = invalidRoleUsers.stream()
+                    .map(u -> u.getId().toString())
+                    .collect(Collectors.joining(", "));
+            throw new ApiException(
+                    "Invalid role for users: " + invalidIds + ". Only STUDENT or TEST_TAKER allowed",
+                    HttpStatus.BAD_REQUEST.value()
+            );
+        }
+
+        // Validate tất cả phải là ACTIVE hoặc INACTIVE
+        List<User> pendingUsers = users.stream()
+                .filter(u -> u.getStatus() == UserStatus.PENDING)
+                .collect(Collectors.toList());
+
+        if (!pendingUsers.isEmpty()) {
+            String pendingIds = pendingUsers.stream()
+                    .map(u -> u.getId().toString())
+                    .collect(Collectors.joining(", "));
+            throw new ApiException(
+                    "Cannot change status from PENDING for users: " + pendingIds +
+                            ". Users must login and change password first",
+                    HttpStatus.BAD_REQUEST.value()
+            );
+        }
+
+        // Update tất cả users
+        List<StudentProfileDTO> results = new ArrayList<>();
+        for (User user : users) {
+            UserStatus oldStatus = user.getStatus();
+            user.setStatus(targetStatus);
+            userRepository.save(user);
+
+            results.add(mapToStudentProfileDTO(user));
+
+            log.info("[{}] Updated user {} from {} to {}",
+                    traceId, user.getId(), oldStatus, targetStatus);
+        }
+
+        log.info("[{}] Bulk update completed successfully for {} students",
+                traceId, results.size());
+
+        return results;
+    }
+
+    @Override
+    @Transactional
+    public List<TeacherProfileDTO> bulkUpdateTeacherStatus(BulkUpdateStatusRequest request) {
+        String traceId = org.slf4j.MDC.get("traceId");
+        log.info("[{}] Bulk updating teacher status for {} users to {}",
+                traceId, request.getUserIds().size(), request.getTargetStatus());
+
+        // Validate target status
+        UserStatus targetStatus = request.getTargetStatus();
+        if (targetStatus == UserStatus.PENDING) {
+            throw new ApiException(
+                    Const.ACCOUNT.CANNOT_CHANGE_STATUS_TO_PENDING,
+                    HttpStatus.BAD_REQUEST.value()
+            );
+        }
+
+        // Validate không có duplicate IDs
+        Set<Long> uniqueIds = new HashSet<>(request.getUserIds());
+        if (uniqueIds.size() != request.getUserIds().size()) {
+            throw new ApiException(
+                    "Duplicate user IDs found in request",
+                    HttpStatus.BAD_REQUEST.value()
+            );
+        }
+
+        // Lấy tất cả users cùng lúc
+        List<User> users = userRepository.findAllById(request.getUserIds());
+
+        // Validate tất cả IDs tồn tại
+        Set<Long> foundIds = users.stream()
+                .map(User::getId)
+                .collect(Collectors.toSet());
+
+        Set<Long> notFoundIds = request.getUserIds().stream()
+                .filter(id -> !foundIds.contains(id))
+                .collect(Collectors.toSet());
+
+        if (!notFoundIds.isEmpty()) {
+            throw new ApiException(
+                    "User IDs not found: " + notFoundIds,
+                    HttpStatus.NOT_FOUND.value()
+            );
+        }
+
+        // Validate tất cả là TEACHER hoặc TEACHING_ASSISTANT
+        List<User> invalidRoleUsers = users.stream()
+                .filter(u -> !List.of(RoleName.TEACHER, RoleName.TEACHING_ASSISTANT)
+                        .contains(u.getRole().getName()))
+                .collect(Collectors.toList());
+
+        if (!invalidRoleUsers.isEmpty()) {
+            String invalidIds = invalidRoleUsers.stream()
+                    .map(u -> u.getId().toString())
+                    .collect(Collectors.joining(", "));
+            throw new ApiException(
+                    "Invalid role for users: " + invalidIds + ". Only TEACHER or TEACHING_ASSISTANT allowed",
+                    HttpStatus.BAD_REQUEST.value()
+            );
+        }
+
+        // Validate tất cả phải là ACTIVE hoặc INACTIVE
+        List<User> pendingUsers = users.stream()
+                .filter(u -> u.getStatus() == UserStatus.PENDING)
+                .collect(Collectors.toList());
+
+        if (!pendingUsers.isEmpty()) {
+            String pendingIds = pendingUsers.stream()
+                    .map(u -> u.getId().toString())
+                    .collect(Collectors.joining(", "));
+            throw new ApiException(
+                    "Cannot change status from PENDING for users: " + pendingIds +
+                            ". Users must login and change password first",
+                    HttpStatus.BAD_REQUEST.value()
+            );
+        }
+
+        // Update tất cả users
+        List<TeacherProfileDTO> results = new ArrayList<>();
+        for (User user : users) {
+            UserStatus oldStatus = user.getStatus();
+            user.setStatus(targetStatus);
+            userRepository.save(user);
+
+            results.add(mapToTeacherProfileDTO(user));
+
+            log.info("[{}] Updated user {} from {} to {}",
+                    traceId, user.getId(), oldStatus, targetStatus);
+        }
+
+        log.info("[{}] Bulk update completed successfully for {} teachers",
+                traceId, results.size());
+
+        return results;
+    }
 }
