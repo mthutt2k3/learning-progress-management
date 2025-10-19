@@ -22,10 +22,4 @@ public interface ClassService {
     void toggleClassActivation(Long id, boolean isActive);
 
     void deleteClass(Long id);
-
-    void exportClassesToExcel(OutputStream outputStream);
-
-    void importClassesFromExcel(InputStream inputStream);
-
-    void downloadImportTemplate(OutputStream outputStream);
 }
