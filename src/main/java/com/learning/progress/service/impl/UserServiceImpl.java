@@ -498,32 +498,43 @@ public class UserServiceImpl implements UserService {
                 throw new ApiException(Const.SECURITY.FORBIDDEN_ROLE, HttpStatus.FORBIDDEN.value());
             }
 
-            // 🎯 Validate riêng cho Manager
+            // 🎯 Validate riêng theo role của người thực hiện
             if (currentRole == RoleName.MANAGER) {
-                if (List.of(RoleName.TEACHER, RoleName.TEACHING_ASSISTANT).contains(targetRole)
-                        && targetUser.getStatus() != UserStatus.PENDING) {
-                    throw new ApiException("Manager chỉ được đổi email cho TEACHER/ASSISTANT ở trạng thái PENDING",
-                            HttpStatus.BAD_REQUEST.value());
+                // Manager chỉ được đổi email cho TEACHER/ASSISTANT ở trạng thái PENDING
+                if (List.of(RoleName.TEACHER, RoleName.TEACHING_ASSISTANT).contains(targetRole)) {
+                    if (targetUser.getStatus() != UserStatus.PENDING) {
+                        throw new ApiException(
+                                "Manager chỉ được đổi email cho TEACHER/TEACHING_ASSISTANT ở trạng thái PENDING",
+                                HttpStatus.FORBIDDEN.value()
+                        );
+                    }
+                }
+                // Manager có thể đổi email cho STUDENT/TEST_TAKER bất kỳ trạng thái nào
+            } else if (currentRole == RoleName.TEACHER || currentRole == RoleName.TEACHING_ASSISTANT) {
+                // Teacher/TA chỉ được đổi cho STUDENT/TEST_TAKER
+                if (!List.of(RoleName.STUDENT, RoleName.TEST_TAKER).contains(targetRole)) {
+                    throw new ApiException(
+                            "TEACHER/TEACHING_ASSISTANT chỉ được đổi email cho STUDENT/TEST_TAKER",
+                            HttpStatus.FORBIDDEN.value()
+                    );
                 }
             }
         }
 
-        String newEmail = request.getNewEmail();
-        switch (targetUser.getStatus()) {
-            case PENDING:
-                String password = DataUtil.generateRandomPassword(8);
-                emailService.sendNewAccountEmail(targetUser, targetUser.getUserName(), password);
-                break;
-
-            case ACTIVE:
-                String token = jwtUtil.generateChangeEmailToken(targetUser.getUserName(), newEmail, targetUser.getId());
-                emailService.sendChangeEmailConfirmation(targetUser, newEmail, token, request.getDomain(), request.getPath());
-                break;
-
-            case INACTIVE:
-            default:
-                throw new ApiException(Const.USER.USER_INACTIVE, HttpStatus.BAD_REQUEST.value());
+        // Validate trạng thái user trước khi xử lý
+        if (targetUser.getStatus() == UserStatus.INACTIVE) {
+            throw new ApiException(Const.USER.USER_INACTIVE, HttpStatus.BAD_REQUEST.value());
         }
+
+        String newEmail = request.getNewEmail();
+
+        // Validate email mới không trùng với email hiện tại
+        if (newEmail.equals(targetUser.getEmail())) {
+            throw new ApiException("Email mới trùng với email hiện tại", HttpStatus.BAD_REQUEST.value());
+        }
+
+        String token = jwtUtil.generateChangeEmailToken(targetUser.getUserName(), newEmail, targetUser.getId());
+        emailService.sendChangeEmailConfirmation(targetUser, newEmail, token, request.getDomain(), request.getPath());
     }
 
 
