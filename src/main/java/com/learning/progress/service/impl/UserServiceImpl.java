@@ -474,7 +474,8 @@ public class UserServiceImpl implements UserService {
         if (username == null || username.trim().isEmpty()) {
             throw new ApiException(Const.AUTH.INVALID_TOKEN_USERNAME, HttpStatus.UNAUTHORIZED.value());
         }
-        User currentUser  = userRepository.findByUserName(username)
+
+        User currentUser = userRepository.findByUserName(username)
                 .orElseThrow(() -> new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         // Lấy user mục tiêu dựa trên userId được truyền vào
@@ -482,19 +483,28 @@ public class UserServiceImpl implements UserService {
                 .orElseThrow(() -> new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         boolean isSelf = currentUser.getId().equals(userId);
+        RoleName currentRole = currentUser.getRole().getName();
+        RoleName targetRole = targetUser.getRole().getName();
 
+        // --- Validate quyền đổi email ---
         if (!isSelf) {
-            RoleName currentRole = currentUser.getRole().getName();
-            RoleName targetRole = targetUser.getRole().getName();
-
-            // Chỉ các role này mới được đổi email cho người khác
+            // Chỉ một số role nhất định được đổi email người khác
             if (!List.of(RoleName.TEACHER, RoleName.TEACHING_ASSISTANT, RoleName.MANAGER).contains(currentRole)) {
                 throw new ApiException(Const.SECURITY.FORBIDDEN_ROLE, HttpStatus.FORBIDDEN.value());
             }
 
-            // Nhưng chỉ được đổi cho STUDENT hoặc TEST_TAKER
+            // Chỉ được đổi cho các role này
             if (!List.of(RoleName.STUDENT, RoleName.TEST_TAKER, RoleName.TEACHER, RoleName.TEACHING_ASSISTANT).contains(targetRole)) {
                 throw new ApiException(Const.SECURITY.FORBIDDEN_ROLE, HttpStatus.FORBIDDEN.value());
+            }
+
+            // 🎯 Validate riêng cho Manager
+            if (currentRole == RoleName.MANAGER) {
+                if (List.of(RoleName.TEACHER, RoleName.TEACHING_ASSISTANT).contains(targetRole)
+                        && targetUser.getStatus() != UserStatus.PENDING) {
+                    throw new ApiException("Manager chỉ được đổi email cho TEACHER/ASSISTANT ở trạng thái PENDING",
+                            HttpStatus.BAD_REQUEST.value());
+                }
             }
         }
 
@@ -507,7 +517,6 @@ public class UserServiceImpl implements UserService {
 
             case ACTIVE:
                 String token = jwtUtil.generateChangeEmailToken(targetUser.getUserName(), newEmail, targetUser.getId());
-                // Gửi email xác nhận bất đồng bộ
                 emailService.sendChangeEmailConfirmation(targetUser, newEmail, token, request.getDomain(), request.getPath());
                 break;
 
@@ -515,8 +524,8 @@ public class UserServiceImpl implements UserService {
             default:
                 throw new ApiException(Const.USER.USER_INACTIVE, HttpStatus.BAD_REQUEST.value());
         }
-
     }
+
 
     @Override
     @Transactional
