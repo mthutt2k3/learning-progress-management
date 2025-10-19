@@ -17,6 +17,14 @@ public class Const {
         public static final String INVALID_ROLE_UPDATE = "Role update from STUDENT to TEST_TAKER is not allowed.";
 
     }
+    public static class CLASS_LESSON {
+        public static final String NOT_FOUND = "Class lesson does not exist in the system or has been deleted";
+
+    }
+    public static class CHALLENGE {
+        public static final String NAME_REQUIRED = "Challenge name is required";
+        public static final String CLASS_LESSON_REQUIRED = "Class lesson is required";
+    }
     public static class DOB {
         public static final String DOB_IN_FUTURE = "Date of birth cannot be in the future.";
         public static final String DOB_UNDER_AGE = "User must be at least %d years old.";
