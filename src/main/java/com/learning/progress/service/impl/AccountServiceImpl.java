@@ -230,6 +230,7 @@ public class AccountServiceImpl implements AccountService {
         user.setPassword(passwordEncoder.encode(password));
         user.setStatus(UserStatus.PENDING);
         user.setMustChangePassword(true);
+        user.setForgotPassword(true);
 
         userRepository.save(user);
         log.info("[{}] Account created for existing user with username: {}", traceId, username);
