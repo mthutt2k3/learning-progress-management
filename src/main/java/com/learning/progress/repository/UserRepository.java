@@ -59,7 +59,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
     @Query("SELECT u FROM User u WHERE (LOWER(u.email) LIKE LOWER(CONCAT('%', :text, '%')) OR LOWER(u.fullName) LIKE LOWER(CONCAT('%', :text, '%'))) AND u.status IN :statuses AND u.role.name IN :roleNames")
     Page<User> findByTextAndStatusInAndRoleNameIn(@Param("text") String text, @Param("statuses") List<UserStatus> statuses, @Param("roleNames") List<RoleName> roleNames, Pageable pageable);
 
-    @Query("SELECT NEW com.learning.progress.dto.LevelInfo(sl.level.id, sl.level.levelCode , sl.level.levelName) " +
+    @Query("SELECT NEW com.learning.progress.dto.level.LevelInfo(sl.level.id, sl.level.levelCode , sl.level.levelName) " +
             "FROM StudentLevel sl WHERE sl.user.id = :userId AND sl.status = 'ACTIVE'")
     Optional<LevelInfo> findActiveLevelInfoByUserId(Long userId);
 
