@@ -1,6 +1,6 @@
 package com.learning.progress.mapper;
 
-import com.learning.progress.dto.ChapterDTO;
+import com.learning.progress.dto.chapter.ChapterDTO;
 import com.learning.progress.entity.Chapter;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;

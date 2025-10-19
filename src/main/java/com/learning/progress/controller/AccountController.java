@@ -2,9 +2,9 @@ package com.learning.progress.controller;
 
 import com.learning.progress.common.Const;
 import com.learning.progress.common.UserStatus;
-import com.learning.progress.dto.AccountDTO;
-import com.learning.progress.dto.request.CreateNewAccountRequest;
-import com.learning.progress.dto.response.DataResponse;
+import com.learning.progress.dto.account.AccountDTO;
+import com.learning.progress.dto.account.CreateNewAccountRequest;
+import com.learning.progress.dto.DataResponse;
 import com.learning.progress.service.AccountService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;

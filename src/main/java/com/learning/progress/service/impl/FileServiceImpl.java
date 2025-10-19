@@ -1,13 +1,13 @@
 package com.learning.progress.service.impl;
 
-import com.learning.progress.dto.ImportTeacherDTO;
-import com.learning.progress.dto.clazz.ImportStudentToClass;
-import com.learning.progress.dto.ImportStudentDTO;
+import com.learning.progress.dto.excel.ImportTeacherDTO;
+import com.learning.progress.dto.excel.ImportStudentToClass;
+import com.learning.progress.dto.excel.ImportStudentDTO;
 import com.learning.progress.dto.excel.*;
-import com.learning.progress.dto.syllabus.ImportChapterDTO;
-import com.learning.progress.dto.syllabus.ImportChapterInClassDTO;
-import com.learning.progress.dto.syllabus.ImportLessonDTO;
-import com.learning.progress.dto.syllabus.ImportSyllabusDTO;
+import com.learning.progress.dto.excel.ImportChapterDTO;
+import com.learning.progress.dto.excel.ImportChapterInClassDTO;
+import com.learning.progress.dto.excel.ImportLessonDTO;
+import com.learning.progress.dto.excel.ImportSyllabusDTO;
 import com.learning.progress.exception.ApiException;
 import com.learning.progress.service.BlobSasService;
 import com.learning.progress.service.FileService;

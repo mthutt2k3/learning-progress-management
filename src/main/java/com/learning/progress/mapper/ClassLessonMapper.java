@@ -1,7 +1,7 @@
 package com.learning.progress.mapper;
 
-import com.learning.progress.dto.clazz.ClassLessonDTO;
-import com.learning.progress.dto.clazz.SyncClassLessonRequest;
+import com.learning.progress.dto.clazz.lesson.ClassLessonDTO;
+import com.learning.progress.dto.clazz.lesson.SyncClassLessonRequest;
 import com.learning.progress.entity.ClassLesson;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;

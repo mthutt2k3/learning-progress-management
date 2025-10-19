@@ -2,8 +2,8 @@ package com.learning.progress.service.impl;
 
 import com.learning.progress.common.Const;
 import com.learning.progress.common.RoleName;
-import com.learning.progress.dto.ClassHistoryDTO;
-import com.learning.progress.dto.response.DataResponse;
+import com.learning.progress.dto.clazz.history.ClassHistoryDTO;
+import com.learning.progress.dto.DataResponse;
 import com.learning.progress.entity.ClassHistory;
 import com.learning.progress.entity.Clazz;
 import com.learning.progress.entity.User;

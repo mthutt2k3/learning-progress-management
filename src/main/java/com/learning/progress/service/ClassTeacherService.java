@@ -1,10 +1,10 @@
 package com.learning.progress.service;
 
 import com.learning.progress.common.ClassTeacherStatus;
-import com.learning.progress.dto.clazz.AddTeacherToClassRequest;
-import com.learning.progress.dto.clazz.ClassTeacherResponse;
-import com.learning.progress.dto.clazz.TeacherPerformanceReport;
-import com.learning.progress.dto.response.DataResponse;
+import com.learning.progress.dto.clazz.teacher.AddTeacherToClassRequest;
+import com.learning.progress.dto.clazz.teacher.ClassTeacherResponse;
+import com.learning.progress.dto.clazz.teacher.TeacherPerformanceReport;
+import com.learning.progress.dto.DataResponse;
 
 import java.util.List;
 

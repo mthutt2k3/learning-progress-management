@@ -2,10 +2,7 @@ package com.learning.progress.repository;
 
 import com.learning.progress.common.RoleName;
 import com.learning.progress.common.UserStatus;
-import com.learning.progress.dto.ClassInfo;
-import com.learning.progress.dto.LevelInfo;
-import com.learning.progress.entity.ClassStudent;
-import com.learning.progress.entity.ClassTeacher;
+import com.learning.progress.dto.level.LevelInfo;
 import com.learning.progress.entity.User;
 import org.springframework.data.domain.Page;
 import org.springframework.data.jpa.repository.JpaRepository;

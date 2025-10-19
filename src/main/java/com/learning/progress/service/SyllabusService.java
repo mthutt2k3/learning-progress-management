@@ -1,8 +1,8 @@
 package com.learning.progress.service;
 
-import com.learning.progress.dto.SyllabusDTO;
-import com.learning.progress.dto.SyllabusDetailDTO;
-import com.learning.progress.dto.response.DataResponse;
+import com.learning.progress.dto.syllabus.SyllabusDTO;
+import com.learning.progress.dto.syllabus.SyllabusDetailDTO;
+import com.learning.progress.dto.DataResponse;
 import com.learning.progress.dto.syllabus.CreateSyllabusRequest;
 import com.learning.progress.dto.syllabus.UpdateSyllabusRequest;
 import org.springframework.web.multipart.MultipartFile;

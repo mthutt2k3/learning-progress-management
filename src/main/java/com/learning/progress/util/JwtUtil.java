@@ -1,7 +1,7 @@
 package com.learning.progress.util;
 
 import com.learning.progress.common.JwtTokenType;
-import com.learning.progress.dto.EmailChangeTokenClaims;
+import com.learning.progress.dto.user.EmailChangeTokenClaims;
 import com.learning.progress.exception.ApiException;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;

@@ -1,7 +1,7 @@
 package com.learning.progress.repository;
 
 import com.learning.progress.common.LevelEnum;
-import com.learning.progress.dto.response.LevelDetailsResponse;
+import com.learning.progress.dto.level.LevelDetailsResponse;
 import com.learning.progress.entity.Level;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;

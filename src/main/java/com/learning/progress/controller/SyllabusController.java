@@ -1,8 +1,8 @@
 package com.learning.progress.controller;
 
 import com.learning.progress.common.Const;
-import com.learning.progress.dto.SyllabusDTO;
-import com.learning.progress.dto.response.DataResponse;
+import com.learning.progress.dto.syllabus.SyllabusDTO;
+import com.learning.progress.dto.DataResponse;
 import com.learning.progress.dto.syllabus.CreateSyllabusRequest;
 import com.learning.progress.dto.syllabus.UpdateSyllabusRequest;
 import com.learning.progress.service.SyllabusService;
