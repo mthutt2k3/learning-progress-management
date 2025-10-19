@@ -1,11 +1,11 @@
 package com.learning.progress.service.impl;
 
-import com.learning.progress.dto.SyllabusDTO;
-import com.learning.progress.dto.SyllabusDetailDTO;
+import com.learning.progress.dto.syllabus.SyllabusDTO;
+import com.learning.progress.dto.syllabus.SyllabusDetailDTO;
 import com.learning.progress.dto.excel.ExportSyllabusDTO;
-import com.learning.progress.dto.response.DataResponse;
+import com.learning.progress.dto.DataResponse;
 import com.learning.progress.dto.syllabus.CreateSyllabusRequest;
-import com.learning.progress.dto.syllabus.ImportSyllabusDTO;
+import com.learning.progress.dto.excel.ImportSyllabusDTO;
 import com.learning.progress.dto.syllabus.UpdateSyllabusRequest;
 import com.learning.progress.entity.Chapter;
 import com.learning.progress.entity.Lesson;

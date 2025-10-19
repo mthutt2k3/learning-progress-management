@@ -1,11 +1,11 @@
 package com.learning.progress.controller;
 import com.learning.progress.common.Const;
-import com.learning.progress.dto.request.ChangePasswordRequest;
-import com.learning.progress.dto.request.ConfirmResetPasswordRequest;
-import com.learning.progress.dto.request.LoginRequest;
-import com.learning.progress.dto.request.ResetPasswordRequest;
-import com.learning.progress.dto.response.DataResponse;
-import com.learning.progress.dto.response.ResetPasswordByTeacherResponse;
+import com.learning.progress.dto.auth.ChangePasswordRequest;
+import com.learning.progress.dto.auth.ConfirmResetPasswordRequest;
+import com.learning.progress.dto.auth.LoginRequest;
+import com.learning.progress.dto.auth.ResetPasswordRequest;
+import com.learning.progress.dto.DataResponse;
+import com.learning.progress.dto.auth.ResetPasswordByTeacherResponse;
 import com.learning.progress.service.AuthService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -53,16 +53,16 @@ public class AuthController {
     }
 
     @PostMapping("/reset-password")
-    @Operation(summary = "reset password by sent default pass word to email", description = "reset password by sent default pass word to ")
-    public ResponseEntity<?> resetPassword(@RequestBody ResetPasswordRequest request) {
-        String response = authService.resetPasswordByEmail(request);
+    @Operation(summary = "Request reset pass by email", description = "Reset password by sent confirm link through email")
+    public ResponseEntity<?> requestResetPasswordByEmail(@RequestBody ResetPasswordRequest request) {
+        String response = authService.requestResetPasswordByEmail(request);
         return ResponseEntity.ok(DataResponse.success(response, Const.RESULT_MESSAGE_CODE.PASSWORD_RESET_EMAIL_SENT));
     }
 
     @PostMapping("/confirm-reset-password")
     @Operation(summary = "Xác nhận và đặt lại mật khẩu", description = "Xác nhận token và cập nhật mật khẩu mới")
-    public ResponseEntity<?> confirmResetPassword(@RequestBody ConfirmResetPasswordRequest request) {
-        String response = authService.confirmResetPassword(request);
+    public ResponseEntity<?> resetPasswordByToken(@RequestBody ConfirmResetPasswordRequest request) {
+        String response = authService.resetPasswordByToken(request);
         return ResponseEntity.ok(DataResponse.success(response, Const.RESULT_MESSAGE_CODE.UPDATE_SUCCESSFUL));
     }
 

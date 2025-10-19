@@ -1,9 +1,9 @@
 package com.learning.progress.controller;
 
 import com.learning.progress.common.Const;
-import com.learning.progress.dto.ClassHistoryDTO;
-import com.learning.progress.dto.clazz.CreateClassHistoryRequest;
-import com.learning.progress.dto.response.DataResponse;
+import com.learning.progress.dto.clazz.history.ClassHistoryDTO;
+import com.learning.progress.dto.clazz.history.CreateClassHistoryRequest;
+import com.learning.progress.dto.DataResponse;
 import com.learning.progress.service.ClassHistoryService;
 import com.learning.progress.util.JwtUtil;
 import io.swagger.v3.oas.annotations.Operation;

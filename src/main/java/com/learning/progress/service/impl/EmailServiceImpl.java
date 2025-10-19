@@ -1,7 +1,7 @@
 package com.learning.progress.service.impl;
 
 import com.learning.progress.common.Const;
-import com.learning.progress.dto.request.ResetPasswordRequest;
+import com.learning.progress.dto.auth.ResetPasswordRequest;
 import com.learning.progress.entity.User;
 import com.learning.progress.exception.ApiException;
 import com.learning.progress.service.EmailService;

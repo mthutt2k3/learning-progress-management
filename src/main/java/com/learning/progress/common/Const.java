@@ -20,6 +20,7 @@ public class Const {
     public static class DOB {
         public static final String DOB_IN_FUTURE = "Date of birth cannot be in the future.";
         public static final String DOB_UNDER_AGE = "User must be at least %d years old.";
+        public static final String DOB_OVER_AGE = "Tuổi không được lớn hơn %d";
     }
     public static class FILE {
         public static final String AVATAR_REQUIRED = "Avatar file is required.";

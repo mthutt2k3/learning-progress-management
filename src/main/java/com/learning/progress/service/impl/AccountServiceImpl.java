@@ -3,9 +3,9 @@ package com.learning.progress.service.impl;
 import com.learning.progress.common.Const;
 import com.learning.progress.common.RoleName;
 import com.learning.progress.common.UserStatus;
-import com.learning.progress.dto.AccountDTO;
-import com.learning.progress.dto.request.CreateNewAccountRequest;
-import com.learning.progress.dto.response.DataResponse;
+import com.learning.progress.dto.account.AccountDTO;
+import com.learning.progress.dto.account.CreateNewAccountRequest;
+import com.learning.progress.dto.DataResponse;
 import com.learning.progress.entity.Role;
 import com.learning.progress.entity.User;
 import com.learning.progress.exception.ApiException;
@@ -28,13 +28,11 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
-import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service

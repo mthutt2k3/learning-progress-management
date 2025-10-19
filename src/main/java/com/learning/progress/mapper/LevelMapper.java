@@ -1,7 +1,7 @@
 package com.learning.progress.mapper;
 
-import com.learning.progress.dto.request.UpdateLevelOrderRequest;
-import com.learning.progress.dto.response.LevelDetailsResponse;
+import com.learning.progress.dto.level.SyncLevelRequest;
+import com.learning.progress.dto.level.LevelDetailsResponse;
 import com.learning.progress.entity.Level;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
@@ -15,7 +15,7 @@ public interface LevelMapper {
     @Mapping(source = "promotionCriteria", target = "promotionCriteria")
     @Mapping(source = "learningObjectives", target = "learningObjectives")
     @Mapping(source = "estimatedDurationWeeks", target = "estimatedDurationWeeks")
-    Level toEntity(UpdateLevelOrderRequest request);
+    Level toEntity(SyncLevelRequest request);
 
     @Mapping(source = "id", target = "id")
     @Mapping(source = "levelName", target = "levelName")
@@ -35,5 +35,5 @@ public interface LevelMapper {
     @Mapping(target = "updatedAt", ignore = true)
     @Mapping(target = "deletedBy", ignore = true)
     @Mapping(target = "deletedAt", ignore = true)
-    void updateOrderFromRequest(@MappingTarget Level level, UpdateLevelOrderRequest request);
+    void updateOrderFromRequest(@MappingTarget Level level, SyncLevelRequest request);
 }

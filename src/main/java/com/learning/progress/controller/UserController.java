@@ -2,10 +2,8 @@ package com.learning.progress.controller;
 
 import com.learning.progress.common.Const;
 import com.learning.progress.common.UserStatus;
-import com.learning.progress.dto.*;
-import com.learning.progress.dto.request.CreateStudentRequest;
-import com.learning.progress.dto.request.CreateUserRequest;
-import com.learning.progress.dto.response.DataResponse;
+import com.learning.progress.dto.user.*;
+import com.learning.progress.dto.DataResponse;
 import com.learning.progress.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;

@@ -1,7 +1,7 @@
 package com.learning.progress.mapper;
 
-import com.learning.progress.dto.clazz.AddTeacherToClassRequest;
-import com.learning.progress.dto.clazz.ClassTeacherResponse;
+import com.learning.progress.dto.clazz.teacher.AddTeacherToClassRequest;
+import com.learning.progress.dto.clazz.teacher.ClassTeacherResponse;
 import com.learning.progress.entity.ClassTeacher;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;

@@ -1,9 +1,7 @@
 package com.learning.progress.dto.clazz;
 
 import com.learning.progress.common.ClassStatus;
-import com.learning.progress.dto.LevelInfo;
-import com.learning.progress.dto.SyllabusDTO;
-import com.learning.progress.entity.Syllabus;
+import com.learning.progress.dto.level.LevelInfo;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;

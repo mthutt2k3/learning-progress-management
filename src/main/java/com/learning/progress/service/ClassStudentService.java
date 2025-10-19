@@ -1,8 +1,11 @@
 package com.learning.progress.service;
 
 import com.learning.progress.common.ClassStudentStatus;
-import com.learning.progress.dto.clazz.*;
-import com.learning.progress.dto.response.DataResponse;
+import com.learning.progress.dto.clazz.student.AddStudentToClassRequest;
+import com.learning.progress.dto.clazz.student.ClassStudentResponse;
+import com.learning.progress.dto.clazz.student.StudentPerformanceReport;
+import com.learning.progress.dto.clazz.student.StudentProgressOverview;
+import com.learning.progress.dto.DataResponse;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;

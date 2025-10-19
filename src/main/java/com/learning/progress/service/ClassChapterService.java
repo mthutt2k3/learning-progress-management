@@ -1,8 +1,8 @@
 package com.learning.progress.service;
 
-import com.learning.progress.dto.clazz.ClassChapterDTO;
-import com.learning.progress.dto.clazz.SyncClassChapterRequest;
-import com.learning.progress.dto.response.DataResponse;
+import com.learning.progress.dto.clazz.chapter.ClassChapterDTO;
+import com.learning.progress.dto.clazz.chapter.SyncClassChapterRequest;
+import com.learning.progress.dto.DataResponse;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
