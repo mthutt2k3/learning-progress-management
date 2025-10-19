@@ -181,7 +181,6 @@ public class LevelServiceImpl implements LevelService {
             }
         }
 
-
         // Step 4: Validate EXISTING IDs - Strict Matching
         Set<Long> requestExistingIds = nonDeletedRequests.stream()
                 .filter(req -> req.getId() != null)
@@ -265,7 +264,7 @@ public class LevelServiceImpl implements LevelService {
             );
         }
 
-        // Step 7: Validate duplicate level names
+        // Step 7: Validate duplicate level names (CHỈ TRONG REQUEST)
         Map<String, List<Integer>> nameToOrders = new HashMap<>();
         for (UpdateLevelOrderRequest req : nonDeletedRequests) {
             String normalizedName = req.getLevelName().trim().toLowerCase();
@@ -273,7 +272,7 @@ public class LevelServiceImpl implements LevelService {
                     .add(req.getOrderNumber());
         }
 
-        // Tìm các tên trùng
+        // Tìm các tên trùng TRONG REQUEST
         Map<String, List<Integer>> duplicates = nameToOrders.entrySet().stream()
                 .filter(e -> e.getValue().size() > 1)
                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
@@ -287,7 +286,6 @@ public class LevelServiceImpl implements LevelService {
                 throw new ApiException(msg, HttpStatus.CONFLICT.value());
             });
         }
-
 
         // Step 8: Process
         String currentUser = jwtUtil.extractUsernameFromCurrentRequest();
@@ -305,7 +303,7 @@ public class LevelServiceImpl implements LevelService {
             levelsToSave.add(level);
         }
 
-        // Process UPDATE CREATE
+        // Process UPDATE and CREATE
         List<UpdateLevelOrderRequest> orderedRequests = nonDeletedRequests.stream()
                 .sorted(Comparator.comparing(UpdateLevelOrderRequest::getOrderNumber))
                 .collect(Collectors.toList());
@@ -319,10 +317,7 @@ public class LevelServiceImpl implements LevelService {
                 levelMapper.updateOrderFromRequest(level, req);
                 level.setOrderNumber(req.getOrderNumber());
             } else {
-                // Create new
-                if (levelRepository.existsByLevelName(req.getLevelName().trim())) {
-                    throw new ApiException(Const.LEVEL.DUPLICATE_LEVEL_NAME, HttpStatus.CONFLICT.value());
-                }
+                // Create new - KHÔNG CẦN CHECK DB NỮA vì đã check duplicate trong request ở Step 7
                 level = levelMapper.toEntity(req);
                 level.setOrderNumber(req.getOrderNumber());
 
@@ -339,7 +334,7 @@ public class LevelServiceImpl implements LevelService {
             result.add(levelMapper.toLevelDetailsResponse(level));
         }
 
-        // Step 8: Save all levels
+        // Step 9: Save all levels
         levelRepository.saveAll(levelsToSave);
         return result;
     }
