@@ -1,10 +1,10 @@
 package com.learning.progress.service.impl;
 
 import com.learning.progress.common.Const;
-import com.learning.progress.dto.LessonDTO;
-import com.learning.progress.dto.response.DataResponse;
-import com.learning.progress.dto.syllabus.ImportLessonDTO;
-import com.learning.progress.dto.syllabus.SyncLessonRequest;
+import com.learning.progress.dto.lesson.LessonDTO;
+import com.learning.progress.dto.DataResponse;
+import com.learning.progress.dto.excel.ImportLessonDTO;
+import com.learning.progress.dto.lesson.SyncLessonRequest;
 import com.learning.progress.entity.Chapter;
 import com.learning.progress.entity.Lesson;
 import com.learning.progress.exception.ApiException;
@@ -157,6 +157,34 @@ public class LessonServiceImpl implements LessonService {
             if (!violations.isEmpty()) {
                 String errorMsg = violations.stream().map(ConstraintViolation::getMessage).collect(Collectors.joining(", "));
                 throw new ApiException(errorMsg, HttpStatus.BAD_REQUEST.value());
+            }
+        }
+
+        // Bước 6b: Validate duplicate lesson names (case-insensitive)
+
+// Check trùng trong request
+        Set<String> lessonNamesLower = new HashSet<>();
+        for (SyncLessonRequest req : nonDeletedRequests) {
+            String name = req.getLessonName().trim().toLowerCase();
+            if (!lessonNamesLower.add(name)) {
+                throw new ApiException(
+                        String.format("Tên lesson bị trùng (không phân biệt hoa thường): %s", req.getLessonName()),
+                        HttpStatus.BAD_REQUEST.value()
+                );
+            }
+        }
+
+// Check trùng với DB (đối với lesson mới)
+        for (SyncLessonRequest req : nonDeletedRequests) {
+            if (req.getId() == null) { // chỉ check cho lesson mới
+                String trimmedName = req.getLessonName().trim();
+                boolean exists = lessonRepository.existsByChapterAndLessonNameIgnoreCaseAndDeletedAtIsNull(chapter, trimmedName);
+                if (exists) {
+                    throw new ApiException(
+                            String.format("Tên lesson '%s' đã tồn tại trong chapter này", trimmedName),
+                            HttpStatus.BAD_REQUEST.value()
+                    );
+                }
             }
         }
 

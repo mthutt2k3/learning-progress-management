@@ -1,14 +1,13 @@
 package com.learning.progress.controller;
 
 import com.learning.progress.common.Const;
-import com.learning.progress.dto.clazz.ClassChapterDTO;
-import com.learning.progress.dto.clazz.SyncClassChapterRequest;
-import com.learning.progress.dto.response.DataResponse;
+import com.learning.progress.dto.clazz.chapter.ClassChapterDTO;
+import com.learning.progress.dto.clazz.chapter.SyncClassChapterRequest;
+import com.learning.progress.dto.DataResponse;
 import com.learning.progress.service.ClassChapterService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.ByteArrayResource;
@@ -20,7 +19,6 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.IOException;
 import java.util.List;
 
 @RestController
@@ -56,33 +54,6 @@ public class ClassChapterController {
             @RequestParam(required = false) String searchText) {
         return ResponseEntity.ok(classChapterService.getClassChapterList(classId, page, size, searchText));
     }
-
-    @GetMapping("/export")
-    @PreAuthorize("hasRole('MANAGER') or hasRole('TEACHER')")
-    @Operation(summary = "Export class chapters", description = "Export danh sách class chapters sang Excel")
-    public void exportClassChapters(@RequestParam Long classId, HttpServletResponse response) throws IOException {
-//        response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-//        response.setHeader("Content-Disposition", "attachment; filename=class_chapters.xlsx");
-//        classChapterService.exportClassChaptersToExcel(classId, response.getOutputStream());
-    }
-
-//    @PostMapping("/import")
-//    @PreAuthorize("hasRole('TEACHER')")
-//    @Operation(summary = "Import class chapters", description = "Import class chapters từ Excel")
-//    public ResponseEntity<DataResponse<Void>> importClassChapters(
-//            @RequestParam Long classId, @RequestParam("file") MultipartFile file) throws IOException {
-//        classChapterService.importClassChaptersFromExcel(classId, file.getInputStream());
-//        return ResponseEntity.ok(DataResponse.success(null, Const.RESULT_MESSAGE_CODE.IMPORT_SUCCESSFUL));
-//    }
-
-//    @GetMapping("/template")
-//    @PreAuthorize("hasRole('TEACHER')")
-//    @Operation(summary = "Tải template import", description = "Tải template Excel cho import class chapters")
-//    public void downloadImportTemplate(HttpServletResponse response) throws IOException {
-//        response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-//        response.setHeader("Content-Disposition", "attachment; filename=class_chapter_import_template.xlsx");
-//        classChapterService.downloadImportTemplate(response.getOutputStream());
-//    }
 
     @PostMapping("/import")
     @PreAuthorize("hasRole('TEACHER')")

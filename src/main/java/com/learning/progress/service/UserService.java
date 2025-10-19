@@ -1,10 +1,8 @@
 package com.learning.progress.service;
 
 import com.learning.progress.common.UserStatus;
-import com.learning.progress.dto.*;
-import com.learning.progress.dto.request.CreateStudentRequest;
-import com.learning.progress.dto.request.CreateUserRequest;
-import com.learning.progress.dto.response.DataResponse;
+import com.learning.progress.dto.user.*;
+import com.learning.progress.dto.DataResponse;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
@@ -33,4 +31,16 @@ public interface UserService {
     String getStudentTemplateSasUrl();
 
     String updateUserAvatar(Long userId, MultipartFile file);
+    byte[] exportStudents(String searchText,
+                          List<String> status,
+                          List<String> roleName,
+                          List<Long> classIds);
+
+    byte[] exportAllTeachers(String searchText,
+                             List<String> status,
+                             List<String> roleName);
+
+    List<StudentProfileDTO> bulkUpdateStudentStatus(BulkUpdateStatusRequest request);
+
+    List<TeacherProfileDTO> bulkUpdateTeacherStatus(BulkUpdateStatusRequest request);
 }

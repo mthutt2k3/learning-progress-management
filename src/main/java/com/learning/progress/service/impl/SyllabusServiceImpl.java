@@ -1,11 +1,14 @@
 package com.learning.progress.service.impl;
 
-import com.learning.progress.dto.SyllabusDTO;
-import com.learning.progress.dto.SyllabusDetailDTO;
-import com.learning.progress.dto.response.DataResponse;
+import com.learning.progress.dto.syllabus.SyllabusDTO;
+import com.learning.progress.dto.syllabus.SyllabusDetailDTO;
+import com.learning.progress.dto.excel.ExportSyllabusDTO;
+import com.learning.progress.dto.DataResponse;
 import com.learning.progress.dto.syllabus.CreateSyllabusRequest;
-import com.learning.progress.dto.syllabus.ImportSyllabusDTO;
+import com.learning.progress.dto.excel.ImportSyllabusDTO;
 import com.learning.progress.dto.syllabus.UpdateSyllabusRequest;
+import com.learning.progress.entity.Chapter;
+import com.learning.progress.entity.Lesson;
 import com.learning.progress.entity.Level;
 import com.learning.progress.entity.Syllabus;
 import com.learning.progress.exception.ApiException;
@@ -29,6 +32,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.text.SimpleDateFormat;
 import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.*;
@@ -62,6 +66,11 @@ public class SyllabusServiceImpl implements SyllabusService {
     @Override
     @Transactional
     public SyllabusDTO createSyllabus(CreateSyllabusRequest request) {
+
+        if (syllabusRepository.existsBySyllabusNameIgnoreCase(request.getSyllabusName())) {
+            throw new ApiException("Syllabus name already exists", HttpStatus.BAD_REQUEST.value());
+        }
+
         Level level = levelRepository.findById(request.getLevelId())
                 .orElseThrow(() -> new ApiException("Level not found", HttpStatus.NOT_FOUND.value()));
 
@@ -255,73 +264,111 @@ public class SyllabusServiceImpl implements SyllabusService {
         return result;
     }
 
-//    @Override
-//    @Transactional
-//    public List<SyllabusDTO> importSyllabusFromExcel(MultipartFile file) {
-//        List<ImportSyllabusDTO> importList = fileService.readExcelData(file, "Import Data", ImportSyllabusDTO.class);
-//        List<SyllabusDTO> result = new ArrayList<>();
-//        String currentUser = jwtUtil.extractUsernameFromCurrentRequest();
-//        OffsetDateTime now = OffsetDateTime.now();
-//
-//        // Nhóm theo syllabusCode
-//        Map<String, List<ImportSyllabusDTO>> chaptersBySyllabus = importList.stream()
-//                .collect(Collectors.groupingBy(ImportChapterDTO::getSyllabusCode));
-//
-//        for (Map.Entry<String, List<ImportChapterDTO>> entry : chaptersBySyllabus.entrySet()) {
-//            String syllabusCode = entry.getKey();
-//            List<ImportChapterDTO> chapters = entry.getValue();
-//
-//            // 1. Kiểm tra syllabusCode
-//            Syllabus syllabus = syllabusRepository.findBySyllabusCode(syllabusCode)
-//                    .filter(s -> s.getDeletedAt() == null)
-//                    .orElseThrow(() -> new ApiException("Syllabus không tìm thấy hoặc đã bị xóa với mã: " + syllabusCode, HttpStatus.NOT_FOUND.value()));
-//
-//            // 2. Validate chapters
-//            for (ImportChapterDTO req : chapters) {
-//                if (req.getChapterName() == null || req.getChapterName().trim().isEmpty()) {
-//                    throw new ApiException("Chapter name là bắt buộc: " + req.getChapterName(), HttpStatus.BAD_REQUEST.value());
-//                }
-//                if (req.getChapterName().length() > 255) {
-//                    throw new ApiException("Chapter name vượt quá 255 ký tự: " + req.getChapterName(), HttpStatus.BAD_REQUEST.value());
-//                }
-//                if (req.getOrderNumber() == null || req.getOrderNumber() < 1) {
-//                    throw new ApiException("Order number phải là số dương: " + req.getOrderNumber(), HttpStatus.BAD_REQUEST.value());
-//                }
-//            }
-//
-//            // 3. Validate order numbers
-//            Set<Integer> orderNumbers = chapters.stream()
-//                    .map(ImportChapterDTO::getOrderNumber)
-//                    .filter(Objects::nonNull)
-//                    .collect(Collectors.toSet());
-//
-//            int chapterSize = chapters.size();
-//            Set<Integer> expectedOrders = IntStream.rangeClosed(1, chapterSize).boxed().collect(Collectors.toSet());
-//
-//            if (orderNumbers.size() != chapterSize || !orderNumbers.equals(expectedOrders)) {
-//                throw new ApiException(
-//                        String.format("Order numbers phải tuần tự từ 1 đến %d, không trùng lặp và không có gap. Current: %s",
-//                                chapterSize, orderNumbers),
-//                        HttpStatus.BAD_REQUEST.value()
-//                );
-//            }
-//
-//            log.info("Validation passed for syllabusCode={}: total chapters={}", syllabusCode, chapterSize);
-//
-//            // 4. Tạo mới chapters
-//            for (ImportChapterDTO req : chapters) {
-//                Chapter newChapter = new Chapter();
-//                newChapter.setSyllabus(syllabus);
-//                newChapter.setChapterName(req.getChapterName());
-//                newChapter.setOrderNumber(req.getOrderNumber());
-//                newChapter.setCreatedBy(currentUser);
-//                newChapter.setUpdatedBy(currentUser);
-//                newChapter.setUpdatedAt(now);
-//                Chapter saved = chapterRepository.save(newChapter);
-//                result.add(chapterMapper.toChapterDTO(saved));
-//            }
-//        }
-//
-//        return result;
-//    }
+    @Override
+    public byte[] exportAllSyllabuses(String searchText) {
+        // Lấy tất cả syllabuses
+        List<Syllabus> syllabuses = syllabusRepository.findAllBySearchText(searchText);
+
+        // Convert sang ExportSyllabusDTO
+        List<ExportSyllabusDTO> exportData = syllabuses.stream()
+                .map(this::convertToExportSyllabusDTO)
+                .collect(Collectors.toList());
+
+        // Tạo summary info
+        Map<String, String> summaryInfo = new LinkedHashMap<>();
+        summaryInfo.put("Ngày xuất", new SimpleDateFormat("dd/MM/yyyy HH:mm:ss").format(new Date()));
+        summaryInfo.put("Tổng số syllabus", String.valueOf(exportData.size()));
+
+        int totalChapters = exportData.stream()
+                .mapToInt(s -> s.getTotalChapters() != null ? s.getTotalChapters() : 0)
+                .sum();
+        int totalLessons = exportData.stream()
+                .mapToInt(s -> s.getTotalLessons() != null ? s.getTotalLessons() : 0)
+                .sum();
+
+        summaryInfo.put("Tổng số chapter", String.valueOf(totalChapters));
+        summaryInfo.put("Tổng số lesson", String.valueOf(totalLessons));
+
+        if (searchText != null && !searchText.trim().isEmpty()) {
+            summaryInfo.put("Từ khóa tìm kiếm", searchText);
+        }
+
+        // Export
+        return fileService.exportSyllabusesData(exportData, summaryInfo);
+    }
+
+    @Override
+    public byte[] exportSyllabusDetail(Long syllabusId) {
+        // Kiểm tra syllabus tồn tại
+        Syllabus syllabus = syllabusRepository.findById(syllabusId)
+                .filter(s -> s.getDeletedAt() == null)
+                .orElseThrow(() -> new ApiException("Syllabus not found or deleted", HttpStatus.NOT_FOUND.value()));
+
+        // Convert sang ExportSyllabusDTO với đầy đủ thông tin
+        ExportSyllabusDTO exportData = convertToExportSyllabusDTO(syllabus);
+
+        // Tạo summary info
+        Map<String, String> summaryInfo = new LinkedHashMap<>();
+        summaryInfo.put("Ngày xuất", new SimpleDateFormat("dd/MM/yyyy HH:mm:ss").format(new Date()));
+        summaryInfo.put("Mã Syllabus", syllabus.getSyllabusCode());
+        summaryInfo.put("Tên Syllabus", syllabus.getSyllabusName());
+        summaryInfo.put("Level", syllabus.getLevel().getLevelName() + " (" + syllabus.getLevel().getLevelCode() + ")");
+        summaryInfo.put("Tổng Chapter", String.valueOf(exportData.getTotalChapters()));
+        summaryInfo.put("Tổng Lesson", String.valueOf(exportData.getTotalLessons()));
+
+        // Export chi tiết
+        return fileService.exportSyllabusDetailData(exportData, summaryInfo);
+    }
+
+    private ExportSyllabusDTO convertToExportSyllabusDTO(Syllabus syllabus) {
+        SimpleDateFormat dateTimeFormat = new SimpleDateFormat("dd/MM/yyyy HH:mm");
+
+        // Lấy chapters
+        List<Chapter> chapters = syllabusRepository.findChaptersBySyllabusId(syllabus.getId());
+
+        // Convert chapters với lessons
+        List<ExportSyllabusDTO.ChapterInfo> chapterInfos = chapters.stream()
+                .map(chapter -> {
+                    List<Lesson> lessons = chapter.getLessons().stream()
+                            .filter(l -> l.getDeletedAt() == null)
+                            .sorted(Comparator.comparing(Lesson::getOrderNumber))
+                            .collect(Collectors.toList());
+
+                    List<ExportSyllabusDTO.LessonInfo> lessonInfos = lessons.stream()
+                            .map(lesson -> ExportSyllabusDTO.LessonInfo.builder()
+                                    .lessonName(lesson.getLessonName())
+                                    .content(lesson.getContent())
+                                    .orderNumber(lesson.getOrderNumber())
+                                    .build())
+                            .collect(Collectors.toList());
+
+                    return ExportSyllabusDTO.ChapterInfo.builder()
+                            .chapterCode(chapter.getChapterCode())
+                            .chapterName(chapter.getChapterName())
+                            .orderNumber(chapter.getOrderNumber())
+                            .lessonCount(lessons.size())
+                            .lessons(lessonInfos)
+                            .build();
+                })
+                .collect(Collectors.toList());
+
+        int totalLessons = chapterInfos.stream()
+                .mapToInt(c -> c.getLessonCount() != null ? c.getLessonCount() : 0)
+                .sum();
+
+        return ExportSyllabusDTO.builder()
+                .syllabusCode(syllabus.getSyllabusCode())
+                .syllabusName(syllabus.getSyllabusName())
+                .levelCode(syllabus.getLevel().getLevelCode())
+                .levelName(syllabus.getLevel().getLevelName())
+                .description(syllabus.getDescription())
+                .createdAt(syllabus.getCreatedAt() != null
+                        ? dateTimeFormat.format(Date.from(syllabus.getCreatedAt().toInstant()))
+                        : "")
+                .createdBy(syllabus.getCreatedBy())
+                .totalChapters(chapters.size())
+                .totalLessons(totalLessons)
+                .chapters(chapterInfos)
+                .build();
+    }
 }

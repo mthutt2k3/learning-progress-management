@@ -4,12 +4,12 @@ import com.learning.progress.common.Const;
 import com.learning.progress.common.JwtTokenType;
 import com.learning.progress.common.RoleName;
 import com.learning.progress.common.UserStatus;
-import com.learning.progress.dto.request.ChangePasswordRequest;
-import com.learning.progress.dto.request.ConfirmResetPasswordRequest;
-import com.learning.progress.dto.request.LoginRequest;
-import com.learning.progress.dto.request.ResetPasswordRequest;
-import com.learning.progress.dto.response.LoginResponse;
-import com.learning.progress.dto.response.ResetPasswordByTeacherResponse;
+import com.learning.progress.dto.auth.ChangePasswordRequest;
+import com.learning.progress.dto.auth.ConfirmResetPasswordRequest;
+import com.learning.progress.dto.auth.LoginRequest;
+import com.learning.progress.dto.auth.ResetPasswordRequest;
+import com.learning.progress.dto.auth.LoginResponse;
+import com.learning.progress.dto.auth.ResetPasswordByTeacherResponse;
 import com.learning.progress.entity.RefreshToken;
 import com.learning.progress.entity.User;
 import com.learning.progress.exception.ApiException;
@@ -35,9 +35,7 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 import org.thymeleaf.spring6.SpringTemplateEngine;
 
 import java.time.Instant;
-import java.time.OffsetDateTime;
 import java.util.Map;
-import java.util.UUID;
 
 @Service
 public class AuthServiceImpl implements AuthService {
@@ -157,7 +155,7 @@ public class AuthServiceImpl implements AuthService {
      * @return Masked email address of the user.
      */
     @Override
-    public String resetPasswordByEmail(ResetPasswordRequest request) {
+    public String requestResetPasswordByEmail(ResetPasswordRequest request) {
         String traceId = MDC.get("traceId");
         log.info("[{}] Password reset requested for username: {}", traceId, request.getUserName());
 
@@ -199,7 +197,7 @@ public class AuthServiceImpl implements AuthService {
      * @return Masked email address of the user.
      */
     @Override
-    public String confirmResetPassword(ConfirmResetPasswordRequest request) {
+    public String resetPasswordByToken(ConfirmResetPasswordRequest request) {
         String traceId = MDC.get("traceId");
         log.info("[{}] Confirming password reset with token: {}", traceId, request.getToken());
 

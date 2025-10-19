@@ -1,7 +1,7 @@
 package com.learning.progress.repository;
 
 import com.learning.progress.common.LevelEnum;
-import com.learning.progress.dto.response.LevelDetailsResponse;
+import com.learning.progress.dto.level.LevelDetailsResponse;
 import com.learning.progress.entity.Level;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -31,7 +31,7 @@ public interface LevelRepository extends JpaRepository<Level, Long> {
     Optional<Level> findByLevelCodeIgnoreCase(String levelCode);
 
     @Query("""
-    SELECT new com.learning.progress.dto.response.LevelDetailsResponse(
+    SELECT new com.learning.progress.dto.level.LevelDetailsResponse(
         l.id, l.levelName, l.levelCode, l.description,
         p.id, p.levelName,
         l.promotionCriteria, l.learningObjectives,
@@ -47,7 +47,7 @@ public interface LevelRepository extends JpaRepository<Level, Long> {
     Page<LevelDetailsResponse> findAllWithFilters(@Param("text") String text, Pageable pageable);
 
     @Query("""
-    SELECT new com.learning.progress.dto.response.LevelDetailsResponse(
+    SELECT new com.learning.progress.dto.level.LevelDetailsResponse(
         l.id, l.levelName, l.levelCode, l.description,
         p.id, p.levelName,
         l.promotionCriteria, l.learningObjectives,

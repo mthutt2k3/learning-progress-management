@@ -1,12 +1,10 @@
 package com.learning.progress.service;
 
-import com.learning.progress.dto.clazz.ClassLessonDTO;
-import com.learning.progress.dto.clazz.SyncClassLessonRequest;
-import com.learning.progress.dto.response.DataResponse;
+import com.learning.progress.dto.clazz.lesson.ClassLessonDTO;
+import com.learning.progress.dto.clazz.lesson.SyncClassLessonRequest;
+import com.learning.progress.dto.DataResponse;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.InputStream;
-import java.io.OutputStream;
 import java.util.List;
 
 public interface ClassLessonService {
@@ -16,8 +14,6 @@ public interface ClassLessonService {
     ClassLessonDTO getClassLesson(Long id);
 
     DataResponse<List<ClassLessonDTO>> getClassLessonList(Long classChapterId, int page, int size, String searchText);
-
-    void exportClassLessonsToExcel(Long classChapterId, OutputStream outputStream);
 
     List<ClassLessonDTO> importLessonsInClassFromExcel(MultipartFile file, Long classId);
 

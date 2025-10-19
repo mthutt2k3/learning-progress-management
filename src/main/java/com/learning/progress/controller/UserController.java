@@ -1,12 +1,9 @@
 package com.learning.progress.controller;
 
 import com.learning.progress.common.Const;
-import com.learning.progress.common.RoleName;
 import com.learning.progress.common.UserStatus;
-import com.learning.progress.dto.*;
-import com.learning.progress.dto.request.CreateStudentRequest;
-import com.learning.progress.dto.request.CreateUserRequest;
-import com.learning.progress.dto.response.DataResponse;
+import com.learning.progress.dto.user.*;
+import com.learning.progress.dto.DataResponse;
 import com.learning.progress.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -22,6 +19,8 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.List;
 
 @RestController
@@ -94,10 +93,10 @@ public class UserController {
     public ResponseEntity<DataResponse<List<StudentProfileDTO>>> getStudentList(
             @Parameter(description = "Page number, starting from 0") @RequestParam(defaultValue = "0") int page,
             @Parameter(description = "Page size") @RequestParam(defaultValue = "10") int size,
-            @Parameter(description = "Search keyword (email, firstName, lastName)") @RequestParam(required = false) String text,
+            @Parameter(description = "Search keyword (email, fullName)") @RequestParam(required = false) String text,
             @Parameter(description = "Filter by status (e.g., ACTIVE, INACTIVE)") @RequestParam(required = false) List<String> status,
             @Parameter(description = "Filter by role (e.g., STUDENT, TEST_TAKER)") @RequestParam(required = false) List<String> roleName,
-            @Parameter(description = "Sort by field (e.g., createdAt, firstName)") @RequestParam(defaultValue = "createdAt") String sortBy,
+            @Parameter(description = "Sort by field (e.g., createdAt, fullName)") @RequestParam(defaultValue = "createdAt") String sortBy,
             @Parameter(description = "Sort direction (asc/desc)") @RequestParam(defaultValue = "asc") String sortDir) {
         return ResponseEntity.ok(userService.getStudentList(page, size, text, status, roleName, sortBy, sortDir));
     }
@@ -108,10 +107,10 @@ public class UserController {
     public ResponseEntity<DataResponse<List<TeacherProfileDTO>>> getTeacherList(
             @Parameter(description = "Page number, starting from 0") @RequestParam(defaultValue = "0") int page,
             @Parameter(description = "Page size") @RequestParam(defaultValue = "10") int size,
-            @Parameter(description = "Search keyword (email, firstName, lastName)") @RequestParam(required = false) String text,
+            @Parameter(description = "Search keyword (email, fullName)") @RequestParam(required = false) String text,
             @Parameter(description = "Filter by status (e.g., ACTIVE, INACTIVE)") @RequestParam(required = false) List<String> status,
             @Parameter(description = "Filter by role (e.g., TEACHER, TEACHING_ASSISTANT)") @RequestParam(required = false) List<String> roleName,
-            @Parameter(description = "Sort by field (e.g., createdAt, firstName)") @RequestParam(defaultValue = "createdAt") String sortBy,
+            @Parameter(description = "Sort by field (e.g., createdAt, fullName)") @RequestParam(defaultValue = "createdAt") String sortBy,
             @Parameter(description = "Sort direction (asc/desc)") @RequestParam(defaultValue = "asc") String sortDir) {
         return ResponseEntity.ok(userService.getTeacherList(page, size, text, status, roleName, sortBy, sortDir));
     }
@@ -240,4 +239,93 @@ public class UserController {
         return new ResponseEntity<>(DataResponse.success("Teachers imported successfully", Const.RESULT_MESSAGE_CODE.IMPORT_SUCCESSFUL), HttpStatus.OK);
     }
 
+    @GetMapping("/students/export")
+    @PreAuthorize("hasRole('MANAGER') or hasRole('TEACHER') or hasRole('TEACHING_ASSISTANT')")
+    @Operation(
+            summary = "Export Students to Excel",
+            description = "Export students to Excel. Can filter by class (TEACHER/TA must be teaching that class)"
+    )
+    public ResponseEntity<ByteArrayResource> exportStudents(
+            @Parameter(description = "Search keyword (email, fullName)")
+            @RequestParam(required = false) String text,
+            @Parameter(description = "Filter by status (e.g., ACTIVE, INACTIVE)")
+            @RequestParam(required = false) List<String> status,
+            @Parameter(description = "Filter by role (e.g., STUDENT, TEST_TAKER)")
+            @RequestParam(required = false) List<String> roleName,
+            @Parameter(description = "Filter by class IDs (if empty, export all)")
+            @RequestParam(required = false) List<Long> classIds) {
+
+        byte[] excelFile = userService.exportStudents(text, status, roleName, classIds);
+        ByteArrayResource resource = new ByteArrayResource(excelFile);
+
+        String filename = "Students_Export_" +
+                new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date()) +
+                ".xlsx";
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=" + filename)
+                .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                .contentLength(excelFile.length)
+                .body(resource);
+    }
+
+    @GetMapping("/teachers/export")
+    @PreAuthorize("hasRole('MANAGER')")
+    @Operation(
+            summary = "Export Teachers to Excel",
+            description = "Export all teachers or filtered teachers to Excel file with beautiful formatting"
+    )
+    public ResponseEntity<ByteArrayResource> exportTeachers(
+            @Parameter(description = "Search keyword (email, fullName)")
+            @RequestParam(required = false) String text,
+            @Parameter(description = "Filter by status (e.g., ACTIVE, INACTIVE)")
+            @RequestParam(required = false) List<String> status,
+            @Parameter(description = "Filter by role (e.g., TEACHER, TEACHING_ASSISTANT)")
+            @RequestParam(required = false) List<String> roleName) {
+
+        byte[] excelFile = userService.exportAllTeachers(text, status, roleName);
+        ByteArrayResource resource = new ByteArrayResource(excelFile);
+
+        String filename = "Teachers_Export_" +
+                new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date()) +
+                ".xlsx";
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=" + filename)
+                .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                .contentLength(excelFile.length)
+                .body(resource);
+    }
+
+    @PatchMapping("students/bulk-status")
+    @PreAuthorize("hasRole('MANAGER')")
+    @Operation(
+            summary = "Bulk update student status",
+            description = "Update status for multiple students at once. Cannot change from PENDING to ACTIVE. Only ACTIVE/INACTIVE can be changed."
+    )
+    public ResponseEntity<DataResponse<List<StudentProfileDTO>>> bulkUpdateStudentStatus(
+            @Valid @RequestBody BulkUpdateStatusRequest request) {
+
+        List<StudentProfileDTO> response = userService.bulkUpdateStudentStatus(request);
+
+        return ResponseEntity.ok(
+                DataResponse.success(response, Const.RESULT_MESSAGE_CODE.UPDATE_SUCCESSFUL)
+        );
+    }
+
+    @PatchMapping("teachers/bulk-status")
+    @PreAuthorize("hasRole('MANAGER')")
+    @Operation(
+            summary = "Bulk update teacher status",
+            description = "Update status for multiple teachers at once. Cannot change from PENDING to ACTIVE. Only ACTIVE/INACTIVE can be changed."
+    )
+    public ResponseEntity<DataResponse<List<TeacherProfileDTO>>> bulkUpdateTeacherStatus(
+            @Valid @RequestBody BulkUpdateStatusRequest request) {
+
+        List<TeacherProfileDTO> response = userService.bulkUpdateTeacherStatus(request);
+
+        return ResponseEntity.ok(
+                DataResponse.success(response, Const.RESULT_MESSAGE_CODE.UPDATE_SUCCESSFUL)
+        );
+    }
 }

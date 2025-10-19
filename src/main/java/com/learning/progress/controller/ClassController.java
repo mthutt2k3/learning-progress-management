@@ -2,22 +2,20 @@ package com.learning.progress.controller;
 
 import com.learning.progress.common.Const;
 import com.learning.progress.dto.clazz.ClassDTO;
+import com.learning.progress.dto.clazz.ClassOverviewDTO;
 import com.learning.progress.dto.clazz.CreateClassRequest;
 import com.learning.progress.dto.clazz.UpdateClassRequest;
-import com.learning.progress.dto.response.DataResponse;
+import com.learning.progress.dto.DataResponse;
 import com.learning.progress.service.ClassService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.multipart.MultipartFile;
 
-import java.io.IOException;
 import java.util.List;
 
 @RestController
@@ -27,6 +25,15 @@ public class ClassController {
 
     @Autowired
     private ClassService classService;
+
+    @GetMapping("/{classId}/overview")
+    @PreAuthorize("hasRole('MANAGER') or hasRole('TEACHER') or hasRole('TEACHING_ASSISTANT') or hasRole('STUDENT') or hasRole('TEST_TAKER')")
+    @Operation(summary = "Lấy tổng quan lớp học", description = "Lấy thông tin tổng quan của lớp học bao gồm giáo viên, trợ giảng, ngày bắt đầu, ngày kết thúc, trạng thái, cấp độ và giáo trình")
+    public ResponseEntity<DataResponse<ClassOverviewDTO>> getClassOverview(
+            @Parameter(description = "ID của lớp học") @PathVariable Long classId) {
+        ClassOverviewDTO overview = classService.getClassOverview(classId);
+        return ResponseEntity.ok(DataResponse.success(overview, Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL));
+    }
 
     @PostMapping
     @PreAuthorize("hasRole('MANAGER')")
@@ -60,13 +67,13 @@ public class ClassController {
         return ResponseEntity.ok(DataResponse.success(classService.updateClass(id, request), Const.RESULT_MESSAGE_CODE.UPDATE_SUCCESSFUL));
     }
 
-    @PatchMapping("/{id}/toggle")
+    @PatchMapping("/{id}/change-status")
     @PreAuthorize("hasRole('MANAGER')")
-    @Operation(summary = "Kết thúc lớp học", description = "Thay đổi trạng thái isActive")
-    public ResponseEntity<DataResponse<Void>> toggleClassActivation(
-            @PathVariable Long id, @RequestParam boolean isActive) {
-        classService.toggleClassActivation(id, isActive);
-        return ResponseEntity.ok(DataResponse.success(null, Const.RESULT_MESSAGE_CODE.UPDATE_SUCCESSFUL));
+    @Operation(summary = "Kết thúc lớp học", description = "Thay đổi trạng thái class")
+    public ResponseEntity<DataResponse<String>> changeClassStatusManually(
+            @PathVariable Long id, @RequestParam String status) {
+        var responseMsg = classService.changeClassStatusManually(id, status);
+        return ResponseEntity.ok(DataResponse.success(responseMsg, Const.RESULT_MESSAGE_CODE.UPDATE_SUCCESSFUL));
     }
 
     @DeleteMapping("/{id}")
@@ -76,31 +83,5 @@ public class ClassController {
             @Parameter(description = "Class ID") @PathVariable Long id) {
         classService.deleteClass(id);
         return ResponseEntity.ok(DataResponse.success(null, Const.RESULT_MESSAGE_CODE.DELETE_SUCCESSFUL));
-    }
-
-    @GetMapping("/export")
-    @PreAuthorize("hasRole('MANAGER')")
-    @Operation(summary = "Export classes", description = "Export danh sách class sang Excel")
-    public void exportClasses(HttpServletResponse response) throws IOException {
-        response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-        response.setHeader("Content-Disposition", "attachment; filename=classes.xlsx");
-        classService.exportClassesToExcel(response.getOutputStream());
-    }
-
-    @PostMapping("/import")
-    @PreAuthorize("hasRole('MANAGER')")
-    @Operation(summary = "Import classes", description = "Import classes từ Excel")
-    public ResponseEntity<DataResponse<Void>> importClasses(@RequestParam("file") MultipartFile file) throws IOException {
-        classService.importClassesFromExcel(file.getInputStream());
-        return ResponseEntity.ok(DataResponse.success(null, Const.RESULT_MESSAGE_CODE.IMPORT_SUCCESSFUL));
-    }
-
-    @GetMapping("/template")
-    @PreAuthorize("hasRole('MANAGER')")
-    @Operation(summary = "Tải template import", description = "Tải template Excel cho import classes")
-    public void downloadImportTemplate(HttpServletResponse response) throws IOException {
-        response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-        response.setHeader("Content-Disposition", "attachment; filename=class_import_template.xlsx");
-        classService.downloadImportTemplate(response.getOutputStream());
     }
 }

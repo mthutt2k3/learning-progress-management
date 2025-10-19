@@ -1,13 +1,8 @@
 package com.learning.progress.mapper;
 
-import com.learning.progress.dto.*;
-import com.learning.progress.dto.request.CreateStudentRequest;
-import com.learning.progress.dto.response.StudentProfileResponse;
-import com.learning.progress.dto.request.CreateUserRequest;
-import com.learning.progress.dto.request.CreateNewAccountRequest;
-import com.learning.progress.dto.response.CreateAccountResponse;
-import com.learning.progress.dto.response.CreateUserResponse;
-import com.learning.progress.dto.response.UserProfileResponse;
+import com.learning.progress.dto.account.AccountDTO;
+import com.learning.progress.dto.user.*;
+import com.learning.progress.dto.account.CreateNewAccountRequest;
 import com.learning.progress.entity.User;
 import com.learning.progress.util.JsonUtil;
 import org.mapstruct.Mapper;
@@ -24,8 +19,6 @@ import java.util.Date;
 )
 public interface UserMapper {
 
-    StudentProfileResponse toStudentProfileResponse(User user);
-
     @Mapping(target = "additionalData", expression = "java(request.getParentInfo() != null ? JsonUtil.objectToJson(request.getParentInfo()) : null)")
     User toUser(CreateStudentRequest request);
 
@@ -33,18 +26,7 @@ public interface UserMapper {
 
     User toUser(CreateNewAccountRequest request);
 
-    User toUser(UpdateProfileDTO updateDTO);
-
     User toUser(UpdateUserRequest request);
-
-    @Mapping(source = "role.name", target = "roleName")
-    CreateUserResponse toCreateUserResponse(User user);
-
-    CreateAccountResponse toCreateAccountResponse(User user);
-
-    @Mapping(source = "theme", target = "theme")
-    @Mapping(source = "language", target = "language")
-    UserProfileResponse toUserProfileResponse(User user);
 
     @Mapping(target = "roleName", source = "role.name")
     @Mapping(target = "createAt", source = "createdAt")

@@ -2,10 +2,10 @@ package com.learning.progress.service.impl;
 
 import com.learning.progress.common.Const;
 import com.learning.progress.common.LevelEnum;
-import com.learning.progress.dto.request.UpdateLevelOrderRequest;
-import com.learning.progress.dto.request.UpdateLevelRequest;
-import com.learning.progress.dto.response.DataResponse;
-import com.learning.progress.dto.response.LevelDetailsResponse;
+import com.learning.progress.dto.level.SyncLevelRequest;
+import com.learning.progress.dto.level.UpdateLevelRequest;
+import com.learning.progress.dto.DataResponse;
+import com.learning.progress.dto.level.LevelDetailsResponse;
 import com.learning.progress.entity.Level;
 import com.learning.progress.exception.ApiException;
 import com.learning.progress.mapper.LevelMapper;
@@ -138,7 +138,7 @@ public class LevelServiceImpl implements LevelService {
 
     @Override
     @Transactional
-    public List<LevelDetailsResponse> bulkUpdateLevels(List<UpdateLevelOrderRequest> requests) {
+    public List<LevelDetailsResponse> bulkUpdateLevels(List<SyncLevelRequest> requests) {
 
         // Step 1: Load existing active levels
         List<Level> existingActiveLevels = levelRepository.findAllActiveOrderByOrderNumberAsc();
@@ -161,16 +161,16 @@ public class LevelServiceImpl implements LevelService {
                 .collect(Collectors.toSet());
 
         // Step 2: Separate requests into delete and non-delete
-        List<UpdateLevelOrderRequest> deleteRequests = requests.stream()
-                .filter(UpdateLevelOrderRequest::isToBeDeleted)
+        List<SyncLevelRequest> deleteRequests = requests.stream()
+                .filter(SyncLevelRequest::isToBeDeleted)
                 .collect(Collectors.toList());
-        List<UpdateLevelOrderRequest> nonDeletedRequests = requests.stream()
+        List<SyncLevelRequest> nonDeletedRequests = requests.stream()
                 .filter(req -> !req.isToBeDeleted())
                 .collect(Collectors.toList());
 
         // Step 3: Validate DELETE requests
-        for (UpdateLevelOrderRequest deleteReq : deleteRequests) {
-            Set<ConstraintViolation<UpdateLevelOrderRequest>> violations = validator.validate(deleteReq, UpdateLevelOrderRequest.Deleted.class);
+        for (SyncLevelRequest deleteReq : deleteRequests) {
+            Set<ConstraintViolation<SyncLevelRequest>> violations = validator.validate(deleteReq, SyncLevelRequest.Deleted.class);
             if (!violations.isEmpty()) {
                 String errorMsg = violations.stream().map(ConstraintViolation::getMessage).collect(Collectors.joining(", "));
                 throw new ApiException(errorMsg, HttpStatus.BAD_REQUEST.value());
@@ -181,14 +181,13 @@ public class LevelServiceImpl implements LevelService {
             }
         }
 
-
         // Step 4: Validate EXISTING IDs - Strict Matching
         Set<Long> requestExistingIds = nonDeletedRequests.stream()
                 .filter(req -> req.getId() != null)
-                .map(UpdateLevelOrderRequest::getId)
+                .map(SyncLevelRequest::getId)
                 .collect(Collectors.toSet());
         Set<Long> requestDeleteIds = deleteRequests.stream()
-                .map(UpdateLevelOrderRequest::getId)
+                .map(SyncLevelRequest::getId)
                 .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
 
@@ -231,16 +230,19 @@ public class LevelServiceImpl implements LevelService {
         }
 
         // Step 5: Bean Validation Non-Deleted
-        for (UpdateLevelOrderRequest req : nonDeletedRequests) {
-            Set<ConstraintViolation<UpdateLevelOrderRequest>> violations = validator.validate(req, UpdateLevelOrderRequest.NotDeleted.class);
+        for (SyncLevelRequest req : nonDeletedRequests) {
+            Set<ConstraintViolation<SyncLevelRequest>> violations = validator.validate(req, SyncLevelRequest.NotDeleted.class);
             if (!violations.isEmpty()) {
                 String errorMsg = violations.stream().map(ConstraintViolation::getMessage).collect(Collectors.joining(", "));
                 throw new ApiException(errorMsg, HttpStatus.BAD_REQUEST.value());
             }
-            if (req.getLevelName() == null || req.getLevelName().trim().isEmpty()) {
+            String trimmedName = req.getLevelName() != null ? req.getLevelName().trim() : null;
+            req.setLevelName(trimmedName);
+
+            if (trimmedName == null || trimmedName.isEmpty()) {
                 throw new ApiException(Const.VALIDATION.MISSING_FIELD, HttpStatus.BAD_REQUEST.value());
             }
-            if (req.getLevelName().length() > 100) {
+            if (trimmedName.length() > 100) {
                 throw new ApiException(Const.VALIDATION.INVALID_FORMAT, HttpStatus.BAD_REQUEST.value());
             }
             if (req.getOrderNumber() == null || req.getOrderNumber() <= 0) {
@@ -250,7 +252,7 @@ public class LevelServiceImpl implements LevelService {
 
         // Step 6: Validate Order Numbers (sequential from 1)
         Set<Integer> orderNumbers = nonDeletedRequests.stream()
-                .map(UpdateLevelOrderRequest::getOrderNumber)
+                .map(SyncLevelRequest::getOrderNumber)
                 .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
         int nonDeletedSize = nonDeletedRequests.size();
@@ -262,14 +264,15 @@ public class LevelServiceImpl implements LevelService {
             );
         }
 
-        // Step 7: Validate duplicate level names
+        // Step 7: Validate duplicate level names (CHỈ TRONG REQUEST)
         Map<String, List<Integer>> nameToOrders = new HashMap<>();
-        for (UpdateLevelOrderRequest req : nonDeletedRequests) {
-            nameToOrders.computeIfAbsent(req.getLevelName(), k -> new ArrayList<>())
+        for (SyncLevelRequest req : nonDeletedRequests) {
+            String normalizedName = req.getLevelName().trim().toLowerCase();
+            nameToOrders.computeIfAbsent(normalizedName, k -> new ArrayList<>())
                     .add(req.getOrderNumber());
         }
 
-        // Tìm các tên trùng
+        // Tìm các tên trùng TRONG REQUEST
         Map<String, List<Integer>> duplicates = nameToOrders.entrySet().stream()
                 .filter(e -> e.getValue().size() > 1)
                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
@@ -283,7 +286,6 @@ public class LevelServiceImpl implements LevelService {
                 throw new ApiException(msg, HttpStatus.CONFLICT.value());
             });
         }
-
 
         // Step 8: Process
         String currentUser = jwtUtil.extractUsernameFromCurrentRequest();
@@ -301,13 +303,13 @@ public class LevelServiceImpl implements LevelService {
             levelsToSave.add(level);
         }
 
-        // Process UPDATE CREATE
-        List<UpdateLevelOrderRequest> orderedRequests = nonDeletedRequests.stream()
-                .sorted(Comparator.comparing(UpdateLevelOrderRequest::getOrderNumber))
+        // Process UPDATE and CREATE
+        List<SyncLevelRequest> orderedRequests = nonDeletedRequests.stream()
+                .sorted(Comparator.comparing(SyncLevelRequest::getOrderNumber))
                 .collect(Collectors.toList());
 
         Level previousLevel = null;
-        for (UpdateLevelOrderRequest req : orderedRequests) {
+        for (SyncLevelRequest req : orderedRequests) {
             Level level;
             if (req.getId() != null && existingMap.containsKey(req.getId())) {
                 // Update existing
@@ -315,10 +317,7 @@ public class LevelServiceImpl implements LevelService {
                 levelMapper.updateOrderFromRequest(level, req);
                 level.setOrderNumber(req.getOrderNumber());
             } else {
-                // Create new
-                if (levelRepository.existsByLevelName(req.getLevelName())) {
-                    throw new ApiException(Const.LEVEL.DUPLICATE_LEVEL_NAME, HttpStatus.CONFLICT.value());
-                }
+                // Create new - KHÔNG CẦN CHECK DB NỮA vì đã check duplicate trong request ở Step 7
                 level = levelMapper.toEntity(req);
                 level.setOrderNumber(req.getOrderNumber());
 
@@ -335,7 +334,7 @@ public class LevelServiceImpl implements LevelService {
             result.add(levelMapper.toLevelDetailsResponse(level));
         }
 
-        // Step 8: Save all levels
+        // Step 9: Save all levels
         levelRepository.saveAll(levelsToSave);
         return result;
     }

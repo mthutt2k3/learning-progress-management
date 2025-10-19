@@ -1,10 +1,9 @@
 package com.learning.progress.exception;
 
 import com.learning.progress.common.RoleName;
-import com.learning.progress.dto.response.DataResponse;
+import com.learning.progress.dto.DataResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
@@ -19,7 +18,6 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 
 import java.time.LocalDateTime;
 import java.util.Arrays;
-import java.util.stream.Collectors;
 
 @Hidden
 @ControllerAdvice

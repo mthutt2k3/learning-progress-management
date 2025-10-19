@@ -28,6 +28,7 @@ public class Const {
     public static class DOB {
         public static final String DOB_IN_FUTURE = "Date of birth cannot be in the future.";
         public static final String DOB_UNDER_AGE = "User must be at least %d years old.";
+        public static final String DOB_OVER_AGE = "Tuổi không được lớn hơn %d";
     }
     public static class FILE {
         public static final String AVATAR_REQUIRED = "Avatar file is required.";
@@ -66,8 +67,7 @@ public class Const {
         public static final String INVALID_PHONE_FORMAT = "Invalid phone number format. Must start with 0 or +84 followed by 9 or 10 digits";
     }
     public static class NAME {
-        public static final String FIRST_NAME_REQUIRED = "First name is required";
-        public static final String LAST_NAME_REQUIRED = "Last name is required";
+        public static final String FULL_NAME_REQUIRED = "Full name is required";
         public static final String ROLE_NAME_REQUIRED = "Role name is required";
 
     }

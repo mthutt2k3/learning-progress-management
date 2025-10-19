@@ -1,7 +1,7 @@
 package com.learning.progress.mapper;
 
-import com.learning.progress.dto.response.LoginResponse;
-import com.learning.progress.dto.response.ResetPasswordByTeacherResponse;
+import com.learning.progress.dto.auth.LoginResponse;
+import com.learning.progress.dto.auth.ResetPasswordByTeacherResponse;
 import com.learning.progress.entity.RefreshToken;
 import com.learning.progress.entity.User;
 import org.mapstruct.Mapper;
