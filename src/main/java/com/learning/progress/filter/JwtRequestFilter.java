@@ -1,5 +1,8 @@
 package com.learning.progress.filter;
 
+import com.learning.progress.common.UserStatus;
+import com.learning.progress.entity.User;
+import com.learning.progress.repository.UserRepository;
 import com.learning.progress.service.CustomUserDetailsService;
 import com.learning.progress.util.JwtUtil;
 import io.jsonwebtoken.JwtException;
@@ -26,10 +29,14 @@ public class JwtRequestFilter extends OncePerRequestFilter {
 
     private final JwtUtil jwtUtil;
     private final CustomUserDetailsService userDetailsService;
+    private final UserRepository userRepository;
 
-    public JwtRequestFilter(JwtUtil jwtUtil, CustomUserDetailsService userDetailsService) {
+    public JwtRequestFilter(JwtUtil jwtUtil,
+                            CustomUserDetailsService userDetailsService,
+                            UserRepository userRepository) {
         this.jwtUtil = jwtUtil;
         this.userDetailsService = userDetailsService;
+        this.userRepository = userRepository;
     }
 
     @Override
@@ -48,12 +55,24 @@ public class JwtRequestFilter extends OncePerRequestFilter {
             if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
                 UserDetails userDetails = this.userDetailsService.loadUserByUsername(username);
                 if (jwtUtil.validateAuthToken(jwt, username)) {
+                    User user = userRepository.findByUserName(username)
+                            .orElseThrow(() -> new UsernameNotFoundException("User not found"));
+
+                    if (user.getStatus() == UserStatus.INACTIVE) {
+                        log.warn("[AUTHENTICATION] Blocked INACTIVE user: {} | traceId={}",
+                                username, MDC.get("traceId"));
+                        response.sendError(HttpServletResponse.SC_FORBIDDEN,
+                                "Account is inactive. Please contact administrator.");
+                        return;
+                    }
+
                     UsernamePasswordAuthenticationToken authenticationToken =
                             new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
                     authenticationToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
                     SecurityContextHolder.getContext().setAuthentication(authenticationToken);
-                    log.info("[AUTHENTICATION] Authenticated user: {} | authorities: {} | traceId={}",
-                            username, userDetails.getAuthorities(), MDC.get("traceId"));
+
+                    log.info("[AUTHENTICATION] Authenticated user: {} | status: {} | authorities: {} | traceId={}",
+                            username, user.getStatus(), userDetails.getAuthorities(), MDC.get("traceId"));
                 }
             }
             chain.doFilter(request, response);

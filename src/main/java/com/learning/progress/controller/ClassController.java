@@ -77,30 +77,4 @@ public class ClassController {
         classService.deleteClass(id);
         return ResponseEntity.ok(DataResponse.success(null, Const.RESULT_MESSAGE_CODE.DELETE_SUCCESSFUL));
     }
-
-    @GetMapping("/export")
-    @PreAuthorize("hasRole('MANAGER')")
-    @Operation(summary = "Export classes", description = "Export danh sách class sang Excel")
-    public void exportClasses(HttpServletResponse response) throws IOException {
-        response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-        response.setHeader("Content-Disposition", "attachment; filename=classes.xlsx");
-        classService.exportClassesToExcel(response.getOutputStream());
-    }
-
-    @PostMapping("/import")
-    @PreAuthorize("hasRole('MANAGER')")
-    @Operation(summary = "Import classes", description = "Import classes từ Excel")
-    public ResponseEntity<DataResponse<Void>> importClasses(@RequestParam("file") MultipartFile file) throws IOException {
-        classService.importClassesFromExcel(file.getInputStream());
-        return ResponseEntity.ok(DataResponse.success(null, Const.RESULT_MESSAGE_CODE.IMPORT_SUCCESSFUL));
-    }
-
-    @GetMapping("/template")
-    @PreAuthorize("hasRole('MANAGER')")
-    @Operation(summary = "Tải template import", description = "Tải template Excel cho import classes")
-    public void downloadImportTemplate(HttpServletResponse response) throws IOException {
-        response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-        response.setHeader("Content-Disposition", "attachment; filename=class_import_template.xlsx");
-        classService.downloadImportTemplate(response.getOutputStream());
-    }
 }
