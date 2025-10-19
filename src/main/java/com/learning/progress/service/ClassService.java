@@ -1,6 +1,7 @@
 package com.learning.progress.service;
 
 import com.learning.progress.dto.clazz.ClassDTO;
+import com.learning.progress.dto.clazz.ClassOverviewDTO;
 import com.learning.progress.dto.clazz.CreateClassRequest;
 import com.learning.progress.dto.clazz.UpdateClassRequest;
 import com.learning.progress.dto.response.DataResponse;
@@ -10,6 +11,7 @@ import java.io.OutputStream;
 import java.util.List;
 
 public interface ClassService {
+    ClassOverviewDTO getClassOverview(Long id);
 
     ClassDTO createClass(CreateClassRequest request);
 
@@ -19,7 +21,7 @@ public interface ClassService {
 
     ClassDTO updateClass(Long id, UpdateClassRequest request);
 
-    void toggleClassActivation(Long id, boolean isActive);
+    String changeClassStatusManually(Long id, String status);
 
     void deleteClass(Long id);
 

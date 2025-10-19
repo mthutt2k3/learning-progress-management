@@ -27,8 +27,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
     WHERE u.role.name IN :roles
       AND (:statuses IS NULL OR u.status IN :statuses)
       AND (:text IS NULL OR 
-           (LOWER(u.firstName) LIKE LOWER(CONCAT('%', CAST(:text AS string), '%'))
-         OR LOWER(u.lastName) LIKE LOWER(CONCAT('%', CAST(:text AS string), '%'))
+           (LOWER(u.fullName) LIKE LOWER(CONCAT('%', CAST(:text AS string), '%'))
          OR LOWER(u.email) LIKE LOWER(CONCAT('%', CAST(:text AS string), '%'))))
 """)
     Page<User> findByRoleNameInAndStatusInAndSearchText(
@@ -42,7 +41,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
     @Query("SELECT CASE WHEN COUNT(u) > 0 THEN true ELSE false END FROM User u WHERE LOWER(u.userName) = LOWER(:userName)")
     boolean existsByUserName(String userName);
 
-    @Query("SELECT u FROM User u WHERE LOWER(u.email) LIKE LOWER(CONCAT('%', :text, '%')) OR LOWER(CONCAT(u.firstName, ' ', u.lastName)) LIKE LOWER(CONCAT('%', :text, '%'))")
+    @Query("SELECT u FROM User u WHERE LOWER(u.email) LIKE LOWER(CONCAT('%', :text, '%')) OR LOWER(u.fullName) LIKE LOWER(CONCAT('%', :text, '%'))")
     Page<User> findByText(@Param("text") String text, Pageable pageable);
 
     @Query("SELECT u FROM User u WHERE u.status IN :statuses")
@@ -54,24 +53,18 @@ public interface UserRepository extends JpaRepository<User, Long> {
     @Query("SELECT u FROM User u WHERE u.status IN :statuses AND u.role.name IN :roleNames")
     Page<User> findByStatusInAndRoleNameIn(@Param("statuses") List<UserStatus> statuses, @Param("roleNames") List<RoleName> roleNames, Pageable pageable);
 
-    @Query("SELECT u FROM User u WHERE (LOWER(u.email) LIKE LOWER(CONCAT('%', :text, '%')) OR LOWER(CONCAT(u.firstName, ' ', u.lastName)) LIKE LOWER(CONCAT('%', :text, '%'))) AND u.status IN :statuses")
+    @Query("SELECT u FROM User u WHERE (LOWER(u.email) LIKE LOWER(CONCAT('%', :text, '%')) OR LOWER(u.fullName) LIKE LOWER(CONCAT('%', :text, '%'))) AND u.status IN :statuses")
     Page<User> findByTextAndStatusIn(@Param("text") String text, @Param("statuses") List<UserStatus> statuses, Pageable pageable);
 
-    @Query("SELECT u FROM User u WHERE (LOWER(u.email) LIKE LOWER(CONCAT('%', :text, '%')) OR LOWER(CONCAT(u.firstName, ' ', u.lastName)) LIKE LOWER(CONCAT('%', :text, '%'))) AND u.role.name IN :roleNames")
+    @Query("SELECT u FROM User u WHERE (LOWER(u.email) LIKE LOWER(CONCAT('%', :text, '%')) OR LOWER(u.fullName) LIKE LOWER(CONCAT('%', :text, '%'))) AND u.role.name IN :roleNames")
     Page<User> findByTextAndRoleNameIn(@Param("text") String text, @Param("roleNames") List<RoleName> roleNames, Pageable pageable);
 
-    @Query("SELECT u FROM User u WHERE (LOWER(u.email) LIKE LOWER(CONCAT('%', :text, '%')) OR LOWER(CONCAT(u.firstName, ' ', u.lastName)) LIKE LOWER(CONCAT('%', :text, '%'))) AND u.status IN :statuses AND u.role.name IN :roleNames")
+    @Query("SELECT u FROM User u WHERE (LOWER(u.email) LIKE LOWER(CONCAT('%', :text, '%')) OR LOWER(u.fullName) LIKE LOWER(CONCAT('%', :text, '%'))) AND u.status IN :statuses AND u.role.name IN :roleNames")
     Page<User> findByTextAndStatusInAndRoleNameIn(@Param("text") String text, @Param("statuses") List<UserStatus> statuses, @Param("roleNames") List<RoleName> roleNames, Pageable pageable);
 
-    @Query("SELECT NEW com.learning.progress.dto.LevelInfo(sl.level.id, sl.level.levelName) " +
+    @Query("SELECT NEW com.learning.progress.dto.LevelInfo(sl.level.id, sl.level.levelCode , sl.level.levelName) " +
             "FROM StudentLevel sl WHERE sl.user.id = :userId AND sl.status = 'ACTIVE'")
     Optional<LevelInfo> findActiveLevelInfoByUserId(Long userId);
-
-    @Query("SELECT NEW com.learning.progress.dto.ClassInfo(cs.clazz.id, cs.clazz.className, null) " +
-            "FROM ClassStudent cs WHERE cs.user.id = :userId AND cs.status = 'ACTIVE' AND cs.clazz.isActive = true")
-    Optional<ClassInfo> findActiveClassInfoByUserId(Long userId);
-
-    Optional<User> findByIdAndStatus(Long id, UserStatus userStatus);
 
     @Query("""
     SELECT u FROM User u 
@@ -79,8 +72,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
     AND u.status IN :statuses 
     AND (:searchText IS NULL OR :searchText = '' OR 
          LOWER(u.email) LIKE LOWER(CONCAT('%', :searchText, '%')) OR 
-         LOWER(u.firstName) LIKE LOWER(CONCAT('%', :searchText, '%')) OR 
-         LOWER(u.lastName) LIKE LOWER(CONCAT('%', :searchText, '%')) OR
+         LOWER(u.fullName) LIKE LOWER(CONCAT('%', :searchText, '%')) OR 
          LOWER(u.userName) LIKE LOWER(CONCAT('%', :searchText, '%')))
     ORDER BY u.createdAt DESC
 """)

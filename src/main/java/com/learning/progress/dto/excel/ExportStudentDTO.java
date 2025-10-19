@@ -11,8 +11,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class ExportStudentDTO {
     private String email;
-    private String firstName;
-    private String lastName;
+    private String fullName;
     private String roleName;
     private String status;
     private String userName;

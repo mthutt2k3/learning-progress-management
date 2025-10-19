@@ -1,8 +1,11 @@
 package com.learning.progress.service.impl;
 
 import com.learning.progress.common.ActionType;
+import com.learning.progress.common.ClassStatus;
+import com.learning.progress.common.Const;
 import com.learning.progress.common.RoleName;
 import com.learning.progress.dto.clazz.ClassDTO;
+import com.learning.progress.dto.clazz.ClassOverviewDTO;
 import com.learning.progress.dto.clazz.CreateClassRequest;
 import com.learning.progress.dto.clazz.UpdateClassRequest;
 import com.learning.progress.dto.response.DataResponse;
@@ -17,6 +20,7 @@ import com.learning.progress.mapper.ClassMapper;
 import com.learning.progress.repository.*;
 import com.learning.progress.service.ClassHistoryService;
 import com.learning.progress.service.ClassService;
+import com.learning.progress.util.AppValidator;
 import com.learning.progress.util.DataUtil;
 import com.learning.progress.util.JwtUtil;
 import jakarta.validation.ConstraintViolation;
@@ -62,6 +66,37 @@ public class ClassServiceImpl implements ClassService {
     private JwtUtil jwtUtil;
     @Autowired
     private Validator validator;
+    @Autowired
+    private AppValidator appValidator;
+
+    @Override
+    public ClassOverviewDTO getClassOverview(Long id) {
+        Clazz clazz = classRepository.findById(id)
+                .filter(c -> c.getDeletedAt() == null)
+                .orElseThrow(() -> new ApiException(Const.CLASS.CLASS_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+
+        ClassOverviewDTO.SyllabusDTO syllabusDTO = null;
+        if (clazz.getSyllabus() != null) {
+            syllabusDTO = ClassOverviewDTO.SyllabusDTO.builder()
+                    .id(clazz.getSyllabus().getId())
+                    .syllabusName(clazz.getSyllabus().getSyllabusName())
+                    .syllabusCode(clazz.getSyllabus().getSyllabusCode()) // TODO: Add syllabusCode to Syllabus entity if needed
+                    .build();
+        }
+
+        return ClassOverviewDTO.builder()
+                .id(clazz.getId())
+                .className(clazz.getClassName())
+                .classCode(clazz.getClassCode())
+                .teachers(null) // TODO: Fetch teacher data from Class-Teacher relationship
+                .teachingAssistants(new ArrayList<>()) // TODO: Fetch teaching assistants data
+                .startDate(null) // TODO: Add startDate to Clazz entity or fetch from related entity
+                .endDate(null) // TODO: Add endDate to Clazz entity or fetch from related entity
+                .status(clazz.getStatus())
+                .level(null) // TODO: Add level to Clazz entity or fetch from related entity
+                .syllabus(syllabusDTO)
+                .build();
+    }
 
     @Override
     @Transactional
@@ -86,7 +121,7 @@ public class ClassServiceImpl implements ClassService {
         clazz.setClassName(request.getClassName());
         clazz.setSyllabus(syllabus);
         clazz.setAvatarUrl(request.getAvatarUrl());
-        clazz.setIsActive(true);
+        clazz.setStatus(ClassStatus.ACTIVE);
         Clazz savedClass = classRepository.saveAndFlush(clazz);
 
         String classCode = DataUtil.generateClassCode(savedClass.getId());
@@ -196,17 +231,28 @@ public class ClassServiceImpl implements ClassService {
 
     @Override
     @Transactional
-    public void toggleClassActivation(Long id, boolean isActive) {
+    public String changeClassStatusManually(Long id, String newStatus) {
         Clazz clazz = classRepository.findById(id)
                 .filter(c -> c.getDeletedAt() == null)
-                .orElseThrow(() -> new ApiException("Class không tồn tại", HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> new ApiException(Const.CLASS.CLASS_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
         Long actionByUserId = jwtUtil.extractUserIdFromCurrentRequest();
+        ClassStatus oldStatus = clazz.getStatus();
+
+        appValidator.validateAllowedEnumValue(ClassStatus.class,
+                newStatus,
+                Set.of(ClassStatus.ACTIVE, ClassStatus.FINISHED, ClassStatus.INACTIVE));
+
+
+        // Cập nhật trạng thái
+        clazz.setStatus(ClassStatus.valueOf(newStatus));
+        classRepository.save(clazz);
 
         // Ghi lịch sử
         String actionDetails = String.format(
-                "Đã %s lớp %s",
-                isActive ? "kích hoạt" : "hủy kích hoạt",
-                clazz.getClassName()
+                "Đã chuyển trạng thái lớp %s từ %s sang %s",
+                clazz.getClassName(),
+                oldStatus,
+                newStatus
         );
         classHistoryService.saveClassHistory(
                 id,
@@ -216,8 +262,8 @@ public class ClassServiceImpl implements ClassService {
                 RoleName.MANAGER.name()
         );
 
-        clazz.setIsActive(isActive);
         classRepository.save(clazz);
+        return actionDetails;
     }
 
     @Override

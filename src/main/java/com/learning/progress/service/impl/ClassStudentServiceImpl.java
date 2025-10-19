@@ -1,9 +1,6 @@
 package com.learning.progress.service.impl;
 
-import com.learning.progress.common.ClassStudentStatus;
-import com.learning.progress.common.Const;
-import com.learning.progress.common.RoleName;
-import com.learning.progress.common.UserStatus;
+import com.learning.progress.common.*;
 import com.learning.progress.dto.clazz.*;
 import com.learning.progress.dto.response.DataResponse;
 import com.learning.progress.entity.ClassStudent;
@@ -75,7 +72,7 @@ public class ClassStudentServiceImpl implements ClassStudentService {
     public DataResponse<List<ClassStudentResponse>> getStudentsInClass(Long classId, int page, int size, String text, ClassStudentStatus status, String sortBy, String sortDir) {
         // Validate pagination and sort parameters
         appValidator.validatePaginationParams(page, size);
-        appValidator.validateSortParams(List.of("id", "userName", "firstName", "lastName", "email", "joinedAt", "status"), sortBy, sortDir);
+        appValidator.validateSortParams(List.of("id", "userName", "fullName", "email", "joinedAt", "status"), sortBy, sortDir);
 
         Sort sort = Sort.by(sortDir.equalsIgnoreCase("asc") ? Sort.Direction.ASC : Sort.Direction.DESC, sortBy);
         Pageable pageable = PageRequest.of(page, size, sort);
@@ -152,7 +149,7 @@ public class ClassStudentServiceImpl implements ClassStudentService {
         Clazz clazz = classRepository.findById(classId)
                 .orElseThrow(() -> new ApiException(Const.CLASS.CLASS_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
-        if (!clazz.getIsActive()) {
+        if (clazz.getStatus() == ClassStatus.INACTIVE) {
             throw new ApiException(Const.CLASS.INACTIVE, HttpStatus.BAD_REQUEST.value());
         }
 
@@ -201,7 +198,7 @@ public class ClassStudentServiceImpl implements ClassStudentService {
                 .orElseThrow(() -> new ApiException(Const.CLASS.CLASS_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         // Validate class is active
-        if (!clazz.getIsActive()) {
+        if (clazz.getStatus() == ClassStatus.INACTIVE) {
             throw new ApiException(Const.CLASS.INACTIVE, HttpStatus.BAD_REQUEST.value());
         }
 
@@ -257,7 +254,7 @@ public class ClassStudentServiceImpl implements ClassStudentService {
         StudentPerformanceReport report = new StudentPerformanceReport();
         report.setUserId(userId);
         report.setClassId(classId);
-        report.setStudentName(classStudent.getUser().getFirstName() + " " + classStudent.getUser().getLastName());
+        report.setStudentName(classStudent.getUser().getFullName());
 
         for (Object[] data : performanceData) {
             report.addPerformanceMetric((Long) data[0], (Double) data[1], (LocalDateTime) data[2]);
@@ -274,7 +271,7 @@ public class ClassStudentServiceImpl implements ClassStudentService {
         StudentProgressOverview overview = new StudentProgressOverview();
         overview.setUserId(userId);
         overview.setClassId(classId);
-        overview.setStudentName(classStudent.getUser().getFirstName() + " " + classStudent.getUser().getLastName());
+        overview.setStudentName(classStudent.getUser().getFullName());
 
         List<Object[]> progressData = submissionRepository.getStudentProgress(classId, userId);
         overview.setTotalChallenges(progressData.size());

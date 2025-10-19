@@ -160,8 +160,7 @@ public class UserServiceImpl implements UserService {
         User updatedUser = userMapper.toUser(request);
         user.setRole(role);
         user.setEmail(user.getEmail());
-        user.setFirstName(updatedUser.getFirstName());
-        user.setLastName(updatedUser.getLastName());
+        user.setFullName(updatedUser.getFullName());
         user.setAvatarUrl(updatedUser.getAvatarUrl());
         user.setDateOfBirth(updatedUser.getDateOfBirth());
         user.setAddress(updatedUser.getAddress());
@@ -203,7 +202,7 @@ public class UserServiceImpl implements UserService {
     public DataResponse<List<StudentProfileDTO>> getStudentList(int page, int size, String searchText, List<String> status, List<String> roleName, String sortBy, String sortDir) {
         // Validate pagination and sort parameters
         appValidator.validatePaginationParams(page, size);
-        appValidator.validateSortParams(List.of("createdAt", "userName", "email", "firstName", "lastName", "status"), sortBy, sortDir);
+        appValidator.validateSortParams(List.of("createdAt", "userName", "email", "fullName", "status"), sortBy, sortDir);
 
         List<RoleName> roles;
         if (roleName == null || roleName.isEmpty()) {
@@ -250,7 +249,7 @@ public class UserServiceImpl implements UserService {
     public DataResponse<List<TeacherProfileDTO>> getTeacherList(int page, int size, String searchText, List<String> status, List<String> roleName, String sortBy, String sortDir) {
         // Validate pagination and sort parameters
         appValidator.validatePaginationParams(page, size);
-        appValidator.validateSortParams(List.of("createdAt", "userName", "email", "firstName", "lastName", "status"), sortBy, sortDir);
+        appValidator.validateSortParams(List.of("createdAt", "userName", "email", "fullName", "status"), sortBy, sortDir);
 
         List<RoleName> roles;
         if (roleName == null || roleName.isEmpty()) {
@@ -341,8 +340,7 @@ public class UserServiceImpl implements UserService {
         User updatedUser = userMapper.toUser(request);
         user.setRole(role);
         user.setEmail(user.getEmail());
-        user.setFirstName(updatedUser.getFirstName());
-        user.setLastName(updatedUser.getLastName());
+        user.setFullName(updatedUser.getFullName());
         user.setAvatarUrl(updatedUser.getAvatarUrl());
         user.setDateOfBirth(updatedUser.getDateOfBirth());
         user.setAddress(updatedUser.getAddress());
@@ -454,8 +452,7 @@ public class UserServiceImpl implements UserService {
             throw new ApiException(Const.SECURITY.NOT_MATCH_CURRENT_USER, HttpStatus.FORBIDDEN.value());
         }
 
-        if (updateDTO.getFirstName() != null) user.setFirstName(updateDTO.getFirstName());
-        if (updateDTO.getLastName() != null) user.setLastName(updateDTO.getLastName());
+        if (updateDTO.getFullName() != null) user.setFullName(updateDTO.getFullName());
         if (updateDTO.getDateOfBirth() != null) user.setDateOfBirth(updateDTO.getDateOfBirth());
         if (updateDTO.getAvatarUrl() != null) user.setAvatarUrl(updateDTO.getAvatarUrl());
         if (updateDTO.getAddress() != null) user.setAddress(updateDTO.getAddress());
@@ -571,11 +568,8 @@ public class UserServiceImpl implements UserService {
             if (record.getEmail() == null || !Pattern.matches(Const.VALIDATE_INPUT.regexEmail, record.getEmail())) {
                 throw new ApiException("Invalid email format: " + record.getEmail(), HttpStatus.BAD_REQUEST.value());
             }
-            if (record.getFirstName() == null || record.getFirstName().trim().isEmpty()) {
-                throw new ApiException("First name is required", HttpStatus.BAD_REQUEST.value());
-            }
-            if (record.getLastName() == null || record.getLastName().trim().isEmpty()) {
-                throw new ApiException("Last name is required", HttpStatus.BAD_REQUEST.value());
+            if (record.getFullName() == null || record.getFullName().trim().isEmpty()) {
+                throw new ApiException("Full name is required", HttpStatus.BAD_REQUEST.value());
             }
             if (!EnumUtil.isAllowedEnumValue(RoleName.class, record.getRoleName(), Set.of(RoleName.STUDENT, RoleName.TEST_TAKER))) {
                 throw new ApiException("Invalid role name: " + record.getRoleName(), HttpStatus.BAD_REQUEST.value());
@@ -604,8 +598,7 @@ public class UserServiceImpl implements UserService {
 
             CreateStudentRequest request = CreateStudentRequest.builder()
                     .email(record.getEmail())
-                    .firstName(record.getFirstName())
-                    .lastName(record.getLastName())
+                    .fullName(record.getFullName())
                     .roleName(record.getRoleName())
                     .avatarUrl(record.getAvatarUrl())
                     .dateOfBirth(record.getDateOfBirth())
@@ -648,13 +641,8 @@ public class UserServiceImpl implements UserService {
             }
 
             // Kiểm tra First Name
-            if (record.getFirstName() == null || record.getFirstName().trim().isEmpty()) {
+            if (record.getFullName() == null || record.getFullName().trim().isEmpty()) {
                 rowErrors.add("First Name không được để trống");
-            }
-
-            // Kiểm tra Last Name
-            if (record.getLastName() == null || record.getLastName().trim().isEmpty()) {
-                rowErrors.add("Last Name không được để trống");
             }
 
             // Kiểm tra Role Name
@@ -696,8 +684,7 @@ public class UserServiceImpl implements UserService {
         for (ImportTeacherDTO record : importList) {
             CreateUserRequest request = CreateUserRequest.builder()
                     .email(record.getEmail())
-                    .firstName(record.getFirstName())
-                    .lastName(record.getLastName())
+                    .fullName(record.getFullName())
                     .roleName(record.getRoleName())
                     .avatarUrl(record.getAvatarUrl())
                     .dateOfBirth(record.getDateOfBirth())
@@ -840,8 +827,7 @@ public class UserServiceImpl implements UserService {
                             }
                             String search = searchText.toLowerCase();
                             return user.getEmail().toLowerCase().contains(search) ||
-                                    user.getFirstName().toLowerCase().contains(search) ||
-                                    user.getLastName().toLowerCase().contains(search) ||
+                                    user.getFullName().toLowerCase().contains(search) ||
                                     user.getUserName().toLowerCase().contains(search);
                         })
                         .collect(Collectors.toList());
@@ -875,7 +861,7 @@ public class UserServiceImpl implements UserService {
                 List<ClassTeacher> teachers = classTeacherRepository.findByClazzId(classId);
                 if (!teachers.isEmpty()) {
                     String teacherNames = teachers.stream()
-                            .map(ct -> ct.getUser().getFirstName() + " " + ct.getUser().getLastName())
+                            .map(ct -> ct.getUser().getFullName())
                             .collect(Collectors.joining(", "));
                     summaryInfo.put("Giáo viên (" + classNameMap.get(classId) + ")", teacherNames);
                 }
@@ -928,8 +914,7 @@ public class UserServiceImpl implements UserService {
 
         ExportStudentDTO dto = ExportStudentDTO.builder()
                 .email(user.getEmail())
-                .firstName(user.getFirstName())
-                .lastName(user.getLastName())
+                .fullName(user.getFullName())
                 .userName(user.getUserName())
                 .roleName(user.getRole().getName().toString())
                 .status(user.getStatus().name())
@@ -1037,8 +1022,7 @@ public class UserServiceImpl implements UserService {
 
         ExportTeacherDTO dto = ExportTeacherDTO.builder()
                 .email(user.getEmail())
-                .firstName(user.getFirstName())
-                .lastName(user.getLastName())
+                .fullName(user.getFullName())
                 .userName(user.getUserName())
                 .roleName(user.getRole().getName().toString())
                 .status(user.getStatus().name())
