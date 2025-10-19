@@ -278,6 +278,7 @@ public class FileServiceImpl implements FileService {
 
         return templateFile;
     }
+
     @Override
     public byte[] generateClassLessonImportTemplate() {
         List<ExcelColumn> columns = fromClass(ImportLessonDTO.class);
@@ -908,18 +909,19 @@ public class FileServiceImpl implements FileService {
             currentRow = createExportHeader(sheet, columns,
                     styleConfig.getHeaderStyle(), currentRow);
 
-            // 5. Tạo dữ liệu
-            currentRow = createExportData(sheet, data, columns,
+            // 5. Tạo dữ liệu với wrap text cho text dài
+            CellStyle dataStyleWithWrap = workbook.createCellStyle();
+            dataStyleWithWrap.cloneStyleFrom(styleConfig.getDataStyle());
+            dataStyleWithWrap.setWrapText(true);
+            dataStyleWithWrap.setVerticalAlignment(VerticalAlignment.TOP);
+
+            currentRow = createExportDataWithWrap(sheet, data, columns,
                     styleConfig.getDataStyle(),
+                    dataStyleWithWrap,
                     styleConfig.getDateStyle(), currentRow);
 
-            // 6. Auto-size columns
-            for (int i = 0; i < columns.size(); i++) {
-                sheet.autoSizeColumn(i);
-                // Thêm padding
-                int currentWidth = sheet.getColumnWidth(i);
-                sheet.setColumnWidth(i, currentWidth + 1000);
-            }
+            // 6. Set FIXED width cho các cột thay vì autoSize
+            setFixedColumnWidths(sheet, columns.size());
 
             // 7. Freeze header row
             sheet.createFreezePane(0, getSummaryRowCount(summaryInfo) + 2);
@@ -956,11 +958,6 @@ public class FileServiceImpl implements FileService {
                 new ExcelColumn("Quan hệ", "relationship"),
                 new ExcelColumn("Ngày tạo", "createdAt")
         );
-
-        // Thêm STT vào data
-        for (int i = 0; i < students.size(); i++) {
-            // Do ExportDataDTO không có field index, ta sẽ xử lý riêng khi tạo cell
-        }
 
         return exportToExcel(students, columns, title, summaryInfo);
     }
@@ -1041,11 +1038,33 @@ public class FileServiceImpl implements FileService {
         return startRow + 1;
     }
 
-    private <T> int createExportData(Sheet sheet, List<T> data,
-                                     List<ExcelColumn> columns,
-                                     CellStyle dataStyle,
-                                     CellStyle dateStyle,
-                                     int startRow) {
+    // Helper method: Set fixed width cho columns
+    private void setFixedColumnWidths(Sheet sheet, int columnCount) {
+        // Định nghĩa width mặc định cho các loại cột
+        int defaultWidth = 6000;  // ~23 ký tự
+        int sttWidth = 2000;      // ~8 ký tự cho cột STT
+        int longTextWidth = 15000; // ~58 ký tự cho text dài
+
+        for (int i = 0; i < columnCount; i++) {
+            if (i == 0) {
+                // Cột đầu thường là STT
+                sheet.setColumnWidth(i, sttWidth);
+            } else if (i >= columnCount - 2) {
+                // 2 cột cuối thường là address, description, content... có thể dài
+                sheet.setColumnWidth(i, longTextWidth);
+            } else {
+                sheet.setColumnWidth(i, defaultWidth);
+            }
+        }
+    }
+
+    // Modified: createExportData với wrap text support
+    private <T> int createExportDataWithWrap(Sheet sheet, List<T> data,
+                                             List<ExcelColumn> columns,
+                                             CellStyle dataStyle,
+                                             CellStyle dataStyleWithWrap,
+                                             CellStyle dateStyle,
+                                             int startRow) {
         int currentRow = startRow;
         int index = 1;
 
@@ -1069,14 +1088,17 @@ public class FileServiceImpl implements FileService {
                         value = field.get(item);
                     }
 
-                    // Set giá trị và style
-                    setCellValueAndStyle(cell, value, dataStyle, dateStyle);
+                    // Set giá trị và style, với wrap text cho text dài
+                    setCellValueAndStyleWithWrap(cell, value, dataStyle, dataStyleWithWrap, dateStyle);
 
                 } catch (NoSuchFieldException | IllegalAccessException e) {
                     cell.setCellValue("");
                     cell.setCellStyle(dataStyle);
                 }
             }
+
+            // Auto height nếu row có text dài
+            row.setHeight((short) -1);
 
             currentRow++;
             index++;
@@ -1085,17 +1107,20 @@ public class FileServiceImpl implements FileService {
         return currentRow;
     }
 
-    private void setCellValueAndStyle(Cell cell, Object value,
-                                      CellStyle dataStyle,
-                                      CellStyle dateStyle) {
+    // Modified: setCellValueAndStyle với wrap text
+    private void setCellValueAndStyleWithWrap(Cell cell, Object value,
+                                              CellStyle dataStyle,
+                                              CellStyle dataStyleWithWrap,
+                                              CellStyle dateStyle) {
         if (value == null) {
             cell.setCellValue("");
             cell.setCellStyle(dataStyle);
             return;
         }
 
-        // Kiểm tra xem có phải date format không
         String strValue = value.toString();
+
+        // Kiểm tra xem có phải date format không
         if (isDateFormat(strValue)) {
             cell.setCellValue(strValue);
             cell.setCellStyle(dateStyle);
@@ -1104,7 +1129,12 @@ public class FileServiceImpl implements FileService {
             cell.setCellStyle(dataStyle);
         } else {
             cell.setCellValue(strValue);
-            cell.setCellStyle(dataStyle);
+            // Dùng wrap style nếu text dài hơn 100 ký tự
+            if (strValue.length() > 100) {
+                cell.setCellStyle(dataStyleWithWrap);
+            } else {
+                cell.setCellStyle(dataStyle);
+            }
         }
     }
 
@@ -1123,11 +1153,6 @@ public class FileServiceImpl implements FileService {
         }
         return 1 + 1 + summaryInfo.size(); // Title + blank + summary lines
     }
-
-
-
-
-
 
     @Override
     public byte[] exportSyllabusesData(List<ExportSyllabusDTO> syllabuses,
@@ -1234,11 +1259,16 @@ public class FileServiceImpl implements FileService {
             createStyledCell(row, 8, s.getCreatedAt(), styleConfig.getDateStyle());
         }
 
-        // Auto-size
-        for (int i = 0; i < 9; i++) {
-            sheet.autoSizeColumn(i);
-            sheet.setColumnWidth(i, sheet.getColumnWidth(i) + 1000);
-        }
+        // FIXED: Set fixed width thay vì autoSize
+        sheet.setColumnWidth(0, 2000);   // STT
+        sheet.setColumnWidth(1, 4000);   // Mã Syllabus
+        sheet.setColumnWidth(2, 10000);  // Tên Syllabus
+        sheet.setColumnWidth(3, 4000);   // Level Code
+        sheet.setColumnWidth(4, 6000);   // Level Name
+        sheet.setColumnWidth(5, 3000);   // Số Chapter
+        sheet.setColumnWidth(6, 3000);   // Số Lesson
+        sheet.setColumnWidth(7, 6000);   // Người tạo
+        sheet.setColumnWidth(8, 5000);   // Ngày tạo
 
         // Freeze
         sheet.createFreezePane(0, getSummaryRowCount(summaryInfo) + 2);
@@ -1283,11 +1313,13 @@ public class FileServiceImpl implements FileService {
             }
         }
 
-        // Auto-size
-        for (int i = 0; i < 6; i++) {
-            sheet.autoSizeColumn(i);
-            sheet.setColumnWidth(i, sheet.getColumnWidth(i) + 1000);
-        }
+        // FIXED: Set fixed width
+        sheet.setColumnWidth(0, 2000);   // STT
+        sheet.setColumnWidth(1, 10000);  // Syllabus
+        sheet.setColumnWidth(2, 5000);   // Chapter Code
+        sheet.setColumnWidth(3, 10000);  // Chapter Name
+        sheet.setColumnWidth(4, 3000);   // Thứ tự
+        sheet.setColumnWidth(5, 3000);   // Số Lesson
 
         sheet.createFreezePane(0, 2);
     }
@@ -1313,6 +1345,12 @@ public class FileServiceImpl implements FileService {
         }
         currentRow++;
 
+        // Thêm wrap text vào dataStyle
+        CellStyle dataStyleWithWrap = workbook.createCellStyle();
+        dataStyleWithWrap.cloneStyleFrom(styleConfig.getDataStyle());
+        dataStyleWithWrap.setWrapText(true); // Cho phép text xuống hàng
+        dataStyleWithWrap.setVerticalAlignment(VerticalAlignment.TOP); // Căn trên
+
         // Data
         int index = 1;
         for (ExportSyllabusDTO syllabus : syllabuses) {
@@ -1321,25 +1359,31 @@ public class FileServiceImpl implements FileService {
                     if (chapter.getLessons() != null) {
                         for (ExportSyllabusDTO.LessonInfo lesson : chapter.getLessons()) {
                             Row row = sheet.createRow(currentRow++);
-                            CellStyle dataStyle = styleConfig.getDataStyle();
 
-                            createStyledCell(row, 0, index++, dataStyle);
-                            createStyledCell(row, 1, syllabus.getSyllabusName(), dataStyle);
-                            createStyledCell(row, 2, chapter.getChapterName(), dataStyle);
-                            createStyledCell(row, 3, lesson.getLessonName(), dataStyle);
-                            createStyledCell(row, 4, lesson.getOrderNumber(), dataStyle);
-                            createStyledCell(row, 5, lesson.getContent(), dataStyle);
+                            createStyledCell(row, 0, index++, styleConfig.getDataStyle());
+                            createStyledCell(row, 1, syllabus.getSyllabusName(), styleConfig.getDataStyle());
+                            createStyledCell(row, 2, chapter.getChapterName(), styleConfig.getDataStyle());
+                            createStyledCell(row, 3, lesson.getLessonName(), styleConfig.getDataStyle());
+                            createStyledCell(row, 4, lesson.getOrderNumber(), styleConfig.getDataStyle());
+                            createStyledCell(row, 5, lesson.getContent(), dataStyleWithWrap); // Dùng style có wrap
+
+                            // Auto-size chiều cao cho row này nếu có content dài
+                            if (lesson.getContent() != null && lesson.getContent().length() > 100) {
+                                row.setHeight((short) -1); // Auto height
+                            }
                         }
                     }
                 }
             }
         }
 
-        // Auto-size
-        for (int i = 0; i < 6; i++) {
-            sheet.autoSizeColumn(i);
-            sheet.setColumnWidth(i, sheet.getColumnWidth(i) + 1500);
-        }
+        // Set fixed width cho các cột (tránh vượt quá 255 chars limit)
+        sheet.setColumnWidth(0, 2000);   // STT
+        sheet.setColumnWidth(1, 8000);   // Syllabus
+        sheet.setColumnWidth(2, 8000);   // Chapter
+        sheet.setColumnWidth(3, 8000);   // Lesson Name
+        sheet.setColumnWidth(4, 3000);   // Thứ tự
+        sheet.setColumnWidth(5, 15000);  // Nội dung (cột rộng nhất cho text dài)
 
         sheet.createFreezePane(0, 2);
     }
@@ -1362,9 +1406,15 @@ public class FileServiceImpl implements FileService {
 
         currentRow += 2;
 
-        // Detailed Info
+        // Detailed Info với wrap text cho description
         CellStyle labelStyle = styleConfig.getSummaryStyle();
         CellStyle valueStyle = styleConfig.getDataStyle();
+
+        // Style đặc biệt cho description dài
+        CellStyle valueStyleWithWrap = workbook.createCellStyle();
+        valueStyleWithWrap.cloneStyleFrom(valueStyle);
+        valueStyleWithWrap.setWrapText(true);
+        valueStyleWithWrap.setVerticalAlignment(VerticalAlignment.TOP);
 
         String[][] info = {
                 {"Mã Syllabus:", syllabus.getSyllabusCode()},
@@ -1381,11 +1431,19 @@ public class FileServiceImpl implements FileService {
         for (String[] pair : info) {
             Row row = sheet.createRow(currentRow++);
             createStyledCell(row, 0, pair[0], labelStyle);
-            createStyledCell(row, 1, pair[1], valueStyle);
+
+            // Dùng wrap style cho description
+            if (pair[0].equals("Mô tả:") && pair[1] != null && pair[1].length() > 100) {
+                createStyledCell(row, 1, pair[1], valueStyleWithWrap);
+                row.setHeight((short) -1); // Auto height
+            } else {
+                createStyledCell(row, 1, pair[1], valueStyle);
+            }
         }
 
+        // FIXED: Set fixed width
         sheet.setColumnWidth(0, 5000);
-        sheet.setColumnWidth(1, 15000);
+        sheet.setColumnWidth(1, 20000);  // Rộng hơn cho nội dung dài
     }
 
     private void createChaptersDetailSheet(Workbook workbook, Sheet sheet,
@@ -1424,11 +1482,12 @@ public class FileServiceImpl implements FileService {
             }
         }
 
-        // Auto-size
-        for (int i = 0; i < 5; i++) {
-            sheet.autoSizeColumn(i);
-            sheet.setColumnWidth(i, sheet.getColumnWidth(i) + 1000);
-        }
+        // FIXED: Set fixed width
+        sheet.setColumnWidth(0, 2000);   // STT
+        sheet.setColumnWidth(1, 5000);   // Chapter Code
+        sheet.setColumnWidth(2, 12000);  // Chapter Name
+        sheet.setColumnWidth(3, 3000);   // Thứ tự
+        sheet.setColumnWidth(4, 3000);   // Số Lesson
 
         sheet.createFreezePane(0, 2);
     }
@@ -1454,6 +1513,12 @@ public class FileServiceImpl implements FileService {
         }
         currentRow++;
 
+        // Style với wrap text cho content
+        CellStyle dataStyleWithWrap = workbook.createCellStyle();
+        dataStyleWithWrap.cloneStyleFrom(styleConfig.getDataStyle());
+        dataStyleWithWrap.setWrapText(true);
+        dataStyleWithWrap.setVerticalAlignment(VerticalAlignment.TOP);
+
         // Data
         int index = 1;
         if (syllabus.getChapters() != null) {
@@ -1461,23 +1526,28 @@ public class FileServiceImpl implements FileService {
                 if (chapter.getLessons() != null) {
                     for (ExportSyllabusDTO.LessonInfo lesson : chapter.getLessons()) {
                         Row row = sheet.createRow(currentRow++);
-                        CellStyle dataStyle = styleConfig.getDataStyle();
 
-                        createStyledCell(row, 0, index++, dataStyle);
-                        createStyledCell(row, 1, chapter.getChapterName(), dataStyle);
-                        createStyledCell(row, 2, lesson.getLessonName(), dataStyle);
-                        createStyledCell(row, 3, lesson.getOrderNumber(), dataStyle);
-                        createStyledCell(row, 4, lesson.getContent(), dataStyle);
+                        createStyledCell(row, 0, index++, styleConfig.getDataStyle());
+                        createStyledCell(row, 1, chapter.getChapterName(), styleConfig.getDataStyle());
+                        createStyledCell(row, 2, lesson.getLessonName(), styleConfig.getDataStyle());
+                        createStyledCell(row, 3, lesson.getOrderNumber(), styleConfig.getDataStyle());
+                        createStyledCell(row, 4, lesson.getContent(), dataStyleWithWrap);
+
+                        // Auto height cho row có content dài
+                        if (lesson.getContent() != null && lesson.getContent().length() > 100) {
+                            row.setHeight((short) -1);
+                        }
                     }
                 }
             }
         }
 
-        // Auto-size
-        for (int i = 0; i < 5; i++) {
-            sheet.autoSizeColumn(i);
-            sheet.setColumnWidth(i, sheet.getColumnWidth(i) + 1500);
-        }
+        // FIXED: Set fixed width
+        sheet.setColumnWidth(0, 2000);   // STT
+        sheet.setColumnWidth(1, 8000);   // Chapter
+        sheet.setColumnWidth(2, 10000);  // Lesson Name
+        sheet.setColumnWidth(3, 3000);   // Thứ tự
+        sheet.setColumnWidth(4, 20000);  // Nội dung - rộng nhất
 
         sheet.createFreezePane(0, 2);
     }
