@@ -1,8 +1,8 @@
 package com.learning.progress.service;
 
-import com.learning.progress.dto.ChapterDTO;
-import com.learning.progress.dto.response.DataResponse;
-import com.learning.progress.dto.syllabus.SyncChapterRequest;
+import com.learning.progress.dto.chapter.ChapterDTO;
+import com.learning.progress.dto.DataResponse;
+import com.learning.progress.dto.chapter.SyncChapterRequest;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;

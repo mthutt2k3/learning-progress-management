@@ -2,10 +2,7 @@ package com.learning.progress.repository;
 
 import com.learning.progress.common.RoleName;
 import com.learning.progress.common.UserStatus;
-import com.learning.progress.dto.ClassInfo;
-import com.learning.progress.dto.LevelInfo;
-import com.learning.progress.entity.ClassStudent;
-import com.learning.progress.entity.ClassTeacher;
+import com.learning.progress.dto.level.LevelInfo;
 import com.learning.progress.entity.User;
 import org.springframework.data.domain.Page;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -62,7 +59,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
     @Query("SELECT u FROM User u WHERE (LOWER(u.email) LIKE LOWER(CONCAT('%', :text, '%')) OR LOWER(u.fullName) LIKE LOWER(CONCAT('%', :text, '%'))) AND u.status IN :statuses AND u.role.name IN :roleNames")
     Page<User> findByTextAndStatusInAndRoleNameIn(@Param("text") String text, @Param("statuses") List<UserStatus> statuses, @Param("roleNames") List<RoleName> roleNames, Pageable pageable);
 
-    @Query("SELECT NEW com.learning.progress.dto.LevelInfo(sl.level.id, sl.level.levelCode , sl.level.levelName) " +
+    @Query("SELECT NEW com.learning.progress.dto.level.LevelInfo(sl.level.id, sl.level.levelCode , sl.level.levelName) " +
             "FROM StudentLevel sl WHERE sl.user.id = :userId AND sl.status = 'ACTIVE'")
     Optional<LevelInfo> findActiveLevelInfoByUserId(Long userId);
 
@@ -81,4 +78,8 @@ public interface UserRepository extends JpaRepository<User, Long> {
             @Param("statuses") List<UserStatus> statuses,
             @Param("searchText") String searchText
     );
+
+    @Query("SELECT u FROM User u WHERE LOWER(u.userName) IN :userNames")
+    List<User> findByUserNameInIgnoreCase(@Param("userNames") List<String> userNames);
+
 }

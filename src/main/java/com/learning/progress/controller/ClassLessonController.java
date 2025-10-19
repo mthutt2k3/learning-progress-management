@@ -1,9 +1,9 @@
 package com.learning.progress.controller;
 
 import com.learning.progress.common.Const;
-import com.learning.progress.dto.clazz.ClassLessonDTO;
-import com.learning.progress.dto.clazz.SyncClassLessonRequest;
-import com.learning.progress.dto.response.DataResponse;
+import com.learning.progress.dto.clazz.lesson.ClassLessonDTO;
+import com.learning.progress.dto.clazz.lesson.SyncClassLessonRequest;
+import com.learning.progress.dto.DataResponse;
 import com.learning.progress.service.ClassLessonService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;

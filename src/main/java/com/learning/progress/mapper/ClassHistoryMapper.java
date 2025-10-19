@@ -1,6 +1,6 @@
 package com.learning.progress.mapper;
 
-import com.learning.progress.dto.ClassHistoryDTO;
+import com.learning.progress.dto.clazz.history.ClassHistoryDTO;
 import com.learning.progress.entity.ClassHistory;
 import org.mapstruct.*;
 import org.mapstruct.ReportingPolicy;

@@ -1,10 +1,10 @@
 package com.learning.progress.controller;
 
 import com.learning.progress.common.Const;
-import com.learning.progress.dto.request.UpdateLevelOrderRequest;
-import com.learning.progress.dto.request.UpdateLevelRequest;
-import com.learning.progress.dto.response.DataResponse;
-import com.learning.progress.dto.response.LevelDetailsResponse;
+import com.learning.progress.dto.level.SyncLevelRequest;
+import com.learning.progress.dto.level.UpdateLevelRequest;
+import com.learning.progress.dto.DataResponse;
+import com.learning.progress.dto.level.LevelDetailsResponse;
 import com.learning.progress.service.LevelService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -71,7 +71,7 @@ public class LevelController {
     @PreAuthorize("hasRole('MANAGER')")
     @PutMapping("/bulk-order")
     @Operation(summary = "Bulk Update Levels", description = "Create or update multiple levels with specified order numbers")
-    public ResponseEntity<?> bulkUpdateLevels(@Valid @RequestBody List<UpdateLevelOrderRequest> requests) {
+    public ResponseEntity<?> bulkUpdateLevels(@Valid @RequestBody List<SyncLevelRequest> requests) {
         List<LevelDetailsResponse> response = levelService.bulkUpdateLevels(requests);
         return ResponseEntity.ok(DataResponse.success(response, Const.LEVEL.LEVEL_UPDATED));
     }

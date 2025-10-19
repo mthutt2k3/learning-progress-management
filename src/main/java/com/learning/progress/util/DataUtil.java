@@ -62,7 +62,17 @@ public class DataUtil {
                     HttpStatus.BAD_REQUEST.value()
             );
         }
+
+        // ✅ Check tuổi tối đa
+        int maximumAge = 100;
+        if (dob.isBefore(today.minusYears(maximumAge))) {
+            throw new ApiException(
+                    String.format(Const.DOB.DOB_OVER_AGE, maximumAge),
+                    HttpStatus.BAD_REQUEST.value()
+            );
+        }
     }
+
     /**
      * Lấy toàn bộ phần trước dấu @ của email
      * Ví dụ: user@example.com -> user

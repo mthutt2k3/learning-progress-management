@@ -1,9 +1,9 @@
 package com.learning.progress.service.impl;
 
-import com.learning.progress.dto.ChapterDTO;
-import com.learning.progress.dto.response.DataResponse;
-import com.learning.progress.dto.syllabus.ImportChapterDTO;
-import com.learning.progress.dto.syllabus.SyncChapterRequest;
+import com.learning.progress.dto.chapter.ChapterDTO;
+import com.learning.progress.dto.DataResponse;
+import com.learning.progress.dto.excel.ImportChapterDTO;
+import com.learning.progress.dto.chapter.SyncChapterRequest;
 import com.learning.progress.entity.Chapter;
 import com.learning.progress.entity.Syllabus;
 import com.learning.progress.exception.ApiException;

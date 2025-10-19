@@ -1,10 +1,11 @@
 package com.learning.progress.service.impl;
 
 import com.learning.progress.common.*;
-import com.learning.progress.dto.clazz.AddTeacherToClassRequest;
-import com.learning.progress.dto.clazz.ClassTeacherResponse;
-import com.learning.progress.dto.clazz.TeacherPerformanceReport;
-import com.learning.progress.dto.response.DataResponse;
+import com.learning.progress.dto.clazz.teacher.AddTeacherToClassRequest;
+import com.learning.progress.dto.clazz.teacher.ClassTeacherResponse;
+import com.learning.progress.dto.clazz.teacher.TeacherPerformanceReport;
+import com.learning.progress.dto.DataResponse;
+import com.learning.progress.dto.clazz.teacher.TeacherWithRole;
 import com.learning.progress.entity.ClassTeacher;
 import com.learning.progress.entity.Clazz;
 import com.learning.progress.entity.User;
@@ -26,7 +27,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
-import java.util.List;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -95,36 +96,130 @@ public class ClassTeacherServiceImpl implements ClassTeacherService {
             throw new ApiException(Const.CLASS.INACTIVE, HttpStatus.BAD_REQUEST.value());
         }
 
-        User user = userRepository.findById(request.getUserId())
-                .orElseThrow(() -> new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
-
-        if (!UserStatus.ACTIVE.equals(user.getStatus())) {
-            throw new ApiException(Const.USER.INACTIVE, HttpStatus.BAD_REQUEST.value());
-        }
-
-        if (user.getRole() == null || !RoleName.TEACHER.equals(user.getRole().getName())) {
-            throw new ApiException(Const.USER.INVALID_ROLE_TEACHER_ONLY, HttpStatus.BAD_REQUEST.value());
-        }
-
-        if (classTeacherRepository.existsByClazzIdAndUserId(classId, request.getUserId())) {
-            throw new ApiException(Const.CLASS_TEACHER.TEACHER_ALREADY_IN_CLASS, HttpStatus.CONFLICT.value());
-        }
-
-        if (user.getDeletedAt() != null) {
-            throw new ApiException(Const.USER.DELETED, HttpStatus.BAD_REQUEST.value());
-        }
         if (clazz.getDeletedAt() != null) {
             throw new ApiException(Const.CLASS.DELETED, HttpStatus.BAD_REQUEST.value());
         }
 
-        ClassTeacher classTeacher = classTeacherMapper.toEntity(request);
-        classTeacher.setClazz(clazz);
-        classTeacher.setUser(user);
-        classTeacher.setRoleInClass(RoleInClass.valueOf(user.getRole().getName().toString().toUpperCase()));
-        classTeacher.setStatus(ClassTeacherStatus.ACTIVE);
-        classTeacher.setJoinedAt(OffsetDateTime.now());
+        // 2️⃣ Extract user IDs
+        List<Long> userIds = request.getTeachers().stream()
+                .map(TeacherWithRole::getUserId)
+                .collect(Collectors.toList());
 
-        classTeacherRepository.save(classTeacher);
+        Set<Long> uniqueIds = new HashSet<>(userIds);
+        if (uniqueIds.size() != userIds.size()) {
+            // Tìm ra ID bị trùng
+            List<Long> duplicateIds = userIds.stream()
+                    .filter(id -> Collections.frequency(userIds, id) > 1)
+                    .distinct()
+                    .collect(Collectors.toList());
+
+            throw new ApiException(
+                    String.format("Duplicate user IDs found in request: %s", duplicateIds),
+                    HttpStatus.BAD_REQUEST.value()
+            );
+        }
+
+        // 3️⃣ Fetch all users at once
+        List<User> users = userRepository.findAllById(userIds);
+
+        if (users.size() != userIds.size()) {
+            List<Long> foundIds = users.stream().map(User::getId).collect(Collectors.toList());
+            List<Long> notFoundIds = userIds.stream()
+                    .filter(id -> !foundIds.contains(id))
+                    .collect(Collectors.toList());
+            throw new ApiException(
+                    String.format("Users with IDs %s not found", notFoundIds),
+                    HttpStatus.NOT_FOUND.value()
+            );
+        }
+
+        // 4️⃣ Create map for quick lookup
+        Map<Long, User> userMap = users.stream()
+                .collect(Collectors.toMap(User::getId, u -> u));
+
+        // 5️⃣ Validate all users
+        List<String> validationErrors = new ArrayList<>();
+        for (User user : users) {
+            if (!UserStatus.ACTIVE.equals(user.getStatus())) {
+                validationErrors.add(String.format("User ID %d (%s) is not active",
+                        user.getId(), user.getUserName()));
+            }
+
+            if (user.getRole() == null || !RoleName.TEACHER.equals(user.getRole().getName())) {
+                validationErrors.add(String.format("User ID %d (%s) is not a teacher",
+                        user.getId(), user.getUserName()));
+            }
+
+            if (user.getDeletedAt() != null) {
+                validationErrors.add(String.format("User ID %d (%s) has been deleted",
+                        user.getId(), user.getUserName()));
+            }
+        }
+
+        if (!validationErrors.isEmpty()) {
+            throw new ApiException(
+                    "Validation errors: " + String.join("; ", validationErrors),
+                    HttpStatus.BAD_REQUEST.value()
+            );
+        }
+
+        // 6️⃣ Check for TEACHER role limit (only 1 TEACHER allowed)
+        long teacherCount = request.getTeachers().stream()
+                .filter(t -> RoleInClass.TEACHER.equals(t.getRoleInClass()))
+                .count();
+
+        if (teacherCount > 1) {
+            throw new ApiException(
+                    "Cannot add more than 1 teacher with TEACHER role",
+                    HttpStatus.BAD_REQUEST.value()
+            );
+        }
+
+        // Check if class already has a TEACHER
+        if (teacherCount == 1) {
+            boolean hasExistingTeacher = classTeacherRepository
+                    .existsByClazzIdAndRoleInClass(classId, RoleInClass.TEACHER);
+
+            if (hasExistingTeacher) {
+                throw new ApiException(
+                        "Class already has a teacher with TEACHER role",
+                        HttpStatus.CONFLICT.value()
+                );
+            }
+        }
+
+        // 7️⃣ Check existing teachers
+        List<Long> existingUserIds = classTeacherRepository
+                .findUserIdsByClazzIdAndUserIdIn(classId, userIds);
+
+        if (!existingUserIds.isEmpty()) {
+            List<String> existingUserNames = users.stream()
+                    .filter(u -> existingUserIds.contains(u.getId()))
+                    .map(User::getUserName)
+                    .collect(Collectors.toList());
+            throw new ApiException(
+                    String.format("Users %s are already in the class", existingUserNames),
+                    HttpStatus.CONFLICT.value()
+            );
+        }
+
+        // 8️⃣ Create class-teacher relationships
+        OffsetDateTime joinedAt = OffsetDateTime.now();
+        List<ClassTeacher> classTeachers = request.getTeachers().stream()
+                .map(teacherWithRole -> {
+                    User user = userMap.get(teacherWithRole.getUserId());
+
+                    ClassTeacher classTeacher = new ClassTeacher();
+                    classTeacher.setClazz(clazz);
+                    classTeacher.setUser(user);
+                    classTeacher.setRoleInClass(teacherWithRole.getRoleInClass());
+                    classTeacher.setStatus(ClassTeacherStatus.ACTIVE);
+                    classTeacher.setJoinedAt(joinedAt);
+                    return classTeacher;
+                })
+                .collect(Collectors.toList());
+
+        classTeacherRepository.saveAll(classTeachers);
     }
 
     @Override

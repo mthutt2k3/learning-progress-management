@@ -2,11 +2,9 @@ package com.learning.progress.controller;
 
 import com.learning.progress.common.ClassStudentStatus;
 import com.learning.progress.common.Const;
-import com.learning.progress.dto.clazz.AddStudentToClassRequest;
-import com.learning.progress.dto.clazz.ClassStudentResponse;
-import com.learning.progress.dto.response.DataResponse;
-import com.learning.progress.dto.clazz.StudentPerformanceReport;
-import com.learning.progress.dto.clazz.StudentProgressOverview;
+import com.learning.progress.dto.clazz.student.AddStudentToClassRequest;
+import com.learning.progress.dto.clazz.student.ClassStudentResponse;
+import com.learning.progress.dto.DataResponse;
 import com.learning.progress.service.ClassStudentService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -56,21 +54,21 @@ public class ClassStudentController {
         return ResponseEntity.ok(DataResponse.success(response, Const.CLASS_STUDENT.PROFILE_RETRIEVED));
     }
 
-    @PreAuthorize("hasAnyRole('MANAGER', 'TEACHER')")
-    @GetMapping("/{classId}/student/{userId}/performance")
-    @Operation(summary = "View Student Performance Report", description = "Retrieve performance report for a student in a class")
-    public ResponseEntity<?> viewStudentPerformanceReport(@PathVariable Long classId, @PathVariable Long userId) {
-        StudentPerformanceReport response = classStudentService.getStudentPerformanceReport(classId, userId);
-        return ResponseEntity.ok(DataResponse.success(response, Const.CLASS_STUDENT.PERFORMANCE_RETRIEVED));
-    }
-
-    @PreAuthorize("hasAnyRole('MANAGER', 'TEACHER')")
-    @GetMapping("/{classId}/student/{userId}/progress")
-    @Operation(summary = "View Student Progress Overview", description = "Retrieve learning progress overview for a student in a class")
-    public ResponseEntity<?> viewStudentProgressOverview(@PathVariable Long classId, @PathVariable Long userId) {
-        StudentProgressOverview response = classStudentService.getStudentProgressOverview(classId, userId);
-        return ResponseEntity.ok(DataResponse.success(response, Const.CLASS_STUDENT.PROGRESS_RETRIEVED));
-    }
+//    @PreAuthorize("hasAnyRole('MANAGER', 'TEACHER')")
+//    @GetMapping("/{classId}/student/{userId}/performance")
+//    @Operation(summary = "View Student Performance Report", description = "Retrieve performance report for a student in a class")
+//    public ResponseEntity<?> viewStudentPerformanceReport(@PathVariable Long classId, @PathVariable Long userId) {
+//        StudentPerformanceReport response = classStudentService.getStudentPerformanceReport(classId, userId);
+//        return ResponseEntity.ok(DataResponse.success(response, Const.CLASS_STUDENT.PERFORMANCE_RETRIEVED));
+//    }
+//
+//    @PreAuthorize("hasAnyRole('MANAGER', 'TEACHER')")
+//    @GetMapping("/{classId}/student/{userId}/progress")
+//    @Operation(summary = "View Student Progress Overview", description = "Retrieve learning progress overview for a student in a class")
+//    public ResponseEntity<?> viewStudentProgressOverview(@PathVariable Long classId, @PathVariable Long userId) {
+//        StudentProgressOverview response = classStudentService.getStudentProgressOverview(classId, userId);
+//        return ResponseEntity.ok(DataResponse.success(response, Const.CLASS_STUDENT.PROGRESS_RETRIEVED));
+//    }
 
     @PreAuthorize("hasRole('MANAGER')")
     @PostMapping("/{classId}/add-student")
@@ -115,7 +113,7 @@ public class ClassStudentController {
     }
 
     @PreAuthorize("hasRole('MANAGER')")
-    @PostMapping("/{classId}/import-students")
+    @PostMapping("/import-students")
     @Operation(summary = "Import Students from Excel", description = "Import multiple students to a class from an Excel file")
     public ResponseEntity<?> importStudentsFromExcel(@RequestParam("file") MultipartFile file) {
         classStudentService.importStudentsFromExcel(file);

@@ -8,7 +8,7 @@ import com.learning.progress.dto.clazz.ClassDTO;
 import com.learning.progress.dto.clazz.ClassOverviewDTO;
 import com.learning.progress.dto.clazz.CreateClassRequest;
 import com.learning.progress.dto.clazz.UpdateClassRequest;
-import com.learning.progress.dto.response.DataResponse;
+import com.learning.progress.dto.DataResponse;
 import com.learning.progress.entity.Chapter;
 import com.learning.progress.entity.ClassChapter;
 import com.learning.progress.entity.ClassLesson;
@@ -34,8 +34,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.io.InputStream;
-import java.io.OutputStream;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;

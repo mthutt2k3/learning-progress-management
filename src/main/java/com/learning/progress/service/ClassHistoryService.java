@@ -1,8 +1,7 @@
 package com.learning.progress.service;
 
-import com.learning.progress.dto.ClassHistoryDTO;
-import com.learning.progress.dto.response.DataResponse;
-import com.learning.progress.entity.ClassHistory;
+import com.learning.progress.dto.clazz.history.ClassHistoryDTO;
+import com.learning.progress.dto.DataResponse;
 
 import java.util.List;
 

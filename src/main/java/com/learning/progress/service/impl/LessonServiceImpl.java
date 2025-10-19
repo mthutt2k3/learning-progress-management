@@ -1,10 +1,10 @@
 package com.learning.progress.service.impl;
 
 import com.learning.progress.common.Const;
-import com.learning.progress.dto.LessonDTO;
-import com.learning.progress.dto.response.DataResponse;
-import com.learning.progress.dto.syllabus.ImportLessonDTO;
-import com.learning.progress.dto.syllabus.SyncLessonRequest;
+import com.learning.progress.dto.lesson.LessonDTO;
+import com.learning.progress.dto.DataResponse;
+import com.learning.progress.dto.excel.ImportLessonDTO;
+import com.learning.progress.dto.lesson.SyncLessonRequest;
 import com.learning.progress.entity.Chapter;
 import com.learning.progress.entity.Lesson;
 import com.learning.progress.exception.ApiException;

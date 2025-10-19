@@ -1,11 +1,10 @@
 package com.learning.progress.service;
 
 import com.learning.progress.common.UserStatus;
-import com.learning.progress.dto.AccountDTO;
-import com.learning.progress.dto.request.CreateNewAccountRequest;
-import com.learning.progress.dto.response.DataResponse;
+import com.learning.progress.dto.account.AccountDTO;
+import com.learning.progress.dto.account.CreateNewAccountRequest;
+import com.learning.progress.dto.DataResponse;
 import com.learning.progress.entity.User;
-import jakarta.validation.Valid;
 
 import java.util.List;
 
