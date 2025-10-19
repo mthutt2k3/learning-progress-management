@@ -95,10 +95,10 @@ public class UserController {
     public ResponseEntity<DataResponse<List<StudentProfileDTO>>> getStudentList(
             @Parameter(description = "Page number, starting from 0") @RequestParam(defaultValue = "0") int page,
             @Parameter(description = "Page size") @RequestParam(defaultValue = "10") int size,
-            @Parameter(description = "Search keyword (email, firstName, lastName)") @RequestParam(required = false) String text,
+            @Parameter(description = "Search keyword (email, fullName)") @RequestParam(required = false) String text,
             @Parameter(description = "Filter by status (e.g., ACTIVE, INACTIVE)") @RequestParam(required = false) List<String> status,
             @Parameter(description = "Filter by role (e.g., STUDENT, TEST_TAKER)") @RequestParam(required = false) List<String> roleName,
-            @Parameter(description = "Sort by field (e.g., createdAt, firstName)") @RequestParam(defaultValue = "createdAt") String sortBy,
+            @Parameter(description = "Sort by field (e.g., createdAt, fullName)") @RequestParam(defaultValue = "createdAt") String sortBy,
             @Parameter(description = "Sort direction (asc/desc)") @RequestParam(defaultValue = "asc") String sortDir) {
         return ResponseEntity.ok(userService.getStudentList(page, size, text, status, roleName, sortBy, sortDir));
     }
@@ -109,10 +109,10 @@ public class UserController {
     public ResponseEntity<DataResponse<List<TeacherProfileDTO>>> getTeacherList(
             @Parameter(description = "Page number, starting from 0") @RequestParam(defaultValue = "0") int page,
             @Parameter(description = "Page size") @RequestParam(defaultValue = "10") int size,
-            @Parameter(description = "Search keyword (email, firstName, lastName)") @RequestParam(required = false) String text,
+            @Parameter(description = "Search keyword (email, fullName)") @RequestParam(required = false) String text,
             @Parameter(description = "Filter by status (e.g., ACTIVE, INACTIVE)") @RequestParam(required = false) List<String> status,
             @Parameter(description = "Filter by role (e.g., TEACHER, TEACHING_ASSISTANT)") @RequestParam(required = false) List<String> roleName,
-            @Parameter(description = "Sort by field (e.g., createdAt, firstName)") @RequestParam(defaultValue = "createdAt") String sortBy,
+            @Parameter(description = "Sort by field (e.g., createdAt, fullName)") @RequestParam(defaultValue = "createdAt") String sortBy,
             @Parameter(description = "Sort direction (asc/desc)") @RequestParam(defaultValue = "asc") String sortDir) {
         return ResponseEntity.ok(userService.getTeacherList(page, size, text, status, roleName, sortBy, sortDir));
     }
@@ -248,7 +248,7 @@ public class UserController {
             description = "Export students to Excel. Can filter by class (TEACHER/TA must be teaching that class)"
     )
     public ResponseEntity<ByteArrayResource> exportStudents(
-            @Parameter(description = "Search keyword (email, firstName, lastName)")
+            @Parameter(description = "Search keyword (email, fullName)")
             @RequestParam(required = false) String text,
             @Parameter(description = "Filter by status (e.g., ACTIVE, INACTIVE)")
             @RequestParam(required = false) List<String> status,
@@ -278,7 +278,7 @@ public class UserController {
             description = "Export all teachers or filtered teachers to Excel file with beautiful formatting"
     )
     public ResponseEntity<ByteArrayResource> exportTeachers(
-            @Parameter(description = "Search keyword (email, firstName, lastName)")
+            @Parameter(description = "Search keyword (email, fullName)")
             @RequestParam(required = false) String text,
             @Parameter(description = "Filter by status (e.g., ACTIVE, INACTIVE)")
             @RequestParam(required = false) List<String> status,

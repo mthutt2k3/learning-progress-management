@@ -14,7 +14,7 @@ public interface ClassHistoryMapper {
     @Mapping(source = "clazz.className", target = "className")
     @Mapping(source = "actionBy.id", target = "actionById")
     @Mapping(source = "actionBy.userName", target = "actionByUsername")
-    @Mapping(expression = "java(history.getActionBy() != null ? history.getActionBy().getFirstName() + \" \" + history.getActionBy().getLastName() : null)",
+    @Mapping(expression = "java(history.getActionBy() != null ? history.getActionBy().getFullName() : null)",
             target = "actionByFullName")
     ClassHistoryDTO toClassHistoryDTO(ClassHistory history);
 }

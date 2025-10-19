@@ -11,8 +11,7 @@ public class ClassTeacherResponse {
     private Long classId;
     private Long userId;
     private String userName;
-    private String firstName;
-    private String lastName;
+    private String fullName;
     private String email;
     private ClassTeacherStatus status;
     private OffsetDateTime joinedAt;

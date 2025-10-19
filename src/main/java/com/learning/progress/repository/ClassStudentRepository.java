@@ -15,7 +15,7 @@ public interface ClassStudentRepository extends JpaRepository<ClassStudent, Long
     Optional<ClassStudent> findByUserIdAndStatus(Long userId, String status);
 
     @Query("SELECT cs FROM ClassStudent cs WHERE cs.clazz.id = :classId AND cs.status = :status " +
-            "AND (cs.user.firstName LIKE %:text% OR cs.user.lastName LIKE %:text% OR cs.user.email LIKE %:text%)")
+            "AND (cs.user.fullName LIKE %:text% OR cs.user.email LIKE %:text%)")
     Page<ClassStudent> findByClassIdAndText(Long classId, String text, ClassStudentStatus status, Pageable pageable);
 
     @Query("SELECT cs FROM ClassStudent cs WHERE cs.clazz.id = :classId AND cs.status = :status")
@@ -27,7 +27,7 @@ public interface ClassStudentRepository extends JpaRepository<ClassStudent, Long
     @Query("SELECT COUNT(cs) > 0 FROM ClassStudent cs WHERE cs.clazz.id = :clazzId AND cs.user.id = :userId")
     boolean existsByClassIdAndUserId(Long clazzId, Long userId);
 
-    @Query("SELECT cs FROM ClassStudent cs WHERE cs.clazz.id = :classId ORDER BY cs.user.firstName, cs.user.lastName")
+    @Query("SELECT cs FROM ClassStudent cs WHERE cs.clazz.id = :classId ORDER BY cs.user.fullName")
     List<ClassStudent> findByClazzId(@Param("classId") Long classId);
 
     @Query("SELECT cs FROM ClassStudent cs WHERE cs.user.id = :userId")
