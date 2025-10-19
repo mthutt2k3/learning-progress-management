@@ -41,4 +41,8 @@ public interface UserService {
     byte[] exportAllTeachers(String searchText,
                              List<String> status,
                              List<String> roleName);
+
+    List<StudentProfileDTO> bulkUpdateStudentStatus(BulkUpdateStatusRequest request);
+
+    List<TeacherProfileDTO> bulkUpdateTeacherStatus(BulkUpdateStatusRequest request);
 }

@@ -66,6 +66,11 @@ public class SyllabusServiceImpl implements SyllabusService {
     @Override
     @Transactional
     public SyllabusDTO createSyllabus(CreateSyllabusRequest request) {
+
+        if (syllabusRepository.existsBySyllabusNameIgnoreCase(request.getSyllabusName())) {
+            throw new ApiException("Syllabus name already exists", HttpStatus.BAD_REQUEST.value());
+        }
+
         Level level = levelRepository.findById(request.getLevelId())
                 .orElseThrow(() -> new ApiException("Level not found", HttpStatus.NOT_FOUND.value()));
 
