@@ -28,5 +28,4 @@ public class UpdateProfileDTO {
 
     @NotBlank(message = Const.GENDER.REQUIRED)
     private String gender;
-
 }

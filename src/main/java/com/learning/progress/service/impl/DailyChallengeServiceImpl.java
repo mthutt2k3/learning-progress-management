@@ -108,8 +108,6 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
         dto.setEndDate(challenge.getEndDate());
         dto.setCreatedBy(challenge.getCreatedBy());
         dto.setCreatedAt(challenge.getCreatedAt());
-        dto.setUpdatedBy(challenge.getUpdatedBy());
-        dto.setUpdatedAt(challenge.getUpdatedAt());
         return dto;
     }
 
@@ -142,6 +140,5 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
         challenge.setIsActive(dto.getIsActive() != null ? dto.getIsActive() : challenge.getIsActive());
         challenge.setStartDate(dto.getStartDate());
         challenge.setEndDate(dto.getEndDate());
-        challenge.setUpdatedBy(dto.getUpdatedBy());
     }
 }

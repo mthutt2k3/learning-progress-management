@@ -3,6 +3,7 @@ package com.learning.progress.dto.account;
 import com.learning.progress.common.Const;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 @Data
@@ -12,7 +13,8 @@ public class CreateNewAccountRequest {
     @Pattern(regexp = Const.VALIDATE_INPUT.regexEmail, message = Const.EMAIL.INVALID)
     private String email;
 
-    @NotBlank(message = Const.NAME.ROLE_NAME_REQUIRED)
+    @NotBlank(message = Const.ROLE.ROLE_NAME_REQUIRED)
+    @Size(max = Const.ROLE.ROLE_NAME_MAX_LENGTH_VALUE, message = Const.ROLE.ROLE_NAME_MAX_LENGTH)
     private String roleName;
 
 }
