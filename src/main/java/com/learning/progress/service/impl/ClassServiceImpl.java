@@ -247,19 +247,4 @@ public class ClassServiceImpl implements ClassService {
         clazz.setDeletedAt(now);
         classRepository.save(clazz);
     }
-
-    @Override
-    public void exportClassesToExcel(OutputStream outputStream) {
-        // Logic export danh sách class sang Excel
-    }
-
-    @Override
-    public void importClassesFromExcel(InputStream inputStream) {
-        // Logic import class từ Excel
-    }
-
-    @Override
-    public void downloadImportTemplate(OutputStream outputStream) {
-        // Tạo template Excel cho import
-    }
 }
