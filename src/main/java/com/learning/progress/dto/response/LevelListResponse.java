@@ -13,7 +13,6 @@ import java.util.Date;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-
 public class LevelListResponse {
     private Long id;
     private String levelName;

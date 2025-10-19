@@ -9,7 +9,6 @@ import lombok.experimental.SuperBuilder;
 import org.hibernate.annotations.OnDelete;
 import org.hibernate.annotations.OnDeleteAction;
 
-import java.time.OffsetDateTime;
 import java.util.Date;
 
 @SuperBuilder
@@ -34,11 +33,8 @@ public class User extends BaseEntity {
     @Column(name = "password")
     private String password;
 
-    @Column(name = "first_name", nullable = false, length = 50)
-    private String firstName;
-
-    @Column(name = "last_name", nullable = false, length = 50)
-    private String lastName;
+    @Column(name = "full_name", nullable = false, length = 100)
+    private String fullName;
 
     @Column(name = "avatar_url")
     private String avatarUrl;

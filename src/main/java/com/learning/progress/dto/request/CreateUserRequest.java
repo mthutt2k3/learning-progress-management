@@ -23,11 +23,8 @@ public class CreateUserRequest {
     @Pattern(regexp = Const.VALIDATE_INPUT.regexEmail, message = Const.EMAIL.INVALID)
     private String email;
 
-    @NotBlank(message = Const.NAME.FIRST_NAME_REQUIRED)
-    private String firstName;
-
-    @NotBlank(message = Const.NAME.LAST_NAME_REQUIRED)
-    private String lastName;
+    @NotBlank(message = Const.NAME.FULL_NAME_REQUIRED)
+    private String fullName;
 
     private String avatarUrl;
 
