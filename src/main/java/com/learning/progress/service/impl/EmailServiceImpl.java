@@ -34,9 +34,7 @@ public class EmailServiceImpl implements EmailService {
     @Async("taskExecutor")
     public void sendNewAccountEmail(User user, String username, String password) {
         try {
-            String fullName = (user.getFirstName() != null ? user.getFirstName() : "")
-                    + " "
-                    + (user.getLastName() != null ? user.getLastName() : "");
+            String fullName = (user.getFullName() != null ? user.getFullName() : "");
 
             Map<String, Object> templateVariables = new HashMap<>();
             templateVariables.put("fullName", fullName.trim().isEmpty() ? "bạn" : fullName.trim());
@@ -56,9 +54,7 @@ public class EmailServiceImpl implements EmailService {
     @Async("taskExecutor")
     public void sendChangeEmailConfirmation(User user, String newEmail, String token, String domain, String path) {
         try {
-            String fullName = (user.getFirstName() != null ? user.getFirstName() : "")
-                    + " "
-                    + (user.getLastName() != null ? user.getLastName() : "");
+            String fullName = (user.getFullName() != null ? user.getFullName() : "");
             Map<String, Object> templateVariables = new HashMap<>();
             templateVariables.put("fullName", fullName.trim().isEmpty() ? "bạn" : fullName.trim());
             templateVariables.put("newEmail", newEmail);
@@ -79,9 +75,7 @@ public class EmailServiceImpl implements EmailService {
     @Async("taskExecutor")
     public void sendForgotPasswordEmail(User user, ResetPasswordRequest request, String resetToken) {
         try {
-            String fullName = (user.getFirstName() != null ? user.getFirstName() : "")
-                    + " "
-                    + (user.getLastName() != null ? user.getLastName() : "");
+            String fullName = (user.getFullName() != null ? user.getFullName() : "");
             String username = user.getUserName() != null ? user.getUserName() : "(chưa có)";
             Map<String, Object> templateVariables = new HashMap<>();
             templateVariables.put("fullName", fullName.trim().isEmpty() ? "bạn" : fullName.trim());

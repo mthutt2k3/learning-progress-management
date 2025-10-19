@@ -1,11 +1,14 @@
 package com.learning.progress.entity;
 
+import com.learning.progress.common.ClassStatus;
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
 import org.hibernate.annotations.ColumnDefault;
 import org.hibernate.annotations.OnDelete;
 import org.hibernate.annotations.OnDeleteAction;
+
+import java.time.LocalDate;
 
 @SuperBuilder
 @NoArgsConstructor
@@ -27,11 +30,17 @@ public class Clazz extends BaseEntity{
     @Column(name = "avatar_url", length = Integer.MAX_VALUE)
     private String avatarUrl;
 
-    @ColumnDefault("true")
-    @Column(name = "is_active")
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", length = 20)
     @Builder.Default
-    private Boolean isActive = true;
+    private ClassStatus status = ClassStatus.ACTIVE;
 
     @Column(name = "class_code", length = 20)
     private String classCode;
+
+    @Column(name = "start_date")
+    private LocalDate startDate;
+
+    @Column(name = "end_date")
+    private LocalDate endDate;
 }

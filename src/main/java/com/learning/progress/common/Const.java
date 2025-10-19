@@ -58,8 +58,7 @@ public class Const {
         public static final String INVALID_PHONE_FORMAT = "Invalid phone number format. Must start with 0 or +84 followed by 9 or 10 digits";
     }
     public static class NAME {
-        public static final String FIRST_NAME_REQUIRED = "First name is required";
-        public static final String LAST_NAME_REQUIRED = "Last name is required";
+        public static final String FULL_NAME_REQUIRED = "Full name is required";
         public static final String ROLE_NAME_REQUIRED = "Role name is required";
 
     }

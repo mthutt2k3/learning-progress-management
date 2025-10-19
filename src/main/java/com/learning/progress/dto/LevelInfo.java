@@ -11,5 +11,6 @@ import lombok.NoArgsConstructor;
 @Builder
 public class LevelInfo {
     private Long id;
+    private String levelCode;
     private String levelName;
 }

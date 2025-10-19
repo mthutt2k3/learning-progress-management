@@ -14,8 +14,7 @@ public class BulkUpdateStatusResult {
     private Long userId;
     private String userName;
     private String email;
-    private String firstName;
-    private String lastName;
+    private String fullName;
     private UserStatus status;
     private String roleName;
 }

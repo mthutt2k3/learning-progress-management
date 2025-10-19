@@ -24,8 +24,7 @@ public interface ClassTeacherRepository extends JpaRepository<ClassTeacher, Long
 
     @Query("SELECT ct FROM ClassTeacher ct WHERE ct.clazz.id = :classId AND ct.status = :status " +
             "AND (LOWER(ct.user.userName) LIKE LOWER(CONCAT('%', :text, '%')) " +
-            "OR LOWER(ct.user.firstName) LIKE LOWER(CONCAT('%', :text, '%')) " +
-            "OR LOWER(ct.user.lastName) LIKE LOWER(CONCAT('%', :text, '%')) " +
+            "OR LOWER(ct.user.fullName) LIKE LOWER(CONCAT('%', :text, '%')) " +
             "OR LOWER(ct.user.email) LIKE LOWER(CONCAT('%', :text, '%')))")
     Page<ClassTeacher> findByClassIdAndText(@Param("classId") Long classId, @Param("text") String text,
                                             @Param("status") ClassTeacherStatus status, Pageable pageable);

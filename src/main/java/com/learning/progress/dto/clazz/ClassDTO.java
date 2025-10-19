@@ -1,10 +1,13 @@
 package com.learning.progress.dto.clazz;
 
+import com.learning.progress.common.ClassStatus;
+import jakarta.persistence.Column;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 
 @Data
@@ -17,9 +20,9 @@ public class ClassDTO {
     private String classCode;
     private Long syllabusId;
     private String avatarUrl;
-    private Boolean isActive;
+    private ClassStatus status;
     private String createdBy;
+    private LocalDate startDate;
+    private LocalDate endDate;
     private OffsetDateTime createdAt;
-    private String updatedBy;
-    private OffsetDateTime updatedAt;
 }

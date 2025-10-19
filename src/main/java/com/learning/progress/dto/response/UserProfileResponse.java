@@ -21,8 +21,7 @@ public class UserProfileResponse {
     private String userName;
     private RoleName roleName;
     private String email;
-    private String firstName;
-    private String lastName;
+    private String fullName;
     private String avatarUrl;
     private Date dateOfBirth;
     private String address;

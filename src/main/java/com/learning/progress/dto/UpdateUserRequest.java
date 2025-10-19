@@ -20,11 +20,8 @@ public class UpdateUserRequest {
     @NotBlank(message = Const.NAME.ROLE_NAME_REQUIRED)
     private String roleName;
 
-    @NotBlank(message = Const.NAME.FIRST_NAME_REQUIRED)
-    private String firstName;
-
-    @NotBlank(message = Const.NAME.LAST_NAME_REQUIRED)
-    private String lastName;
+    @NotBlank(message = Const.NAME.FULL_NAME_REQUIRED)
+    private String fullName;
 
     private String avatarUrl;
 

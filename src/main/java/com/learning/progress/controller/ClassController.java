@@ -2,6 +2,7 @@ package com.learning.progress.controller;
 
 import com.learning.progress.common.Const;
 import com.learning.progress.dto.clazz.ClassDTO;
+import com.learning.progress.dto.clazz.ClassOverviewDTO;
 import com.learning.progress.dto.clazz.CreateClassRequest;
 import com.learning.progress.dto.clazz.UpdateClassRequest;
 import com.learning.progress.dto.response.DataResponse;
@@ -27,6 +28,15 @@ public class ClassController {
 
     @Autowired
     private ClassService classService;
+
+    @GetMapping("/{classId}/overview")
+    @PreAuthorize("hasRole('MANAGER') or hasRole('TEACHER') or hasRole('TEACHING_ASSISTANT') or hasRole('STUDENT') or hasRole('TEST_TAKER')")
+    @Operation(summary = "Lấy tổng quan lớp học", description = "Lấy thông tin tổng quan của lớp học bao gồm giáo viên, trợ giảng, ngày bắt đầu, ngày kết thúc, trạng thái, cấp độ và giáo trình")
+    public ResponseEntity<DataResponse<ClassOverviewDTO>> getClassOverview(
+            @Parameter(description = "ID của lớp học") @PathVariable Long classId) {
+        ClassOverviewDTO overview = classService.getClassOverview(classId);
+        return ResponseEntity.ok(DataResponse.success(overview, Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL));
+    }
 
     @PostMapping
     @PreAuthorize("hasRole('MANAGER')")
@@ -60,13 +70,13 @@ public class ClassController {
         return ResponseEntity.ok(DataResponse.success(classService.updateClass(id, request), Const.RESULT_MESSAGE_CODE.UPDATE_SUCCESSFUL));
     }
 
-    @PatchMapping("/{id}/toggle")
+    @PatchMapping("/{id}/change-status")
     @PreAuthorize("hasRole('MANAGER')")
-    @Operation(summary = "Kết thúc lớp học", description = "Thay đổi trạng thái isActive")
-    public ResponseEntity<DataResponse<Void>> toggleClassActivation(
-            @PathVariable Long id, @RequestParam boolean isActive) {
-        classService.toggleClassActivation(id, isActive);
-        return ResponseEntity.ok(DataResponse.success(null, Const.RESULT_MESSAGE_CODE.UPDATE_SUCCESSFUL));
+    @Operation(summary = "Kết thúc lớp học", description = "Thay đổi trạng thái class")
+    public ResponseEntity<DataResponse<String>> changeClassStatusManually(
+            @PathVariable Long id, @RequestParam String status) {
+        var responseMsg = classService.changeClassStatusManually(id, status);
+        return ResponseEntity.ok(DataResponse.success(responseMsg, Const.RESULT_MESSAGE_CODE.UPDATE_SUCCESSFUL));
     }
 
     @DeleteMapping("/{id}")

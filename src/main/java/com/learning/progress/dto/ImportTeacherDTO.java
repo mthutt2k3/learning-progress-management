@@ -9,9 +9,7 @@ import java.util.Date;
 public class ImportTeacherDTO {
     private String email;
 
-    private String firstName;
-
-    private String lastName;
+    private String fullName;
 
     private String roleName;
 

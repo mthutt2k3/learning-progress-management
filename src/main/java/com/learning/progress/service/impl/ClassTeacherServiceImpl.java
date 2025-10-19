@@ -53,7 +53,7 @@ public class ClassTeacherServiceImpl implements ClassTeacherService {
     public DataResponse<List<ClassTeacherResponse>> getTeachersInClass(Long classId, int page, int size, String text, ClassTeacherStatus status, String sortBy, String sortDir) {
         // Validate pagination and sort parameters
         appValidator.validatePaginationParams(page, size);
-        appValidator.validateSortParams(List.of("id", "userName", "firstName", "lastName", "email", "joinedAt", "status"), sortBy, sortDir);
+        appValidator.validateSortParams(List.of("id", "userName", "fullName", "email", "joinedAt", "status"), sortBy, sortDir);
 
         Sort sort = Sort.by(sortDir.equalsIgnoreCase("asc") ? Sort.Direction.ASC : Sort.Direction.DESC, sortBy);
         Pageable pageable = PageRequest.of(page, size, sort);
@@ -91,7 +91,7 @@ public class ClassTeacherServiceImpl implements ClassTeacherService {
         Clazz clazz = classRepository.findById(classId)
                 .orElseThrow(() -> new ApiException(Const.CLASS.CLASS_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
-        if (!clazz.getIsActive()) {
+        if (clazz.getStatus() == ClassStatus.INACTIVE) {
             throw new ApiException(Const.CLASS.INACTIVE, HttpStatus.BAD_REQUEST.value());
         }
 
@@ -133,7 +133,7 @@ public class ClassTeacherServiceImpl implements ClassTeacherService {
         Clazz clazz = classRepository.findById(classId)
                 .orElseThrow(() -> new ApiException(Const.CLASS.CLASS_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
-        if (!clazz.getIsActive()) {
+        if (clazz.getStatus() == ClassStatus.INACTIVE) {
             throw new ApiException(Const.CLASS.INACTIVE, HttpStatus.BAD_REQUEST.value());
         }
 
@@ -181,7 +181,7 @@ public class ClassTeacherServiceImpl implements ClassTeacherService {
         TeacherPerformanceReport report = new TeacherPerformanceReport();
         report.setUserId(userId);
         report.setClassId(classId);
-        report.setTeacherName(classTeacher.getUser().getFirstName() + " " + classTeacher.getUser().getLastName());
+        report.setTeacherName(classTeacher.getUser().getFullName());
 
         // Placeholder: Add actual performance metrics
         // For example:
