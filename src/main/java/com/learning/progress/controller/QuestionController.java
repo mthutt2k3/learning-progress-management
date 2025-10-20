@@ -1,7 +1,10 @@
 package com.learning.progress.controller;
 
+import com.learning.progress.common.Const;
+import com.learning.progress.dto.DataResponse;
 import com.learning.progress.dto.challenge.ChallengeSectionDTO;
 import com.learning.progress.dto.challenge.QuestionDTO;
+import com.learning.progress.dto.challenge.section.SectionWithQuestionsDTO;
 import com.learning.progress.service.QuestionService;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -18,13 +21,31 @@ public class QuestionController {
     @Autowired
     private QuestionService questionService;
 
-    // 1. Tạo Section cho Challenge
+    // *** 1. TẠO 1 SECTION + QUESTIONS - TRẢ VỀ CHÍNH DTO ***
     @PostMapping("/sections")
-    public ResponseEntity<ChallengeSectionDTO> createSection(
+    public ResponseEntity<DataResponse<?>> createSectionWithQuestions(
+            @PathVariable Long challengeId,
+            @Valid @RequestBody SectionWithQuestionsDTO dto) {
+        var response = questionService.createSectionWithQuestions(challengeId, dto);
+        return new ResponseEntity<>(DataResponse.success(
+                response,
+                Const.RESULT_MESSAGE_CODE.UPDATE_SUCCESSFUL), HttpStatus.CREATED);
+    }
+
+    @PostMapping("/section")
+    public ResponseEntity<ChallengeSectionDTO> createSectionQuestion(
             @PathVariable Long challengeId, @Valid @RequestBody ChallengeSectionDTO dto) {
         ChallengeSectionDTO createdSection = questionService.createSection(challengeId, dto);
         return new ResponseEntity<>(createdSection, HttpStatus.CREATED);
     }
+
+//    // 1. Tạo Section cho Challenge
+//    @PostMapping("/sections")
+//    public ResponseEntity<ChallengeSectionDTO> createSection(
+//            @PathVariable Long challengeId, @Valid @RequestBody ChallengeSectionDTO dto) {
+//        ChallengeSectionDTO createdSection = questionService.createSection(challengeId, dto);
+//        return new ResponseEntity<>(createdSection, HttpStatus.CREATED);
+//    }
 
     // 2. Lấy danh sách Sections của Challenge
     @GetMapping("/sections")

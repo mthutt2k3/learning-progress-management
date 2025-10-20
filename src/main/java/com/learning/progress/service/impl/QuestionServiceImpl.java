@@ -2,22 +2,27 @@ package com.learning.progress.service.impl;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.learning.progress.common.ChallengeType;
+import com.learning.progress.common.Const;
 import com.learning.progress.common.QuestionType;
 import com.learning.progress.dto.challenge.ChallengeSectionDTO;
 import com.learning.progress.dto.challenge.QuestionDTO;
+import com.learning.progress.dto.challenge.section.SectionWithQuestionsDTO;
 import com.learning.progress.entity.ChallengeSection;
 import com.learning.progress.entity.DailyChallenge;
 import com.learning.progress.entity.Question;
+import com.learning.progress.exception.ApiException;
 import com.learning.progress.repository.ChallengeSectionRepository;
 import com.learning.progress.repository.DailyChallengeRepository;
 import com.learning.progress.repository.QuestionRepository;
 import com.learning.progress.service.QuestionService;
 import jakarta.persistence.EntityNotFoundException;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -35,6 +40,40 @@ public class QuestionServiceImpl implements QuestionService {
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    @Override
+    public Object createSectionWithQuestions(Long challengeId, SectionWithQuestionsDTO dto) {
+        // 1. Kiểm tra DailyChallenge tồn tại
+        DailyChallenge challenge = dailyChallengeRepository.findById(challengeId)
+                .filter(c -> c.getDeletedAt() == null)
+                .orElseThrow(() -> new ApiException(Const.CHALLENGE.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+
+        ChallengeSection section = createSectionFromDTO(challenge, dto);
+        section = challengeSectionRepository.save(section);
+
+        List<SectionWithQuestionsDTO.QuestionInfoDTO> questions = new ArrayList<>();
+        if (dto.getQuestions() != null && !dto.getQuestions().isEmpty()) {
+            for (SectionWithQuestionsDTO.QuestionInfoDTO questionDto : dto.getQuestions()) {
+                validateQuestionContent(questionDto.getQuestionContent(), questionDto.getQuestionType());
+                Question question = createQuestionFromDTO(section, questionDto);
+                question = questionRepository.save(question);
+
+                // UPDATE QUESTION DTO
+                SectionWithQuestionsDTO.QuestionInfoDTO updatedQuestion = new SectionWithQuestionsDTO.QuestionInfoDTO();
+                updatedQuestion.setQuestionText(question.getQuestionText());
+                updatedQuestion.setQuestionType(question.getQuestionType());
+                updatedQuestion.setOrderNumber(question.getOrderNumber());
+                updatedQuestion.setQuestionContent(questionDto.getQuestionContent());
+                updatedQuestion.setScore(question.getScore());
+                updatedQuestion.setCreatedBy(question.getCreatedBy());
+                questions.add(updatedQuestion);
+            }
+        }
+
+        // 5. TRẢ VỀ DTO
+        dto.setQuestions(questions);
+        return dto;
+    }
 
     @Override
     @Transactional

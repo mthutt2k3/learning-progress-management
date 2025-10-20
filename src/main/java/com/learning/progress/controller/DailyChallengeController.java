@@ -3,6 +3,7 @@ package com.learning.progress.controller;
 import com.learning.progress.dto.challenge.CreateDailyChallengeRequest;
 import com.learning.progress.dto.challenge.DailyChallengeDTO;
 import com.learning.progress.service.DailyChallengeService;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -12,7 +13,8 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/daily-challenges")
+@RequestMapping("/api/v1/daily-challenges")
+@Tag(name = "Daily Challenge", description = "Daily Challenge Management APIs")
 public class DailyChallengeController {
 
     @Autowired
