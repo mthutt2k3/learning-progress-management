@@ -1,5 +1,6 @@
 package com.learning.progress.service.impl;
 
+import com.learning.progress.common.Const;
 import com.learning.progress.dto.excel.ImportTeacherDTO;
 import com.learning.progress.dto.excel.ImportStudentToClass;
 import com.learning.progress.dto.excel.ImportStudentDTO;
@@ -651,7 +652,7 @@ public class FileServiceImpl implements FileService {
                     return cell.getStringCellValue();
                 case NUMERIC:
                     if (DateUtil.isCellDateFormatted(cell)) {
-                        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
+                        SimpleDateFormat sdf = new SimpleDateFormat(Const.VALIDATE_INPUT.regexDate);
                         return sdf.format(cell.getDateCellValue());
                     }
                     // Xử lý số để tránh scientific notation
@@ -803,7 +804,7 @@ public class FileServiceImpl implements FileService {
 
     private Date parseDate(String dateStr, int rowNum, String columnName) {
         List<String> patterns = List.of(
-                "yyyy-MM-dd", "dd/MM/yyyy", "MM/dd/yyyy",
+                Const.VALIDATE_INPUT.regexDate, "dd/MM/yyyy", "MM/dd/yyyy",
                 "dd-MM-yyyy", "yyyy/MM/dd"
         );
 
@@ -856,7 +857,7 @@ public class FileServiceImpl implements FileService {
 
                 // --- Date parse từ text ---
                 if (type == Date.class) {
-                    List<String> patterns = List.of("dd/MM/yyyy", "yyyy-MM-dd", "MM/dd/yyyy");
+                    List<String> patterns = List.of("dd/MM/yyyy", Const.VALIDATE_INPUT.regexDate, "MM/dd/yyyy");
                     for (String pattern : patterns) {
                         try {
                             return new SimpleDateFormat(pattern).parse(str);

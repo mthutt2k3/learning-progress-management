@@ -1,6 +1,7 @@
 package com.learning.progress.dto.excel;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
+import com.learning.progress.common.Const;
 import lombok.Data;
 
 import java.util.Date;
@@ -15,7 +16,7 @@ public class ImportTeacherDTO {
 
     private String avatarUrl;
 
-    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd")
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = Const.VALIDATE_INPUT.regexDate)
     private Date dateOfBirth;
 
     private String address;

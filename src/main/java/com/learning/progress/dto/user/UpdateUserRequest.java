@@ -25,7 +25,7 @@ public class UpdateUserRequest {
 
     private String avatarUrl;
 
-    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = Const.VALIDATE_INPUT.dateOfbirth)
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = Const.VALIDATE_INPUT.regexDate)
     private Date dateOfBirth;
 
     private String address;

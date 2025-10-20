@@ -119,39 +119,17 @@ public class SyllabusController {
     @PreAuthorize("hasRole('MANAGER') or hasRole('TEACHER') or hasRole('TEACHING_ASSISTANT')")
     @Operation(
             summary = "Export Syllabuses to Excel",
-            description = "Export all syllabuses with chapters and lessons to multi-sheet Excel file"
+            description = "Export syllabuses to multi-sheet Excel file. " +
+                    "If ids provided, export only those syllabuses. Otherwise export all (with optional search)"
     )
     public ResponseEntity<ByteArrayResource> exportSyllabuses(
-            @Parameter(description = "Search keyword")
-            @RequestParam(required = false) String searchText) {
+            @Parameter(description = "List of Syllabus IDs to export (optional)")
+            @RequestParam(required = false) List<Long> ids) {
 
-        byte[] excelFile = syllabusService.exportAllSyllabuses(searchText);
+        byte[] excelFile = syllabusService.exportSyllabuses(ids);
         ByteArrayResource resource = new ByteArrayResource(excelFile);
 
         String filename = "Syllabuses_Export_" +
-                new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date()) +
-                ".xlsx";
-
-        return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=" + filename)
-                .contentType(MediaType.APPLICATION_OCTET_STREAM)
-                .contentLength(excelFile.length)
-                .body(resource);
-    }
-
-    @GetMapping("/{id}/export")
-    @PreAuthorize("hasRole('MANAGER') or hasRole('TEACHER') or hasRole('TEACHING_ASSISTANT')")
-    @Operation(
-            summary = "Export Syllabus Detail to Excel",
-            description = "Export specific syllabus with full chapter and lesson details"
-    )
-    public ResponseEntity<ByteArrayResource> exportSyllabusDetail(
-            @Parameter(description = "Syllabus ID") @PathVariable Long id) {
-
-        byte[] excelFile = syllabusService.exportSyllabusDetail(id);
-        ByteArrayResource resource = new ByteArrayResource(excelFile);
-
-        String filename = "Syllabus_Detail_" + id + "_" +
                 new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date()) +
                 ".xlsx";
 

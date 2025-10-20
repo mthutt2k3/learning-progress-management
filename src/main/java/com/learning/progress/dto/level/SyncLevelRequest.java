@@ -27,10 +27,6 @@ public class SyncLevelRequest {
 
     private String learningObjectives;
 
-    @NotNull(message = "Estimated duration is required", groups = NotDeleted.class)
-    @PositiveOrZero(message = "Duration must be non-negative", groups = NotDeleted.class)
-    private Integer estimatedDurationWeeks;
-
     @NotNull(message = "Order number is required", groups = NotDeleted.class)
     @Min(value = 1, message = "Order number must be 1 or greater", groups = NotDeleted.class)
     private Integer orderNumber;
