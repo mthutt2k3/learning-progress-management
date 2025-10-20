@@ -265,9 +265,83 @@ public class SyllabusServiceImpl implements SyllabusService {
     }
 
     @Override
-    public byte[] exportAllSyllabuses(String searchText) {
-        // Lấy tất cả syllabuses
-        List<Syllabus> syllabuses = syllabusRepository.findAllBySearchText(searchText);
+    public byte[] exportSyllabuses(List<Long> ids) {
+        List<Syllabus> syllabuses;
+
+        // Case 1: ids = null hoặc không truyền → Export tất cả
+        if (ids == null || ids.isEmpty()) {
+            syllabuses = syllabusRepository.findAll().stream()
+                    .filter(s -> s.getDeletedAt() == null)
+                    .collect(Collectors.toList());
+
+            if (syllabuses.isEmpty()) {
+                throw new ApiException(
+                        "No syllabuses found in the system",
+                        HttpStatus.NOT_FOUND.value()
+                );
+            }
+        }
+        // Case 2: ids có giá trị → Export theo IDs
+        else {
+            // Validation: Không cho chứa null values trong list
+            if (ids.contains(null)) {
+                throw new ApiException(
+                        "IDs list cannot contain null values",
+                        HttpStatus.BAD_REQUEST.value()
+                );
+            }
+
+            // Validation: Không cho duplicate IDs
+            Set<Long> uniqueIds = new HashSet<>(ids);
+            if (uniqueIds.size() != ids.size()) {
+                List<Long> duplicates = ids.stream()
+                        .filter(id -> Collections.frequency(ids, id) > 1)
+                        .distinct()
+                        .collect(Collectors.toList());
+                throw new ApiException(
+                        "Duplicate IDs found: " + duplicates,
+                        HttpStatus.BAD_REQUEST.value()
+                );
+            }
+
+            // Validation: Kiểm tra IDs phải là số dương
+            List<Long> invalidIds = ids.stream()
+                    .filter(id -> id <= 0)
+                    .collect(Collectors.toList());
+            if (!invalidIds.isEmpty()) {
+                throw new ApiException(
+                        "Invalid IDs (must be positive): " + invalidIds,
+                        HttpStatus.BAD_REQUEST.value()
+                );
+            }
+
+            // Lấy syllabuses từ DB
+            syllabuses = syllabusRepository.findAllById(ids).stream()
+                    .filter(s -> s.getDeletedAt() == null)
+                    .collect(Collectors.toList());
+
+            // Validation: Check syllabuses không tồn tại hoặc đã bị xóa
+            if (syllabuses.isEmpty()) {
+                throw new ApiException(
+                        "No syllabuses found with provided IDs or all are deleted",
+                        HttpStatus.NOT_FOUND.value()
+                );
+            }
+
+            // Validation: Check có IDs nào không tồn tại
+            if (syllabuses.size() != ids.size()) {
+                List<Long> foundIds = syllabuses.stream()
+                        .map(Syllabus::getId)
+                        .collect(Collectors.toList());
+                List<Long> missingIds = ids.stream()
+                        .filter(id -> !foundIds.contains(id))
+                        .collect(Collectors.toList());
+                throw new ApiException(
+                        "Syllabuses not found or deleted for IDs: " + missingIds,
+                        HttpStatus.NOT_FOUND.value()
+                );
+            }
+        }
 
         // Convert sang ExportSyllabusDTO
         List<ExportSyllabusDTO> exportData = syllabuses.stream()
@@ -275,10 +349,20 @@ public class SyllabusServiceImpl implements SyllabusService {
                 .collect(Collectors.toList());
 
         // Tạo summary info
+        Map<String, String> summaryInfo = createSummaryInfo(exportData, ids);
+
+        // Export
+        return fileService.exportSyllabusesData(exportData, summaryInfo);
+    }
+
+    private Map<String, String> createSummaryInfo(List<ExportSyllabusDTO> exportData, List<Long> ids) {
         Map<String, String> summaryInfo = new LinkedHashMap<>();
+
         summaryInfo.put("Ngày xuất", new SimpleDateFormat("dd/MM/yyyy HH:mm:ss").format(new Date()));
+        summaryInfo.put("Người xuất", jwtUtil.extractUsernameFromCurrentRequest());
         summaryInfo.put("Tổng số syllabus", String.valueOf(exportData.size()));
 
+        // Tính toán thống kê
         int totalChapters = exportData.stream()
                 .mapToInt(s -> s.getTotalChapters() != null ? s.getTotalChapters() : 0)
                 .sum();
@@ -289,35 +373,31 @@ public class SyllabusServiceImpl implements SyllabusService {
         summaryInfo.put("Tổng số chapter", String.valueOf(totalChapters));
         summaryInfo.put("Tổng số lesson", String.valueOf(totalLessons));
 
-        if (searchText != null && !searchText.trim().isEmpty()) {
-            summaryInfo.put("Từ khóa tìm kiếm", searchText);
+        // Thống kê theo level
+        Map<String, Long> levelStats = exportData.stream()
+                .collect(Collectors.groupingBy(
+                        ExportSyllabusDTO::getLevelName,
+                        LinkedHashMap::new,
+                        Collectors.counting()
+                ));
+        summaryInfo.put("Phân bổ theo Level",
+                levelStats.entrySet().stream()
+                        .map(e -> e.getKey() + " (" + e.getValue() + ")")
+                        .collect(Collectors.joining(", "))
+        );
+
+        // Thêm thông tin export
+        if (ids == null || ids.isEmpty()) {
+            summaryInfo.put("Loại export", "Toàn bộ Syllabus");
+        } else {
+            summaryInfo.put("Loại export", "Theo IDs đã chọn");
+            summaryInfo.put("Danh sách IDs", ids.stream()
+                    .map(String::valueOf)
+                    .collect(Collectors.joining(", "))
+            );
         }
 
-        // Export
-        return fileService.exportSyllabusesData(exportData, summaryInfo);
-    }
-
-    @Override
-    public byte[] exportSyllabusDetail(Long syllabusId) {
-        // Kiểm tra syllabus tồn tại
-        Syllabus syllabus = syllabusRepository.findById(syllabusId)
-                .filter(s -> s.getDeletedAt() == null)
-                .orElseThrow(() -> new ApiException("Syllabus not found or deleted", HttpStatus.NOT_FOUND.value()));
-
-        // Convert sang ExportSyllabusDTO với đầy đủ thông tin
-        ExportSyllabusDTO exportData = convertToExportSyllabusDTO(syllabus);
-
-        // Tạo summary info
-        Map<String, String> summaryInfo = new LinkedHashMap<>();
-        summaryInfo.put("Ngày xuất", new SimpleDateFormat("dd/MM/yyyy HH:mm:ss").format(new Date()));
-        summaryInfo.put("Mã Syllabus", syllabus.getSyllabusCode());
-        summaryInfo.put("Tên Syllabus", syllabus.getSyllabusName());
-        summaryInfo.put("Level", syllabus.getLevel().getLevelName() + " (" + syllabus.getLevel().getLevelCode() + ")");
-        summaryInfo.put("Tổng Chapter", String.valueOf(exportData.getTotalChapters()));
-        summaryInfo.put("Tổng Lesson", String.valueOf(exportData.getTotalLessons()));
-
-        // Export chi tiết
-        return fileService.exportSyllabusDetailData(exportData, summaryInfo);
+        return summaryInfo;
     }
 
     private ExportSyllabusDTO convertToExportSyllabusDTO(Syllabus syllabus) {
