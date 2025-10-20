@@ -7,7 +7,7 @@ public class Const {
         public static final String regexPhone = "^(?:0|\\+84)(?:\\s?\\d){9,10}$";
         public static final String regexPass = "^[A-Za-z0-9]{4,20}$";
         public static final String regexGender = "MALE|FEMALE|OTHER";
-        public static final String dateOfbirth = "yyyy-MM-dd";
+        public static final String regexDate = "yyyy-MM-dd";
     }
     public static class STUDENT {
         public static final String LEVEL_ID_REQUIRED = "Level is required for student";
@@ -189,7 +189,38 @@ public class Const {
         public static final String CLASS_NOT_FOUND = "Class not found";
         public static final String INACTIVE = "Class is inactive";
         public static final String DELETED = "Class has been deleted";
+        public static final String UPDATE_FINISHED_CLASS = "Cannot update a finished class";
+
+        public static final String CLASS_NAME_REQUIRED = "Class name cannot be empty";
+        public static final String CLASS_NAME_MAX_LENGTH = "Class name cannot exceed 50 characters";
+        public static final int CLASS_NAME_MAX_LENGTH_VALUE = 50;
+
+        public static final String START_DATE_REQUIRED = "Start date cannot be empty";
+        public static final String END_DATE_REQUIRED = "End date cannot be empty";
+        public static final String END_DATE_INVALID = "End date cannot be earlier than start date";
+        public static final String INVALID_DATE_RANGE = "Start date and end date must not be null";
+
+        public static final String INVALID_DATE_FORMAT = "Invalid date format for %s, expected: %s";
+        public static final String CANNOT_DELETE_ACTIVE_CLASS = "Cannot delete class %s because its status is %s";
+
     }
+    public static class SYLLABUS {
+        public static final String ID_REQUIRED = "Syllabus ID cannot be empty";
+        public static final String NOT_FOUND = "Syllabus not found";
+        public static final String NAME_REQUIRED = "Syllabus name cannot be empty";
+        public static final String NAME_MAX_LENGTH = "Syllabus name cannot exceed 100 characters";
+        public static final String DESCRIPTION_REQUIRED = "Description cannot be empty";
+        public static final String INVALID_ID = "Invalid syllabus ID";
+
+
+    }
+    public static class CLASS_HISTORY {
+        public static final String CREATE_CLASS = "Created class %s with syllabus %s";
+        public static final String UPDATE_CLASS = "Updated class %s: %s";
+        public static final String CHANGE_STATUS = "Changed class %s status from %s to %s";
+        public static final String DELETE_CLASS = "Deleted class %s";
+    }
+
 
     public static class CLASS_STUDENT {
         public static final String LIST_RETRIEVED = "Student list retrieved successfully";

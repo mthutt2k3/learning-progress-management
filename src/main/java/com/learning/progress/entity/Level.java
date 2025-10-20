@@ -31,9 +31,6 @@ public class Level extends BaseEntity{
     @Column(name = "learning_objectives", length = Integer.MAX_VALUE)
     private String learningObjectives;
 
-    @Column(name = "estimated_duration_weeks")
-    private Integer estimatedDurationWeeks;
-
     @Column(name = "order_number", nullable = false)
     private Integer orderNumber;
 
