@@ -1,9 +1,6 @@
 package com.learning.progress.mapper;
 
-import com.learning.progress.dto.syllabus.SyllabusDTO;
-import com.learning.progress.dto.syllabus.SyllabusDetailDTO;
-import com.learning.progress.dto.syllabus.CreateSyllabusRequest;
-import com.learning.progress.dto.syllabus.UpdateSyllabusRequest;
+import com.learning.progress.dto.syllabus.*;
 import com.learning.progress.entity.Syllabus;
 import org.mapstruct.*;
 
@@ -40,4 +37,5 @@ public interface SyllabusMapper {
     @Mapping(target = "level", source = "level")
     SyllabusDetailDTO toSyllabusDetailDTO(Syllabus syllabus);
 
+    SyllabusInfo toSyllabusInfo(Syllabus syllabus);
 }

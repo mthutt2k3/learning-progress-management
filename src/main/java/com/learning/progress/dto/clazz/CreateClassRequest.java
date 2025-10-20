@@ -1,5 +1,6 @@
 package com.learning.progress.dto.clazz;
 
+import com.learning.progress.common.Const;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -8,16 +9,25 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalDate;
+
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 public class CreateClassRequest {
-    @NotBlank(message = "Tên lớp không được để trống")
-    @Size(max = 50, message = "Tên lớp không được vượt quá 50 ký tự")
+    @NotBlank(message = Const.CLASS.CLASS_NAME_REQUIRED)
+    @Size(max = Const.CLASS.CLASS_NAME_MAX_LENGTH_VALUE, message = Const.CLASS.CLASS_NAME_MAX_LENGTH)
     private String className;
 
-    @NotNull(message = "Syllabus không được để trống")
+    @NotNull(message = Const.SYLLABUS.ID_REQUIRED)
     private Long syllabusId;
+
     private String avatarUrl; // Có thể null
+
+    @NotNull(message = Const.CLASS.START_DATE_REQUIRED)
+    private LocalDate startDate;
+
+    @NotNull(message = Const.CLASS.END_DATE_REQUIRED)
+    private LocalDate endDate;
 }

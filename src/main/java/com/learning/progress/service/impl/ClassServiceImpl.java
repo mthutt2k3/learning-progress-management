@@ -29,11 +29,13 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -99,19 +101,14 @@ public class ClassServiceImpl implements ClassService {
     @Override
     @Transactional
     public ClassDTO createClass(CreateClassRequest request) {
-        // Validate request
-        Set<ConstraintViolation<CreateClassRequest>> violations = validator.validate(request);
-        if (!violations.isEmpty()) {
-            throw new ApiException(violations.stream().map(ConstraintViolation::getMessage).collect(Collectors.joining(", ")), HttpStatus.BAD_REQUEST.value());
-        }
+        // Validate startDate and endDate using DataUtil
+        DataUtil.validateStartAndEndDate(request.getStartDate(), request.getEndDate());
 
         // Kiểm tra syllabus
         Syllabus syllabus = syllabusRepository.findById(request.getSyllabusId())
                 .filter(s -> s.getDeletedAt() == null)
-                .orElseThrow(() -> new ApiException("Syllabus không tồn tại", HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> new ApiException(Const.SYLLABUS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
-        String currentUser = jwtUtil.extractUsernameFromCurrentRequest();
-        OffsetDateTime now = OffsetDateTime.now();
         Long actionByUserId = jwtUtil.extractUserIdFromCurrentRequest();
 
         // Tạo class
@@ -119,7 +116,13 @@ public class ClassServiceImpl implements ClassService {
         clazz.setClassName(request.getClassName());
         clazz.setSyllabus(syllabus);
         clazz.setAvatarUrl(request.getAvatarUrl());
-        clazz.setStatus(ClassStatus.ACTIVE);
+        LocalDate today = LocalDate.now();
+        if (request.getStartDate() != null && request.getStartDate().isAfter(today)) {
+            clazz.setStatus(ClassStatus.PENDING);
+        } else {
+            clazz.setStatus(ClassStatus.ACTIVE);
+        }
+
         Clazz savedClass = classRepository.saveAndFlush(clazz);
 
         String classCode = DataUtil.generateClassCode(savedClass.getId());
@@ -128,7 +131,7 @@ public class ClassServiceImpl implements ClassService {
 
         // Ghi lịch sử
         String actionDetails = String.format(
-                "Đã tạo lớp %s với giáo trình %s",
+                Const.CLASS_HISTORY.CREATE_CLASS,
                 request.getClassName(),
                 syllabus.getSyllabusName()
         );
@@ -169,21 +172,51 @@ public class ClassServiceImpl implements ClassService {
     public ClassDTO getClass(Long id) {
         Clazz clazz = classRepository.findById(id)
                 .filter(c -> c.getDeletedAt() == null)
-                .orElseThrow(() -> new ApiException("Class không tồn tại", HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> new ApiException(Const.CLASS.CLASS_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
         return classMapper.toClassDTO(clazz);
     }
 
     @Override
-    public DataResponse<List<ClassDTO>> getClassList(int page, int size, String searchText) {
-        Page<Clazz> classPage = classRepository.findBySearchText(searchText, PageRequest.of(page, size, Sort.by("createdAt").ascending()));
-        List<ClassDTO> responses = classPage.getContent().stream()
+    public DataResponse<List<ClassDTO>> getClassList(int page, int size, String searchText, String status, Long syllabusId, String startDateFrom, String startDateTo, String endDateFrom, String endDateTo, String sortBy, String sortDir) {
+        appValidator.validatePaginationParams(page, size);
+        appValidator.validateSortParams(
+                List.of("createdAt", "className", "classCode", "status", "startDate", "endDate"),
+                sortBy,
+                sortDir
+        );
+
+        Pageable pageable = PageRequest.of(
+                page,
+                size,
+                sortDir.equalsIgnoreCase("asc") ? Sort.by(sortBy).ascending() : Sort.by(sortBy).descending()
+        );
+
+        // ✅ Parse date nếu truyền vào
+        LocalDate startFrom = DataUtil.parseAndValidateDate(startDateFrom, Const.VALIDATE_INPUT.regexDate, "startDateFrom");
+        LocalDate startTo   = DataUtil.parseAndValidateDate(startDateTo,   Const.VALIDATE_INPUT.regexDate, "startDateTo");
+        LocalDate endFrom   = DataUtil.parseAndValidateDate(endDateFrom,   Const.VALIDATE_INPUT.regexDate, "endDateFrom");
+        LocalDate endTo     = DataUtil.parseAndValidateDate(endDateTo,     Const.VALIDATE_INPUT.regexDate, "endDateTo");
+
+        Page<Clazz> classPage = classRepository.searchClassesWithFilters(
+                searchText == null ? "" : searchText,
+                status,
+                syllabusId,
+                startFrom,
+                startTo,
+                endFrom,
+                endTo,
+                pageable
+        );
+
+        List<ClassDTO> classDTOs = classPage.getContent()
+                .stream()
                 .map(classMapper::toClassDTO)
-                .collect(Collectors.toList());
+                .toList();
 
         return DataResponse.<List<ClassDTO>>builder()
                 .success(true)
-                .message("Thành công")
-                .data(responses)
+                .message(Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL)
+                .data(classDTOs)
                 .page(page)
                 .size(size)
                 .totalElements(classPage.getTotalElements())
@@ -196,36 +229,63 @@ public class ClassServiceImpl implements ClassService {
     public ClassDTO updateClass(Long id, UpdateClassRequest request) {
         Clazz clazz = classRepository.findById(id)
                 .filter(c -> c.getDeletedAt() == null)
-                .orElseThrow(() -> new ApiException("Class không tồn tại", HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> new ApiException(Const.CLASS.CLASS_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
-        // Validate request
-        Set<ConstraintViolation<UpdateClassRequest>> violations = validator.validate(request);
-        if (!violations.isEmpty()) {
-            throw new ApiException(violations.stream().map(ConstraintViolation::getMessage).collect(Collectors.joining(", ")), HttpStatus.BAD_REQUEST.value());
+        if (clazz.getStatus() == ClassStatus.FINISHED) {
+            throw new ApiException(
+                    Const.CLASS.UPDATE_FINISHED_CLASS,
+                    HttpStatus.BAD_REQUEST.value()
+            );
         }
 
-        String currentUser = jwtUtil.extractUsernameFromCurrentRequest();
-        OffsetDateTime now = OffsetDateTime.now();
-        Long actionByUserId = jwtUtil.extractUserIdFromCurrentRequest();
-        // Ghi lịch sử
-        String actionDetails = String.format(
-                "Đã cập nhật lớp %s với avatar %s",
-                request.getClassName(),
-                request.getAvatarUrl()
-        );
-        classHistoryService.saveClassHistory(
-                id,
-                actionDetails,
-                actionByUserId,
-                ActionType.UPDATE_CLASS.name(),
-                RoleName.MANAGER.name()
-        );
+        // Validate startDate and endDate using DataUtil
+        DataUtil.validateStartAndEndDate(request.getStartDate(), request.getEndDate());
 
-        clazz.setClassName(request.getClassName());
-        clazz.setAvatarUrl(request.getAvatarUrl());
+        Long actionByUserId = jwtUtil.extractUserIdFromCurrentRequest();
+        StringBuilder details = new StringBuilder();
+
+        // So sánh và chỉ ghi lịch sử khi có thay đổi
+        if (request.getClassName() != null && !request.getClassName().equals(clazz.getClassName())) {
+            details.append(String.format("name changed to '%s'; ", request.getClassName()));
+            clazz.setClassName(request.getClassName());
+        }
+
+        if (request.getAvatarUrl() != null && !request.getAvatarUrl().equals(clazz.getAvatarUrl())) {
+            details.append(String.format("avatar set to %s; ", request.getAvatarUrl()));
+            clazz.setAvatarUrl(request.getAvatarUrl());
+        }
+
+        if (request.getStartDate() != null && !request.getStartDate().equals(clazz.getStartDate())) {
+            details.append(String.format("start date set to %s; ", request.getStartDate()));
+            clazz.setStartDate(request.getStartDate());
+        }
+
+        if (request.getEndDate() != null && !request.getEndDate().equals(clazz.getEndDate())) {
+            details.append(String.format("end date set to %s; ", request.getEndDate()));
+            clazz.setEndDate(request.getEndDate());
+        }
+
+        // Nếu không có gì thay đổi thì không ghi lịch sử
+        String changeDetails = details.toString().replaceAll("; $", "");
+        if (!changeDetails.isEmpty()) {
+            String actionDetails = String.format(
+                    Const.CLASS_HISTORY.UPDATE_CLASS,
+                    clazz.getClassName(),
+                    changeDetails
+            );
+
+            classHistoryService.saveClassHistory(
+                    id,
+                    actionDetails,
+                    actionByUserId,
+                    ActionType.UPDATE_CLASS.name(),
+                    RoleName.MANAGER.name()
+            );
+        }
 
         return classMapper.toClassDTO(classRepository.save(clazz));
     }
+
 
     @Override
     @Transactional
@@ -247,7 +307,7 @@ public class ClassServiceImpl implements ClassService {
 
         // Ghi lịch sử
         String actionDetails = String.format(
-                "Đã chuyển trạng thái lớp %s từ %s sang %s",
+                Const.CLASS_HISTORY.CHANGE_STATUS,
                 clazz.getClassName(),
                 oldStatus,
                 newStatus
@@ -269,13 +329,18 @@ public class ClassServiceImpl implements ClassService {
     public void deleteClass(Long id) {
         Clazz clazz = classRepository.findById(id)
                 .filter(c -> c.getDeletedAt() == null)
-                .orElseThrow(() -> new ApiException("Class không tồn tại", HttpStatus.NOT_FOUND.value()));
-        String currentUser = jwtUtil.extractUsernameFromCurrentRequest();
+                .orElseThrow(() -> new ApiException(Const.CLASS.CLASS_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+
+        if(clazz.getStatus() != ClassStatus.PENDING){
+            throw new ApiException(String.format(Const.CLASS.CANNOT_DELETE_ACTIVE_CLASS, clazz.getClassName(), clazz.getStatus()),
+                    HttpStatus.BAD_REQUEST.value());
+        }
+        String currentUser = jwtUtil.extractEmailFromCurrentRequest();
         Long actionByUserId = jwtUtil.extractUserIdFromCurrentRequest();
 
         // Ghi lịch sử
         String actionDetails = String.format(
-                "Đã xóa lớp %s",
+                Const.CLASS_HISTORY.DELETE_CLASS,
                 clazz.getClassName()
         );
         classHistoryService.saveClassHistory(
@@ -287,7 +352,7 @@ public class ClassServiceImpl implements ClassService {
         );
 
         OffsetDateTime now = OffsetDateTime.now();
-        clazz.setDeletedBy(currentUser);
+        clazz.setDeletedBy(DataUtil.getEmailPrefix(currentUser));
         clazz.setDeletedAt(now);
         classRepository.save(clazz);
     }

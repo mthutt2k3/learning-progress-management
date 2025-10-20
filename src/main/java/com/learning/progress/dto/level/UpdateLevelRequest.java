@@ -18,7 +18,4 @@ public class UpdateLevelRequest {
     private String description;
     private String promotionCriteria;
     private String learningObjectives;
-    @NotNull(message = "Estimated duration is required")
-    @Min(value = 1, message = "Estimated duration must be at least 1 week")
-    private Integer estimatedDurationWeeks;
 }

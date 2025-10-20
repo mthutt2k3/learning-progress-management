@@ -120,7 +120,6 @@ public class LevelServiceImpl implements LevelService {
             }
 
             level.setLevelName(request.getLevelName());
-            level.setEstimatedDurationWeeks(request.getEstimatedDurationWeeks());
 
         }
 
