@@ -34,8 +34,7 @@ public interface LevelRepository extends JpaRepository<Level, Long> {
     SELECT new com.learning.progress.dto.level.LevelDetailsResponse(
         l.id, l.levelName, l.levelCode, l.description,
         p.id, p.levelName,
-        l.promotionCriteria, l.learningObjectives,
-        l.estimatedDurationWeeks, l.orderNumber,
+        l.promotionCriteria, l.learningObjectives, l.orderNumber,
         l.status
     )
     FROM Level l
@@ -50,8 +49,7 @@ public interface LevelRepository extends JpaRepository<Level, Long> {
     SELECT new com.learning.progress.dto.level.LevelDetailsResponse(
         l.id, l.levelName, l.levelCode, l.description,
         p.id, p.levelName,
-        l.promotionCriteria, l.learningObjectives,
-        l.estimatedDurationWeeks, l.orderNumber,
+        l.promotionCriteria, l.learningObjectives, l.orderNumber,
         l.status
     )
     FROM Level l

@@ -14,7 +14,6 @@ public interface LevelMapper {
     @Mapping(source = "description", target = "description")
     @Mapping(source = "promotionCriteria", target = "promotionCriteria")
     @Mapping(source = "learningObjectives", target = "learningObjectives")
-    @Mapping(source = "estimatedDurationWeeks", target = "estimatedDurationWeeks")
     Level toEntity(SyncLevelRequest request);
 
     @Mapping(source = "id", target = "id")
@@ -24,7 +23,6 @@ public interface LevelMapper {
     @Mapping(source = "prerequisite", target = "prerequisite")
     @Mapping(source = "promotionCriteria", target = "promotionCriteria")
     @Mapping(source = "learningObjectives", target = "learningObjectives")
-    @Mapping(source = "estimatedDurationWeeks", target = "estimatedDurationWeeks")
     @Mapping(source = "orderNumber", target = "orderNumber")
     LevelDetailsResponse toLevelDetailsResponse(Level level);
 

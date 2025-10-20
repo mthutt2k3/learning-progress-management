@@ -1,6 +1,8 @@
 package com.learning.progress.dto.clazz;
 
 import com.learning.progress.common.ClassStatus;
+import com.learning.progress.dto.level.LevelInfo;
+import com.learning.progress.dto.syllabus.SyllabusInfo;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -17,7 +19,7 @@ public class ClassDTO {
     private Long id;
     private String className;
     private String classCode;
-    private Long syllabusId;
+    private SyllabusInfo syllabus;
     private String avatarUrl;
     private ClassStatus status;
     private String createdBy;

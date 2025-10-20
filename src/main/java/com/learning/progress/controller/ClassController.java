@@ -50,14 +50,44 @@ public class ClassController {
     }
 
     @GetMapping
-    @PreAuthorize("hasRole('MANAGER') or hasRole('TEACHER')")
-    @Operation(summary = "Lấy danh sách class", description = "Lấy danh sách class phân trang")
+    @PreAuthorize("hasRole('MANAGER') or hasRole('TEACHER') or hasRole('TEACHING_ASSISTANT')")
+    @Operation(summary = "Get class list", description = "Get paginated list of classes with filters and sorting")
     public ResponseEntity<DataResponse<List<ClassDTO>>> getClassList(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
-            @RequestParam(required = false) String searchText) {
-        return ResponseEntity.ok(classService.getClassList(page, size, searchText));
+            @RequestParam(required = false) String searchText,
+
+            // ✅ Filters (optional)
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) Long syllabusId,
+            @RequestParam(required = false) String startDateFrom,
+            @RequestParam(required = false) String startDateTo,
+            @RequestParam(required = false) String endDateFrom,
+            @RequestParam(required = false) String endDateTo,
+
+            // ✅ Sorting
+            @Parameter(description = "Field to sort by (e.g., createdAt, className, startDate)")
+            @RequestParam(defaultValue = "createdAt") String sortBy,
+            @Parameter(description = "Sort direction (asc or desc)")
+            @RequestParam(defaultValue = "desc") String sortDir
+    ) {
+        return ResponseEntity.ok(
+                classService.getClassList(
+                        page,
+                        size,
+                        searchText,
+                        status,
+                        syllabusId,
+                        startDateFrom,
+                        startDateTo,
+                        endDateFrom,
+                        endDateTo,
+                        sortBy,
+                        sortDir
+                )
+        );
     }
+
 
     @PutMapping("/{id}")
     @PreAuthorize("hasRole('MANAGER')")
