@@ -2,21 +2,138 @@
 <html xmlns:th="http://www.thymeleaf.org">
 <head>
     <meta charset="UTF-8"/>
-    <title>Thông tin tài khoản học tập mới</title>
+    <title>New Account Information</title>
 </head>
-<body>
-<p>Xin chào <span th:text="${fullName} ?: 'bạn'"></span>,</p>
-<p>Hệ thống đã tạo mới tài khoản học tập cho bạn.</p>
+<body style="margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f5f5f5;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f5f5f5; padding: 40px 20px;">
+    <tr>
+        <td align="center">
+            <!-- Main Container -->
+            <table width="600" cellpadding="0" cellspacing="0" style="background: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
 
-<h3>👤 Thông tin đăng nhập:</h3>
-<ul>
-    <li>Tên đăng nhập: <span th:text="${username}"></span></li>
-    <li>Mật khẩu: <span th:text="${password}"></span></li>
-</ul>
+                <!-- Header -->
+                <tr>
+                    <td style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 40px; text-align: center;">
+                        <h1 style="margin: 0; color: #ffffff; font-size: 28px; font-weight: 600;">
+                            Camkey English Center
+                        </h1>
+                    </td>
+                </tr>
 
-<p>📢 <strong>Lưu ý:</strong> Vì lý do bảo mật, bạn vui lòng đăng nhập và đổi mật khẩu ngay sau khi truy cập hệ thống.</p>
-<p>Nếu bạn không yêu cầu tạo tài khoản, vui lòng liên hệ với đội ngũ hỗ trợ.</p>
+                <!-- ENGLISH SECTION -->
+                <tr>
+                    <td style="padding: 40px; border-bottom: 3px solid #f0f0f0;">
+                        <h2 style="margin: 0 0 20px 0; color: #333333; font-size: 24px; font-weight: 600;">
+                            🎉 Welcome to Camkey!
+                        </h2>
 
-<p>Trân trọng,<br/>Đội ngũ Hỗ trợ Hệ thống Học tập Camkey 🎓</p>
+                        <p style="margin: 0 0 20px 0; color: #555555; font-size: 16px; line-height: 1.6;">
+                            Hello <strong><span th:text="${fullName} ?: 'there'"></span></strong>,
+                        </p>
+
+                        <p style="margin: 0 0 30px 0; color: #555555; font-size: 15px; line-height: 1.6;">
+                            Your learning account has been successfully created. Below are your login credentials:
+                        </p>
+
+                        <!-- Credentials Box -->
+                        <div style="background: #f8f9fa; border: 2px solid #667eea; border-radius: 8px; padding: 25px; margin: 0 0 30px 0;">
+                            <h3 style="margin: 0 0 20px 0; color: #667eea; font-size: 18px; font-weight: 600;">
+                                🔑 Login Credentials
+                            </h3>
+
+                            <table width="100%" cellpadding="10" cellspacing="0">
+                                <tr>
+                                    <td style="color: #666666; font-size: 14px; font-weight: 600; width: 120px;">
+                                        Username:
+                                    </td>
+                                    <td style="color: #333333; font-size: 15px; font-family: 'Courier New', monospace;">
+                                        <span th:text="${username}"></span>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td style="color: #666666; font-size: 14px; font-weight: 600;">
+                                        Password:
+                                    </td>
+                                    <td style="color: #333333; font-size: 15px; font-family: 'Courier New', monospace;">
+                                        <span th:text="${password}"></span>
+                                    </td>
+                                </tr>
+                            </table>
+                        </div>
+
+                        <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; border-radius: 4px; margin: 0 0 25px 0;">
+                            <p style="margin: 0; color: #856404; font-size: 14px; line-height: 1.6;">
+                                <strong>🔒 IMPORTANT:</strong> For security reasons, you must change your password immediately after your first login.
+                            </p>
+                        </div>
+
+                    </td>
+                </tr>
+
+                <!-- VIETNAMESE SECTION -->
+                <tr>
+                    <td style="padding: 40px;">
+                        <h2 style="margin: 0 0 20px 0; color: #333333; font-size: 24px; font-weight: 600;">
+                            🎉 Chào Mừng Đến Với Camkey!
+                        </h2>
+
+                        <p style="margin: 0 0 20px 0; color: #555555; font-size: 16px; line-height: 1.6;">
+                            Xin chào <strong><span th:text="${fullName} ?: 'bạn'"></span></strong>,
+                        </p>
+
+                        <p style="margin: 0 0 30px 0; color: #555555; font-size: 15px; line-height: 1.6;">
+                            Tài khoản học tập của bạn đã được tạo thành công. Dưới đây là thông tin đăng nhập:
+                        </p>
+
+                        <!-- Credentials Box -->
+                        <div style="background: #f8f9fa; border: 2px solid #667eea; border-radius: 8px; padding: 25px; margin: 0 0 30px 0;">
+                            <h3 style="margin: 0 0 20px 0; color: #667eea; font-size: 18px; font-weight: 600;">
+                                🔑 Thông Tin Đăng Nhập
+                            </h3>
+
+                            <table width="100%" cellpadding="10" cellspacing="0">
+                                <tr>
+                                    <td style="color: #666666; font-size: 14px; font-weight: 600; width: 140px;">
+                                        Tên đăng nhập:
+                                    </td>
+                                    <td style="color: #333333; font-size: 15px; font-family: 'Courier New', monospace;">
+                                        <span th:text="${username}"></span>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td style="color: #666666; font-size: 14px; font-weight: 600;">
+                                        Mật khẩu:
+                                    </td>
+                                    <td style="color: #333333; font-size: 15px; font-family: 'Courier New', monospace;">
+                                        <span th:text="${password}"></span>
+                                    </td>
+                                </tr>
+                            </table>
+                        </div>
+
+                        <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; border-radius: 4px; margin: 0 0 25px 0;">
+                            <p style="margin: 0; color: #856404; font-size: 14px; line-height: 1.6;">
+                                <strong>🔒 QUAN TRỌNG:</strong> Vì lý do bảo mật, bạn bắt buộc phải đổi mật khẩu ngay sau khi đăng nhập lần đầu tiên.
+                            </p>
+                        </div>
+
+                    </td>
+                </tr>
+
+                <!-- Footer -->
+                <tr>
+                    <td style="background: #f8f9fa; padding: 30px; text-align: center; border-top: 1px solid #e0e0e0;">
+                        <p style="margin: 0 0 5px 0; color: #666666; font-size: 14px;">
+                            Camkey English Center Team
+                        </p>
+                        <p style="margin: 0; color: #999999; font-size: 12px;">
+                            © 2025 Camkey English Center. All rights reserved.
+                        </p>
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+</table>
 </body>
 </html>
