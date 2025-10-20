@@ -9,6 +9,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 
 @Repository
@@ -42,4 +43,8 @@ public interface ClassRepository extends JpaRepository<Clazz, Long> {
 
 
     Optional<Clazz> findByClassCodeIgnoreCase(String classCode);
+
+    @Query("SELECT c FROM Clazz c WHERE LOWER(c.classCode) IN :classCodes")
+    List<Clazz> findByClassCodeInIgnoreCase(@Param("classCodes") List<String> classCodes);
+
 }

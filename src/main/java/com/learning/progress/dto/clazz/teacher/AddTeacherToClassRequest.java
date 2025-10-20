@@ -1,12 +1,15 @@
 package com.learning.progress.dto.clazz.teacher;
 
-import com.learning.progress.common.Const;
-import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotEmpty;
 import lombok.Data;
+
+import java.util.List;
 
 @Data
 public class AddTeacherToClassRequest {
 
-    @NotBlank(message = Const.ID.USER_ID_REQUIRED)
-    private Long userId;
+    @NotEmpty(message = "Teachers list cannot be empty")
+    private List<@Valid TeacherWithRole> teachers;
+
 }

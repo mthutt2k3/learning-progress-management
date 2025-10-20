@@ -1,6 +1,7 @@
 package com.learning.progress.repository;
 
 import com.learning.progress.common.ClassTeacherStatus;
+import com.learning.progress.common.RoleInClass;
 import com.learning.progress.entity.ClassTeacher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -40,4 +41,8 @@ public interface ClassTeacherRepository extends JpaRepository<ClassTeacher, Long
     @Query("SELECT ct FROM ClassTeacher ct WHERE ct.clazz.id = :classId")
     List<ClassTeacher> findByClazzId(@Param("classId") Long classId);
 
+    boolean existsByClazzIdAndRoleInClass(Long clazzId, RoleInClass roleInClass);
+
+    @Query("SELECT ct.user.id FROM ClassTeacher ct WHERE ct.clazz.id = :clazzId AND ct.user.id IN :userIds")
+    List<Long> findUserIdsByClazzIdAndUserIdIn(@Param("clazzId") Long clazzId, @Param("userIds") List<Long> userIds);
 }
