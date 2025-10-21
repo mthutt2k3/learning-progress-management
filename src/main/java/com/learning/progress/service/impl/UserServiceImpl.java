@@ -553,9 +553,23 @@ public class UserServiceImpl implements UserService {
         if (newEmail.equals(targetUser.getEmail())) {
             throw new ApiException("Email mới trùng với email hiện tại", HttpStatus.BAD_REQUEST.value());
         }
+        targetUser.setEmail(newEmail);
 
-        String token = jwtUtil.generateChangeEmailToken(targetUser.getUserName(), newEmail, targetUser.getId());
-        emailService.sendChangeEmailConfirmation(targetUser, newEmail, token, request.getDomain(), request.getPath());
+        switch (targetUser.getStatus()) {
+            case PENDING:
+                String password = DataUtil.generateRandomPassword(8);
+                emailService.sendNewAccountEmail(targetUser, targetUser.getUserName(), password);
+                break;
+
+            case ACTIVE:
+                String token = jwtUtil.generateChangeEmailToken(targetUser.getUserName(), newEmail, targetUser.getId());
+                emailService.sendChangeEmailConfirmation(targetUser, newEmail, token, request.getDomain(), request.getPath());
+                break;
+
+            case INACTIVE:
+            default:
+                throw new ApiException(Const.USER.USER_INACTIVE, HttpStatus.BAD_REQUEST.value());
+        }
     }
 
 
