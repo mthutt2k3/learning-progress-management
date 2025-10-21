@@ -26,7 +26,7 @@ public class ClassDTO {
     private String avatarUrl;
     private ClassStatus status;
     private String createdBy;
-    private LocalDate startDate;
-    private LocalDate endDate;
+    private OffsetDateTime startDate;
+    private OffsetDateTime endDate;
     private OffsetDateTime createdAt;
 }
