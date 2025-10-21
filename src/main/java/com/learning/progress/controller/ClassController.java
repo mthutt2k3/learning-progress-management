@@ -43,14 +43,14 @@ public class ClassController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasRole('MANAGER') or hasRole('TEACHER')")
+    @PreAuthorize("hasRole('MANAGER') or hasRole('TEACHER') or hasRole('TEACHING_ASSISTANT') or hasRole('STUDENT') or hasRole('TEST_TAKER')")
     @Operation(summary = "Lấy class", description = "Lấy thông tin class theo ID")
     public ResponseEntity<DataResponse<ClassDTO>> getClass(@PathVariable Long id) {
         return ResponseEntity.ok(DataResponse.success(classService.getClass(id), Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL));
     }
 
     @GetMapping
-    @PreAuthorize("hasRole('MANAGER') or hasRole('TEACHER') or hasRole('TEACHING_ASSISTANT')")
+    @PreAuthorize("hasRole('MANAGER') or hasRole('TEACHER') or hasRole('TEACHING_ASSISTANT') or hasRole('STUDENT') or hasRole('TEST_TAKER')")
     @Operation(summary = "Get class list", description = "Get paginated list of classes with filters and sorting")
     public ResponseEntity<DataResponse<List<ClassDTO>>> getClassList(
             @RequestParam(defaultValue = "0") int page,
