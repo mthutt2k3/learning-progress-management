@@ -17,11 +17,11 @@ import com.learning.progress.service.EmailService;
 import com.learning.progress.util.AppValidator;
 import com.learning.progress.util.DataUtil;
 import com.learning.progress.util.JwtUtil;
+import com.learning.progress.util.TraceUtil;
 import jakarta.persistence.EntityManager;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -32,6 +32,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -77,7 +78,7 @@ public class AccountServiceImpl implements AccountService {
      */
     @Override
     public DataResponse<List<AccountDTO>> listAccounts(int page, int size, String text, List<String> statusStr, List<String> roleNameStr, String sortBy, String sortDir) {
-        String traceId = MDC.get("traceId");
+        String traceId = TraceUtil.getTraceId();
         log.info("[{}] Listing accounts with page: {}, size: {}, text: {}, statuses: {}, roles: {}, sortBy: {}, sortDir: {}",
                 traceId, page, size, text, statusStr, roleNameStr, sortBy, sortDir);
 
@@ -115,7 +116,7 @@ public class AccountServiceImpl implements AccountService {
             } else if (roleNames != null && !roleNames.isEmpty()) {
                 userPage = userRepository.findByRoleNameIn(roleNames, pageable);
             } else {
-                userPage = userRepository.findAll(pageable);
+                userPage = userRepository.findAllByDeletedAtIsNull(pageable);
             }
         }
         log.debug("[{}] Retrieved {} users for page {}", traceId, userPage.getTotalElements(), page);
@@ -147,11 +148,11 @@ public class AccountServiceImpl implements AccountService {
      */
     @Override
     public AccountDTO getAccountByUserId(Long userId) {
-        String traceId = MDC.get("traceId");
+        String traceId = TraceUtil.getTraceId();
         log.info("[{}] Retrieving account for userId: {}", traceId, userId);
 
         // Fetch user by ID
-        User user = userRepository.findById(userId)
+        User user = userRepository.findByIdAndDeletedAtIsNull(userId)
                 .orElseThrow(() -> {
                     log.error("[{}] Account not found for userId: {}", traceId, userId);
                     return new ApiException(Const.ACCOUNT.ACCOUNT_NOT_FOUND, HttpStatus.BAD_REQUEST.value());
@@ -170,7 +171,7 @@ public class AccountServiceImpl implements AccountService {
     @Override
     @Transactional
     public AccountDTO createNewAccount(CreateNewAccountRequest request) {
-        String traceId = MDC.get("traceId");
+        String traceId = TraceUtil.getTraceId();
         log.info("[{}] Creating new account with role: {}", traceId, request.getRoleName());
 
         // Fetch role
@@ -216,7 +217,7 @@ public class AccountServiceImpl implements AccountService {
     @Override
     @Transactional
     public User createAccountForExistUser(User user, String username, String password) {
-        String traceId = MDC.get("traceId");
+        String traceId = TraceUtil.getTraceId();
         log.info("[{}] Creating account for existing user with username: {}", traceId, username);
 
         // Check for username uniqueness
@@ -243,17 +244,17 @@ public class AccountServiceImpl implements AccountService {
     @Override
     @Transactional
     public AccountDTO updateAccount(Long id, @Valid String email) {
-        String traceId = MDC.get("traceId");
+        String traceId = TraceUtil.getTraceId();
 
         if(!DataUtil.isValidEmail(email)){
             throw new ApiException(Const.EMAIL.INVALID, HttpStatus.BAD_REQUEST.value());
         }
 
         // Fetch user by ID
-        User user = userRepository.findById(id)
+        User user = userRepository.findByIdAndDeletedAtIsNull(id)
                 .orElseThrow(() -> {
                     log.error("[{}] User not found for userId: {}", traceId, id);
-                    return new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value());
+                    return new ApiException(Const.USER.NOT_FOUND, HttpStatus.NOT_FOUND.value());
                 });
         if (!UserStatus.PENDING.equals(user.getStatus())) {
             throw new ApiException(Const.ACCOUNT.FORBIDDEN_EMAIL_CHANGE_ACTIVE_USER, HttpStatus.FORBIDDEN.value());
@@ -276,38 +277,35 @@ public class AccountServiceImpl implements AccountService {
     @Override
     @Transactional
     public AccountDTO updateStatusAccount(Long id, UserStatus newStatus) {
-        String traceId = MDC.get("traceId");
+        String traceId = TraceUtil.getTraceId();
         log.info("[{}] Updating status for userId: {} to {}", traceId, id, newStatus);
 
-        User targetUser = userRepository.findById(id)
+        User targetUser = userRepository.findByIdAndDeletedAtIsNull(id)
                 .orElseThrow(() -> {
                     log.error("[{}] User not found for userId: {}", traceId, id);
-                    return new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.BAD_REQUEST.value());
+                    return new ApiException(Const.USER.NOT_FOUND, HttpStatus.BAD_REQUEST.value());
                 });
 
         Long userIdFromCurrentRequest = jwtUtil.extractUserIdFromCurrentRequest();
 
         // Lấy thông tin admin đang thao tác
-        User currentUser = userRepository.findById(userIdFromCurrentRequest)
+        User currentUser = userRepository.findByIdAndDeletedAtIsNull(userIdFromCurrentRequest)
                 .orElseThrow(() -> new ApiException("Current user not found", HttpStatus.UNAUTHORIZED.value()));
 
         UserStatus oldStatus = targetUser.getStatus();
 
         // Quy tắc trạng thái
         if (UserStatus.PENDING.equals(oldStatus)) {
-            if (!UserStatus.ACTIVE.equals(newStatus)) {
-                throw new ApiException(Const.ACCOUNT.CANNOT_CHANGE_STATUS_TO_ACTIVE_MANUALLY, HttpStatus.FORBIDDEN.value());
-            }
-        } else { // ACTIVE hoặc INACTIVE
-            if (UserStatus.PENDING.equals(newStatus)) {
-                throw new ApiException(Const.ACCOUNT.CANNOT_CHANGE_STATUS_TO_PENDING, HttpStatus.FORBIDDEN.value());
-            }
+            throw new ApiException(Const.ACCOUNT.CANNOT_CHANGE_STATUS_TO_ACTIVE_MANUALLY, HttpStatus.FORBIDDEN.value());
+        }
+        if (UserStatus.PENDING.equals(newStatus)) {
+            throw new ApiException(Const.ACCOUNT.CANNOT_CHANGE_STATUS_TO_PENDING, HttpStatus.FORBIDDEN.value());
         }
 
         // Quy tắc Admin
         if (RoleName.ADMIN.equals(targetUser.getRole().getName())) {
             if (RoleName.ADMIN.equals(currentUser.getRole().getName())) {
-                throw new ApiException("Admin cannot change status of other Admins or themselves", HttpStatus.FORBIDDEN.value());
+                throw new ApiException(Const.USER.ADMIN_CANNOT_CHANGE_STATUS, HttpStatus.FORBIDDEN.value());
             }
         }
 
@@ -317,6 +315,36 @@ public class AccountServiceImpl implements AccountService {
         log.info("[{}] Successfully updated status for userId: {} to {}", traceId, id, newStatus);
 
         return userMapper.toAccountDTO(targetUser);
+    }
+
+    @Override
+    public void deleteAccount(Long id) {
+        User targetUser = userRepository.findByIdAndDeletedAtIsNull(id)
+                .filter(user -> user.getDeletedAt() == null)
+                .orElseThrow(() -> new ApiException(Const.USER.NOT_FOUND, HttpStatus.BAD_REQUEST.value()));
+
+        if(!targetUser.getStatus().equals(UserStatus.PENDING)) {
+            throw new ApiException(Const.USER.PENDING_STATUS, HttpStatus.BAD_REQUEST.value());
+        }
+
+        Long userIdFromCurrentRequest = jwtUtil.extractUserIdFromCurrentRequest();
+
+        // Lấy thông tin admin đang thao tác
+        User currentUser = userRepository.findByIdAndDeletedAtIsNull(userIdFromCurrentRequest)
+                .orElseThrow(() -> new ApiException(Const.USER.NOT_FOUND, HttpStatus.UNAUTHORIZED.value()));
+
+        // Quy tắc Admin
+        if (RoleName.ADMIN.equals(targetUser.getRole().getName()) && (RoleName.ADMIN.equals(currentUser.getRole().getName()))) {
+                throw new ApiException(Const.USER.ADMIN_CANNOT_CHANGE_STATUS, HttpStatus.FORBIDDEN.value());
+        }
+        // Quy tắc Manager
+        if (RoleName.MANAGER.equals(targetUser.getRole().getName()) && (RoleName.MANAGER.equals(currentUser.getRole().getName()))) {
+            throw new ApiException(Const.USER.MANAGER_CANNOT_CHANGE_STATUS, HttpStatus.FORBIDDEN.value());
+        }
+
+        targetUser.setDeletedBy(jwtUtil.extractEmailPrefixFromCurrentRequest());
+        targetUser.setDeletedAt(OffsetDateTime.now());
+        userRepository.save(targetUser);
     }
 
 }

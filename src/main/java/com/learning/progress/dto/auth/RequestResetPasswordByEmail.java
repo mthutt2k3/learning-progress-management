@@ -13,7 +13,7 @@ import lombok.NoArgsConstructor;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class ResetPasswordRequest {
+public class RequestResetPasswordByEmail {
     @NotBlank(message = Const.USERNAME.REQUIRED)
     @Size(min = Const.USERNAME.MIN_LENGTH_VALUE, max = Const.USERNAME.MAX_LENGTH_VALUE, message = Const.USERNAME.LENGTH_INVALID)
     private String userName;

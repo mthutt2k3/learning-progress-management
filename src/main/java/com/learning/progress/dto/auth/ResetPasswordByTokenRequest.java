@@ -12,7 +12,7 @@ import lombok.NoArgsConstructor;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class ConfirmResetPasswordRequest {
+public class ResetPasswordByTokenRequest {
     @NotBlank(message = Const.TOKEN.REQUIRED)
     private String token;
 

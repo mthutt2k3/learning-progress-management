@@ -14,4 +14,5 @@ public interface ChapterService {
     List<ChapterDTO> importChaptersFromExcel(MultipartFile file);
     byte[] generateChapterImportTemplate();
     String getChapterTemplateSasUrl();
+    byte[] validateChapterImportFile(MultipartFile file);
 }

@@ -18,6 +18,6 @@ public interface SyllabusService {
     byte[] generateSyllabusImportTemplate();
     String getSyllabusTemplateSasUrl();
     List<SyllabusDTO> importSyllabusFromExcel(MultipartFile file);
-    byte[] exportAllSyllabuses(String searchText);
-    byte[] exportSyllabusDetail(Long syllabusId);
+    byte[] validateSyllabusImportFile(MultipartFile file);
+    byte[] exportSyllabuses(List<Long> ids);
 }

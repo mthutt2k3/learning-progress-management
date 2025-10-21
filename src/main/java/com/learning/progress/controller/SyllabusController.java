@@ -119,13 +119,14 @@ public class SyllabusController {
     @PreAuthorize("hasRole('MANAGER') or hasRole('TEACHER') or hasRole('TEACHING_ASSISTANT')")
     @Operation(
             summary = "Export Syllabuses to Excel",
-            description = "Export all syllabuses with chapters and lessons to multi-sheet Excel file"
+            description = "Export syllabuses to multi-sheet Excel file. " +
+                    "If ids provided, export only those syllabuses. Otherwise export all (with optional search)"
     )
     public ResponseEntity<ByteArrayResource> exportSyllabuses(
-            @Parameter(description = "Search keyword")
-            @RequestParam(required = false) String searchText) {
+            @Parameter(description = "List of Syllabus IDs to export (optional)")
+            @RequestParam(required = false) List<Long> ids) {
 
-        byte[] excelFile = syllabusService.exportAllSyllabuses(searchText);
+        byte[] excelFile = syllabusService.exportSyllabuses(ids);
         ByteArrayResource resource = new ByteArrayResource(excelFile);
 
         String filename = "Syllabuses_Export_" +
@@ -139,26 +140,27 @@ public class SyllabusController {
                 .body(resource);
     }
 
-    @GetMapping("/{id}/export")
-    @PreAuthorize("hasRole('MANAGER') or hasRole('TEACHER') or hasRole('TEACHING_ASSISTANT')")
+    @PostMapping("/validate-import")
+    @PreAuthorize("hasRole('MANAGER')")
     @Operation(
-            summary = "Export Syllabus Detail to Excel",
-            description = "Export specific syllabus with full chapter and lesson details"
+            summary = "Validate Syllabus Import File",
+            description = "Validate Excel file without importing. Returns validation result file."
     )
-    public ResponseEntity<ByteArrayResource> exportSyllabusDetail(
-            @Parameter(description = "Syllabus ID") @PathVariable Long id) {
+    public ResponseEntity<ByteArrayResource> validateSyllabusImport(
+            @Parameter(description = "Excel file to validate")
+            @RequestParam("file") MultipartFile file) {
 
-        byte[] excelFile = syllabusService.exportSyllabusDetail(id);
-        ByteArrayResource resource = new ByteArrayResource(excelFile);
+        byte[] validationFile = syllabusService.validateSyllabusImportFile(file);
+        ByteArrayResource resource = new ByteArrayResource(validationFile);
 
-        String filename = "Syllabus_Detail_" + id + "_" +
+        String filename = "Syllabus_Validation_" +
                 new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date()) +
                 ".xlsx";
 
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=" + filename)
                 .contentType(MediaType.APPLICATION_OCTET_STREAM)
-                .contentLength(excelFile.length)
+                .contentLength(validationFile.length)
                 .body(resource);
     }
 }

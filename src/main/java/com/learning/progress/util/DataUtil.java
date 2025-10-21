@@ -33,6 +33,7 @@ import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.time.*;
 import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicReference;
@@ -42,6 +43,59 @@ import java.util.stream.Collectors;
 
 @Slf4j
 public class DataUtil {
+
+    public static LocalDate parseAndValidateDate(String dateStr, String pattern, String fieldName) {
+        if (dateStr == null || dateStr.trim().isEmpty()) {
+            return null;
+        }
+
+        try {
+            DateTimeFormatter formatter = DateTimeFormatter.ofPattern(pattern);
+            return LocalDate.parse(dateStr.trim(), formatter);
+        } catch (DateTimeParseException e) {
+            throw new ApiException(
+                    String.format(Const.CLASS.INVALID_DATE_FORMAT, fieldName, pattern),
+                    HttpStatus.BAD_REQUEST.value()
+            );
+        }
+    }
+
+    public static OffsetDateTime parseAndValidateOffsetDateTime(String dateStr, String pattern, String fieldName) {
+        if (dateStr == null || dateStr.trim().isEmpty()) {
+            return null;
+        }
+
+        try {
+            DateTimeFormatter formatter = DateTimeFormatter.ofPattern(pattern);
+            return OffsetDateTime.parse(dateStr.trim(), formatter);
+        } catch (DateTimeParseException e) {
+            throw new ApiException(
+                    String.format(Const.CLASS.INVALID_DATE_FORMAT, fieldName, pattern),
+                    HttpStatus.BAD_REQUEST.value()
+            );
+        }
+    }
+
+
+    public static void validateStartAndEndDate(OffsetDateTime startDate, OffsetDateTime endDate) {
+        if (startDate == null || endDate == null) {
+            log.error("Start date or end date is null");
+            throw new ApiException(
+                    Const.CLASS.INVALID_DATE_RANGE,
+                    HttpStatus.BAD_REQUEST.value()
+            );
+        }
+
+        if (endDate.isBefore(startDate)) {
+            log.error("Invalid date range: endDate {} is before startDate {}", endDate, startDate);
+            throw new ApiException(
+                    Const.CLASS.END_DATE_INVALID,
+                    HttpStatus.BAD_REQUEST.value()
+            );
+        }
+    }
+
+
 
     public static void validateDateOfBirth(Date dateOfBirth) {
         if (dateOfBirth == null) return;

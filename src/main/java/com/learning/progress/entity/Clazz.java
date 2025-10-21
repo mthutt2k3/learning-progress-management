@@ -7,8 +7,11 @@ import lombok.experimental.SuperBuilder;
 import org.hibernate.annotations.ColumnDefault;
 import org.hibernate.annotations.OnDelete;
 import org.hibernate.annotations.OnDeleteAction;
+import org.hibernate.annotations.Where;
 
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
+import java.util.List;
 
 @SuperBuilder
 @NoArgsConstructor
@@ -39,8 +42,16 @@ public class Clazz extends BaseEntity{
     private String classCode;
 
     @Column(name = "start_date")
-    private LocalDate startDate;
+    private OffsetDateTime startDate;
 
     @Column(name = "end_date")
-    private LocalDate endDate;
+    private OffsetDateTime endDate;
+
+    @OneToMany(mappedBy = "clazz", fetch = FetchType.LAZY)
+    @Where(clause = "status = 'ACTIVE' AND deleted_at IS NULL")
+    private List<ClassTeacher> classTeachers;
+
+    @OneToMany(mappedBy = "clazz", fetch = FetchType.LAZY)
+    @Where(clause = "status = 'ACTIVE' AND deleted_at IS NULL")
+    private List<ClassStudent> classStudents;
 }

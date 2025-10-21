@@ -20,7 +20,4 @@ public class UpdateLevelRequest {
     private String promotionCriteria;
     @Size(max = Const.LEVEL.LEARNING_OBJECTIVES_MAX_LENGTH_VALUE, message = Const.LEVEL.LEARNING_OBJECTIVES_MAX_LENGTH)
     private String learningObjectives;
-    @NotNull(message = Const.LEVEL.ESTIMATED_DURATION_REQUIRED)
-    @PositiveOrZero(message = Const.LEVEL.DURATION_NON_NEGATIVE)
-    private Integer estimatedDurationWeeks;
 }

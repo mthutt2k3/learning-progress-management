@@ -16,8 +16,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.Optional;
-
 @Service
 public class StudentLevelServiceImpl implements StudentLevelService {
 
@@ -38,12 +36,12 @@ public class StudentLevelServiceImpl implements StudentLevelService {
         }
 
         // Tìm User theo userId
-        User user = userRepository.findById(userId)
+        User user = userRepository.findByIdAndDeletedAtIsNull(userId)
                 .orElseThrow(() -> new ApiException(Const.ACCOUNT.ACCOUNT_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         // Tìm Level theo levelId
         Level level = levelRepository.findById(levelId)
-                .orElseThrow(() -> new ApiException(Const.LEVEL.LEVEL_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> new ApiException(Const.LEVEL.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
         if (level.getStatus() != LevelEnum.PUBLISHED) {
             throw new ApiException(Const.LEVEL.NOT_PUBLISHED, HttpStatus.BAD_REQUEST.value());
         }

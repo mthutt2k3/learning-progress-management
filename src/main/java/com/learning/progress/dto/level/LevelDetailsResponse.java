@@ -18,7 +18,6 @@ public class LevelDetailsResponse {
     private LevelPrerequisite prerequisite;
     private String promotionCriteria;
     private String learningObjectives;
-    private Integer estimatedDurationWeeks;
     private Integer orderNumber;
     private LevelEnum status;
 
@@ -32,8 +31,7 @@ public class LevelDetailsResponse {
     }
     public LevelDetailsResponse(Long id, String levelName, String levelCode, String description,
                                 Long prerequisiteId, String prerequisiteName,
-                                String promotionCriteria, String learningObjectives,
-                                Integer estimatedDurationWeeks, Integer orderNumber,
+                                String promotionCriteria, String learningObjectives, Integer orderNumber,
                                 LevelEnum status) {
         this.id = id;
         this.levelName = levelName;
@@ -46,7 +44,6 @@ public class LevelDetailsResponse {
         }
         this.promotionCriteria = promotionCriteria;
         this.learningObjectives = learningObjectives;
-        this.estimatedDurationWeeks = estimatedDurationWeeks;
         this.orderNumber = orderNumber;
         this.status = status;
     }

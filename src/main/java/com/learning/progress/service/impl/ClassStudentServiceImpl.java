@@ -4,6 +4,7 @@ import com.learning.progress.common.*;
 import com.learning.progress.dto.clazz.student.*;
 import com.learning.progress.dto.excel.ImportStudentToClass;
 import com.learning.progress.dto.DataResponse;
+import com.learning.progress.dto.excel.ValidationResult;
 import com.learning.progress.entity.ClassStudent;
 import com.learning.progress.entity.Clazz;
 import com.learning.progress.entity.User;
@@ -18,6 +19,7 @@ import com.learning.progress.service.ClassStudentService;
 import com.learning.progress.service.FileService;
 import com.learning.progress.util.AppValidator;
 import com.learning.progress.util.JwtUtil;
+import com.learning.progress.util.TraceUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
@@ -32,7 +34,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
-import java.util.List;
+import java.util.*;
 import java.util.stream.Collectors;
 
 
@@ -79,7 +81,7 @@ public class ClassStudentServiceImpl implements ClassStudentService {
         Pageable pageable = PageRequest.of(page, size, sort);
 
         Clazz clazz = classRepository.findById(classId)
-                .orElseThrow(() -> new ApiException(Const.CLASS.CLASS_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> new ApiException(Const.CLASS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         Page<ClassStudent> studentPage;
         if (text != null && !text.isBlank()) {
@@ -93,7 +95,7 @@ public class ClassStudentServiceImpl implements ClassStudentService {
                 .collect(Collectors.toList());
 
         return DataResponse.<List<ClassStudentResponse>>builder()
-                .traceId(org.slf4j.MDC.get("traceId"))
+                .traceId(TraceUtil.getTraceId())
                 .success(true)
                 .message(Const.CLASS_STUDENT.LIST_RETRIEVED)
                 .data(students)
@@ -110,7 +112,7 @@ public class ClassStudentServiceImpl implements ClassStudentService {
     public ClassStudentResponse getStudentProfile(Long classId, Long userId) {
         // Kiểm tra sự tồn tại của lớp học
         Clazz clazz = classRepository.findById(classId)
-                .orElseThrow(() -> new ApiException(Const.CLASS.CLASS_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> new ApiException(Const.CLASS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         // Kiểm tra lớp học chưa bị xóa mềm
         if (clazz.getDeletedAt() != null) {
@@ -118,8 +120,8 @@ public class ClassStudentServiceImpl implements ClassStudentService {
         }
 
         // Kiểm tra sự tồn tại của người dùng
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+        User user = userRepository.findByIdAndDeletedAtIsNull(userId)
+                .orElseThrow(() -> new ApiException(Const.USER.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         // Kiểm tra trạng thái người dùng
         if (!UserStatus.ACTIVE.equals(user.getStatus())) {
@@ -147,48 +149,92 @@ public class ClassStudentServiceImpl implements ClassStudentService {
     @Override
     @Transactional
     public void addStudentToClass(Long classId, AddStudentToClassRequest request) {
+        // 1️⃣ Validate class
         Clazz clazz = classRepository.findById(classId)
-                .orElseThrow(() -> new ApiException(Const.CLASS.CLASS_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> new ApiException(Const.CLASS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         if (clazz.getStatus() == ClassStatus.INACTIVE) {
             throw new ApiException(Const.CLASS.INACTIVE, HttpStatus.BAD_REQUEST.value());
         }
 
-        // Fetch and validate user
-        User user = userRepository.findById(request.getUserId())
-                .orElseThrow(() -> new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
-
-        // Validate user status
-        if (!UserStatus.ACTIVE.equals(user.getStatus())) {
-            throw new ApiException(Const.USER.INACTIVE, HttpStatus.BAD_REQUEST.value());
-        }
-
-        if (user.getRole() == null || (!RoleName.STUDENT.equals(user.getRole().getName()) && !RoleName.TEST_TAKER.equals(user.getRole().getName()))) {
-            throw new ApiException(Const.USER.INVALID_ROLE_FOR_CLASS, HttpStatus.BAD_REQUEST.value());
-        }
-
-        // Check if student is already in class
-        if (classStudentRepository.existsByClassIdAndUserId(classId, request.getUserId())) {
-            throw new ApiException(Const.CLASS_STUDENT.STUDENT_ALREADY_IN_CLASS, HttpStatus.CONFLICT.value());
-        }
-
-        // Additional validations based on schema constraints
-        if (user.getDeletedAt() != null) {
-            throw new ApiException(Const.USER.DELETED, HttpStatus.BAD_REQUEST.value());
-        }
         if (clazz.getDeletedAt() != null) {
             throw new ApiException(Const.CLASS.DELETED, HttpStatus.BAD_REQUEST.value());
         }
 
-        // Map request to entity and set required fields
-        ClassStudent classStudent = classStudentMapper.toEntity(request);
-        classStudent.setClazz(clazz);
-        classStudent.setUser(user);
-        classStudent.setStatus(ClassStudentStatus.ACTIVE);
-        classStudent.setJoinedAt(OffsetDateTime.now());
+        // 2️⃣ Fetch all users at once
+        List<User> users = userRepository.findAllById(request.getUserIds());
 
-        // Save the class-student relationship
-        classStudentRepository.save(classStudent);
+        // Check if all users exist
+        if (users.size() != request.getUserIds().size()) {
+            List<Long> foundIds = users.stream().map(User::getId).collect(Collectors.toList());
+            List<Long> notFoundIds = request.getUserIds().stream()
+                    .filter(id -> !foundIds.contains(id))
+                    .collect(Collectors.toList());
+            throw new ApiException(
+                    String.format("Users with IDs %s not found", notFoundIds),
+                    HttpStatus.NOT_FOUND.value()
+            );
+        }
+
+        // 3️⃣ Validate all users
+        List<String> validationErrors = new ArrayList<>();
+        for (User user : users) {
+            if (!UserStatus.ACTIVE.equals(user.getStatus())) {
+                validationErrors.add(String.format("User ID %d (%s) is not active",
+                        user.getId(), user.getUserName()));
+            }
+
+            if (user.getRole() == null ||
+                    (!RoleName.STUDENT.equals(user.getRole().getName()) &&
+                            !RoleName.TEST_TAKER.equals(user.getRole().getName()))) {
+                validationErrors.add(String.format("User ID %d (%s) has invalid role for class",
+                        user.getId(), user.getUserName()));
+            }
+
+            if (user.getDeletedAt() != null) {
+                validationErrors.add(String.format("User ID %d (%s) has been deleted",
+                        user.getId(), user.getUserName()));
+            }
+        }
+
+        if (!validationErrors.isEmpty()) {
+            throw new ApiException(
+                    "Validation errors: " + String.join("; ", validationErrors),
+                    HttpStatus.BAD_REQUEST.value()
+            );
+        }
+
+        // 4️⃣ Check existing students
+        List<Long> userIds = users.stream().map(User::getId).collect(Collectors.toList());
+        List<Long> existingUserIds = classStudentRepository
+                .findUserIdsByClassIdAndUserIdIn(classId, userIds);
+
+        if (!existingUserIds.isEmpty()) {
+            List<String> existingUserNames = users.stream()
+                    .filter(u -> existingUserIds.contains(u.getId()))
+                    .map(User::getUserName)
+                    .collect(Collectors.toList());
+            throw new ApiException(
+                    String.format("Users %s are already in the class", existingUserNames),
+                    HttpStatus.CONFLICT.value()
+            );
+        }
+
+        // 5️⃣ Create class-student relationships
+        OffsetDateTime joinedAt = OffsetDateTime.now();
+        List<ClassStudent> classStudents = users.stream()
+                .map(user -> {
+                    ClassStudent classStudent = new ClassStudent();
+                    classStudent.setClazz(clazz);
+                    classStudent.setUser(user);
+                    classStudent.setStatus(ClassStudentStatus.ACTIVE);
+                    classStudent.setJoinedAt(joinedAt);
+                    return classStudent;
+                })
+                .collect(Collectors.toList());
+
+        // 6️⃣ Batch save
+        classStudentRepository.saveAll(classStudents);
     }
 
     @Override
@@ -196,7 +242,7 @@ public class ClassStudentServiceImpl implements ClassStudentService {
     public void removeStudentFromClass(Long classId, Long userId) {
         // Fetch and validate class
         Clazz clazz = classRepository.findById(classId)
-                .orElseThrow(() -> new ApiException(Const.CLASS.CLASS_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> new ApiException(Const.CLASS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         // Validate class is active
         if (clazz.getStatus() == ClassStatus.INACTIVE) {
@@ -209,8 +255,8 @@ public class ClassStudentServiceImpl implements ClassStudentService {
         }
 
         // Fetch and validate user
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+        User user = userRepository.findByIdAndDeletedAtIsNull(userId)
+                .orElseThrow(() -> new ApiException(Const.USER.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         // Validate user status
         if (!UserStatus.ACTIVE.equals(user.getStatus())) {
@@ -296,22 +342,241 @@ public class ClassStudentServiceImpl implements ClassStudentService {
     @Override
     @Transactional
     public void importStudentsFromExcel(MultipartFile file) {
-        // 1️⃣ Đọc dữ liệu từ file Excel ra list object
+        // 1️⃣ Đọc dữ liệu từ file Excel
         List<ImportStudentToClass> importList = fileService.readExcelData(file, "Import Data", ImportStudentToClass.class);
 
-        // 2️⃣ Lặp qua danh sách và xử lý import
-        for (ImportStudentToClass record : importList) {
-
-            Clazz clazz = classRepository.findByClassCodeIgnoreCase(record.getClassCode())
-                    .orElseThrow(() -> new ApiException(Const.CLASS.CLASS_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
-
-            User user = userRepository.findByUserNameIgnoreCase(record.getUserName())
-                    .orElseThrow(() -> new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
-
-            AddStudentToClassRequest dto = new AddStudentToClassRequest();
-            dto.setUserId(user.getId());
-
-            addStudentToClass(clazz.getId(), dto);
+        if (importList.isEmpty()) {
+            throw new ApiException("Import file is empty", HttpStatus.BAD_REQUEST.value());
         }
+
+        // 2️⃣ Fetch all classes và users một lần
+        Set<String> classCodes = importList.stream()
+                .map(record -> record.getClassCode().toLowerCase().trim())
+                .collect(Collectors.toSet());
+
+        Set<String> userNames = importList.stream()
+                .map(record -> record.getUserName().toLowerCase().trim())
+                .collect(Collectors.toSet());
+
+        List<Clazz> classes = classRepository.findByClassCodeInIgnoreCase(new ArrayList<>(classCodes));
+        List<User> users = userRepository.findByUserNameInIgnoreCase(new ArrayList<>(userNames));
+
+        Map<String, Clazz> classMap = classes.stream()
+                .collect(Collectors.toMap(c -> c.getClassCode().toLowerCase(), c -> c));
+
+        Map<String, User> userMap = users.stream()
+                .collect(Collectors.toMap(u -> u.getUserName().toLowerCase(), u -> u));
+
+        // 3️⃣ Group theo classId
+        Map<Long, List<Long>> classToUserIds = new HashMap<>();
+        List<String> errors = new ArrayList<>();
+
+        for (int i = 0; i < importList.size(); i++) {
+            ImportStudentToClass record = importList.get(i);
+            int rowNumber = i + 2;
+
+            String classCode = record.getClassCode().toLowerCase().trim();
+            String userName = record.getUserName().toLowerCase().trim();
+
+            Clazz clazz = classMap.get(classCode);
+            User user = userMap.get(userName);
+
+            if (clazz == null) {
+                errors.add(String.format("Row %d: Class code '%s' not found", rowNumber, record.getClassCode()));
+                continue;
+            }
+
+            if (user == null) {
+                errors.add(String.format("Row %d: Username '%s' not found", rowNumber, record.getUserName()));
+                continue;
+            }
+
+            classToUserIds.computeIfAbsent(clazz.getId(), k -> new ArrayList<>()).add(user.getId());
+        }
+
+        // Nếu có lỗi validation, throw ngay
+        if (!errors.isEmpty()) {
+            throw new ApiException(
+                    String.format("Import validation failed:\n%s", String.join("\n", errors)),
+                    HttpStatus.BAD_REQUEST.value()
+            );
+        }
+
+        // 4️⃣ Gọi addStudentsToClass cho từng class
+        for (Map.Entry<Long, List<Long>> entry : classToUserIds.entrySet()) {
+            AddStudentToClassRequest request = new AddStudentToClassRequest();
+            request.setUserIds(entry.getValue());
+
+            addStudentToClass(entry.getKey(), request);
+        }
+    }
+
+    @Override
+    public byte[] validateStudentToClassImportFile(MultipartFile file) {
+        ValidationResult<ImportStudentToClass> result = new ValidationResult<>();
+        List<ImportStudentToClass> importList;
+
+        // Bước 1: Đọc file - catch lỗi format
+        try {
+            importList = fileService.readExcelData(file, "Import Data", ImportStudentToClass.class);
+            result.setTotalRows(importList.size());
+
+            if (importList.isEmpty()) {
+                throw new ApiException("Import file is empty", HttpStatus.BAD_REQUEST.value());
+            }
+        } catch (ApiException e) {
+            // Lỗi khi đọc file
+            result.setTotalRows(0);
+            result.setValidRows(0);
+            result.setInvalidRows(0);
+
+            ValidationResult.ValidatedRow<ImportStudentToClass> errorRow =
+                    new ValidationResult.ValidatedRow<>();
+            errorRow.setData(new ImportStudentToClass());
+            errorRow.setRowNumber(0);
+            errorRow.setValid(false);
+            errorRow.setErrorMessage("❌ LỖI ĐỌC FILE:\n" + e.getMessage());
+            result.addRow(errorRow);
+
+            return fileService.generateValidationResultFile(
+                    file, "Import Data", result, ImportStudentToClass.class
+            );
+        }
+
+        // Bước 2: Fetch all classes và users một lần
+        Set<String> classCodes = importList.stream()
+                .map(record -> record.getClassCode().toLowerCase().trim())
+                .collect(Collectors.toSet());
+
+        Set<String> userNames = importList.stream()
+                .map(record -> record.getUserName().toLowerCase().trim())
+                .collect(Collectors.toSet());
+
+        List<Clazz> classes = classRepository.findByClassCodeInIgnoreCase(new ArrayList<>(classCodes));
+        List<User> users = userRepository.findByUserNameInIgnoreCase(new ArrayList<>(userNames));
+
+        Map<String, Clazz> classMap = classes.stream()
+                .collect(Collectors.toMap(c -> c.getClassCode().toLowerCase(), c -> c));
+
+        Map<String, User> userMap = users.stream()
+                .collect(Collectors.toMap(u -> u.getUserName().toLowerCase(), u -> u));
+
+        // Bước 3: Validate từng row
+        int validCount = 0;
+        int invalidCount = 0;
+
+        // Track duplicate pairs trong file
+        Set<String> seenPairs = new HashSet<>();
+
+        for (int i = 0; i < importList.size(); i++) {
+            ImportStudentToClass record = importList.get(i);
+            ValidationResult.ValidatedRow<ImportStudentToClass> validatedRow =
+                    new ValidationResult.ValidatedRow<>();
+            validatedRow.setData(record);
+            validatedRow.setRowNumber(i + 2); // +2 vì header ở row 1
+
+            StringBuilder errors = new StringBuilder();
+
+            try {
+                // Validate Class Code
+                if (record.getClassCode() == null || record.getClassCode().trim().isEmpty()) {
+                    errors.append("• Class Code không được để trống\n");
+                } else {
+                    String classCode = record.getClassCode().toLowerCase().trim();
+                    Clazz clazz = classMap.get(classCode);
+
+                    if (clazz == null) {
+                        errors.append("• Class Code không tồn tại: ").append(record.getClassCode()).append("\n");
+                    } else {
+                        // Validate class status
+                        if (clazz.getStatus() == ClassStatus.INACTIVE) {
+                            errors.append("• Class đang INACTIVE, không thể thêm học sinh\n");
+                        }
+
+                        if (clazz.getDeletedAt() != null) {
+                            errors.append("• Class đã bị xóa, không thể thêm học sinh\n");
+                        }
+                    }
+                }
+
+                // Validate User Name
+                if (record.getUserName() == null || record.getUserName().trim().isEmpty()) {
+                    errors.append("• User Name không được để trống\n");
+                } else {
+                    String userName = record.getUserName().toLowerCase().trim();
+                    User user = userMap.get(userName);
+
+                    if (user == null) {
+                        errors.append("• Username không tồn tại: ").append(record.getUserName()).append("\n");
+                    } else {
+                        // Validate user status
+                        if (!UserStatus.ACTIVE.equals(user.getStatus())) {
+                            errors.append("• User không ở trạng thái ACTIVE\n");
+                        }
+
+                        // Validate user role
+                        if (user.getRole() == null ||
+                                (!RoleName.STUDENT.equals(user.getRole().getName()) &&
+                                        !RoleName.TEST_TAKER.equals(user.getRole().getName()))) {
+                            errors.append("• User phải có role STUDENT hoặc TEST_TAKER\n");
+                        }
+
+                        if (user.getDeletedAt() != null) {
+                            errors.append("• User đã bị xóa\n");
+                        }
+                    }
+                }
+
+                // Validate duplicate pair trong file
+                String pairKey = record.getClassCode().toLowerCase().trim() + "|" +
+                        record.getUserName().toLowerCase().trim();
+                if (seenPairs.contains(pairKey)) {
+                    errors.append("• Cặp Class Code + Username bị trùng lặp trong file\n");
+                } else {
+                    seenPairs.add(pairKey);
+                }
+
+                // Check if student already in class (nếu cả class và user đều valid)
+                if (record.getClassCode() != null && record.getUserName() != null) {
+                    String classCode = record.getClassCode().toLowerCase().trim();
+                    String userName = record.getUserName().toLowerCase().trim();
+                    Clazz clazz = classMap.get(classCode);
+                    User user = userMap.get(userName);
+
+                    if (clazz != null && user != null) {
+                        Optional<ClassStudent> existing = classStudentRepository
+                                .findByClazzIdAndUserId(clazz.getId(), user.getId());
+
+                        if (existing.isPresent()) {
+                            errors.append("• Học sinh đã có trong lớp này rồi\n");
+                        }
+                    }
+                }
+
+                if (errors.length() > 0) {
+                    validatedRow.setValid(false);
+                    validatedRow.setErrorMessage(errors.toString().trim());
+                    invalidCount++;
+                } else {
+                    validatedRow.setValid(true);
+                    validatedRow.setErrorMessage("✓ Hợp lệ");
+                    validCount++;
+                }
+
+            } catch (Exception e) {
+                validatedRow.setValid(false);
+                validatedRow.setErrorMessage("⚠️ Lỗi xử lý dòng: " + e.getMessage());
+                invalidCount++;
+            }
+
+            result.addRow(validatedRow);
+        }
+
+        result.setValidRows(validCount);
+        result.setInvalidRows(invalidCount);
+
+        return fileService.generateValidationResultFile(
+                file, "Import Data", result, ImportStudentToClass.class
+        );
     }
 }

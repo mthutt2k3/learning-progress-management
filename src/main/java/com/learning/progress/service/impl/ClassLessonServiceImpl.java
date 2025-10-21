@@ -2,11 +2,13 @@ package com.learning.progress.service.impl;
 
 import com.learning.progress.common.ActionType;
 import com.learning.progress.common.ClassTeacherStatus;
+import com.learning.progress.common.Const;
 import com.learning.progress.common.RoleName;
 import com.learning.progress.dto.clazz.lesson.ClassLessonDTO;
 import com.learning.progress.dto.clazz.lesson.SyncClassLessonRequest;
 import com.learning.progress.dto.DataResponse;
 import com.learning.progress.dto.excel.ImportLessonDTO;
+import com.learning.progress.dto.excel.ValidationResult;
 import com.learning.progress.entity.*;
 import com.learning.progress.exception.ApiException;
 import com.learning.progress.mapper.ClassLessonMapper;
@@ -71,7 +73,7 @@ public class ClassLessonServiceImpl implements ClassLessonService {
         // Validate class chapter and class
         ClassChapter classChapter = classChapterRepository.findById(classChapterId)
                 .filter(c -> c.getDeletedAt() == null)
-                .orElseThrow(() -> new ApiException("Class chapter không tồn tại hoặc không thuộc lớp này", HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> new ApiException(Const.CLASS_CHAPTER.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
         Long classId = classChapter.getClazz().getId();
 
         // Load existing active class lessons
@@ -97,7 +99,7 @@ public class ClassLessonServiceImpl implements ClassLessonService {
             }
             Long deleteId = deleteReq.getId();
             if (deleteId == null || !existingActiveIds.contains(deleteId)) {
-                throw new ApiException("Class lesson ID không tồn tại: " + deleteId, HttpStatus.BAD_REQUEST.value());
+                throw new ApiException(String.format(Const.CLASS_LESSON.INVALID_ID, deleteId), HttpStatus.BAD_REQUEST.value());
             }
         }
 
@@ -122,7 +124,7 @@ public class ClassLessonServiceImpl implements ClassLessonService {
                 .collect(Collectors.toSet()));
 
         if (!invalidRequestIds.isEmpty()) {
-            throw new ApiException("Các lesson ID không tồn tại: " + invalidRequestIds, HttpStatus.BAD_REQUEST.value());
+            throw new ApiException(String.format(Const.CLASS_LESSON.LESSONS_NOT_FOUND, invalidRequestIds), HttpStatus.BAD_REQUEST.value());
         }
 
         // Check 2: Tất cả DB lessons phải được handle
@@ -136,7 +138,7 @@ public class ClassLessonServiceImpl implements ClassLessonService {
 
         if (!unhandledDbIds.isEmpty()) {
             throw new ApiException(
-                    String.format("Các lesson không được handle: %s. FE phải include TẤT CẢ active lessons!", unhandledDbIds),
+                    String.format(String.format(Const.CLASS_LESSON.UNHANDLED_LESSONS, unhandledDbIds), unhandledDbIds),
                     HttpStatus.BAD_REQUEST.value()
             );
         }
@@ -147,7 +149,7 @@ public class ClassLessonServiceImpl implements ClassLessonService {
 
         if (actualNonDeletedCount != expectedNonDeletedCount) {
             throw new ApiException(
-                    String.format("Số lượng non-deleted lessons không khớp! Expected: %d, Actual: %d",
+                    String.format(Const.CLASS_LESSON.NON_DELETED_COUNT_MISMATCH,
                             expectedNonDeletedCount, actualNonDeletedCount),
                     HttpStatus.BAD_REQUEST.value()
             );
@@ -177,7 +179,6 @@ public class ClassLessonServiceImpl implements ClassLessonService {
             );
         }
 
-        String currentUser = jwtUtil.extractUsernameFromCurrentRequest();
         OffsetDateTime now = OffsetDateTime.now();
         Long actionByUserId = jwtUtil.extractUserIdFromCurrentRequest();
         List<ClassLessonDTO> result = new ArrayList<>();
@@ -187,14 +188,14 @@ public class ClassLessonServiceImpl implements ClassLessonService {
         for (SyncClassLessonRequest deleteReq : deleteRequests) {
             ClassLesson classLesson = classLessonRepository.findById(deleteReq.getId())
                     .filter(l -> l.getDeletedAt() == null)
-                    .orElseThrow(() -> new ApiException("Class lesson không tồn tại", HttpStatus.NOT_FOUND.value()));
-            classLesson.setDeletedBy(currentUser);
+                    .orElseThrow(() -> new ApiException(Const.CLASS_LESSON.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+            classLesson.setDeletedBy(jwtUtil.extractEmailPrefixFromCurrentRequest());
             classLesson.setDeletedAt(now);
             classLessonRepository.save(classLesson);
 
             // Ghi lịch sử
             String actionDetails = String.format(
-                    "Đã xóa bài học %s của chương %s, lớp %s",
+                    Const.CLASS_LESSON.ACTION_DELETE,
                     classLesson.getClassLessonName(),
                     classChapter.getClassChapterName(),
                     classChapter.getClazz().getClassName()
@@ -216,7 +217,7 @@ public class ClassLessonServiceImpl implements ClassLessonService {
         for (SyncClassLessonRequest req : updateRequests) {
             ClassLesson classLesson = classLessonRepository.findById(req.getId())
                     .filter(l -> l.getDeletedAt() == null)
-                    .orElseThrow(() -> new ApiException("Class lesson không tồn tại", HttpStatus.NOT_FOUND.value()));
+                    .orElseThrow(() -> new ApiException(Const.CLASS_LESSON.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
             classLesson.setClassLessonName(req.getClassLessonName());
             classLesson.setClassLessonContent(req.getClassLessonContent());
             classLesson.setOrderNumber(req.getOrderNumber());
@@ -225,7 +226,7 @@ public class ClassLessonServiceImpl implements ClassLessonService {
 
             // Ghi lịch sử
             String actionDetails = String.format(
-                    "Đã cập nhật bài học %s của chương %s, lớp %s với thứ tự %d",
+                    Const.CLASS_LESSON.ACTION_UPDATE,
                     req.getClassLessonName(),
                     classChapter.getClassChapterName(),
                     classChapter.getClazz().getClassName(),
@@ -255,7 +256,7 @@ public class ClassLessonServiceImpl implements ClassLessonService {
 
             // Ghi lịch sử
             String actionDetails = String.format(
-                    "Đã tạo bài học %s cho chương %s, lớp %s với thứ tự %d",
+                    Const.CLASS_LESSON.ACTION_CREATE,
                     req.getClassLessonName(),
                     classChapter.getClassChapterName(),
                     classChapter.getClazz().getClassName(),
@@ -277,7 +278,7 @@ public class ClassLessonServiceImpl implements ClassLessonService {
     public ClassLessonDTO getClassLesson(Long id) {
         ClassLesson classLesson = classLessonRepository.findById(id)
                 .filter(l -> l.getDeletedAt() == null)
-                .orElseThrow(() -> new ApiException("Class lesson không tồn tại", HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> new ApiException(Const.CLASS_LESSON.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
         return classLessonMapper.toClassLessonDTO(classLesson);
     }
 
@@ -285,7 +286,7 @@ public class ClassLessonServiceImpl implements ClassLessonService {
     public DataResponse<List<ClassLessonDTO>> getClassLessonList(Long classChapterId, int page, int size, String searchText) {
         classChapterRepository.findById(classChapterId)
                 .filter(c -> c.getDeletedAt() == null)
-                .orElseThrow(() -> new ApiException("Class chapter không tồn tại", HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> new ApiException(Const.CLASS_CHAPTER.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         Page<ClassLesson> lessonPage = classLessonRepository.findByClassChapterIdAndSearchText(
                 classChapterId, searchText, PageRequest.of(page, size, Sort.by("orderNumber").ascending()));
@@ -295,7 +296,7 @@ public class ClassLessonServiceImpl implements ClassLessonService {
 
         return DataResponse.<List<ClassLessonDTO>>builder()
                 .success(true)
-                .message("Thành công")
+                .message(Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL)
                 .data(responses)
                 .page(page)
                 .size(size)
@@ -317,15 +318,10 @@ public class ClassLessonServiceImpl implements ClassLessonService {
     @Override
     @Transactional
     public List<ClassLessonDTO> importLessonsInClassFromExcel(MultipartFile file, Long classId) {
-
-        Clazz classEntity = classRepository.findById(classId)
-                .filter(c -> c.getDeletedAt() == null)
-                .orElseThrow(() -> new ApiException("Class không tồn tại", HttpStatus.NOT_FOUND.value()));
-
         // Validate teacher assignment
         Long currentUserId = jwtUtil.extractUserIdFromCurrentRequest();
         if ( !classTeacherRepository.existsByClazz_IdAndUser_IdAndStatus(classId, currentUserId, ClassTeacherStatus.ACTIVE)) {
-            throw new ApiException("Giáo viên không được phân công cho lớp này", HttpStatus.FORBIDDEN.value());
+            throw new ApiException(Const.CLASS.TEACHER_NOT_ASSIGNED, HttpStatus.FORBIDDEN.value());
         }
 
         List<ImportLessonDTO> importList = fileService.readExcelData(file, "Import Data", ImportLessonDTO.class);
@@ -344,21 +340,21 @@ public class ClassLessonServiceImpl implements ClassLessonService {
             // 1. Kiểm tra chapterCode
             ClassChapter chapter = classChapterRepository.findByClassChapterCode(chapterCode)
                     .filter(c -> c.getDeletedAt() == null)
-                    .orElseThrow(() -> new ApiException("Chapter không tìm thấy hoặc đã bị xóa với mã: " + chapterCode, HttpStatus.NOT_FOUND.value()));
+                    .orElseThrow(() -> new ApiException(String.format(Const.CLASS_LESSON.CHAPTER_CODE_NOT_FOUND, chapterCode), HttpStatus.NOT_FOUND.value()));
 
             // 2. Validate lessons
             for (ImportLessonDTO req : lessons) {
                 if (req.getLessonName() == null || req.getLessonName().trim().isEmpty()) {
-                    throw new ApiException("Lesson name là bắt buộc: " + req.getLessonName(), HttpStatus.BAD_REQUEST.value());
+                    throw new ApiException(String.format(Const.CLASS_LESSON.LESSON_NAME_REQUIRED, req.getLessonName()), HttpStatus.BAD_REQUEST.value());
                 }
                 if (req.getLessonName().length() > 255) {
-                    throw new ApiException("Lesson name vượt quá 255 ký tự: " + req.getLessonName(), HttpStatus.BAD_REQUEST.value());
+                    throw new ApiException(String.format(Const.CLASS_LESSON.LESSON_NAME_TOO_LONG, req.getLessonName()), HttpStatus.BAD_REQUEST.value());
                 }
                 if (req.getContent() != null && req.getContent().length() > 1000) {
-                    throw new ApiException("Content vượt quá 1000 ký tự: " + req.getContent(), HttpStatus.BAD_REQUEST.value());
+                    throw new ApiException(String.format(Const.CLASS_LESSON.LESSON_CONTENT_TOO_LONG, req.getContent()), HttpStatus.BAD_REQUEST.value());
                 }
                 if (req.getOrderNumber() == null || req.getOrderNumber() < 1) {
-                    throw new ApiException("Order number phải là số dương: " + req.getOrderNumber(), HttpStatus.BAD_REQUEST.value());
+                    throw new ApiException(String.format(Const.CLASS_LESSON.ORDER_NUMBER_INVALID, req.getOrderNumber()), HttpStatus.BAD_REQUEST.value());
                 }
             }
 
@@ -373,7 +369,7 @@ public class ClassLessonServiceImpl implements ClassLessonService {
 
             if (orderNumbers.size() != lessonSize || !orderNumbers.equals(expectedOrders)) {
                 throw new ApiException(
-                        String.format("Order numbers phải tuần tự từ 1 đến %d, không trùng lặp và không có gap. Current: %s",
+                        String.format(Const.CLASS_LESSON.ORDER_NUMBER_SEQUENCE_INVALID,
                                 lessonSize, orderNumbers),
                         HttpStatus.BAD_REQUEST.value()
                 );
@@ -398,5 +394,283 @@ public class ClassLessonServiceImpl implements ClassLessonService {
         }
 
         return result;
+    }
+
+    @Override
+    public byte[] validateClassLessonImportFile(Long classId, MultipartFile file) {
+        ValidationResult<ImportLessonDTO> result = new ValidationResult<>();
+        List<ImportLessonDTO> importList;
+
+        // Bước 1: Validate class exists
+        Clazz classEntity;
+        try {
+            classEntity = classRepository.findById(classId)
+                    .filter(c -> c.getDeletedAt() == null)
+                    .orElseThrow(() -> new ApiException("Class không tồn tại", HttpStatus.NOT_FOUND.value()));
+        } catch (ApiException e) {
+            result.setTotalRows(0);
+            result.setValidRows(0);
+            result.setInvalidRows(0);
+
+            ValidationResult.ValidatedRow<ImportLessonDTO> errorRow =
+                    new ValidationResult.ValidatedRow<>();
+            errorRow.setData(new ImportLessonDTO());
+            errorRow.setRowNumber(0);
+            errorRow.setValid(false);
+            errorRow.setErrorMessage("❌ LỖI:\n" + e.getMessage());
+            result.addRow(errorRow);
+
+            return fileService.generateValidationResultFile(
+                    file, "Import Data", result, ImportLessonDTO.class
+            );
+        }
+
+        // Bước 2: Validate teacher assignment
+        Long currentUserId = jwtUtil.extractUserIdFromCurrentRequest();
+        if (!classTeacherRepository.existsByClazz_IdAndUser_IdAndStatus(
+                classId, currentUserId, ClassTeacherStatus.ACTIVE)) {
+            result.setTotalRows(0);
+            result.setValidRows(0);
+            result.setInvalidRows(0);
+
+            ValidationResult.ValidatedRow<ImportLessonDTO> errorRow =
+                    new ValidationResult.ValidatedRow<>();
+            errorRow.setData(new ImportLessonDTO());
+            errorRow.setRowNumber(0);
+            errorRow.setValid(false);
+            errorRow.setErrorMessage("❌ LỖI:\nGiáo viên không được phân công cho lớp này");
+            result.addRow(errorRow);
+
+            return fileService.generateValidationResultFile(
+                    file, "Import Data", result, ImportLessonDTO.class
+            );
+        }
+
+        // Bước 3: Đọc file - catch lỗi format
+        try {
+            importList = fileService.readExcelData(file, "Import Data", ImportLessonDTO.class);
+            result.setTotalRows(importList.size());
+
+            if (importList.isEmpty()) {
+                throw new ApiException("File không có dữ liệu để import", HttpStatus.BAD_REQUEST.value());
+            }
+        } catch (ApiException e) {
+            result.setTotalRows(0);
+            result.setValidRows(0);
+            result.setInvalidRows(0);
+
+            ValidationResult.ValidatedRow<ImportLessonDTO> errorRow =
+                    new ValidationResult.ValidatedRow<>();
+            errorRow.setData(new ImportLessonDTO());
+            errorRow.setRowNumber(0);
+            errorRow.setValid(false);
+            errorRow.setErrorMessage("❌ LỖI ĐỌC FILE:\n" + e.getMessage());
+            result.addRow(errorRow);
+
+            return fileService.generateValidationResultFile(
+                    file, "Import Data", result, ImportLessonDTO.class
+            );
+        }
+
+        // Bước 4: Fetch all class chapter codes một lần
+        Set<String> chapterCodes = importList.stream()
+                .filter(dto -> dto.getChapterCode() != null && !dto.getChapterCode().trim().isEmpty())
+                .map(dto -> dto.getChapterCode().trim())
+                .collect(Collectors.toSet());
+
+        List<ClassChapter> chapters = classChapterRepository.findByClassChapterCodeIn(new ArrayList<>(chapterCodes));
+
+        Map<String, ClassChapter> chapterMap = chapters.stream()
+                .filter(c -> c.getDeletedAt() == null && c.getClazz().getId().equals(classId))
+                .collect(Collectors.toMap(
+                        ClassChapter::getClassChapterCode,
+                        c -> c
+                ));
+
+        // Bước 5: Nhóm theo chapterCode để validate
+        Map<String, List<ImportLessonDTO>> lessonsByChapter = new LinkedHashMap<>();
+        for (ImportLessonDTO dto : importList) {
+            String chapterCode = dto.getChapterCode() != null ? dto.getChapterCode().trim() : null;
+            if (chapterCode != null && !chapterCode.isEmpty()) {
+                lessonsByChapter
+                        .computeIfAbsent(chapterCode, k -> new ArrayList<>())
+                        .add(dto);
+            }
+        }
+
+        // Bước 6: Validate từng row
+        int validCount = 0;
+        int invalidCount = 0;
+
+        int rowIndex = 2; // Bắt đầu từ dòng 2 (sau header)
+
+        for (int i = 0; i < importList.size(); i++) {
+            ImportLessonDTO dto = importList.get(i);
+            ValidationResult.ValidatedRow<ImportLessonDTO> validatedRow =
+                    new ValidationResult.ValidatedRow<>();
+            validatedRow.setData(dto);
+            validatedRow.setRowNumber(rowIndex);
+
+            StringBuilder errors = new StringBuilder();
+
+            try {
+                // Validate Chapter Code
+                if (dto.getChapterCode() == null || dto.getChapterCode().trim().isEmpty()) {
+                    errors.append("• Chapter Code không được để trống\n");
+                } else {
+                    String chapterCode = dto.getChapterCode().trim();
+                    ClassChapter chapter = chapterMap.get(chapterCode);
+
+                    if (chapter == null) {
+                        errors.append("• Chapter Code không tồn tại hoặc đã bị xóa hoặc không thuộc lớp này: ")
+                                .append(chapterCode).append("\n");
+                    }
+                }
+
+                // Validate Lesson Name
+                if (dto.getLessonName() == null || dto.getLessonName().trim().isEmpty()) {
+                    errors.append("• Lesson Name không được để trống\n");
+                } else {
+                    String trimmedName = dto.getLessonName().trim();
+
+                    if (trimmedName.length() > 255) {
+                        errors.append("• Lesson Name vượt quá 255 ký tự (hiện tại: ")
+                                .append(trimmedName.length()).append(" ký tự)\n");
+                    }
+
+                    // Check duplicate trong file (cùng chapter)
+                    if (dto.getChapterCode() != null) {
+                        String chapterCode = dto.getChapterCode().trim();
+                        List<ImportLessonDTO> sameGroupLessons = lessonsByChapter.get(chapterCode);
+
+                        if (sameGroupLessons != null) {
+                            long duplicateCount = sameGroupLessons.stream()
+                                    .filter(l -> l.getLessonName() != null &&
+                                            l.getLessonName().trim().equalsIgnoreCase(trimmedName))
+                                    .count();
+
+                            if (duplicateCount > 1) {
+                                errors.append("• Lesson Name bị trùng lặp trong file: ")
+                                        .append(trimmedName).append("\n");
+                            }
+                        }
+                    }
+
+                    // Check duplicate trong DB (nếu chapter valid)
+                    if (dto.getChapterCode() != null) {
+                        ClassChapter chapter = chapterMap.get(dto.getChapterCode().trim());
+                        if (chapter != null) {
+                            boolean exists = classLessonRepository
+                                    .existsByClassChapterAndClassLessonNameIgnoreCaseAndDeletedAtIsNull(
+                                            chapter, trimmedName
+                                    );
+                            if (exists) {
+                                errors.append("• Lesson Name đã tồn tại trong hệ thống cho chapter này: ")
+                                        .append(trimmedName).append("\n");
+                            }
+                        }
+                    }
+                }
+
+                // Validate Content (optional)
+                if (dto.getContent() != null && dto.getContent().length() > 1000) {
+                    errors.append("• Content vượt quá 1000 ký tự (hiện tại: ")
+                            .append(dto.getContent().length()).append(" ký tự)\n");
+                }
+
+                // Validate Order Number
+                if (dto.getOrderNumber() == null) {
+                    errors.append("• Order Number không được để trống\n");
+                } else {
+                    if (dto.getOrderNumber() < 1) {
+                        errors.append("• Order Number phải là số dương (>= 1), giá trị hiện tại: ")
+                                .append(dto.getOrderNumber()).append("\n");
+                    }
+
+                    // Check duplicate order number trong cùng chapter
+                    if (dto.getChapterCode() != null) {
+                        String chapterCode = dto.getChapterCode().trim();
+                        List<ImportLessonDTO> sameGroupLessons = lessonsByChapter.get(chapterCode);
+
+                        if (sameGroupLessons != null) {
+                            long duplicateOrderCount = sameGroupLessons.stream()
+                                    .filter(l -> l.getOrderNumber() != null &&
+                                            l.getOrderNumber().equals(dto.getOrderNumber()))
+                                    .count();
+
+                            if (duplicateOrderCount > 1) {
+                                errors.append("• Order Number bị trùng lặp trong file: ")
+                                        .append(dto.getOrderNumber()).append("\n");
+                            }
+                        }
+                    }
+                }
+
+                if (errors.length() > 0) {
+                    validatedRow.setValid(false);
+                    validatedRow.setErrorMessage(errors.toString().trim());
+                    invalidCount++;
+                } else {
+                    validatedRow.setValid(true);
+                    validatedRow.setErrorMessage("✓ Hợp lệ");
+                    validCount++;
+                }
+
+            } catch (Exception e) {
+                validatedRow.setValid(false);
+                validatedRow.setErrorMessage("⚠️ Lỗi xử lý dòng: " + e.getMessage());
+                invalidCount++;
+            }
+
+            result.addRow(validatedRow);
+            rowIndex++;
+        }
+
+        // Bước 7: Validate order numbers tuần tự không gap cho từng chapter
+        for (Map.Entry<String, List<ImportLessonDTO>> entry : lessonsByChapter.entrySet()) {
+            String chapterCode = entry.getKey();
+            List<ImportLessonDTO> lessons = entry.getValue();
+
+            Set<Integer> orderNumbers = lessons.stream()
+                    .map(ImportLessonDTO::getOrderNumber)
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toSet());
+
+            if (!orderNumbers.isEmpty()) {
+                int maxOrder = Collections.max(orderNumbers);
+                List<Integer> missingOrders = new ArrayList<>();
+
+                for (int i = 1; i <= maxOrder; i++) {
+                    if (!orderNumbers.contains(i)) {
+                        missingOrders.add(i);
+                    }
+                }
+
+                // Nếu có gap, đánh dấu lại các row trong group này là invalid
+                if (!missingOrders.isEmpty()) {
+                    for (ValidationResult.ValidatedRow<ImportLessonDTO> row : result.getRows()) {
+                        if (row.getData().getChapterCode() != null &&
+                                row.getData().getChapterCode().trim().equals(chapterCode) &&
+                                row.isValid()) {
+
+                            row.setValid(false);
+                            String gapError = "\n• Order Number không tuần tự từ 1 đến " + maxOrder +
+                                    ". Thiếu số: " + missingOrders;
+                            row.setErrorMessage(row.getErrorMessage() + gapError);
+
+                            validCount--;
+                            invalidCount++;
+                        }
+                    }
+                }
+            }
+        }
+
+        result.setValidRows(validCount);
+        result.setInvalidRows(invalidCount);
+
+        return fileService.generateValidationResultFile(
+                file, "Import Data", result, ImportLessonDTO.class
+        );
     }
 }

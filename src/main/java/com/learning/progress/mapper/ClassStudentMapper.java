@@ -1,6 +1,5 @@
 package com.learning.progress.mapper;
 
-import com.learning.progress.dto.clazz.student.AddStudentToClassRequest;
 import com.learning.progress.dto.clazz.student.ClassStudentResponse;
 import com.learning.progress.entity.ClassStudent;
 import org.mapstruct.Mapper;
@@ -8,9 +7,6 @@ import org.mapstruct.Mapping;
 
 @Mapper(componentModel = "spring")
 public interface ClassStudentMapper {
-
-    @Mapping(source = "userId", target = "user.id")
-    ClassStudent toEntity(AddStudentToClassRequest request);
 
     @Mapping(source = "user.id", target = "userId")
     @Mapping(source = "user.fullName", target = "fullName")

@@ -1,5 +1,6 @@
 package com.learning.progress.repository;
 
+import com.learning.progress.entity.ClassChapter;
 import com.learning.progress.entity.ClassLesson;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -20,4 +21,10 @@ public interface ClassLessonRepository extends JpaRepository<ClassLesson, Long> 
     Page<ClassLesson> findByClassChapterIdAndSearchText(Long classChapterId, String searchText, Pageable pageable);
 
     Optional<ClassLesson> findByIdAndDeletedAtIsNull(Long id);
+
+    boolean existsByClassChapterAndClassLessonNameIgnoreCaseAndDeletedAtIsNull(
+            ClassChapter classChapter,
+            String classLessonName
+    );
+
 }

@@ -14,6 +14,7 @@ import com.learning.progress.service.LevelService;
 import com.learning.progress.util.AppValidator;
 import com.learning.progress.util.DataUtil;
 import com.learning.progress.util.JwtUtil;
+import com.learning.progress.util.TraceUtil;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validator;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -60,7 +61,7 @@ public class LevelServiceImpl implements LevelService {
         );
 
         return DataResponse.<List<LevelDetailsResponse>>builder()
-                .traceId(org.slf4j.MDC.get("traceId"))
+                .traceId(TraceUtil.getTraceId())
                 .success(true)
                 .message(Const.LEVEL.LIST_RETRIEVED)
                 .data(levelPage.getContent())
@@ -83,7 +84,7 @@ public class LevelServiceImpl implements LevelService {
         );
 
         return DataResponse.<List<LevelDetailsResponse>>builder()
-                .traceId(org.slf4j.MDC.get("traceId"))
+                .traceId(TraceUtil.getTraceId())
                 .success(true)
                 .message(Const.LEVEL.LIST_RETRIEVED)
                 .data(levelPage.getContent())
@@ -99,7 +100,7 @@ public class LevelServiceImpl implements LevelService {
     @Transactional(readOnly = true)
     public LevelDetailsResponse getLevelDetails(Long id) {
         Level level = levelRepository.findByIdWithPrerequisite(id)
-                .orElseThrow(() -> new ApiException(Const.LEVEL.LEVEL_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> new ApiException(Const.LEVEL.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
         return levelMapper.toLevelDetailsResponse(level);
     }
 
@@ -108,7 +109,7 @@ public class LevelServiceImpl implements LevelService {
         // Kiểm tra level tồn tại và active
         Level level = levelRepository.findById(id)
                 .filter(l -> l.getDeletedAt() == null)
-                .orElseThrow(() -> new ApiException(Const.LEVEL.LEVEL_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> new ApiException(Const.LEVEL.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         if (level.getStatus() == LevelEnum.DRAFT) {
             // Kiểm tra trùng lặp levelName và orderNumber
@@ -120,7 +121,6 @@ public class LevelServiceImpl implements LevelService {
             }
 
             level.setLevelName(request.getLevelName());
-            level.setEstimatedDurationWeeks(request.getEstimatedDurationWeeks());
 
         }
 
@@ -128,9 +128,6 @@ public class LevelServiceImpl implements LevelService {
         level.setDescription(request.getDescription());
         level.setPromotionCriteria(request.getPromotionCriteria());
         level.setLearningObjectives(request.getLearningObjectives());
-
-        // 5. Update audit fields nếu có
-        String currentUser = jwtUtil.extractUsernameFromCurrentRequest();
 
         levelRepository.save(level);
     }
@@ -288,7 +285,6 @@ public class LevelServiceImpl implements LevelService {
         }
 
         // Step 8: Process
-        String currentUser = jwtUtil.extractUsernameFromCurrentRequest();
         OffsetDateTime now = OffsetDateTime.now();
         List<Level> levelsToSave = new ArrayList<>();
         List<LevelDetailsResponse> result = new ArrayList<>();
@@ -299,7 +295,7 @@ public class LevelServiceImpl implements LevelService {
                     .filter(l -> l.getDeletedAt() == null)
                     .orElseThrow(() -> new ApiException("Level not found to delete: " + deleteId, HttpStatus.NOT_FOUND.value()));
             level.setDeletedAt(now);
-            level.setDeletedBy(currentUser);
+            level.setDeletedBy(jwtUtil.extractEmailPrefixFromCurrentRequest());
             levelsToSave.add(level);
         }
 
