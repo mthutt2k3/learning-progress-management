@@ -1,5 +1,6 @@
 package com.learning.progress.repository;
 
+import com.learning.progress.common.ClassStatus;
 import com.learning.progress.entity.Clazz;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -41,10 +42,34 @@ public interface ClassRepository extends JpaRepository<Clazz, Long> {
             Pageable pageable
     );
 
+    @Query("SELECT c FROM Clazz c WHERE " +
+            "(:searchText = '' OR c.className LIKE %:searchText% OR c.classCode LIKE %:searchText%) " +
+            "AND (:status IS NULL OR c.status = :status) " +
+            "AND (:syllabusId IS NULL OR c.syllabus.id = :syllabusId) " +
+            "AND (:startFrom IS NULL OR c.startDate >= :startFrom) " +
+            "AND (:startTo IS NULL OR c.startDate <= :startTo) " +
+            "AND (:endFrom IS NULL OR c.endDate >= :endFrom) " +
+            "AND (:endTo IS NULL OR c.endDate <= :endTo) " +
+            "AND c.id IN :classIds")
+    Page<Clazz> searchClassesWithFiltersAndIds(
+            @Param("searchText") String searchText,
+            @Param("status") String status,
+            @Param("syllabusId") Long syllabusId,
+            @Param("startFrom") LocalDate startFrom,
+            @Param("startTo") LocalDate startTo,
+            @Param("endFrom") LocalDate endFrom,
+            @Param("endTo") LocalDate endTo,
+            @Param("classIds") List<Long> classIds,
+            Pageable pageable);
 
     Optional<Clazz> findByClassCodeIgnoreCase(String classCode);
 
     @Query("SELECT c FROM Clazz c WHERE LOWER(c.classCode) IN :classCodes")
     List<Clazz> findByClassCodeInIgnoreCase(@Param("classCodes") List<String> classCodes);
 
+    Optional<Clazz> findByIdAndDeletedAtIsNull(Long id);
+
+    List<Clazz> findByStatusAndStartDateLessThanEqualAndDeletedAtIsNull(ClassStatus classStatus, LocalDate today);
+
+    List<Clazz> findByStatusAndEndDateLessThanEqualAndDeletedAtIsNull(ClassStatus classStatus, LocalDate upcomingThreshold);
 }

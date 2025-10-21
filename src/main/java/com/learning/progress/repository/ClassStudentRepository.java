@@ -12,7 +12,7 @@ import java.util.List;
 import java.util.Optional;
 
 public interface ClassStudentRepository extends JpaRepository<ClassStudent, Long> {
-    Optional<ClassStudent> findByUserIdAndStatus(Long userId, String status);
+    Optional<ClassStudent> findByUserIdAndStatus(Long userId, ClassStudentStatus status);
 
     @Query("SELECT cs FROM ClassStudent cs WHERE cs.clazz.id = :classId AND cs.status = :status " +
             "AND (cs.user.fullName LIKE %:text% OR cs.user.email LIKE %:text%)")
@@ -42,4 +42,6 @@ public interface ClassStudentRepository extends JpaRepository<ClassStudent, Long
     List<Object[]> findExistingClassStudentPairs(
             @Param("classIds") List<Long> classIds,
             @Param("userIds") List<Long> userIds);
+
+    Optional<ClassStudent> findByUserIdAndClazzIdAndStatus(Long userId, Long classId, ClassStudentStatus classStudentStatus);
 }

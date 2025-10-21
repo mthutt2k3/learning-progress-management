@@ -4,12 +4,7 @@ import com.learning.progress.common.Const;
 import com.learning.progress.common.JwtTokenType;
 import com.learning.progress.common.RoleName;
 import com.learning.progress.common.UserStatus;
-import com.learning.progress.dto.auth.ChangePasswordRequest;
-import com.learning.progress.dto.auth.ConfirmResetPasswordRequest;
-import com.learning.progress.dto.auth.LoginRequest;
-import com.learning.progress.dto.auth.ResetPasswordRequest;
-import com.learning.progress.dto.auth.LoginResponse;
-import com.learning.progress.dto.auth.ResetPasswordByTeacherResponse;
+import com.learning.progress.dto.auth.*;
 import com.learning.progress.entity.RefreshToken;
 import com.learning.progress.entity.User;
 import com.learning.progress.exception.ApiException;
@@ -25,7 +20,6 @@ import com.learning.progress.util.TraceUtil;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.mail.javamail.JavaMailSender;
@@ -86,7 +80,7 @@ public class AuthServiceImpl implements AuthService {
         User user = userRepository.findByUserNameAndDeletedAtIsNull(loginRequest.getUsername())
                 .orElseThrow(() -> {
                     log.error("[{}] User not found: {}", traceId, loginRequest.getUsername());
-                    return new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.UNAUTHORIZED.value());
+                    return new ApiException(Const.USER.NOT_FOUND, HttpStatus.UNAUTHORIZED.value());
                 });
 
         // Validate password
@@ -149,6 +143,74 @@ public class AuthServiceImpl implements AuthService {
         return authMapper.toLoginResponse(user, refreshToken, accessToken, mustChangePassword);
     }
 
+    @Override
+    public String requestTeacherResetPassword(RequestTeacherResetPassword request) {
+        // Fetch user by username
+        User user = userRepository.findByUserNameAndDeletedAtIsNull(request.getUserName())
+                .orElseThrow(() -> {
+                    return new ApiException(Const.USER.NOT_FOUND, HttpStatus.NOT_FOUND.value());
+                });
+
+        // Check user status
+        if (user.getStatus() != UserStatus.ACTIVE) {
+            throw new ApiException(Const.USER.USER_INACTIVE, HttpStatus.FORBIDDEN.value());
+        }
+
+        user.setRequestResetPasswordByTeacher(true);
+        userRepository.save(user);
+        return "";
+    }
+
+    /**
+     * Resets a student's password by a teacher, generating a random password.
+     *
+     * @param username The username of the student.
+     * @return ResetPasswordByTeacherResponse with user details and new password.
+     */
+    @Override
+    public ResetPasswordByTeacherResponse resetPasswordByTeacher(String username) {
+        String traceId = TraceUtil.getTraceId();
+        log.info("[{}] Teacher password reset requested for username: {}", traceId, username);
+
+        // Validate username
+        if (username == null || username.trim().isEmpty()) {
+            log.error("[{}] Username is required", traceId);
+            throw new ApiException(Const.USERNAME.REQUIRED, HttpStatus.BAD_REQUEST.value());
+        }
+
+        // Fetch user
+        User user = userRepository.findByUserNameAndDeletedAtIsNull(username)
+                .orElseThrow(() -> {
+                    log.error("[{}] User not found: {}", traceId, username);
+                    return new ApiException(Const.USER.NOT_FOUND, HttpStatus.NOT_FOUND.value());
+                });
+
+        // Check user status
+        if (user.getStatus() != UserStatus.ACTIVE) {
+            log.error("[{}] User inactive: {}", traceId, username);
+            throw new ApiException(Const.USER.USER_INACTIVE, HttpStatus.FORBIDDEN.value());
+        }
+        if(!user.isRequestResetPasswordByTeacher()){
+            throw new ApiException(Const.USER.NO_RESET_REQUEST_FROM_STUDENT, HttpStatus.FORBIDDEN.value());
+        }
+
+        // Validate role
+        RoleName userRole = RoleName.valueOf(user.getRole().getName().toString().toUpperCase());
+        if (!(userRole == RoleName.STUDENT || userRole == RoleName.TEST_TAKER)) {
+            log.error("[{}] Forbidden role for reset: {}", traceId, userRole);
+            throw new ApiException(Const.SECURITY.FORBIDDEN_ROLE_STUDENT_ONLY, HttpStatus.FORBIDDEN.value());
+        }
+
+        // Generate and set new password
+        String newPassword = DataUtil.generateRandomPassword(8);
+        user.setPassword(passwordEncoder.encode(newPassword));
+        user.setMustChangePassword(true);
+        userRepository.save(user);
+        log.info("[{}] Password reset by teacher for username: {}", traceId, username);
+
+        return authMapper.toResetPasswordByTeacherResponse(user, newPassword);
+    }
+
     /**
      * Initiates a password reset by sending an email with a reset token.
      *
@@ -156,7 +218,7 @@ public class AuthServiceImpl implements AuthService {
      * @return Masked email address of the user.
      */
     @Override
-    public String requestResetPasswordByEmail(ResetPasswordRequest request) {
+    public String requestResetPasswordByEmail(RequestResetPasswordByEmail request) {
         String traceId = TraceUtil.getTraceId();
         log.info("[{}] Password reset requested for username: {}", traceId, request.getUserName());
 
@@ -164,7 +226,7 @@ public class AuthServiceImpl implements AuthService {
         User user = userRepository.findByUserNameAndDeletedAtIsNull(request.getUserName())
                 .orElseThrow(() -> {
                     log.error("[{}] User not found: {}", traceId, request.getUserName());
-                    return new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value());
+                    return new ApiException(Const.USER.NOT_FOUND, HttpStatus.NOT_FOUND.value());
                 });
 
         // Check user status
@@ -181,7 +243,6 @@ public class AuthServiceImpl implements AuthService {
         try {
             emailService.sendForgotPasswordEmail(user, request, resetPasswordToken);
             log.info("[{}] Password reset email sent to: {}", traceId, user.getEmail());
-            user.setForgotPassword(true);
             userRepository.save(user);
             return DataUtil.maskEmail(user.getEmail());
         } catch (Exception e) {
@@ -198,7 +259,7 @@ public class AuthServiceImpl implements AuthService {
      * @return Masked email address of the user.
      */
     @Override
-    public String resetPasswordByToken(ConfirmResetPasswordRequest request) {
+    public String resetPasswordByToken(ResetPasswordByTokenRequest request) {
         String traceId = TraceUtil.getTraceId();
         log.info("[{}] Confirming password reset with token: {}", traceId, request.getToken());
 
@@ -209,7 +270,7 @@ public class AuthServiceImpl implements AuthService {
         User user = userRepository.findByIdAndDeletedAtIsNull(userId)
                 .orElseThrow(() -> {
                     log.error("[{}] Invalid reset token: {}", traceId, request.getToken());
-                    return new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.BAD_REQUEST.value());
+                    return new ApiException(Const.USER.NOT_FOUND, HttpStatus.BAD_REQUEST.value());
                 });
         if (user.getStatus() == UserStatus.INACTIVE) {
             log.error("[{}] User inactive: {}", traceId, user.getUserName());
@@ -218,7 +279,7 @@ public class AuthServiceImpl implements AuthService {
         if (user.getStatus() == UserStatus.PENDING) {
             user.setStatus(UserStatus.ACTIVE);
         }
-        if (!user.isForgotPassword()) {
+        if (!user.isResetPasswordTokenUsed()) {
             log.error("[{}] Have changed password: {}", traceId, user.getUserName());
             throw new ApiException(Const.AUTH.HAVE_CHANGED_PASSWORD, HttpStatus.FORBIDDEN.value());
         }
@@ -226,7 +287,7 @@ public class AuthServiceImpl implements AuthService {
         // Update password
         user.setPassword(passwordEncoder.encode(request.getNewPassword()));
         user.setMustChangePassword(false);
-        user.setForgotPassword(false);
+        user.setResetPasswordTokenUsed(false);
         userRepository.save(user);
         log.info("[{}] Password reset successful for user: {}", traceId, user.getUserName());
 
@@ -255,7 +316,7 @@ public class AuthServiceImpl implements AuthService {
         User user = userRepository.findByUserNameAndDeletedAtIsNull(username)
                 .orElseThrow(() -> {
                     log.error("[{}] User not found: {}", traceId, username);
-                    return new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value());
+                    return new ApiException(Const.USER.NOT_FOUND, HttpStatus.NOT_FOUND.value());
                 });
         // Check user status
         if (user.getStatus() != UserStatus.ACTIVE) {
@@ -290,53 +351,6 @@ public class AuthServiceImpl implements AuthService {
 
         log.info("[{}] Password change successful for username: {}", traceId, username);
         return authMapper.toLoginResponse(user, refreshToken, accessToken, mustChangePassword);
-    }
-
-    /**
-     * Resets a student's password by a teacher, generating a random password.
-     *
-     * @param username The username of the student.
-     * @return ResetPasswordByTeacherResponse with user details and new password.
-     */
-    @Override
-    public ResetPasswordByTeacherResponse resetPasswordByTeacher(String username) {
-        String traceId = TraceUtil.getTraceId();
-        log.info("[{}] Teacher password reset requested for username: {}", traceId, username);
-
-        // Validate username
-        if (username == null || username.trim().isEmpty()) {
-            log.error("[{}] Username is required", traceId);
-            throw new ApiException(Const.USERNAME.REQUIRED, HttpStatus.BAD_REQUEST.value());
-        }
-
-        // Fetch user
-        User user = userRepository.findByUserNameAndDeletedAtIsNull(username)
-                .orElseThrow(() -> {
-                    log.error("[{}] User not found: {}", traceId, username);
-                    return new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value());
-                });
-
-        // Check user status
-        if (user.getStatus() != UserStatus.ACTIVE) {
-            log.error("[{}] User inactive: {}", traceId, username);
-            throw new ApiException(Const.USER.USER_INACTIVE, HttpStatus.FORBIDDEN.value());
-        }
-
-        // Validate role
-        RoleName userRole = RoleName.valueOf(user.getRole().getName().toString().toUpperCase());
-        if (!(userRole == RoleName.STUDENT || userRole == RoleName.TEST_TAKER)) {
-            log.error("[{}] Forbidden role for reset: {}", traceId, userRole);
-            throw new ApiException(Const.SECURITY.FORBIDDEN_ROLE_STUDENT_ONLY, HttpStatus.FORBIDDEN.value());
-        }
-
-        // Generate and set new password
-        String newPassword = DataUtil.generateRandomPassword(8);
-        user.setPassword(passwordEncoder.encode(newPassword));
-        user.setMustChangePassword(true);
-        userRepository.save(user);
-        log.info("[{}] Password reset by teacher for username: {}", traceId, username);
-
-        return authMapper.toResetPasswordByTeacherResponse(user, newPassword);
     }
 
     /**
@@ -379,6 +393,7 @@ public class AuthServiceImpl implements AuthService {
                 "refreshToken", refreshToken
         );
     }
+
 
     /**
      * Logs out a user by blacklisting the access token and revoking the refresh token.

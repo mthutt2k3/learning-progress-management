@@ -11,7 +11,7 @@ import lombok.NoArgsConstructor;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class ResetPasswordRequest {
+public class RequestResetPasswordByEmail {
     @NotBlank(message = Const.USERNAME.REQUIRED)
     private String userName;
     @NotBlank(message = Const.DOMAIN.REQUIRED)

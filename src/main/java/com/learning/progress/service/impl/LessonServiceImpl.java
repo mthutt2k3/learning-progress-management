@@ -207,7 +207,6 @@ public class LessonServiceImpl implements LessonService {
         }
 
         // Bước 8: Process
-        String currentUser = jwtUtil.extractUsernameFromCurrentRequest();
         OffsetDateTime now = OffsetDateTime.now();
         List<LessonDTO> result = new ArrayList<>();
 
@@ -216,7 +215,7 @@ public class LessonServiceImpl implements LessonService {
             Lesson lesson = lessonRepository.findById(deleteId)
                     .filter(l -> l.getDeletedAt() == null)
                     .orElseThrow(() -> new ApiException("Lesson không tìm thấy để xóa: " + deleteId, HttpStatus.NOT_FOUND.value()));
-            lesson.setDeletedBy(currentUser);
+            lesson.setDeletedBy(jwtUtil.extractEmailPrefixFromCurrentRequest());
             lesson.setDeletedAt(now);
             lessonRepository.save(lesson);
         }

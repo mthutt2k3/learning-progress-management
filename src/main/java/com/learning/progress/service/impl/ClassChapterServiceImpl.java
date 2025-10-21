@@ -196,7 +196,6 @@ public class ClassChapterServiceImpl implements ClassChapterService {
             throw new ApiException("Order numbers phải tuần tự từ 1 đến " + nonDeletedSize, HttpStatus.BAD_REQUEST.value());
         }
 
-        String currentUser = jwtUtil.extractUsernameFromCurrentRequest();
         OffsetDateTime now = OffsetDateTime.now();
         Long actionByUserId = jwtUtil.extractUserIdFromCurrentRequest();
         List<ClassChapterDTO> result = new ArrayList<>();
@@ -207,7 +206,7 @@ public class ClassChapterServiceImpl implements ClassChapterService {
             ClassChapter classChapter = classChapterRepository.findById(deleteReq.getId())
                     .filter(c -> c.getDeletedAt() == null)
                     .orElseThrow(() -> new ApiException("Clazz chapter không tồn tại", HttpStatus.NOT_FOUND.value()));
-            classChapter.setDeletedBy(currentUser);
+            classChapter.setDeletedBy(jwtUtil.extractEmailPrefixFromCurrentRequest());
             classChapter.setDeletedAt(now);
             classChapterRepository.save(classChapter);
 

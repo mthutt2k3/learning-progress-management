@@ -258,7 +258,6 @@ public class ChapterServiceImpl implements ChapterService {
 
         log.info("Order number validation passed: nonDeletedSize={}, orders={}", nonDeletedSize, orderNumbers);
         // 6. Initial process
-        String currentUser = jwtUtil.extractUsernameFromCurrentRequest();
         OffsetDateTime now = OffsetDateTime.now();
         List<ChapterDTO> result = new ArrayList<>();
 
@@ -267,7 +266,7 @@ public class ChapterServiceImpl implements ChapterService {
             Chapter chapter = chapterRepository.findById(deleteReq.getId())
                     .filter(c -> c.getDeletedAt() == null)
                     .orElseThrow(() -> new ApiException("Chapter không tìm thấy để xóa", HttpStatus.NOT_FOUND.value()));
-            chapter.setDeletedBy(currentUser);
+            chapter.setDeletedBy(jwtUtil.extractEmailPrefixFromCurrentRequest());
             chapter.setDeletedAt(now);
             chapterRepository.save(chapter);
         }
