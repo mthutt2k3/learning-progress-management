@@ -279,7 +279,7 @@ public class AuthServiceImpl implements AuthService {
         if (user.getStatus() == UserStatus.PENDING) {
             user.setStatus(UserStatus.ACTIVE);
         }
-        if (!user.isResetPasswordTokenUsed()) {
+        if (user.isResetPasswordTokenUsed()) {
             log.error("[{}] Have changed password: {}", traceId, user.getUserName());
             throw new ApiException(Const.AUTH.HAVE_CHANGED_PASSWORD, HttpStatus.FORBIDDEN.value());
         }
@@ -287,7 +287,7 @@ public class AuthServiceImpl implements AuthService {
         // Update password
         user.setPassword(passwordEncoder.encode(request.getNewPassword()));
         user.setMustChangePassword(false);
-        user.setResetPasswordTokenUsed(false);
+        user.setResetPasswordTokenUsed(true);
         userRepository.save(user);
         log.info("[{}] Password reset successful for user: {}", traceId, user.getUserName());
 
