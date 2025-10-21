@@ -34,11 +34,6 @@ public class Const {
         public static final int LESSON_NAME_MAX_LENGTH_VALUE = 200;
 
     }
-
-    public static class CLASS_LESSON {
-        public static final String NOT_FOUND = "Class lesson does not exist in the system or has been deleted";
-
-    }
     public static class CHALLENGE {
         public static final String NAME_REQUIRED = "Challenge name is required";
         public static final String CLASS_LESSON_REQUIRED = "Class lesson is required";

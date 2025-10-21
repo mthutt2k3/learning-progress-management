@@ -15,7 +15,6 @@ import java.util.List;
 @Setter
 public class SectionWithQuestionsDTO {
 
-    @NotBlank(message = "Section title is required")
     private String sectionTitle;
 
     @NotNull(message = "Section type is required")
@@ -23,7 +22,7 @@ public class SectionWithQuestionsDTO {
 
     private String sectionsUrl;
     private String sectionsContent;
-
+    private Integer orderNumber;
     @Valid
     private List<@Valid QuestionInfoDTO> questions;
 
@@ -53,7 +52,7 @@ public class SectionWithQuestionsDTO {
     @Setter
     public static class QuestionContentDTO {
         @NotBlank(message = "Question type is required")
-        private String questionType;  // "MC", "MS", "TF", ...
+        private QuestionType questionType;
 
         @NotNull(message = "Question number is required")
         private Integer questionNumber;

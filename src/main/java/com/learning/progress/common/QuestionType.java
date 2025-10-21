@@ -4,8 +4,6 @@ public enum QuestionType {
     // Grammar & Vocab
     PASSAGE,                     // Used in Writing
     MULTIPLE_CHOICE,             // Reading, Listening
-    MULTIPLE_SELECT,             // Reading, Listening
-    TRUE_FALSE,                  // Reading, Listening
     OPEN_ENDED,                  // General
     FILL_IN_THE_BLANK,           // Reading, Listening
     DROPDOWN,                    // Reading, Listening
