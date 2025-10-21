@@ -1,20 +1,12 @@
 package com.learning.progress.service.impl;
 
-import com.learning.progress.common.ActionType;
-import com.learning.progress.common.ClassStatus;
-import com.learning.progress.common.Const;
-import com.learning.progress.common.RoleName;
+import com.learning.progress.common.*;
 import com.learning.progress.dto.clazz.ClassDTO;
 import com.learning.progress.dto.clazz.ClassOverviewDTO;
 import com.learning.progress.dto.clazz.CreateClassRequest;
 import com.learning.progress.dto.clazz.UpdateClassRequest;
 import com.learning.progress.dto.DataResponse;
-import com.learning.progress.entity.Chapter;
-import com.learning.progress.entity.ClassChapter;
-import com.learning.progress.entity.ClassLesson;
-import com.learning.progress.entity.Clazz;
-import com.learning.progress.entity.Lesson;
-import com.learning.progress.entity.Syllabus;
+import com.learning.progress.entity.*;
 import com.learning.progress.exception.ApiException;
 import com.learning.progress.mapper.ClassMapper;
 import com.learning.progress.repository.*;
@@ -23,7 +15,6 @@ import com.learning.progress.service.ClassService;
 import com.learning.progress.util.AppValidator;
 import com.learning.progress.util.DataUtil;
 import com.learning.progress.util.JwtUtil;
-import jakarta.validation.Validator;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
@@ -42,8 +33,7 @@ import java.util.Set;
 
 @Service
 @Slf4j
-public class ClassServiceImpl implements ClassService {
-
+public class ManagerClassServiceImpl implements ClassService {
     @Autowired
     private ClassRepository classRepository;
     @Autowired
@@ -63,21 +53,20 @@ public class ClassServiceImpl implements ClassService {
     @Autowired
     private JwtUtil jwtUtil;
     @Autowired
-    private Validator validator;
-    @Autowired
     private AppValidator appValidator;
 
     @Override
+    @Transactional(readOnly = true)
     public ClassOverviewDTO getClassOverview(Long id) {
         Clazz clazz = classRepository.findByIdAndDeletedAtIsNull(id)
-                .orElseThrow(() -> new ApiException(Const.CLASS.CLASS_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> new ApiException(Const.CLASS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         ClassOverviewDTO.SyllabusDTO syllabusDTO = null;
         if (clazz.getSyllabus() != null) {
             syllabusDTO = ClassOverviewDTO.SyllabusDTO.builder()
                     .id(clazz.getSyllabus().getId())
                     .syllabusName(clazz.getSyllabus().getSyllabusName())
-                    .syllabusCode(clazz.getSyllabus().getSyllabusCode()) // TODO: Add syllabusCode to Syllabus entity if needed
+                    .syllabusCode(clazz.getSyllabus().getSyllabusCode())
                     .build();
         }
 
@@ -85,12 +74,12 @@ public class ClassServiceImpl implements ClassService {
                 .id(clazz.getId())
                 .className(clazz.getClassName())
                 .classCode(clazz.getClassCode())
-                .teachers(null) // TODO: Fetch teacher data from Class-Teacher relationship
-                .teachingAssistants(new ArrayList<>()) // TODO: Fetch teaching assistants data
-                .startDate(null) // TODO: Add startDate to Clazz entity or fetch from related entity
-                .endDate(null) // TODO: Add endDate to Clazz entity or fetch from related entity
+                .teachers(null) // TODO: Fetch teacher data
+                .teachingAssistants(new ArrayList<>()) // TODO: Fetch teaching assistants
+                .startDate(null) // TODO: Add startDate to Clazz
+                .endDate(null) // TODO: Add endDate to Clazz
                 .status(clazz.getStatus())
-                .level(null) // TODO: Add level to Clazz entity or fetch from related entity
+                .level(null) // TODO: Add level to Clazz
                 .syllabus(syllabusDTO)
                 .build();
     }
@@ -98,22 +87,22 @@ public class ClassServiceImpl implements ClassService {
     @Override
     @Transactional
     public ClassDTO createClass(CreateClassRequest request) {
-        // Validate startDate and endDate using DataUtil
+        // Validate dates
         DataUtil.validateStartAndEndDate(request.getStartDate(), request.getEndDate());
 
-        // Kiểm tra syllabus
+        // Check syllabus
         Syllabus syllabus = syllabusRepository.findById(request.getSyllabusId())
                 .filter(s -> s.getDeletedAt() == null)
                 .orElseThrow(() -> new ApiException(Const.SYLLABUS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         Long actionByUserId = jwtUtil.extractUserIdFromCurrentRequest();
 
-        // Tạo class
+        // Create class
         Clazz clazz = new Clazz();
         clazz.setClassName(request.getClassName());
         clazz.setSyllabus(syllabus);
         clazz.setAvatarUrl(request.getAvatarUrl());
-        LocalDate today = LocalDate.now();
+        OffsetDateTime today = OffsetDateTime.now();
         if (request.getStartDate() != null && request.getStartDate().isAfter(today)) {
             clazz.setStatus(ClassStatus.PENDING);
         } else {
@@ -126,7 +115,7 @@ public class ClassServiceImpl implements ClassService {
         savedClass.setClassCode(classCode);
         savedClass = classRepository.saveAndFlush(savedClass);
 
-        // Ghi lịch sử
+        // Save history
         String actionDetails = String.format(
                 Const.CLASS_HISTORY.CREATE_CLASS,
                 request.getClassName(),
@@ -140,7 +129,7 @@ public class ClassServiceImpl implements ClassService {
                 RoleName.MANAGER.name()
         );
 
-        // Sao chép chapters
+        // Copy chapters
         List<Chapter> chapters = chapterRepository.findBySyllabusIdAndDeletedAtIsNullOrderByOrderNumberAsc(syllabus.getId());
         List<ClassChapter> classChapters = new ArrayList<>();
         for (Chapter chapter : chapters) {
@@ -150,7 +139,7 @@ public class ClassServiceImpl implements ClassService {
             classChapter.setOrderNumber(chapter.getOrderNumber());
             classChapters.add(classChapterRepository.save(classChapter));
 
-            // Sao chép lessons
+            // Copy lessons
             List<Lesson> lessons = lessonRepository.findByChapterIdAndDeletedAtIsNullOrderByOrderNumberAsc(chapter.getId());
             for (Lesson lesson : lessons) {
                 ClassLesson classLesson = new ClassLesson();
@@ -166,43 +155,37 @@ public class ClassServiceImpl implements ClassService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public ClassDTO getClass(Long id) {
         Clazz clazz = classRepository.findByIdAndDeletedAtIsNull(id)
-                .orElseThrow(() -> new ApiException(Const.CLASS.CLASS_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> new ApiException(Const.CLASS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
         return classMapper.toClassDTO(clazz);
     }
 
     @Override
-    public DataResponse<List<ClassDTO>> getClassList(int page, int size, String searchText, String status, Long syllabusId, String startDateFrom, String startDateTo, String endDateFrom, String endDateTo, String sortBy, String sortDir) {
+    @Transactional(readOnly = true)
+    public DataResponse<List<ClassDTO>> getClassList(int page, int size, String searchText, String status, Long syllabusId,
+                                                     String startDateFrom, String startDateTo, String endDateFrom, String endDateTo,
+                                                     String sortBy, String sortDir) {
         appValidator.validatePaginationParams(page, size);
         appValidator.validateSortParams(
                 List.of("createdAt", "className", "classCode", "status", "startDate", "endDate"),
-                sortBy,
-                sortDir
-        );
+                sortBy, sortDir);
 
         Pageable pageable = PageRequest.of(
-                page,
-                size,
+                page, size,
                 sortDir.equalsIgnoreCase("asc") ? Sort.by(sortBy).ascending() : Sort.by(sortBy).descending()
         );
 
-        // ✅ Parse date nếu truyền vào
         LocalDate startFrom = DataUtil.parseAndValidateDate(startDateFrom, Const.VALIDATE_INPUT.regexDate, "startDateFrom");
-        LocalDate startTo   = DataUtil.parseAndValidateDate(startDateTo,   Const.VALIDATE_INPUT.regexDate, "startDateTo");
-        LocalDate endFrom   = DataUtil.parseAndValidateDate(endDateFrom,   Const.VALIDATE_INPUT.regexDate, "endDateFrom");
-        LocalDate endTo     = DataUtil.parseAndValidateDate(endDateTo,     Const.VALIDATE_INPUT.regexDate, "endDateTo");
+        LocalDate startTo = DataUtil.parseAndValidateDate(startDateTo, Const.VALIDATE_INPUT.regexDate, "startDateTo");
+        LocalDate endFrom = DataUtil.parseAndValidateDate(endDateFrom, Const.VALIDATE_INPUT.regexDate, "endDateFrom");
+        LocalDate endTo = DataUtil.parseAndValidateDate(endDateTo, Const.VALIDATE_INPUT.regexDate, "endDateTo");
 
+        // Manager: View ALL classes
         Page<Clazz> classPage = classRepository.searchClassesWithFilters(
                 searchText == null ? "" : searchText,
-                status,
-                syllabusId,
-                startFrom,
-                startTo,
-                endFrom,
-                endTo,
-                pageable
-        );
+                status, syllabusId, startFrom, startTo, endFrom, endTo, pageable);
 
         List<ClassDTO> classDTOs = classPage.getContent()
                 .stream()
@@ -224,22 +207,17 @@ public class ClassServiceImpl implements ClassService {
     @Transactional
     public ClassDTO updateClass(Long id, UpdateClassRequest request) {
         Clazz clazz = classRepository.findByIdAndDeletedAtIsNull(id)
-                .orElseThrow(() -> new ApiException(Const.CLASS.CLASS_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> new ApiException(Const.CLASS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         if (clazz.getStatus() == ClassStatus.FINISHED) {
-            throw new ApiException(
-                    Const.CLASS.FINISHED_CLASS,
-                    HttpStatus.BAD_REQUEST.value()
-            );
+            throw new ApiException(Const.CLASS.FINISHED_CLASS, HttpStatus.BAD_REQUEST.value());
         }
 
-        // Validate startDate and endDate using DataUtil
         DataUtil.validateStartAndEndDate(request.getStartDate(), request.getEndDate());
 
         Long actionByUserId = jwtUtil.extractUserIdFromCurrentRequest();
         StringBuilder details = new StringBuilder();
 
-        // So sánh và chỉ ghi lịch sử khi có thay đổi
         if (request.getClassName() != null && !request.getClassName().equals(clazz.getClassName())) {
             details.append(String.format("name changed to '%s'; ", request.getClassName()));
             clazz.setClassName(request.getClassName());
@@ -260,7 +238,6 @@ public class ClassServiceImpl implements ClassService {
             clazz.setEndDate(request.getEndDate());
         }
 
-        // Nếu không có gì thay đổi thì không ghi lịch sử
         String changeDetails = details.toString().replaceAll("; $", "");
         if (!changeDetails.isEmpty()) {
             String actionDetails = String.format(
@@ -268,7 +245,6 @@ public class ClassServiceImpl implements ClassService {
                     clazz.getClassName(),
                     changeDetails
             );
-
             classHistoryService.saveClassHistory(
                     id,
                     actionDetails,
@@ -281,30 +257,26 @@ public class ClassServiceImpl implements ClassService {
         return classMapper.toClassDTO(classRepository.save(clazz));
     }
 
-
     @Override
     @Transactional
-    public String changeClassStatusManually(Long id, String newStatus) {
+    public String changeClassStatusManually(Long id, String status) {
         Clazz clazz = classRepository.findByIdAndDeletedAtIsNull(id)
-                .orElseThrow(() -> new ApiException(Const.CLASS.CLASS_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> new ApiException(Const.CLASS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
         Long actionByUserId = jwtUtil.extractUserIdFromCurrentRequest();
         ClassStatus oldStatus = clazz.getStatus();
 
         appValidator.validateAllowedEnumValue(ClassStatus.class,
-                newStatus,
+                status,
                 Set.of(ClassStatus.ACTIVE, ClassStatus.FINISHED, ClassStatus.INACTIVE));
 
-
-        // Cập nhật trạng thái
-        clazz.setStatus(ClassStatus.valueOf(newStatus));
+        clazz.setStatus(ClassStatus.valueOf(status));
         classRepository.save(clazz);
 
-        // Ghi lịch sử
         String actionDetails = String.format(
                 Const.CLASS_HISTORY.CHANGE_STATUS,
                 clazz.getClassName(),
                 oldStatus,
-                newStatus
+                status
         );
         classHistoryService.saveClassHistory(
                 id,
@@ -314,7 +286,6 @@ public class ClassServiceImpl implements ClassService {
                 RoleName.MANAGER.name()
         );
 
-        classRepository.save(clazz);
         return actionDetails;
     }
 
@@ -322,16 +293,14 @@ public class ClassServiceImpl implements ClassService {
     @Transactional
     public void deleteClass(Long id) {
         Clazz clazz = classRepository.findByIdAndDeletedAtIsNull(id)
-                .orElseThrow(() -> new ApiException(Const.CLASS.CLASS_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> new ApiException(Const.CLASS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
-        if(clazz.getStatus() != ClassStatus.PENDING){
+        if (clazz.getStatus() != ClassStatus.PENDING) {
             throw new ApiException(String.format(Const.CLASS.CANNOT_DELETE_ACTIVE_CLASS, clazz.getClassName(), clazz.getStatus()),
                     HttpStatus.BAD_REQUEST.value());
         }
-        String currentUser = jwtUtil.extractEmailFromCurrentRequest();
-        Long actionByUserId = jwtUtil.extractUserIdFromCurrentRequest();
 
-        // Ghi lịch sử
+        Long actionByUserId = jwtUtil.extractUserIdFromCurrentRequest();
         String actionDetails = String.format(
                 Const.CLASS_HISTORY.DELETE_CLASS,
                 clazz.getClassName()
@@ -345,7 +314,7 @@ public class ClassServiceImpl implements ClassService {
         );
 
         OffsetDateTime now = OffsetDateTime.now();
-        clazz.setDeletedBy(DataUtil.getEmailPrefix(currentUser));
+        clazz.setDeletedBy(jwtUtil.extractEmailPrefixFromCurrentRequest());
         clazz.setDeletedAt(now);
         classRepository.save(clazz);
     }

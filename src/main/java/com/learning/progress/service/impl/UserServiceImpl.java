@@ -1,11 +1,8 @@
 package com.learning.progress.service.impl;
 
 import com.learning.progress.common.*;
-import com.learning.progress.dto.excel.ImportStudentDTO;
+import com.learning.progress.dto.excel.*;
 import com.learning.progress.dto.clazz.ClassInfo;
-import com.learning.progress.dto.excel.ExportStudentDTO;
-import com.learning.progress.dto.excel.ExportTeacherDTO;
-import com.learning.progress.dto.excel.ImportTeacherDTO;
 import com.learning.progress.dto.user.*;
 import com.learning.progress.dto.DataResponse;
 import com.learning.progress.entity.*;
@@ -144,7 +141,7 @@ public class UserServiceImpl implements UserService {
         RoleName newRoleName = role.getName();
 
         User user = userRepository.findByIdAndDeletedAtIsNull(userId)
-                .orElseThrow(() -> new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> new ApiException(Const.USER.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         RoleName oldRoleName = user.getRole().getName();
 
@@ -185,7 +182,7 @@ public class UserServiceImpl implements UserService {
     @Transactional
     public StudentProfileDTO updateStudentStatus(Long userId, UserStatus newStatus) {
         User user = userRepository.findByIdAndDeletedAtIsNull(userId)
-                .orElseThrow(() -> new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> new ApiException(Const.USER.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         appValidator.validateAllowedEnumValue(
                 RoleName.class,
@@ -344,7 +341,7 @@ public class UserServiceImpl implements UserService {
                 .orElseThrow(() -> new ApiException(Const.ROLE.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         User user = userRepository.findByIdAndDeletedAtIsNull(userId)
-                .orElseThrow(() -> new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> new ApiException(Const.USER.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         RoleName oldRoleName = user.getRole().getName();
         RoleName newRoleName = role.getName();
@@ -378,7 +375,7 @@ public class UserServiceImpl implements UserService {
         }
 
         User user = userRepository.findByIdAndDeletedAtIsNull(userId)
-                .orElseThrow(() -> new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> new ApiException(Const.USER.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
         appValidator.validateAllowedEnumValue(
                 RoleName.class,
                 user.getRole().getName().name(),
@@ -408,10 +405,10 @@ public class UserServiceImpl implements UserService {
                 throw new ApiException(Const.AUTH.INVALID_TOKEN_USERNAME, HttpStatus.UNAUTHORIZED.value());
             }
             user = userRepository.findByUserNameAndDeletedAtIsNull(username)
-                    .orElseThrow(() -> new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+                    .orElseThrow(() -> new ApiException(Const.USER.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
         } else {
             user = userRepository.findByIdAndDeletedAtIsNull(userId)
-                    .orElseThrow(() -> new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+                    .orElseThrow(() -> new ApiException(Const.USER.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
         }
 
         RoleName roleName = user.getRole().getName();
@@ -470,7 +467,7 @@ public class UserServiceImpl implements UserService {
         }
 
         User user = userRepository.findByUserNameAndDeletedAtIsNull(username)
-                .orElseThrow(() -> new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> new ApiException(Const.USER.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         if (!user.getId().equals(userId)) {
             throw new ApiException(Const.SECURITY.NOT_MATCH_CURRENT_USER, HttpStatus.FORBIDDEN.value());
@@ -497,11 +494,11 @@ public class UserServiceImpl implements UserService {
         }
 
         User currentUser = userRepository.findByUserNameAndDeletedAtIsNull(username)
-                .orElseThrow(() -> new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> new ApiException(Const.USER.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         // Lấy user mục tiêu dựa trên userId được truyền vào
         User targetUser = userRepository.findByIdAndDeletedAtIsNull(userId)
-                .orElseThrow(() -> new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> new ApiException(Const.USER.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         boolean isSelf = currentUser.getId().equals(userId);
         RoleName currentRole = currentUser.getRole().getName();
@@ -581,7 +578,7 @@ public class UserServiceImpl implements UserService {
         String newEmail = claims.getNewEmail();
 
         User user = userRepository.findByIdAndDeletedAtIsNull(userId)
-                .orElseThrow(() -> new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> new ApiException(Const.USER.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         user.setEmail(newEmail);
         userRepository.save(user);
@@ -775,7 +772,7 @@ public class UserServiceImpl implements UserService {
 
         // Tìm user
         User user = userRepository.findByIdAndDeletedAtIsNull(userId)
-                .orElseThrow(() -> new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> new ApiException(Const.USER.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         // Upload ảnh lên Blob
         String fileName = blobSasService.uploadFile(file);
@@ -848,7 +845,7 @@ public class UserServiceImpl implements UserService {
             students = new ArrayList<>();
             for (Long classId : classIds) {
                 Clazz clazz = classRepository.findById(classId)
-                        .orElseThrow(() -> new ApiException(Const.CLASS.CLASS_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+                        .orElseThrow(() -> new ApiException(Const.CLASS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
                 classNameMap.put(classId, clazz.getClassName());
 
@@ -1296,5 +1293,162 @@ public class UserServiceImpl implements UserService {
                 traceId, results.size());
 
         return results;
+    }
+
+    @Override
+    public byte[] validateStudentImportFile(MultipartFile file) {
+        // Đọc và validate file
+        List<ImportStudentDTO> importList = fileService.readExcelData(
+                file, "Import Data", ImportStudentDTO.class
+        );
+
+        ValidationResult<ImportStudentDTO> result = new ValidationResult<>();
+        result.setTotalRows(importList.size());
+
+        int validCount = 0;
+        int invalidCount = 0;
+
+        for (int i = 0; i < importList.size(); i++) {
+            ImportStudentDTO record = importList.get(i);
+            ValidationResult.ValidatedRow<ImportStudentDTO> validatedRow =
+                    new ValidationResult.ValidatedRow<>();
+            validatedRow.setData(record);
+            validatedRow.setRowNumber(i + 2); // +2 vì header ở row 1
+
+            StringBuilder errors = new StringBuilder();
+
+            // Validate từng field (copy logic từ importStudentsFromExcel)
+            try {
+                if (record.getEmail() == null || !Pattern.matches(Const.VALIDATE_INPUT.regexEmail, record.getEmail())) {
+                    errors.append("• Email không hợp lệ\n");
+                }
+                if (record.getFullName() == null || record.getFullName().trim().isEmpty()) {
+                    errors.append("• Full Name không được để trống\n");
+                }
+                if (!EnumUtil.isAllowedEnumValue(RoleName.class, record.getRoleName(),
+                        Set.of(RoleName.STUDENT, RoleName.TEST_TAKER))) {
+                    errors.append("• Role Name không hợp lệ\n");
+                }
+                if (record.getPhoneNumber() != null && !DataUtil.isValidPhoneNumber(record.getPhoneNumber())) {
+                    errors.append("• Phone Number không hợp lệ\n");
+                }
+                if (record.getGender() != null && !EnumUtil.isValidEnum(Gender.class, record.getGender())) {
+                    errors.append("• Gender không hợp lệ\n");
+                }
+                if (record.getParentEmail() != null && !record.getParentEmail().isEmpty() &&
+                        !Pattern.matches(Const.VALIDATE_INPUT.regexEmail, record.getParentEmail())) {
+                    errors.append("• Parent Email không hợp lệ\n");
+                }
+                if (record.getLevelCode() != null && !record.getLevelCode().isBlank()) {
+                    if (!levelRepository.findByLevelCodeIgnoreCase(record.getLevelCode()).isPresent()) {
+                        errors.append("• Level Code không tồn tại: " + record.getLevelCode() + "\n");
+                    }
+                }
+
+                if (errors.length() > 0) {
+                    validatedRow.setValid(false);
+                    validatedRow.setErrorMessage(errors.toString().trim());
+                    invalidCount++;
+                } else {
+                    validatedRow.setValid(true);
+                    validatedRow.setErrorMessage("");
+                    validCount++;
+                }
+
+            } catch (Exception e) {
+                validatedRow.setValid(false);
+                validatedRow.setErrorMessage("Lỗi xử lý: " + e.getMessage());
+                invalidCount++;
+            }
+
+            result.addRow(validatedRow);
+        }
+
+        result.setValidRows(validCount);
+        result.setInvalidRows(invalidCount);
+
+        // Tạo file validation result
+        return fileService.generateValidationResultFile(
+                file, "Import Data", result, ImportStudentDTO.class
+        );
+    }
+
+    @Override
+    public byte[] validateTeacherImportFile(MultipartFile file) {
+        // Tương tự như student, nhưng dùng ImportTeacherDTO
+        List<ImportTeacherDTO> importList = fileService.readExcelData(
+                file, "Import Data", ImportTeacherDTO.class
+        );
+
+        ValidationResult<ImportTeacherDTO> result = new ValidationResult<>();
+        result.setTotalRows(importList.size());
+
+        int validCount = 0;
+        int invalidCount = 0;
+
+        for (int i = 0; i < importList.size(); i++) {
+            ImportTeacherDTO record = importList.get(i);
+            ValidationResult.ValidatedRow<ImportTeacherDTO> validatedRow =
+                    new ValidationResult.ValidatedRow<>();
+            validatedRow.setData(record);
+            validatedRow.setRowNumber(i + 2);
+
+            StringBuilder errors = new StringBuilder();
+
+            try {
+                if (record.getEmail() == null || record.getEmail().trim().isEmpty()) {
+                    errors.append("• Email không được để trống\n");
+                } else if (!Pattern.matches(Const.VALIDATE_INPUT.regexEmail, record.getEmail())) {
+                    errors.append("• Email không đúng định dạng\n");
+                }
+
+                if (record.getFullName() == null || record.getFullName().trim().isEmpty()) {
+                    errors.append("• Full Name không được để trống\n");
+                }
+
+                if (record.getRoleName() == null || record.getRoleName().trim().isEmpty()) {
+                    errors.append("• Role Name không được để trống\n");
+                } else if (!EnumUtil.isAllowedEnumValue(RoleName.class, record.getRoleName(),
+                        Set.of(RoleName.TEACHER, RoleName.TEACHING_ASSISTANT))) {
+                    errors.append("• Role Name không hợp lệ (chỉ chấp nhận TEACHER, TEACHING_ASSISTANT)\n");
+                }
+
+                if (record.getPhoneNumber() != null && !record.getPhoneNumber().trim().isEmpty()) {
+                    if (!DataUtil.isValidPhoneNumber(record.getPhoneNumber())) {
+                        errors.append("• Phone Number không đúng định dạng\n");
+                    }
+                }
+
+                if (record.getGender() != null && !record.getGender().trim().isEmpty()) {
+                    if (!EnumUtil.isValidEnum(Gender.class, record.getGender())) {
+                        errors.append("• Gender không hợp lệ\n");
+                    }
+                }
+
+                if (errors.length() > 0) {
+                    validatedRow.setValid(false);
+                    validatedRow.setErrorMessage(errors.toString().trim());
+                    invalidCount++;
+                } else {
+                    validatedRow.setValid(true);
+                    validatedRow.setErrorMessage("");
+                    validCount++;
+                }
+
+            } catch (Exception e) {
+                validatedRow.setValid(false);
+                validatedRow.setErrorMessage("Lỗi xử lý: " + e.getMessage());
+                invalidCount++;
+            }
+
+            result.addRow(validatedRow);
+        }
+
+        result.setValidRows(validCount);
+        result.setInvalidRows(invalidCount);
+
+        return fileService.generateValidationResultFile(
+                file, "Import Data", result, ImportTeacherDTO.class
+        );
     }
 }

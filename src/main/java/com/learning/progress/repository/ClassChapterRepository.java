@@ -2,12 +2,14 @@ package com.learning.progress.repository;
 
 import com.learning.progress.entity.Chapter;
 import com.learning.progress.entity.ClassChapter;
+import com.learning.progress.entity.Clazz;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -23,4 +25,9 @@ public interface ClassChapterRepository extends JpaRepository<ClassChapter, Long
     Optional<ClassChapter> findByIdAndDeletedAtIsNull(Long id);
 
     Optional<ClassChapter> findByClassChapterCode(String classChapterCode);
+
+    boolean existsByClazzAndClassChapterNameIgnoreCaseAndDeletedAtIsNull(Clazz clazz, String classChapterName);
+
+    List<ClassChapter> findByClassChapterCodeIn(Collection<String> chapterCodes);
+
 }

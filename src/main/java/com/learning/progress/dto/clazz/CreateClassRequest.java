@@ -10,6 +10,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
 
 @Data
 @Builder
@@ -26,8 +27,8 @@ public class CreateClassRequest {
     private String avatarUrl; // Có thể null
 
     @NotNull(message = Const.CLASS.START_DATE_REQUIRED)
-    private LocalDate startDate;
+    private OffsetDateTime startDate;
 
     @NotNull(message = Const.CLASS.END_DATE_REQUIRED)
-    private LocalDate endDate;
+    private OffsetDateTime endDate;
 }

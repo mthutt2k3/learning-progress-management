@@ -17,10 +17,6 @@ import java.util.Optional;
 @Repository
 public interface LevelRepository extends JpaRepository<Level, Long> {
 
-    boolean existsByLevelName(String levelName);
-
-    boolean existsByLevelNameAndIdNot(String levelName, Long id);
-
     @Query("SELECT l FROM Level l WHERE l.deletedAt IS NULL ORDER BY l.orderNumber ASC")
     List<Level> findAllActiveOrderByOrderNumberAsc();
 
@@ -72,4 +68,12 @@ public interface LevelRepository extends JpaRepository<Level, Long> {
     Collection<Level> findByLevelNameAndDeletedAtIsNull(String levelName);
 
     List<Level> findAllByStatus(LevelEnum levelEnum);
+
+    @Query("""
+        SELECT l 
+        FROM Level l 
+        WHERE LOWER(l.levelCode) IN :codes
+    """)
+    List<Level> findByLevelCodeInIgnoreCase(@Param("codes") List<String> codes);
+
 }

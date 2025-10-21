@@ -22,7 +22,6 @@ import jakarta.persistence.EntityManager;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -232,7 +231,6 @@ public class AccountServiceImpl implements AccountService {
         user.setPassword(passwordEncoder.encode(password));
         user.setStatus(UserStatus.PENDING);
         user.setMustChangePassword(true);
-        user.setForgotPassword(true);
 
         userRepository.save(user);
         log.info("[{}] Account created for existing user with username: {}", traceId, username);
@@ -256,7 +254,7 @@ public class AccountServiceImpl implements AccountService {
         User user = userRepository.findByIdAndDeletedAtIsNull(id)
                 .orElseThrow(() -> {
                     log.error("[{}] User not found for userId: {}", traceId, id);
-                    return new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value());
+                    return new ApiException(Const.USER.NOT_FOUND, HttpStatus.NOT_FOUND.value());
                 });
         if (!UserStatus.PENDING.equals(user.getStatus())) {
             throw new ApiException(Const.ACCOUNT.FORBIDDEN_EMAIL_CHANGE_ACTIVE_USER, HttpStatus.FORBIDDEN.value());
@@ -285,7 +283,7 @@ public class AccountServiceImpl implements AccountService {
         User targetUser = userRepository.findByIdAndDeletedAtIsNull(id)
                 .orElseThrow(() -> {
                     log.error("[{}] User not found for userId: {}", traceId, id);
-                    return new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.BAD_REQUEST.value());
+                    return new ApiException(Const.USER.NOT_FOUND, HttpStatus.BAD_REQUEST.value());
                 });
 
         Long userIdFromCurrentRequest = jwtUtil.extractUserIdFromCurrentRequest();
@@ -323,7 +321,7 @@ public class AccountServiceImpl implements AccountService {
     public void deleteAccount(Long id) {
         User targetUser = userRepository.findByIdAndDeletedAtIsNull(id)
                 .filter(user -> user.getDeletedAt() == null)
-                .orElseThrow(() -> new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.BAD_REQUEST.value()));
+                .orElseThrow(() -> new ApiException(Const.USER.NOT_FOUND, HttpStatus.BAD_REQUEST.value()));
 
         if(!targetUser.getStatus().equals(UserStatus.PENDING)) {
             throw new ApiException(Const.USER.PENDING_STATUS, HttpStatus.BAD_REQUEST.value());
@@ -333,7 +331,7 @@ public class AccountServiceImpl implements AccountService {
 
         // Lấy thông tin admin đang thao tác
         User currentUser = userRepository.findByIdAndDeletedAtIsNull(userIdFromCurrentRequest)
-                .orElseThrow(() -> new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.UNAUTHORIZED.value()));
+                .orElseThrow(() -> new ApiException(Const.USER.NOT_FOUND, HttpStatus.UNAUTHORIZED.value()));
 
         // Quy tắc Admin
         if (RoleName.ADMIN.equals(targetUser.getRole().getName()) && (RoleName.ADMIN.equals(currentUser.getRole().getName()))) {

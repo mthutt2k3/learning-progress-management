@@ -3,6 +3,7 @@ package com.learning.progress.dto.clazz;
 import com.learning.progress.common.ClassStatus;
 import com.learning.progress.dto.level.LevelInfo;
 import com.learning.progress.dto.syllabus.SyllabusInfo;
+import com.learning.progress.dto.user.TeacherInfo;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -10,6 +11,7 @@ import lombok.NoArgsConstructor;
 
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.util.List;
 
 @Data
 @Builder
@@ -20,6 +22,7 @@ public class ClassDTO {
     private String className;
     private String classCode;
     private SyllabusInfo syllabus;
+    private List<TeacherInfo> teacherInfos;
     private String avatarUrl;
     private ClassStatus status;
     private String createdBy;

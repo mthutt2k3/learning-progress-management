@@ -285,7 +285,6 @@ public class LevelServiceImpl implements LevelService {
         }
 
         // Step 8: Process
-        String currentUser = jwtUtil.extractUsernameFromCurrentRequest();
         OffsetDateTime now = OffsetDateTime.now();
         List<Level> levelsToSave = new ArrayList<>();
         List<LevelDetailsResponse> result = new ArrayList<>();
@@ -296,7 +295,7 @@ public class LevelServiceImpl implements LevelService {
                     .filter(l -> l.getDeletedAt() == null)
                     .orElseThrow(() -> new ApiException("Level not found to delete: " + deleteId, HttpStatus.NOT_FOUND.value()));
             level.setDeletedAt(now);
-            level.setDeletedBy(currentUser);
+            level.setDeletedBy(jwtUtil.extractEmailPrefixFromCurrentRequest());
             levelsToSave.add(level);
         }
 

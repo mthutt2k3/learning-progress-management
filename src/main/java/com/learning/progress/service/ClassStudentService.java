@@ -20,4 +20,5 @@ public interface ClassStudentService {
     byte[] generateStudentImportTemplate();
     String getStudentTemplateSasUrl();
     void importStudentsFromExcel(MultipartFile file);
+    byte[] validateStudentToClassImportFile(MultipartFile file);
 }
