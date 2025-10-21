@@ -1,6 +1,7 @@
 package com.learning.progress.service.impl;
 
 import com.learning.progress.common.Const;
+import com.learning.progress.dto.excel.ValidationResult;
 import com.learning.progress.dto.syllabus.SyllabusDTO;
 import com.learning.progress.dto.syllabus.SyllabusDetailDTO;
 import com.learning.progress.dto.excel.ExportSyllabusDTO;
@@ -452,5 +453,137 @@ public class SyllabusServiceImpl implements SyllabusService {
                 .totalLessons(totalLessons)
                 .chapters(chapterInfos)
                 .build();
+    }
+
+    @Override
+    public byte[] validateSyllabusImportFile(MultipartFile file) {
+        ValidationResult<ImportSyllabusDTO> result = new ValidationResult<>();
+        List<ImportSyllabusDTO> importList;
+
+        // Bước 1: Đọc file - catch lỗi format
+        try {
+            importList = fileService.readExcelData(file, "Import Data", ImportSyllabusDTO.class);
+            result.setTotalRows(importList.size());
+
+            if (importList.isEmpty()) {
+                throw new ApiException("Import file is empty", HttpStatus.BAD_REQUEST.value());
+            }
+        } catch (ApiException e) {
+            // Lỗi khi đọc file
+            result.setTotalRows(0);
+            result.setValidRows(0);
+            result.setInvalidRows(0);
+
+            ValidationResult.ValidatedRow<ImportSyllabusDTO> errorRow =
+                    new ValidationResult.ValidatedRow<>();
+            errorRow.setData(new ImportSyllabusDTO());
+            errorRow.setRowNumber(0);
+            errorRow.setValid(false);
+            errorRow.setErrorMessage("❌ LỖI ĐỌC FILE:\n" + e.getMessage());
+            result.addRow(errorRow);
+
+            return fileService.generateValidationResultFile(
+                    file, "Import Data", result, ImportSyllabusDTO.class
+            );
+        }
+
+        // Bước 2: Fetch all level codes một lần
+        Set<String> levelCodes = importList.stream()
+                .filter(record -> record.getLevelCode() != null && !record.getLevelCode().isBlank())
+                .map(record -> record.getLevelCode().toLowerCase().trim())
+                .collect(Collectors.toSet());
+
+        List<Level> levels = levelRepository.findByLevelCodeInIgnoreCase(new ArrayList<>(levelCodes));
+
+        Map<String, Level> levelMap = levels.stream()
+                .collect(Collectors.toMap(
+                        l -> l.getLevelCode().toLowerCase(),
+                        l -> l
+                ));
+
+        // Bước 3: Validate từng row
+        int validCount = 0;
+        int invalidCount = 0;
+
+        // Track duplicate syllabus names trong file
+        Set<String> seenSyllabusNames = new HashSet<>();
+
+        for (int i = 0; i < importList.size(); i++) {
+            ImportSyllabusDTO record = importList.get(i);
+            ValidationResult.ValidatedRow<ImportSyllabusDTO> validatedRow =
+                    new ValidationResult.ValidatedRow<>();
+            validatedRow.setData(record);
+            validatedRow.setRowNumber(i + 2); // +2 vì header ở row 1
+
+            StringBuilder errors = new StringBuilder();
+
+            try {
+                // Validate Syllabus Name
+                if (StringUtils.isBlank(record.getSyllabusName())) {
+                    errors.append("• Syllabus Name không được để trống\n");
+                } else {
+                    if (record.getSyllabusName().length() > 100) {
+                        errors.append("• Syllabus Name không được vượt quá 100 ký tự\n");
+                    }
+
+                    // Check duplicate trong file
+                    String syllabusNameLower = record.getSyllabusName().toLowerCase().trim();
+                    if (seenSyllabusNames.contains(syllabusNameLower)) {
+                        errors.append("• Syllabus Name bị trùng lặp trong file: ")
+                                .append(record.getSyllabusName()).append("\n");
+                    } else {
+                        seenSyllabusNames.add(syllabusNameLower);
+
+                        // Check duplicate trong DB
+                        if (syllabusRepository.existsBySyllabusNameIgnoreCase(record.getSyllabusName())) {
+                            errors.append("• Syllabus Name đã tồn tại trong hệ thống: ")
+                                    .append(record.getSyllabusName()).append("\n");
+                        }
+                    }
+                }
+
+                // Validate Level Code
+                if (StringUtils.isBlank(record.getLevelCode())) {
+                    errors.append("• Level Code không được để trống\n");
+                } else {
+                    String levelCodeLower = record.getLevelCode().toLowerCase().trim();
+                    Level level = levelMap.get(levelCodeLower);
+
+                    if (level == null) {
+                        errors.append("• Level Code không tồn tại trong hệ thống: ")
+                                .append(record.getLevelCode()).append("\n");
+                    }
+                }
+
+                // Validate Description (optional, nhưng nếu có thì check length)
+                if (record.getDescription() != null && record.getDescription().length() > 1000) {
+                    errors.append("• Description không được vượt quá 1000 ký tự\n");
+                }
+
+                if (errors.length() > 0) {
+                    validatedRow.setValid(false);
+                    validatedRow.setErrorMessage(errors.toString().trim());
+                    invalidCount++;
+                } else {
+                    validatedRow.setValid(true);
+                    validatedRow.setErrorMessage("✓ Hợp lệ");
+                    validCount++;
+                }
+
+            } catch (Exception e) {
+                validatedRow.setValid(false);
+                validatedRow.setErrorMessage("⚠️ Lỗi xử lý dòng: " + e.getMessage());
+                invalidCount++;
+            }
+
+            result.addRow(validatedRow);
+        }
+
+        result.setValidRows(validCount);
+        result.setInvalidRows(invalidCount);
+
+        return fileService.generateValidationResultFile(
+                file, "Import Data", result, ImportSyllabusDTO.class
+        );
     }
 }

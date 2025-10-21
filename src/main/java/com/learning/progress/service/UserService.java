@@ -43,4 +43,7 @@ public interface UserService {
     List<StudentProfileDTO> bulkUpdateStudentStatus(BulkUpdateStatusRequest request);
 
     List<TeacherProfileDTO> bulkUpdateTeacherStatus(BulkUpdateStatusRequest request);
+
+    byte[] validateStudentImportFile(MultipartFile file);
+    byte[] validateTeacherImportFile(MultipartFile file);
 }

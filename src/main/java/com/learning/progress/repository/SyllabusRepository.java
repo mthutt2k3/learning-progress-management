@@ -49,4 +49,7 @@ public interface SyllabusRepository extends JpaRepository<Syllabus, Long> {
     List<Syllabus> findAllBySearchText(@Param("searchText") String searchText);
 
     boolean existsBySyllabusNameIgnoreCase(String syllabusName);
+
+    List<Syllabus> findBySyllabusCodeIn(List<String> syllabusCodes);
+
 }

@@ -19,6 +19,8 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.List;
 
 @RestController
@@ -92,5 +94,28 @@ public class ChapterController {
             @Parameter(description = "Excel file containing chapter data") @RequestParam("file") MultipartFile file) {
         var response = chapterService.importChaptersFromExcel(file);
         return new ResponseEntity<>(DataResponse.success(response, Const.RESULT_MESSAGE_CODE.IMPORT_SUCCESSFUL), HttpStatus.OK);
+    }
+    @PostMapping("/validate-import")
+    @PreAuthorize("hasRole('MANAGER')")
+    @Operation(
+            summary = "Validate Chapter Import File",
+            description = "Validate Excel file without importing. Returns validation result file."
+    )
+    public ResponseEntity<ByteArrayResource> validateChapterImport(
+            @Parameter(description = "Excel file to validate")
+            @RequestParam("file") MultipartFile file) {
+
+        byte[] validationFile = chapterService.validateChapterImportFile(file);
+        ByteArrayResource resource = new ByteArrayResource(validationFile);
+
+        String filename = "Chapter_Validation_" +
+                new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date()) +
+                ".xlsx";
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=" + filename)
+                .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                .contentLength(validationFile.length)
+                .body(resource);
     }
 }

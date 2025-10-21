@@ -20,9 +20,13 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.lang.reflect.Field;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.*;
@@ -1561,5 +1565,314 @@ public class FileServiceImpl implements FileService {
             cell.setCellValue(value.toString());
         }
         cell.setCellStyle(style);
+    }
+
+    @Override
+    public <T> byte[] generateValidationResultFile(MultipartFile originalFile,
+                                                   String sheetName,
+                                                   ValidationResult<T> validationResult,
+                                                   Class<T> clazz) {
+        try (InputStream is = originalFile.getInputStream();
+             Workbook originalWorkbook = WorkbookFactory.create(is)) {
+
+            Sheet originalSheet = originalWorkbook.getSheet(sheetName);
+            if (originalSheet == null) {
+                throw new ApiException("Sheet not found: " + sheetName, HttpStatus.BAD_REQUEST.value());
+            }
+
+            // Tạo workbook mới
+            try (Workbook newWorkbook = new XSSFWorkbook();
+                 ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+
+                ExportStyleConfig styleConfig = ExportStyleConfig.createDefaultStyle(newWorkbook);
+
+                // Tạo validation styles
+                CellStyle validStyle = newWorkbook.createCellStyle();
+                validStyle.setFillForegroundColor(IndexedColors.LIGHT_GREEN.getIndex());
+                validStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+                validStyle.setBorderBottom(BorderStyle.THIN);
+                validStyle.setBorderTop(BorderStyle.THIN);
+                validStyle.setBorderLeft(BorderStyle.THIN);
+                validStyle.setBorderRight(BorderStyle.THIN);
+
+                CellStyle invalidStyle = newWorkbook.createCellStyle();
+                invalidStyle.setFillForegroundColor(IndexedColors.LIGHT_ORANGE.getIndex());
+                invalidStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+                invalidStyle.setBorderBottom(BorderStyle.THIN);
+                invalidStyle.setBorderTop(BorderStyle.THIN);
+                invalidStyle.setBorderLeft(BorderStyle.THIN);
+                invalidStyle.setBorderRight(BorderStyle.THIN);
+
+                CellStyle errorTextStyle = newWorkbook.createCellStyle();
+                errorTextStyle.cloneStyleFrom(invalidStyle);
+                errorTextStyle.setWrapText(true);
+                errorTextStyle.setVerticalAlignment(VerticalAlignment.TOP);
+                Font errorFont = newWorkbook.createFont();
+                errorFont.setColor(IndexedColors.RED.getIndex());
+                errorTextStyle.setFont(errorFont);
+
+                // Sheet 1: Summary
+                Sheet summarySheet = newWorkbook.createSheet("Validation Summary");
+                createValidationSummarySheet(summarySheet, validationResult, styleConfig);
+
+                // Sheet 2: Data with Validation
+                Sheet dataSheet = newWorkbook.createSheet("Import Data");
+                createValidationDataSheet(dataSheet, originalSheet, validationResult, clazz,
+                        styleConfig, validStyle, invalidStyle, errorTextStyle);
+
+                newWorkbook.write(out);
+                return out.toByteArray();
+            }
+
+        } catch (IOException e) {
+            throw new ApiException("Failed to generate validation file: " + e.getMessage(),
+                    HttpStatus.INTERNAL_SERVER_ERROR.value());
+        }
+    }
+
+    @Override
+    public <T> byte[] generateValidationResultFile(String originalFileName,
+                                                   String sheetName,
+                                                   ValidationResult<T> validationResult,
+                                                   Class<T> clazz) {
+        try (Workbook originalWorkbook = WorkbookFactory.create(
+                new ByteArrayInputStream(Files.readAllBytes(Paths.get(originalFileName))))) {
+
+            // Đọc original file để clone format
+            Sheet originalSheet = originalWorkbook.getSheet(sheetName);
+            if (originalSheet == null) {
+                throw new ApiException("Sheet not found: " + sheetName, HttpStatus.BAD_REQUEST.value());
+            }
+
+            // Tạo workbook mới
+            try (Workbook newWorkbook = new XSSFWorkbook();
+                 ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+
+                // Copy styles
+                ExportStyleConfig styleConfig = ExportStyleConfig.createDefaultStyle(newWorkbook);
+
+                // Tạo thêm styles cho validation
+                CellStyle validStyle = newWorkbook.createCellStyle();
+                validStyle.setFillForegroundColor(IndexedColors.LIGHT_GREEN.getIndex());
+                validStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+                validStyle.setBorderBottom(BorderStyle.THIN);
+                validStyle.setBorderTop(BorderStyle.THIN);
+                validStyle.setBorderLeft(BorderStyle.THIN);
+                validStyle.setBorderRight(BorderStyle.THIN);
+
+                CellStyle invalidStyle = newWorkbook.createCellStyle();
+                invalidStyle.setFillForegroundColor(IndexedColors.LIGHT_ORANGE.getIndex());
+                invalidStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+                invalidStyle.setBorderBottom(BorderStyle.THIN);
+                invalidStyle.setBorderTop(BorderStyle.THIN);
+                invalidStyle.setBorderLeft(BorderStyle.THIN);
+                invalidStyle.setBorderRight(BorderStyle.THIN);
+
+                CellStyle errorTextStyle = newWorkbook.createCellStyle();
+                errorTextStyle.cloneStyleFrom(invalidStyle);
+                errorTextStyle.setWrapText(true);
+                errorTextStyle.setVerticalAlignment(VerticalAlignment.TOP);
+                Font errorFont = newWorkbook.createFont();
+                errorFont.setColor(IndexedColors.RED.getIndex());
+                errorTextStyle.setFont(errorFont);
+
+                // ========== SHEET 1: Summary ==========
+                Sheet summarySheet = newWorkbook.createSheet("Validation Summary");
+                createValidationSummarySheet(summarySheet, validationResult, styleConfig);
+
+                // ========== SHEET 2: Data with Validation ==========
+                Sheet dataSheet = newWorkbook.createSheet("Import Data");
+                createValidationDataSheet(dataSheet, originalSheet, validationResult, clazz,
+                        styleConfig, validStyle, invalidStyle, errorTextStyle);
+
+                newWorkbook.write(out);
+                return out.toByteArray();
+            }
+
+        } catch (IOException e) {
+            throw new ApiException("Failed to generate validation file: " + e.getMessage(),
+                    HttpStatus.INTERNAL_SERVER_ERROR.value());
+        }
+    }
+
+    private <T> void createValidationSummarySheet(Sheet sheet,
+                                                  ValidationResult<T> result,
+                                                  ExportStyleConfig styleConfig) {
+        int currentRow = 0;
+
+        // Title
+        Row titleRow = sheet.createRow(currentRow++);
+        titleRow.setHeightInPoints(30);
+        Cell titleCell = titleRow.createCell(0);
+        titleCell.setCellValue("KẾT QUẢ VALIDATION FILE IMPORT");
+        titleCell.setCellStyle(styleConfig.getTitleStyle());
+        sheet.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(0, 0, 0, 3));
+
+        currentRow++;
+
+        // Summary info
+        CellStyle labelStyle = styleConfig.getSummaryStyle();
+        Font labelFont = sheet.getWorkbook().createFont();
+        labelFont.setBold(true);
+        labelStyle.setFont(labelFont);
+
+        CellStyle valueStyle = styleConfig.getDataStyle();
+
+        String[][] summary = {
+                {"Tổng số dòng:", String.valueOf(result.getTotalRows())},
+                {"Số dòng hợp lệ:", String.valueOf(result.getValidRows())},
+                {"Số dòng lỗi:", String.valueOf(result.getInvalidRows())},
+                {"Tỷ lệ hợp lệ:", String.format("%.2f%%",
+                        (result.getValidRows() * 100.0 / result.getTotalRows()))}
+        };
+
+        for (String[] pair : summary) {
+            Row row = sheet.createRow(currentRow++);
+
+            Cell labelCell = row.createCell(0);
+            labelCell.setCellValue(pair[0]);
+            labelCell.setCellStyle(labelStyle);
+
+            Cell valueCell = row.createCell(1);
+            valueCell.setCellValue(pair[1]);
+            valueCell.setCellStyle(valueStyle);
+
+            // Highlight số dòng lỗi
+            if (pair[0].equals("Số dòng lỗi:")) {
+                CellStyle errorValueStyle = sheet.getWorkbook().createCellStyle();
+                errorValueStyle.cloneStyleFrom(valueStyle);
+                Font errorFont = sheet.getWorkbook().createFont();
+                errorFont.setColor(IndexedColors.RED.getIndex());
+                errorFont.setBold(true);
+                errorValueStyle.setFont(errorFont);
+                valueCell.setCellStyle(errorValueStyle);
+            }
+        }
+
+        currentRow++;
+
+        // Instructions
+        Row instructionRow = sheet.createRow(currentRow++);
+        Cell instructionCell = instructionRow.createCell(0);
+        instructionCell.setCellValue("📋 Hướng dẫn:");
+        instructionCell.setCellStyle(labelStyle);
+
+        String[] instructions = {
+                "• Các dòng có nền XANH LÁ là dữ liệu hợp lệ và ĐÃ ĐƯỢC IMPORT",
+                "• Các dòng có nền CAM là dữ liệu có lỗi và CHƯA ĐƯỢC IMPORT",
+                "• Cột 'Validation Status' và 'Error Details' hiển thị chi tiết lỗi",
+                "• Sửa lỗi trong file này và import lại nếu cần"
+        };
+
+        for (String instruction : instructions) {
+            Row row = sheet.createRow(currentRow++);
+            Cell cell = row.createCell(0);
+            cell.setCellValue(instruction);
+            sheet.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(
+                    currentRow - 1, currentRow - 1, 0, 3));
+        }
+
+        // Set column widths
+        sheet.setColumnWidth(0, 8000);
+        sheet.setColumnWidth(1, 8000);
+    }
+
+    private <T> void createValidationDataSheet(Sheet newSheet,
+                                               Sheet originalSheet,
+                                               ValidationResult<T> validationResult,
+                                               Class<T> clazz,
+                                               ExportStyleConfig styleConfig,
+                                               CellStyle validStyle,
+                                               CellStyle invalidStyle,
+                                               CellStyle errorTextStyle) {
+        // 1. Copy header từ original sheet
+        Row originalHeaderRow = originalSheet.getRow(0);
+        Row newHeaderRow = newSheet.createRow(0);
+        newHeaderRow.setHeightInPoints(25);
+
+        int originalColCount = originalHeaderRow.getLastCellNum();
+
+        // Copy original headers
+        for (int i = 0; i < originalColCount; i++) {
+            Cell originalCell = originalHeaderRow.getCell(i);
+            Cell newCell = newHeaderRow.createCell(i);
+            if (originalCell != null) {
+                newCell.setCellValue(originalCell.getStringCellValue());
+            }
+            newCell.setCellStyle(styleConfig.getHeaderStyle());
+        }
+
+        // Add validation columns
+        Cell statusHeaderCell = newHeaderRow.createCell(originalColCount);
+        statusHeaderCell.setCellValue("Validation Status");
+        statusHeaderCell.setCellStyle(styleConfig.getHeaderStyle());
+
+        Cell errorHeaderCell = newHeaderRow.createCell(originalColCount + 1);
+        errorHeaderCell.setCellValue("Error Details");
+        errorHeaderCell.setCellStyle(styleConfig.getHeaderStyle());
+
+        // 2. Fill data với validation status
+        int rowIndex = 1;
+        for (ValidationResult.ValidatedRow<T> validatedRow : validationResult.getRows()) {
+            Row newRow = newSheet.createRow(rowIndex);
+
+            // Copy data từ original object
+            T data = validatedRow.getData();
+            Field[] fields = clazz.getDeclaredFields();
+
+            for (int colIndex = 0; colIndex < fields.length; colIndex++) {
+                Cell newCell = newRow.createCell(colIndex);
+
+                try {
+                    Field field = fields[colIndex];
+                    field.setAccessible(true);
+                    Object value = field.get(data);
+
+                    if (value != null) {
+                        if (value instanceof Number) {
+                            newCell.setCellValue(((Number) value).doubleValue());
+                        } else if (value instanceof Date) {
+                            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
+                            newCell.setCellValue(sdf.format((Date) value));
+                        } else {
+                            newCell.setCellValue(value.toString());
+                        }
+                    }
+
+                    // Apply style dựa trên validation status
+                    newCell.setCellStyle(validatedRow.isValid() ? validStyle : invalidStyle);
+
+                } catch (IllegalAccessException e) {
+                    newCell.setCellValue("");
+                }
+            }
+
+            // Thêm validation status
+            Cell statusCell = newRow.createCell(originalColCount);
+            statusCell.setCellValue(validatedRow.isValid() ? "✓ Valid" : "✗ Invalid");
+            statusCell.setCellStyle(validatedRow.isValid() ? validStyle : invalidStyle);
+
+            // Thêm error details
+            Cell errorCell = newRow.createCell(originalColCount + 1);
+            errorCell.setCellValue(validatedRow.getErrorMessage());
+            errorCell.setCellStyle(validatedRow.isValid() ? validStyle : errorTextStyle);
+
+            // Auto height cho row có error dài
+            if (!validatedRow.isValid() && validatedRow.getErrorMessage().length() > 50) {
+                newRow.setHeight((short) -1);
+            }
+
+            rowIndex++;
+        }
+
+        // 3. Set column widths
+        for (int i = 0; i < originalColCount; i++) {
+            newSheet.setColumnWidth(i, 6000);
+        }
+        newSheet.setColumnWidth(originalColCount, 4000); // Status column
+        newSheet.setColumnWidth(originalColCount + 1, 20000); // Error details column
+
+        // 4. Freeze panes
+        newSheet.createFreezePane(0, 1);
     }
 }
