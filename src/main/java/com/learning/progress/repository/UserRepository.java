@@ -27,6 +27,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
       AND (:text IS NULL OR 
            (LOWER(u.fullName) LIKE LOWER(CONCAT('%', CAST(:text AS string), '%'))
          OR LOWER(u.email) LIKE LOWER(CONCAT('%', CAST(:text AS string), '%'))))
+         AND u.deletedAt is null
 """)
     Page<User> findByRoleNameInAndStatusInAndSearchText(
             @Param("roles") List<RoleName> roles,
@@ -84,4 +85,6 @@ public interface UserRepository extends JpaRepository<User, Long> {
     List<User> findByUserNameInIgnoreCase(@Param("userNames") List<String> userNames);
 
     Page<User> findAllByDeletedAtIsNull(Pageable pageable);
+
+    List<User> findAllByIdInAndDeletedAtIsNull(List<Long> userIds);
 }

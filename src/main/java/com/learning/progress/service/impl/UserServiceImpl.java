@@ -143,13 +143,14 @@ public class UserServiceImpl implements UserService {
                 .orElseThrow(() -> new ApiException(Const.ROLE.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
         RoleName newRoleName = role.getName();
 
-        User user = userRepository.findById(userId)
+        User user = userRepository.findByIdAndDeletedAtIsNull(userId)
                 .orElseThrow(() -> new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+
         RoleName oldRoleName = user.getRole().getName();
 
         // ✅ Chặn STUDENT -> TEST_TAKER
-        if (oldRoleName == RoleName.STUDENT && newRoleName == RoleName.TEST_TAKER) {
-            throw new ApiException(Const.STUDENT.INVALID_ROLE_UPDATE, HttpStatus.BAD_REQUEST.value());
+        if (oldRoleName == RoleName.STUDENT && newRoleName == RoleName.TEST_TAKER && user.getStatus() != UserStatus.PENDING) {
+            throw new ApiException(Const.STUDENT.INVALID_ROLE_STUDENT_UPDATE, HttpStatus.BAD_REQUEST.value());
         }
 
         // ✅ Nếu đổi sang STUDENT thì phải có levelId
@@ -182,8 +183,8 @@ public class UserServiceImpl implements UserService {
 
     @Override
     @Transactional
-    public StudentProfileDTO updateStudentStatus(Long userId, UserStatus status) {
-        User user = userRepository.findById(userId)
+    public StudentProfileDTO updateStudentStatus(Long userId, UserStatus newStatus) {
+        User user = userRepository.findByIdAndDeletedAtIsNull(userId)
                 .orElseThrow(() -> new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         appValidator.validateAllowedEnumValue(
@@ -191,8 +192,15 @@ public class UserServiceImpl implements UserService {
                 user.getRole().getName().name(),
                 Set.of(RoleName.STUDENT, RoleName.TEST_TAKER)
         );
-
-        user.setStatus(status);
+        UserStatus oldStatus = user.getStatus();
+        // Quy tắc trạng thái
+        if (UserStatus.PENDING.equals(oldStatus)) {
+            throw new ApiException(Const.ACCOUNT.CANNOT_CHANGE_STATUS_TO_ACTIVE_MANUALLY, HttpStatus.FORBIDDEN.value());
+        }
+        if (UserStatus.PENDING.equals(newStatus)) {
+            throw new ApiException(Const.ACCOUNT.CANNOT_CHANGE_STATUS_TO_PENDING, HttpStatus.FORBIDDEN.value());
+        }
+        user.setStatus(newStatus);
         userRepository.save(user);
 
         return mapToStudentProfileDTO(user);
@@ -231,7 +239,7 @@ public class UserServiceImpl implements UserService {
                 .collect(Collectors.toList());
 
         return DataResponse.<List<StudentProfileDTO>>builder()
-                .traceId(org.slf4j.MDC.get("traceId"))
+                .traceId(TraceUtil.getTraceId())
                 .success(true)
                 .message(Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL)
                 .data(responses)
@@ -277,9 +285,9 @@ public class UserServiceImpl implements UserService {
                 .collect(Collectors.toList());
 
         return DataResponse.<List<TeacherProfileDTO>>builder()
-                .traceId(org.slf4j.MDC.get("traceId"))
+                .traceId(TraceUtil.getTraceId())
                 .success(true)
-                .message("Successful")
+                .message(Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL)
                 .data(responses)
                 .timestamp(java.time.LocalDateTime.now())
                 .page(page)
@@ -307,6 +315,7 @@ public class UserServiceImpl implements UserService {
 
         User user = userMapper.toUser(request);
         user.setRole(role);
+        user.setStatus(UserStatus.PENDING);
 
         userRepository.saveAndFlush(user);
         entityManager.clear();
@@ -334,8 +343,15 @@ public class UserServiceImpl implements UserService {
         Role role = roleRepository.findByName(RoleName.valueOf(request.getRoleName().toUpperCase()))
                 .orElseThrow(() -> new ApiException(Const.ROLE.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
-        User user = userRepository.findById(userId)
+        User user = userRepository.findByIdAndDeletedAtIsNull(userId)
                 .orElseThrow(() -> new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+
+        RoleName oldRoleName = user.getRole().getName();
+        RoleName newRoleName = role.getName();
+
+        if (oldRoleName == RoleName.TEACHER && newRoleName == RoleName.TEACHING_ASSISTANT && user.getStatus() != UserStatus.PENDING) {
+            throw new ApiException(Const.STUDENT.INVALID_ROLE_TEACHER_UPDATE, HttpStatus.BAD_REQUEST.value());
+        }
 
         User updatedUser = userMapper.toUser(request);
         user.setRole(role);
@@ -361,15 +377,23 @@ public class UserServiceImpl implements UserService {
             throw new ApiException("Invalid status: " + status, HttpStatus.BAD_REQUEST.value());
         }
 
-        User user = userRepository.findById(userId)
+        User user = userRepository.findByIdAndDeletedAtIsNull(userId)
                 .orElseThrow(() -> new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
         appValidator.validateAllowedEnumValue(
                 RoleName.class,
                 user.getRole().getName().name(),
                 Set.of(RoleName.TEACHER, RoleName.TEACHING_ASSISTANT)
         );
-
-        user.setStatus(UserStatus.valueOf(status));
+        UserStatus oldStatus = user.getStatus();
+        UserStatus newStatus = UserStatus.valueOf(status);
+        // Quy tắc trạng thái
+        if (UserStatus.PENDING.equals(oldStatus)) {
+            throw new ApiException(Const.ACCOUNT.CANNOT_CHANGE_STATUS_TO_ACTIVE_MANUALLY, HttpStatus.FORBIDDEN.value());
+        }
+        if (UserStatus.PENDING.equals(newStatus)) {
+            throw new ApiException(Const.ACCOUNT.CANNOT_CHANGE_STATUS_TO_PENDING, HttpStatus.FORBIDDEN.value());
+        }
+        user.setStatus(newStatus);
         userRepository.save(user);
 
         return mapToTeacherProfileDTO(user);
@@ -386,7 +410,7 @@ public class UserServiceImpl implements UserService {
             user = userRepository.findByUserNameAndDeletedAtIsNull(username)
                     .orElseThrow(() -> new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
         } else {
-            user = userRepository.findById(userId)
+            user = userRepository.findByIdAndDeletedAtIsNull(userId)
                     .orElseThrow(() -> new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
         }
 
@@ -476,7 +500,7 @@ public class UserServiceImpl implements UserService {
                 .orElseThrow(() -> new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         // Lấy user mục tiêu dựa trên userId được truyền vào
-        User targetUser = userRepository.findById(userId)
+        User targetUser = userRepository.findByIdAndDeletedAtIsNull(userId)
                 .orElseThrow(() -> new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         boolean isSelf = currentUser.getId().equals(userId);
@@ -542,7 +566,7 @@ public class UserServiceImpl implements UserService {
         Long userId = claims.getUserId();
         String newEmail = claims.getNewEmail();
 
-        User user = userRepository.findById(userId)
+        User user = userRepository.findByIdAndDeletedAtIsNull(userId)
                 .orElseThrow(() -> new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         user.setEmail(newEmail);
@@ -736,7 +760,7 @@ public class UserServiceImpl implements UserService {
         }
 
         // Tìm user
-        User user = userRepository.findById(userId)
+        User user = userRepository.findByIdAndDeletedAtIsNull(userId)
                 .orElseThrow(() -> new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         // Upload ảnh lên Blob
@@ -1074,17 +1098,15 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional
     public List<StudentProfileDTO> bulkUpdateStudentStatus(BulkUpdateStatusRequest request) {
-        String traceId = org.slf4j.MDC.get("traceId");
+        String traceId = TraceUtil.getTraceId();
         log.info("[{}] Bulk updating student status for {} users to {}",
                 traceId, request.getUserIds().size(), request.getTargetStatus());
 
         // Validate target status
         UserStatus targetStatus = request.getTargetStatus();
-        if (targetStatus == UserStatus.PENDING) {
-            throw new ApiException(
-                    Const.ACCOUNT.CANNOT_CHANGE_STATUS_TO_PENDING,
-                    HttpStatus.BAD_REQUEST.value()
-            );
+
+        if (UserStatus.PENDING.equals(targetStatus)) {
+            throw new ApiException(Const.ACCOUNT.CANNOT_CHANGE_STATUS_TO_PENDING, HttpStatus.FORBIDDEN.value());
         }
 
         // Validate không có duplicate IDs
@@ -1097,7 +1119,8 @@ public class UserServiceImpl implements UserService {
         }
 
         // Lấy tất cả users cùng lúc
-        List<User> users = userRepository.findAllById(request.getUserIds());
+        List<User> users = userRepository.findAllByIdInAndDeletedAtIsNull(request.getUserIds());
+
 
         // Validate tất cả IDs tồn tại
         Set<Long> foundIds = users.stream()
@@ -1169,7 +1192,7 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional
     public List<TeacherProfileDTO> bulkUpdateTeacherStatus(BulkUpdateStatusRequest request) {
-        String traceId = org.slf4j.MDC.get("traceId");
+        String traceId = TraceUtil.getTraceId();
         log.info("[{}] Bulk updating teacher status for {} users to {}",
                 traceId, request.getUserIds().size(), request.getTargetStatus());
 

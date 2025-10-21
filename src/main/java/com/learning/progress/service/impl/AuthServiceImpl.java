@@ -21,6 +21,7 @@ import com.learning.progress.service.EmailService;
 import com.learning.progress.service.TokenService;
 import com.learning.progress.util.DataUtil;
 import com.learning.progress.util.JwtUtil;
+import com.learning.progress.util.TraceUtil;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -78,7 +79,7 @@ public class AuthServiceImpl implements AuthService {
      */
     @Override
     public LoginResponse login(LoginRequest loginRequest) {
-        String traceId = MDC.get("traceId");
+        String traceId = TraceUtil.getTraceId();
         log.info("[{}] Login attempt for username: {}, role: {}", traceId, loginRequest.getUsername(), loginRequest.getLoginRole());
 
         // Fetch user by username
@@ -156,7 +157,7 @@ public class AuthServiceImpl implements AuthService {
      */
     @Override
     public String requestResetPasswordByEmail(ResetPasswordRequest request) {
-        String traceId = MDC.get("traceId");
+        String traceId = TraceUtil.getTraceId();
         log.info("[{}] Password reset requested for username: {}", traceId, request.getUserName());
 
         // Fetch user by username
@@ -198,7 +199,7 @@ public class AuthServiceImpl implements AuthService {
      */
     @Override
     public String resetPasswordByToken(ConfirmResetPasswordRequest request) {
-        String traceId = MDC.get("traceId");
+        String traceId = TraceUtil.getTraceId();
         log.info("[{}] Confirming password reset with token: {}", traceId, request.getToken());
 
         // ✅ Validate token + user
@@ -240,7 +241,7 @@ public class AuthServiceImpl implements AuthService {
      */
     @Override
     public LoginResponse changePassword(ChangePasswordRequest request) {
-        String traceId = MDC.get("traceId");
+        String traceId = TraceUtil.getTraceId();
         String username = jwtUtil.extractUsernameFromCurrentRequest();
         log.info("[{}] Password change requested for username: {}", traceId, username);
 
@@ -299,7 +300,7 @@ public class AuthServiceImpl implements AuthService {
      */
     @Override
     public ResetPasswordByTeacherResponse resetPasswordByTeacher(String username) {
-        String traceId = MDC.get("traceId");
+        String traceId = TraceUtil.getTraceId();
         log.info("[{}] Teacher password reset requested for username: {}", traceId, username);
 
         // Validate username
@@ -346,7 +347,7 @@ public class AuthServiceImpl implements AuthService {
      */
     @Override
     public Map<String, String> refreshAccessToken(String refreshToken) {
-        String traceId = MDC.get("traceId");
+        String traceId = TraceUtil.getTraceId();
         log.info("[{}] Refresh token request", traceId);
 
         // Validate refresh token
@@ -386,7 +387,7 @@ public class AuthServiceImpl implements AuthService {
      */
     @Override
     public void logout(String refreshTokenParam) {
-        String traceId = MDC.get("traceId");
+        String traceId = TraceUtil.getTraceId();
         log.info("[{}] Logout request", traceId);
 
         // Validate refresh token

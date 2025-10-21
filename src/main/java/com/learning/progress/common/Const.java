@@ -14,7 +14,9 @@ public class Const {
         public static final String PARENT_NAME_REQUIRED = "Parent name is required";
         public static final String PARENT_PHONE_REQUIRED = "Parent phone number is required";
 
-        public static final String INVALID_ROLE_UPDATE = "Role update from STUDENT to TEST_TAKER is not allowed.";
+        public static final String INVALID_ROLE_STUDENT_UPDATE = "Role update from STUDENT to TEST_TAKER is not allowed.";
+        public static final String INVALID_ROLE_TEACHER_UPDATE = "Role update from TEACHER to TEACHING_ASSISTANT is not allowed.";
+
 
     }
     public static class DOB {
@@ -92,6 +94,9 @@ public class Const {
     public static class SORT {
         public static final String INVALID_SORT_BY = "Invalid sort field: %s. Valid fields are: %s";
         public static final String INVALID_SORT_DIR = "Invalid sort direction: %s. Valid values are: asc, desc";
+    }
+    public static class LOGGING {
+        public static final String TRACE_ID = "traceId";
     }
 
     public static class RESULT_MESSAGE_CODE {

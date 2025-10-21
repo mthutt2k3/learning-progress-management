@@ -1,5 +1,6 @@
 package com.learning.progress.service.impl;
 
+import com.learning.progress.common.Const;
 import com.learning.progress.dto.syllabus.SyllabusDTO;
 import com.learning.progress.dto.syllabus.SyllabusDetailDTO;
 import com.learning.progress.dto.excel.ExportSyllabusDTO;
@@ -20,6 +21,7 @@ import com.learning.progress.service.FileService;
 import com.learning.progress.service.SyllabusService;
 import com.learning.progress.util.DataUtil;
 import com.learning.progress.util.JwtUtil;
+import com.learning.progress.util.TraceUtil;
 import com.vladmihalcea.hibernate.util.StringUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -196,7 +198,7 @@ public class SyllabusServiceImpl implements SyllabusService {
                 .collect(Collectors.toList());
 
         return DataResponse.<List<SyllabusDTO>>builder()
-                .traceId(org.slf4j.MDC.get("traceId"))
+                .traceId(TraceUtil.getTraceId())
                 .success(true)
                 .message("Successful")
                 .data(responses)
