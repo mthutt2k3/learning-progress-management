@@ -2,6 +2,7 @@ package com.learning.progress.exception;
 
 import com.learning.progress.common.RoleName;
 import com.learning.progress.dto.DataResponse;
+import com.learning.progress.util.TraceUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
 import org.springframework.http.HttpStatus;
@@ -27,7 +28,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ApiException.class)
     public ResponseEntity<DataResponse<Object>> handleApiException(ApiException ex, WebRequest request) {
         DataResponse<Object> response = DataResponse.builder()
-                .traceId(MDC.get("traceId"))
+                .traceId(TraceUtil.getTraceId())
                 .success(false)
                 .error(ex.getMessage())
                 .status(ex.getStatus())
@@ -41,7 +42,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<DataResponse<Object>> handleGenericException(Exception ex, WebRequest request) {
         log.error("Unexpected error: {}", ex.getMessage(), ex);
         DataResponse<Object> response = DataResponse.builder()
-                .traceId(MDC.get("traceId"))
+                .traceId(TraceUtil.getTraceId())
                 .success(false)
                 .error("Internal server error: " + ex.getMessage())
                 .status(HttpStatus.INTERNAL_SERVER_ERROR.value())
@@ -52,11 +53,11 @@ public class GlobalExceptionHandler {
     }
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     public ResponseEntity<DataResponse<Object>> handleMethodArgumentTypeMismatchException(MethodArgumentTypeMismatchException ex, WebRequest request) {
-        log.error("Invalid input: {} | traceId={}", ex.getMessage(), MDC.get("traceId"));
+        log.error("Invalid input: {} | traceId={}", ex.getMessage(), TraceUtil.getTraceId());
         String errorMessage = String.format("Invalid value '%s' for parameter '%s'. Expected one of: %s",
                 ex.getValue(), ex.getName(), Arrays.toString(RoleName.values()));
         DataResponse<Object> response = DataResponse.builder()
-                .traceId(MDC.get("traceId"))
+                .traceId(TraceUtil.getTraceId())
                 .success(false)
                 .error(errorMessage)
                 .status(HttpStatus.BAD_REQUEST.value())
@@ -69,7 +70,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(AuthenticationException.class)
     public ResponseEntity<DataResponse<Object>> handleAuthenticationException(AuthenticationException ex, WebRequest request) {
         DataResponse<Object> response = DataResponse.builder()
-                .traceId(MDC.get("traceId"))
+                .traceId(TraceUtil.getTraceId())
                 .success(false)
                 .error("Authentication failed: " + ex.getMessage())
                 .status(HttpStatus.UNAUTHORIZED.value())
@@ -90,7 +91,7 @@ public class GlobalExceptionHandler {
                 .orElse("Validation error");
 
         DataResponse<Object> response = DataResponse.builder()
-                .traceId(MDC.get("traceId"))
+                .traceId(TraceUtil.getTraceId())
                 .success(false)
                 .error(errorMessage)  // ✅ Không cần kèm prefix
                 .status(HttpStatus.BAD_REQUEST.value())
@@ -106,7 +107,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<DataResponse<Object>> handleAccessDeniedException(AccessDeniedException ex, WebRequest request) {
         DataResponse<Object> response = DataResponse.builder()
-                .traceId(MDC.get("traceId"))
+                .traceId(TraceUtil.getTraceId())
                 .success(false)
                 .error("Access denied: " + ex.getMessage())
                 .status(HttpStatus.FORBIDDEN.value())

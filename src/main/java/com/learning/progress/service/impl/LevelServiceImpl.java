@@ -14,6 +14,7 @@ import com.learning.progress.service.LevelService;
 import com.learning.progress.util.AppValidator;
 import com.learning.progress.util.DataUtil;
 import com.learning.progress.util.JwtUtil;
+import com.learning.progress.util.TraceUtil;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validator;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -60,7 +61,7 @@ public class LevelServiceImpl implements LevelService {
         );
 
         return DataResponse.<List<LevelDetailsResponse>>builder()
-                .traceId(org.slf4j.MDC.get("traceId"))
+                .traceId(TraceUtil.getTraceId())
                 .success(true)
                 .message(Const.LEVEL.LIST_RETRIEVED)
                 .data(levelPage.getContent())
@@ -83,7 +84,7 @@ public class LevelServiceImpl implements LevelService {
         );
 
         return DataResponse.<List<LevelDetailsResponse>>builder()
-                .traceId(org.slf4j.MDC.get("traceId"))
+                .traceId(TraceUtil.getTraceId())
                 .success(true)
                 .message(Const.LEVEL.LIST_RETRIEVED)
                 .data(levelPage.getContent())

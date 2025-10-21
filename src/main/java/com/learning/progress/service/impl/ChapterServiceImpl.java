@@ -1,5 +1,6 @@
 package com.learning.progress.service.impl;
 
+import com.learning.progress.common.Const;
 import com.learning.progress.dto.chapter.ChapterDTO;
 import com.learning.progress.dto.DataResponse;
 import com.learning.progress.dto.excel.ImportChapterDTO;
@@ -15,6 +16,7 @@ import com.learning.progress.service.ChapterService;
 import com.learning.progress.service.FileService;
 import com.learning.progress.util.DataUtil;
 import com.learning.progress.util.JwtUtil;
+import com.learning.progress.util.TraceUtil;
 import jakarta.validation.ConstraintViolation;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -82,7 +84,7 @@ public class ChapterServiceImpl implements ChapterService {
                 .collect(Collectors.toList());
 
         return DataResponse.<List<ChapterDTO>>builder()
-                .traceId(org.slf4j.MDC.get("traceId"))
+                .traceId(TraceUtil.getTraceId())
                 .success(true)
                 .message("Thành công")
                 .data(responses)

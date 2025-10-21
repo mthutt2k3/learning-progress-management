@@ -17,6 +17,7 @@ import com.learning.progress.repository.UserRepository;
 import com.learning.progress.service.ClassTeacherService;
 import com.learning.progress.util.AppValidator;
 import com.learning.progress.util.JwtUtil;
+import com.learning.progress.util.TraceUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -74,7 +75,7 @@ public class ClassTeacherServiceImpl implements ClassTeacherService {
                 .collect(Collectors.toList());
 
         return DataResponse.<List<ClassTeacherResponse>>builder()
-                .traceId(org.slf4j.MDC.get("traceId"))
+                .traceId(TraceUtil.getTraceId())
                 .success(true)
                 .message(Const.CLASS_TEACHER.LIST_RETRIEVED)
                 .data(teachers)
@@ -236,7 +237,7 @@ public class ClassTeacherServiceImpl implements ClassTeacherService {
             throw new ApiException(Const.CLASS.DELETED, HttpStatus.BAD_REQUEST.value());
         }
 
-        User user = userRepository.findById(userId)
+        User user = userRepository.findByIdAndDeletedAtIsNull(userId)
                 .orElseThrow(() -> new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         if (!UserStatus.ACTIVE.equals(user.getStatus())) {

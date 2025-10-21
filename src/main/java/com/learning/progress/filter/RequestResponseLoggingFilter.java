@@ -1,5 +1,6 @@
 package com.learning.progress.filter;
 
+import com.learning.progress.common.Const;
 import com.learning.progress.util.Snowflake;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.Logger;
@@ -42,7 +43,7 @@ public class RequestResponseLoggingFilter extends OncePerRequestFilter {
             throws ServletException, IOException {
 
         String traceId = snowflake.nextId();
-        MDC.put("traceId", traceId); // Lưu traceId vào MDC
+        MDC.put(Const.LOGGING.TRACE_ID, traceId); // Lưu traceId vào MDC
 
         try {
             String clientIp = request.getHeader("X-Forwarded-For");
