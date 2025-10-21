@@ -101,7 +101,7 @@ public class ManagerClassServiceImpl implements ClassService {
         Clazz clazz = new Clazz();
         clazz.setClassName(request.getClassName());
         clazz.setStartDate(request.getStartDate());
-        clazz.setStartDate(request.getEndDate());
+        clazz.setEndDate(request.getEndDate());
         clazz.setSyllabus(syllabus);
         clazz.setAvatarUrl(request.getAvatarUrl());
         OffsetDateTime today = OffsetDateTime.now();
