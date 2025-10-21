@@ -26,19 +26,11 @@ public interface ClassRepository extends JpaRepository<Clazz, Long> {
               OR LOWER(c.classCode) LIKE LOWER(CONCAT('%', :searchText, '%')))
          AND (:status IS NULL OR c.status = :status)
          AND (:syllabusId IS NULL OR c.syllabus.id = :syllabusId)
-         AND (:startDateFrom IS NULL OR c.startDate >= :startDateFrom)
-         AND (:startDateTo IS NULL OR c.startDate <= :startDateTo)
-         AND (:endDateFrom IS NULL OR c.endDate >= :endDateFrom)
-         AND (:endDateTo IS NULL OR c.endDate <= :endDateTo)
        """)
     Page<Clazz> searchClassesWithFilters(
             @Param("searchText") String searchText,
             @Param("status") String status,
             @Param("syllabusId") Long syllabusId,
-            @Param("startDateFrom") LocalDate startDateFrom,
-            @Param("startDateTo") LocalDate startDateTo,
-            @Param("endDateFrom") LocalDate endDateFrom,
-            @Param("endDateTo") LocalDate endDateTo,
             Pageable pageable
     );
 
@@ -46,19 +38,11 @@ public interface ClassRepository extends JpaRepository<Clazz, Long> {
             "(:searchText = '' OR c.className LIKE %:searchText% OR c.classCode LIKE %:searchText%) " +
             "AND (:status IS NULL OR c.status = :status) " +
             "AND (:syllabusId IS NULL OR c.syllabus.id = :syllabusId) " +
-            "AND (:startFrom IS NULL OR c.startDate >= :startFrom) " +
-            "AND (:startTo IS NULL OR c.startDate <= :startTo) " +
-            "AND (:endFrom IS NULL OR c.endDate >= :endFrom) " +
-            "AND (:endTo IS NULL OR c.endDate <= :endTo) " +
             "AND c.id IN :classIds")
     Page<Clazz> searchClassesWithFiltersAndIds(
             @Param("searchText") String searchText,
             @Param("status") String status,
             @Param("syllabusId") Long syllabusId,
-            @Param("startFrom") LocalDate startFrom,
-            @Param("startTo") LocalDate startTo,
-            @Param("endFrom") LocalDate endFrom,
-            @Param("endTo") LocalDate endTo,
             @Param("classIds") List<Long> classIds,
             Pageable pageable);
 

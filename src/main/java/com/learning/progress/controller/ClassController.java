@@ -81,10 +81,6 @@ public class ClassController {
                         searchText,
                         status,
                         syllabusId,
-                        startDateFrom,
-                        startDateTo,
-                        endDateFrom,
-                        endDateTo,
                         sortBy,
                         sortDir
                 )
