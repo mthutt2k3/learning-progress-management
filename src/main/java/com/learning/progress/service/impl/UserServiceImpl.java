@@ -144,7 +144,7 @@ public class UserServiceImpl implements UserService {
         RoleName newRoleName = role.getName();
 
         User user = userRepository.findByIdAndDeletedAtIsNull(userId)
-                .orElseThrow(() -> new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> new ApiException(Const.USER.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         RoleName oldRoleName = user.getRole().getName();
 
@@ -185,7 +185,7 @@ public class UserServiceImpl implements UserService {
     @Transactional
     public StudentProfileDTO updateStudentStatus(Long userId, UserStatus newStatus) {
         User user = userRepository.findByIdAndDeletedAtIsNull(userId)
-                .orElseThrow(() -> new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> new ApiException(Const.USER.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         appValidator.validateAllowedEnumValue(
                 RoleName.class,
@@ -344,7 +344,7 @@ public class UserServiceImpl implements UserService {
                 .orElseThrow(() -> new ApiException(Const.ROLE.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         User user = userRepository.findByIdAndDeletedAtIsNull(userId)
-                .orElseThrow(() -> new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> new ApiException(Const.USER.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         RoleName oldRoleName = user.getRole().getName();
         RoleName newRoleName = role.getName();
@@ -378,7 +378,7 @@ public class UserServiceImpl implements UserService {
         }
 
         User user = userRepository.findByIdAndDeletedAtIsNull(userId)
-                .orElseThrow(() -> new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> new ApiException(Const.USER.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
         appValidator.validateAllowedEnumValue(
                 RoleName.class,
                 user.getRole().getName().name(),
@@ -408,10 +408,10 @@ public class UserServiceImpl implements UserService {
                 throw new ApiException(Const.AUTH.INVALID_TOKEN_USERNAME, HttpStatus.UNAUTHORIZED.value());
             }
             user = userRepository.findByUserNameAndDeletedAtIsNull(username)
-                    .orElseThrow(() -> new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+                    .orElseThrow(() -> new ApiException(Const.USER.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
         } else {
             user = userRepository.findByIdAndDeletedAtIsNull(userId)
-                    .orElseThrow(() -> new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+                    .orElseThrow(() -> new ApiException(Const.USER.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
         }
 
         RoleName roleName = user.getRole().getName();
@@ -470,7 +470,7 @@ public class UserServiceImpl implements UserService {
         }
 
         User user = userRepository.findByUserNameAndDeletedAtIsNull(username)
-                .orElseThrow(() -> new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> new ApiException(Const.USER.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         if (!user.getId().equals(userId)) {
             throw new ApiException(Const.SECURITY.NOT_MATCH_CURRENT_USER, HttpStatus.FORBIDDEN.value());
@@ -497,11 +497,11 @@ public class UserServiceImpl implements UserService {
         }
 
         User currentUser = userRepository.findByUserNameAndDeletedAtIsNull(username)
-                .orElseThrow(() -> new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> new ApiException(Const.USER.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         // Lấy user mục tiêu dựa trên userId được truyền vào
         User targetUser = userRepository.findByIdAndDeletedAtIsNull(userId)
-                .orElseThrow(() -> new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> new ApiException(Const.USER.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         boolean isSelf = currentUser.getId().equals(userId);
         RoleName currentRole = currentUser.getRole().getName();
@@ -581,7 +581,7 @@ public class UserServiceImpl implements UserService {
         String newEmail = claims.getNewEmail();
 
         User user = userRepository.findByIdAndDeletedAtIsNull(userId)
-                .orElseThrow(() -> new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> new ApiException(Const.USER.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         user.setEmail(newEmail);
         userRepository.save(user);
@@ -775,7 +775,7 @@ public class UserServiceImpl implements UserService {
 
         // Tìm user
         User user = userRepository.findByIdAndDeletedAtIsNull(userId)
-                .orElseThrow(() -> new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> new ApiException(Const.USER.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         // Upload ảnh lên Blob
         String fileName = blobSasService.uploadFile(file);

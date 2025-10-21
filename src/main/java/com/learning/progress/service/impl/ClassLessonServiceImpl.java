@@ -177,7 +177,6 @@ public class ClassLessonServiceImpl implements ClassLessonService {
             );
         }
 
-        String currentUser = jwtUtil.extractUsernameFromCurrentRequest();
         OffsetDateTime now = OffsetDateTime.now();
         Long actionByUserId = jwtUtil.extractUserIdFromCurrentRequest();
         List<ClassLessonDTO> result = new ArrayList<>();
@@ -188,7 +187,7 @@ public class ClassLessonServiceImpl implements ClassLessonService {
             ClassLesson classLesson = classLessonRepository.findById(deleteReq.getId())
                     .filter(l -> l.getDeletedAt() == null)
                     .orElseThrow(() -> new ApiException("Class lesson không tồn tại", HttpStatus.NOT_FOUND.value()));
-            classLesson.setDeletedBy(currentUser);
+            classLesson.setDeletedBy(jwtUtil.extractEmailPrefixFromCurrentRequest());
             classLesson.setDeletedAt(now);
             classLessonRepository.save(classLesson);
 

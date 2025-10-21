@@ -3,6 +3,7 @@ package com.learning.progress.mapper;
 import com.learning.progress.dto.account.AccountDTO;
 import com.learning.progress.dto.user.*;
 import com.learning.progress.dto.account.CreateNewAccountRequest;
+import com.learning.progress.entity.ClassTeacher;
 import com.learning.progress.entity.User;
 import com.learning.progress.util.JsonUtil;
 import org.mapstruct.Mapper;

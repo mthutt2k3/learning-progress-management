@@ -2,6 +2,8 @@ package com.learning.progress.mapper;
 
 import com.learning.progress.dto.clazz.ClassDTO;
 import com.learning.progress.dto.clazz.CreateClassRequest;
+import com.learning.progress.dto.user.TeacherInfo;
+import com.learning.progress.entity.ClassTeacher;
 import com.learning.progress.entity.Clazz;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
@@ -13,6 +15,12 @@ import org.mapstruct.ReportingPolicy;
 )
 public interface ClassMapper {
 
+    @Mapping(source = "classTeachers", target = "teacherInfos")
     ClassDTO toClassDTO(Clazz clazzEntity);
 
+    @Mapping(source = "user.id" , target = "teacherId")
+    @Mapping(source = "user.email" , target = "email")
+    @Mapping(source = "user.fullName" , target = "fullName")
+    @Mapping(source = "user.userName" , target = "userName")
+    TeacherInfo toTeacherInfo(ClassTeacher classTeacher);
 }

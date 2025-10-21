@@ -132,7 +132,7 @@ public class Const {
     }
 
     public static class USER {
-        public static final String USER_NOT_FOUND = "User does not exist in the system or has been deleted";
+        public static final String NOT_FOUND = "User does not exist in the system or has been deleted";
         public static final String USER_INACTIVE = "User account is not active";
         public static final String USERNAME_EXISTS = "Username already exists";
         public static final String PENDING_STATUS = "User is not in PENDING status";
