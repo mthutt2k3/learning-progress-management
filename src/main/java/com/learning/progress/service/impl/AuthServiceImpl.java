@@ -21,6 +21,7 @@ import com.learning.progress.service.EmailService;
 import com.learning.progress.service.TokenService;
 import com.learning.progress.util.DataUtil;
 import com.learning.progress.util.JwtUtil;
+import com.learning.progress.util.TraceUtil;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -78,11 +79,11 @@ public class AuthServiceImpl implements AuthService {
      */
     @Override
     public LoginResponse login(LoginRequest loginRequest) {
-        String traceId = MDC.get("traceId");
+        String traceId = TraceUtil.getTraceId();
         log.info("[{}] Login attempt for username: {}, role: {}", traceId, loginRequest.getUsername(), loginRequest.getLoginRole());
 
         // Fetch user by username
-        User user = userRepository.findByUserName(loginRequest.getUsername())
+        User user = userRepository.findByUserNameAndDeletedAtIsNull(loginRequest.getUsername())
                 .orElseThrow(() -> {
                     log.error("[{}] User not found: {}", traceId, loginRequest.getUsername());
                     return new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.UNAUTHORIZED.value());
@@ -156,11 +157,11 @@ public class AuthServiceImpl implements AuthService {
      */
     @Override
     public String requestResetPasswordByEmail(ResetPasswordRequest request) {
-        String traceId = MDC.get("traceId");
+        String traceId = TraceUtil.getTraceId();
         log.info("[{}] Password reset requested for username: {}", traceId, request.getUserName());
 
         // Fetch user by username
-        User user = userRepository.findByUserName(request.getUserName())
+        User user = userRepository.findByUserNameAndDeletedAtIsNull(request.getUserName())
                 .orElseThrow(() -> {
                     log.error("[{}] User not found: {}", traceId, request.getUserName());
                     return new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value());
@@ -198,14 +199,14 @@ public class AuthServiceImpl implements AuthService {
      */
     @Override
     public String resetPasswordByToken(ConfirmResetPasswordRequest request) {
-        String traceId = MDC.get("traceId");
+        String traceId = TraceUtil.getTraceId();
         log.info("[{}] Confirming password reset with token: {}", traceId, request.getToken());
 
         // ✅ Validate token + user
         Long userId = jwtUtil.validateAndGetUserIdFromResetPasswordToken(request.getToken());
 
         // Fetch user by reset token
-        User user = userRepository.findById(userId)
+        User user = userRepository.findByIdAndDeletedAtIsNull(userId)
                 .orElseThrow(() -> {
                     log.error("[{}] Invalid reset token: {}", traceId, request.getToken());
                     return new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.BAD_REQUEST.value());
@@ -240,7 +241,7 @@ public class AuthServiceImpl implements AuthService {
      */
     @Override
     public LoginResponse changePassword(ChangePasswordRequest request) {
-        String traceId = MDC.get("traceId");
+        String traceId = TraceUtil.getTraceId();
         String username = jwtUtil.extractUsernameFromCurrentRequest();
         log.info("[{}] Password change requested for username: {}", traceId, username);
 
@@ -251,12 +252,16 @@ public class AuthServiceImpl implements AuthService {
         }
 
         // Fetch user
-        User user = userRepository.findByUserName(username)
+        User user = userRepository.findByUserNameAndDeletedAtIsNull(username)
                 .orElseThrow(() -> {
                     log.error("[{}] User not found: {}", traceId, username);
                     return new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value());
                 });
-
+        // Check user status
+        if (user.getStatus() != UserStatus.ACTIVE) {
+            log.error("[{}] User inactive: {}", traceId, username);
+            throw new ApiException(Const.USER.USER_INACTIVE, HttpStatus.FORBIDDEN.value());
+        }
         // Validate old password
         if (!passwordEncoder.matches(request.getOldPassword(), user.getPassword())) {
             log.error("[{}] Invalid old password for username: {}", traceId, username);
@@ -295,7 +300,7 @@ public class AuthServiceImpl implements AuthService {
      */
     @Override
     public ResetPasswordByTeacherResponse resetPasswordByTeacher(String username) {
-        String traceId = MDC.get("traceId");
+        String traceId = TraceUtil.getTraceId();
         log.info("[{}] Teacher password reset requested for username: {}", traceId, username);
 
         // Validate username
@@ -305,7 +310,7 @@ public class AuthServiceImpl implements AuthService {
         }
 
         // Fetch user
-        User user = userRepository.findByUserName(username)
+        User user = userRepository.findByUserNameAndDeletedAtIsNull(username)
                 .orElseThrow(() -> {
                     log.error("[{}] User not found: {}", traceId, username);
                     return new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value());
@@ -342,7 +347,7 @@ public class AuthServiceImpl implements AuthService {
      */
     @Override
     public Map<String, String> refreshAccessToken(String refreshToken) {
-        String traceId = MDC.get("traceId");
+        String traceId = TraceUtil.getTraceId();
         log.info("[{}] Refresh token request", traceId);
 
         // Validate refresh token
@@ -382,7 +387,7 @@ public class AuthServiceImpl implements AuthService {
      */
     @Override
     public void logout(String refreshTokenParam) {
-        String traceId = MDC.get("traceId");
+        String traceId = TraceUtil.getTraceId();
         log.info("[{}] Logout request", traceId);
 
         // Validate refresh token

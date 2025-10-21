@@ -215,6 +215,10 @@ public class JwtUtil {
     public String extractEmailFromCurrentRequest() {
         return getEmailFromAuthToken(extractTokenFromRequest(getCurrentRequest()));
     }
+    public String extractEmailPrefixFromCurrentRequest() {
+        String currentEmail = getEmailFromAuthToken(extractTokenFromRequest(getCurrentRequest()));
+        return DataUtil.getEmailPrefix(currentEmail);
+    }
 
     public boolean isCurrentUser(Long userId) {
         try {

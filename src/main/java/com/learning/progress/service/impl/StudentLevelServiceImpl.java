@@ -38,7 +38,7 @@ public class StudentLevelServiceImpl implements StudentLevelService {
         }
 
         // Tìm User theo userId
-        User user = userRepository.findById(userId)
+        User user = userRepository.findByIdAndDeletedAtIsNull(userId)
                 .orElseThrow(() -> new ApiException(Const.ACCOUNT.ACCOUNT_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         // Tìm Level theo levelId
