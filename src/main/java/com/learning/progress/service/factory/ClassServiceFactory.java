@@ -42,4 +42,5 @@ public class ClassServiceFactory {
             default -> throw new ApiException(Const.SECURITY.FORBIDDEN_ROLE, HttpStatus.FORBIDDEN.value());
         };
     }
+
 }

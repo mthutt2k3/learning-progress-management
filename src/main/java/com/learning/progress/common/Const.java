@@ -131,6 +131,66 @@ public class Const {
         public static final String HAVE_CHANGED_PASSWORD = "Your account have changed password";
     }
 
+    public static class CLASS_LESSON {
+
+        // Not found & invalid
+        public static final String NOT_FOUND = "Class lesson not found";
+        public static final String INVALID_ID = "Invalid class lesson ID: %s";
+        public static final String LESSONS_NOT_FOUND = "Lesson IDs not found: %s";
+        public static final String CHAPTER_CODE_NOT_FOUND = "Chapter not found or deleted with code: %s";
+
+        // Validation & logic errors
+        public static final String UNHANDLED_LESSONS = "Unhandled lessons: %s. FE must include ALL active lessons!";
+        public static final String NON_DELETED_COUNT_MISMATCH = "Mismatch in non-deleted lesson count! Expected: %d, actual: %d";
+        public static final String INVALID_ORDER_SEQUENCE = "Order numbers must be sequential from 1 to %d. Current: %s";
+        public static final String LESSON_NAME_REQUIRED = "Lesson name is required: %s";
+        public static final String LESSON_NAME_TOO_LONG = "Lesson name exceeds 255 characters: %s";
+        public static final String LESSON_CONTENT_TOO_LONG = "Lesson content exceeds 1000 characters: %s";
+        public static final String ORDER_NUMBER_INVALID = "Order number must be positive: %s";
+        public static final String ORDER_NUMBER_SEQUENCE_INVALID =
+                "Order numbers must be sequential from 1 to %d, without duplicates or gaps. Current: %s";
+
+        // Action / history log
+        public static final String ACTION_DELETE =
+                "Deleted lesson %s from chapter %s, class %s";
+        public static final String ACTION_UPDATE =
+                "Updated lesson %s in chapter %s, class %s with order number %d";
+        public static final String ACTION_CREATE =
+                "Created lesson %s for chapter %s, class %s with order number %d";
+
+    }
+
+    public static class CLASS_CHAPTER {
+
+        // Not found & invalid
+        public static final String NOT_FOUND = "Class chapter not found";
+        public static final String INVALID_ID = "Invalid class chapter ID: %s";
+        public static final String CHAPTERS_NOT_FOUND = "Chapter IDs not found: %s";
+        public static final String CLASS_NOT_FOUND = "Class not found or deleted";
+
+        // Validation & logic errors
+        public static final String UNHANDLED_CHAPTERS = "Unhandled chapters: %s. FE must include ALL active chapters!";
+        public static final String NON_DELETED_COUNT_MISMATCH = "Mismatch in non-deleted chapter count! Expected: %d, actual: %d";
+        public static final String INVALID_ORDER_SEQUENCE = "Order numbers must be sequential from 1 to %d. Current: %s";
+        public static final String CHAPTER_NAME_REQUIRED = "Chapter name is required: %s";
+        public static final String CHAPTER_NAME_TOO_LONG = "Chapter name exceeds 255 characters: %s";
+        public static final String DESCRIPTION_TOO_LONG = "Chapter description exceeds 1000 characters: %s";
+        public static final String ORDER_NUMBER_INVALID = "Order number must be positive: %s";
+        public static final String ORDER_NUMBER_SEQUENCE_INVALID =
+                "Order numbers must be sequential from 1 to %d, without duplicates or gaps. Current: %s";
+
+        // Action / history log
+        public static final String ACTION_DELETE =
+                "Deleted chapter %s from class %s";
+        public static final String ACTION_UPDATE =
+                "Updated chapter %s in class %s with order number %d";
+        public static final String ACTION_CREATE =
+                "Created chapter %s for class %s with order number %d";
+
+        // Common
+        public static final String SUCCESS = "Success";
+    }
+
     public static class USER {
         public static final String NOT_FOUND = "User does not exist in the system or has been deleted";
         public static final String USER_INACTIVE = "User account is not active";
@@ -196,7 +256,7 @@ public class Const {
     }
 
     public static class CLASS {
-        public static final String CLASS_NOT_FOUND = "Class not found or be deleted";
+        public static final String NOT_FOUND = "Class not found or be deleted";
         public static final String INACTIVE = "Class is inactive";
         public static final String DELETED = "Class has been deleted";
         public static final String FINISHED_CLASS = "Class has been finished";
@@ -212,6 +272,9 @@ public class Const {
 
         public static final String INVALID_DATE_FORMAT = "Invalid date format for %s, expected: %s";
         public static final String CANNOT_DELETE_ACTIVE_CLASS = "Cannot delete class %s because its status is %s";
+
+        // Permission / access
+        public static final String TEACHER_NOT_ASSIGNED = "Teacher is not assigned to this class";
 
     }
     public static class SYLLABUS {

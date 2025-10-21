@@ -28,7 +28,7 @@ public class ClassController {
     private ClassServiceFactory classServiceFactory;
 
     @GetMapping("/{classId}/overview")
-    @PreAuthorize("hasRole('MANAGER') or hasRole('TEACHER') or hasRole('TEACHING_ASSISTANT') or hasRole('STUDENT') or hasRole('TEST_TAKER')")
+    @PreAuthorize("hasAnyRole('MANAGER', 'TEACHER', 'TEACHING_ASSISTANT', 'STUDENT', 'TEST_TAKER')")
     @Operation(summary = "Lấy tổng quan lớp học", description = "Lấy thông tin tổng quan của lớp học bao gồm giáo viên, trợ giảng, ngày bắt đầu, ngày kết thúc, trạng thái, cấp độ và giáo trình")
     public ResponseEntity<DataResponse<ClassOverviewDTO>> getClassOverview(@PathVariable Long classId) {
         ClassService classService = classServiceFactory.getClassService();
@@ -44,7 +44,7 @@ public class ClassController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasRole('MANAGER') or hasRole('TEACHER') or hasRole('TEACHING_ASSISTANT') or hasRole('STUDENT') or hasRole('TEST_TAKER')")
+    @PreAuthorize("hasAnyRole('MANAGER', 'TEACHER', 'TEACHING_ASSISTANT', 'STUDENT', 'TEST_TAKER')")
     @Operation(summary = "Lấy class", description = "Lấy thông tin class theo ID")
     public ResponseEntity<DataResponse<ClassDTO>> getClass(@PathVariable Long id) {
         ClassService classService = classServiceFactory.getClassService();
@@ -52,7 +52,7 @@ public class ClassController {
     }
 
     @GetMapping
-    @PreAuthorize("hasRole('MANAGER') or hasRole('TEACHER') or hasRole('TEACHING_ASSISTANT') or hasRole('STUDENT') or hasRole('TEST_TAKER')")
+    @PreAuthorize("hasAnyRole('MANAGER', 'TEACHER', 'TEACHING_ASSISTANT', 'STUDENT', 'TEST_TAKER')")
     @Operation(summary = "Get class list", description = "Get paginated list of classes with filters and sorting")
     public ResponseEntity<DataResponse<List<ClassDTO>>> getClassList(
             @RequestParam(defaultValue = "0") int page,

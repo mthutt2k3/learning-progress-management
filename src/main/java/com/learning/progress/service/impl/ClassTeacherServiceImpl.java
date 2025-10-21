@@ -61,7 +61,7 @@ public class ClassTeacherServiceImpl implements ClassTeacherService {
         Pageable pageable = PageRequest.of(page, size, sort);
 
         Clazz clazz = classRepository.findById(classId)
-                .orElseThrow(() -> new ApiException(Const.CLASS.CLASS_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> new ApiException(Const.CLASS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         Page<ClassTeacher> teacherPage;
         if (text != null && !text.isBlank()) {
@@ -91,7 +91,7 @@ public class ClassTeacherServiceImpl implements ClassTeacherService {
     @Transactional
     public void addTeacherToClass(Long classId, AddTeacherToClassRequest request) {
         Clazz clazz = classRepository.findById(classId)
-                .orElseThrow(() -> new ApiException(Const.CLASS.CLASS_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> new ApiException(Const.CLASS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         if (clazz.getStatus() == ClassStatus.INACTIVE) {
             throw new ApiException(Const.CLASS.INACTIVE, HttpStatus.BAD_REQUEST.value());
@@ -227,7 +227,7 @@ public class ClassTeacherServiceImpl implements ClassTeacherService {
     @Transactional
     public void removeTeacherFromClass(Long classId, Long userId) {
         Clazz clazz = classRepository.findById(classId)
-                .orElseThrow(() -> new ApiException(Const.CLASS.CLASS_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> new ApiException(Const.CLASS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         if (clazz.getStatus() == ClassStatus.INACTIVE) {
             throw new ApiException(Const.CLASS.INACTIVE, HttpStatus.BAD_REQUEST.value());

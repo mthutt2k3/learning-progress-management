@@ -41,14 +41,14 @@ public class ClassLessonController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasRole('MANAGER') or hasRole('TEACHER')")
+    @PreAuthorize("hasAnyRole('MANAGER', 'TEACHER', 'TEACHING_ASSISTANT', 'STUDENT', 'TEST_TAKER')")
     @Operation(summary = "Lấy class lesson", description = "Lấy thông tin class lesson theo ID")
     public ResponseEntity<DataResponse<ClassLessonDTO>> getClassLesson(@PathVariable Long id) {
         return ResponseEntity.ok(DataResponse.success(classLessonService.getClassLesson(id), Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL));
     }
 
     @GetMapping
-    @PreAuthorize("hasRole('MANAGER') or hasRole('TEACHER')")
+    @PreAuthorize("hasAnyRole('MANAGER', 'TEACHER', 'TEACHING_ASSISTANT', 'STUDENT', 'TEST_TAKER')")
     @Operation(summary = "Lấy danh sách class lesson", description = "Lấy danh sách class lesson phân trang")
     public ResponseEntity<DataResponse<List<ClassLessonDTO>>> getClassLessonList(
             @Parameter(description = "Class Chapter ID") @RequestParam Long classChapterId,

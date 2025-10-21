@@ -70,7 +70,7 @@ public class ClassChapterServiceImpl implements ClassChapterService {
         // Validate class
         Clazz classEntity = classRepository.findById(classId)
                 .filter(c -> c.getDeletedAt() == null)
-                .orElseThrow(() -> new ApiException(Const.CLASS.CLASS_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> new ApiException(Const.CLASS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         if(classEntity.getStatus() == ClassStatus.FINISHED){
             throw new ApiException(Const.CLASS.FINISHED_CLASS, HttpStatus.BAD_REQUEST.value());
@@ -204,14 +204,14 @@ public class ClassChapterServiceImpl implements ClassChapterService {
         for (SyncClassChapterRequest deleteReq : deleteRequests) {
             ClassChapter classChapter = classChapterRepository.findById(deleteReq.getId())
                     .filter(c -> c.getDeletedAt() == null)
-                    .orElseThrow(() -> new ApiException("Clazz chapter không tồn tại", HttpStatus.NOT_FOUND.value()));
+                    .orElseThrow(() -> new ApiException(Const.CLASS_CHAPTER.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
             classChapter.setDeletedBy(jwtUtil.extractEmailPrefixFromCurrentRequest());
             classChapter.setDeletedAt(now);
             classChapterRepository.save(classChapter);
 
             // Ghi lịch sử
             String actionDetails = String.format(
-                    "Đã xóa chương %s của lớp %s",
+                    Const.CLASS_CHAPTER.ACTION_DELETE,
                     classChapter.getClassChapterName(),
                     classEntity.getClassName()
             );
@@ -232,14 +232,14 @@ public class ClassChapterServiceImpl implements ClassChapterService {
         for (SyncClassChapterRequest req : updateRequests) {
             ClassChapter classChapter = classChapterRepository.findById(req.getId())
                     .filter(c -> c.getDeletedAt() == null)
-                    .orElseThrow(() -> new ApiException("Clazz chapter không tồn tại", HttpStatus.NOT_FOUND.value()));
+                    .orElseThrow(() -> new ApiException(Const.CLASS_CHAPTER.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
             classChapter.setClassChapterName(req.getClassChapterName());
             classChapter.setOrderNumber(req.getOrderNumber());
             result.add(classChapterMapper.toClassChapterDTO(classChapterRepository.save(classChapter)));
 
             // Ghi lịch sử
             String actionDetails = String.format(
-                    "Đã cập nhật chương %s của lớp %s với thứ tự %d",
+                    Const.CLASS_CHAPTER.ACTION_UPDATE,
                     req.getClassChapterName(),
                     classEntity.getClassName(),
                     req.getOrderNumber()
@@ -272,7 +272,7 @@ public class ClassChapterServiceImpl implements ClassChapterService {
 
             // Ghi lịch sử
             String actionDetails = String.format(
-                    "Đã tạo chương %s cho lớp %s với thứ tự %d",
+                    Const.CLASS_CHAPTER.ACTION_CREATE,
                     req.getClassChapterName(),
                     classEntity.getClassName(),
                     req.getOrderNumber()
@@ -292,14 +292,14 @@ public class ClassChapterServiceImpl implements ClassChapterService {
     public ClassChapterDTO getClassChapter(Long id) {
         ClassChapter classChapter = classChapterRepository.findById(id)
                 .filter(c -> c.getDeletedAt() == null)
-                .orElseThrow(() -> new ApiException("Clazz chapter không tồn tại", HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> new ApiException(Const.CLASS_CHAPTER.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
         return classChapterMapper.toClassChapterDTO(classChapter);
     }
 
     public DataResponse<List<ClassChapterDTO>> getClassChapterList(Long classId, int page, int size, String searchText) {
         classRepository.findById(classId)
                 .filter(c -> c.getDeletedAt() == null)
-                .orElseThrow(() -> new ApiException("Clazz không tồn tại", HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> new ApiException(Const.CLASS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         Page<ClassChapter> chapterPage = classChapterRepository.findByClassIdAndSearchText(classId, searchText, PageRequest.of(page, size, Sort.by("orderNumber").ascending()));
         List<ClassChapterDTO> responses = chapterPage.getContent().stream()
@@ -308,7 +308,7 @@ public class ClassChapterServiceImpl implements ClassChapterService {
 
         return DataResponse.<List<ClassChapterDTO>>builder()
                 .success(true)
-                .message("Thành công")
+                .message(Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL)
                 .data(responses)
                 .page(page)
                 .size(size)
@@ -333,12 +333,12 @@ public class ClassChapterServiceImpl implements ClassChapterService {
         // Validate class
         Clazz classEntity = classRepository.findById(classId)
                 .filter(c -> c.getDeletedAt() == null)
-                .orElseThrow(() -> new ApiException("Class không tồn tại", HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> new ApiException(Const.CLASS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         // Validate teacher assignment
         Long currentUserId = jwtUtil.extractUserIdFromCurrentRequest();
         if ( !classTeacherRepository.existsByClazz_IdAndUser_IdAndStatus(classId, currentUserId, ClassTeacherStatus.ACTIVE)) {
-            throw new ApiException("Giáo viên không được phân công cho lớp này", HttpStatus.FORBIDDEN.value());
+            throw new ApiException(Const.CLASS.TEACHER_NOT_ASSIGNED, HttpStatus.FORBIDDEN.value());
         }
 
         // Read Excel data
@@ -419,7 +419,7 @@ public class ClassChapterServiceImpl implements ClassChapterService {
 
                 // Record history
                 String actionDetails = String.format(
-                        "Đã tạo chương %s cho lớp %s với thứ tự %d",
+                        Const.CLASS_CHAPTER.ACTION_CREATE,
                         req.getChapterName(),
                         classEntity.getClassName(),
                         req.getOrderNumber()

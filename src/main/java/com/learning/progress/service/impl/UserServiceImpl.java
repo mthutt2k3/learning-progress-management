@@ -848,7 +848,7 @@ public class UserServiceImpl implements UserService {
             students = new ArrayList<>();
             for (Long classId : classIds) {
                 Clazz clazz = classRepository.findById(classId)
-                        .orElseThrow(() -> new ApiException(Const.CLASS.CLASS_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+                        .orElseThrow(() -> new ApiException(Const.CLASS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
                 classNameMap.put(classId, clazz.getClassName());
 
