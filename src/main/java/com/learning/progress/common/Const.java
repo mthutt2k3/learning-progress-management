@@ -136,6 +136,7 @@ public class Const {
         public static final String USERNAME_EXISTS = "Username already exists";
         public static final String PENDING_STATUS = "User is not in PENDING status";
         public static final String ADMIN_CANNOT_CHANGE_STATUS = "Admin cannot change status of other Admins or themselves";
+        public static final String MANAGER_CANNOT_CHANGE_STATUS = "Manager cannot change status of other Manager or themselves";
 
 
         public static final String DELETED = "User has been deleted";

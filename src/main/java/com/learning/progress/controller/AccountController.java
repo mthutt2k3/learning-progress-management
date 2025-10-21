@@ -70,8 +70,8 @@ public class AccountController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
-    @Operation(summary = "Delete Pending Account", description = "Delete Pending account (ADMIN only)")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('MANAGER')")
+    @Operation(summary = "Delete Pending Account", description = "Delete Pending account (ADMIN MANAGER)")
     public ResponseEntity<DataResponse<?>> deleteAccount(@PathVariable Long id) {
         accountService.deleteAccount(id);
         return new ResponseEntity<>(DataResponse.success(null, Const.RESULT_MESSAGE_CODE.DELETE_SUCCESSFUL), HttpStatus.OK);
