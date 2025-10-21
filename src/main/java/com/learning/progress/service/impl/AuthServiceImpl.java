@@ -243,6 +243,7 @@ public class AuthServiceImpl implements AuthService {
         try {
             emailService.sendForgotPasswordEmail(user, request, resetPasswordToken);
             log.info("[{}] Password reset email sent to: {}", traceId, user.getEmail());
+            user.setResetPasswordTokenUsed(false);
             userRepository.save(user);
             return DataUtil.maskEmail(user.getEmail());
         } catch (Exception e) {
