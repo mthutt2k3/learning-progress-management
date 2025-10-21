@@ -18,6 +18,7 @@ import com.learning.progress.service.ClassStudentService;
 import com.learning.progress.service.FileService;
 import com.learning.progress.util.AppValidator;
 import com.learning.progress.util.JwtUtil;
+import com.learning.progress.util.TraceUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
@@ -93,7 +94,7 @@ public class ClassStudentServiceImpl implements ClassStudentService {
                 .collect(Collectors.toList());
 
         return DataResponse.<List<ClassStudentResponse>>builder()
-                .traceId(org.slf4j.MDC.get("traceId"))
+                .traceId(TraceUtil.getTraceId())
                 .success(true)
                 .message(Const.CLASS_STUDENT.LIST_RETRIEVED)
                 .data(students)
@@ -118,7 +119,7 @@ public class ClassStudentServiceImpl implements ClassStudentService {
         }
 
         // Kiểm tra sự tồn tại của người dùng
-        User user = userRepository.findById(userId)
+        User user = userRepository.findByIdAndDeletedAtIsNull(userId)
                 .orElseThrow(() -> new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         // Kiểm tra trạng thái người dùng
@@ -253,7 +254,7 @@ public class ClassStudentServiceImpl implements ClassStudentService {
         }
 
         // Fetch and validate user
-        User user = userRepository.findById(userId)
+        User user = userRepository.findByIdAndDeletedAtIsNull(userId)
                 .orElseThrow(() -> new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         // Validate user status

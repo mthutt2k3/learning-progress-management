@@ -16,6 +16,7 @@ import com.learning.progress.repository.UserRepository;
 import com.learning.progress.service.ClassHistoryService;
 import com.learning.progress.util.EnumUtil;
 import com.learning.progress.util.JwtUtil;
+import com.learning.progress.util.TraceUtil;
 import com.learning.progress.util.ValidateUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
@@ -97,7 +98,7 @@ public class ClassHistoryServiceImpl implements ClassHistoryService {
         ValidateUtil.validateSortParams(List.of("actionAt", "actionType"), sortBy, sortDir);
 
         String username = jwtUtil.extractUsernameFromCurrentRequest();
-        User user = userRepository.findByUserName(username)
+        User user = userRepository.findByUserNameAndDeletedAtIsNull(username)
                 .orElseThrow(() -> new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.UNAUTHORIZED.value()));
 
         RoleName role = user.getRole().getName();
@@ -121,7 +122,7 @@ public class ClassHistoryServiceImpl implements ClassHistoryService {
                 .collect(Collectors.toList());
 
         return DataResponse.<List<ClassHistoryDTO>>builder()
-                .traceId(org.slf4j.MDC.get("traceId"))
+                .traceId(TraceUtil.getTraceId())
                 .success(true)
                 .message("Successful")
                 .data(historiesDTO)
@@ -140,14 +141,14 @@ public class ClassHistoryServiceImpl implements ClassHistoryService {
         ValidateUtil.validateSortParams(List.of("actionAt", "actionType"), sortBy, sortDir);
 
         String currentUsername = jwtUtil.extractUsernameFromCurrentRequest();
-        User currentUser = userRepository.findByUserName(currentUsername)
+        User currentUser = userRepository.findByUserNameAndDeletedAtIsNull(currentUsername)
                 .orElseThrow(() -> new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.UNAUTHORIZED.value()));
 
         if (!currentUser.getId().equals(userId) && currentUser.getRole().getName() != RoleName.MANAGER) {
             throw new ApiException("You are not authorized to view this user's class history", HttpStatus.FORBIDDEN.value());
         }
 
-        User targetUser = userRepository.findById(userId)
+        User targetUser = userRepository.findByIdAndDeletedAtIsNull(userId)
                 .orElseThrow(() -> new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         RoleName role = targetUser.getRole().getName();
@@ -163,7 +164,7 @@ public class ClassHistoryServiceImpl implements ClassHistoryService {
 
         if (classIds.isEmpty()) {
             return DataResponse.<List<ClassHistoryDTO>>builder()
-                    .traceId(org.slf4j.MDC.get("traceId"))
+                    .traceId(TraceUtil.getTraceId())
                     .success(true)
                     .message("No class history found")
                     .data(List.of())
@@ -187,7 +188,7 @@ public class ClassHistoryServiceImpl implements ClassHistoryService {
                 .map(classHistoryMapper::toClassHistoryDTO)
                 .collect(Collectors.toList());
         return DataResponse.<List<ClassHistoryDTO>>builder()
-                .traceId(org.slf4j.MDC.get("traceId"))
+                .traceId(TraceUtil.getTraceId())
                 .success(true)
                 .message("Successful")
                 .data(historiesDTO)

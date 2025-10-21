@@ -16,6 +16,7 @@ import com.learning.progress.service.FileService;
 import com.learning.progress.service.LessonService;
 import com.learning.progress.util.AppValidator;
 import com.learning.progress.util.JwtUtil;
+import com.learning.progress.util.TraceUtil;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validator;
 import lombok.extern.slf4j.Slf4j;
@@ -304,7 +305,7 @@ public class LessonServiceImpl implements LessonService {
                 .collect(Collectors.toList());
 
         return DataResponse.<List<LessonDTO>>builder()
-                .traceId(org.slf4j.MDC.get("traceId"))
+                .traceId(TraceUtil.getTraceId())
                 .success(true)
                 .message("Successful")
                 .data(responses)

@@ -1,6 +1,8 @@
 package com.learning.progress.dto;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.learning.progress.common.Const;
+import com.learning.progress.util.TraceUtil;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -34,7 +36,7 @@ public class DataResponse<T> {
 
     public static <T> DataResponse<T> success(T data, String message) {
         return DataResponse.<T>builder()
-                .traceId(MDC.get("traceId")) // Lấy traceId từ MDC
+                .traceId(TraceUtil.getTraceId()) // Lấy traceId từ MDC
                 .success(true)
                 .message(message)
                 .data(data)
@@ -44,7 +46,7 @@ public class DataResponse<T> {
 
     public static <T> DataResponse<T> error(String error, Integer status) {
         return DataResponse.<T>builder()
-                .traceId(MDC.get("traceId")) // Lấy traceId từ MDC
+                .traceId(TraceUtil.getTraceId()) // Lấy traceId từ MDC
                 .success(false)
                 .error(error)
                 .status(status)

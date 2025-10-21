@@ -17,6 +17,7 @@ import com.learning.progress.service.EmailService;
 import com.learning.progress.util.AppValidator;
 import com.learning.progress.util.DataUtil;
 import com.learning.progress.util.JwtUtil;
+import com.learning.progress.util.TraceUtil;
 import jakarta.persistence.EntityManager;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
@@ -78,7 +79,7 @@ public class AccountServiceImpl implements AccountService {
      */
     @Override
     public DataResponse<List<AccountDTO>> listAccounts(int page, int size, String text, List<String> statusStr, List<String> roleNameStr, String sortBy, String sortDir) {
-        String traceId = MDC.get("traceId");
+        String traceId = TraceUtil.getTraceId();
         log.info("[{}] Listing accounts with page: {}, size: {}, text: {}, statuses: {}, roles: {}, sortBy: {}, sortDir: {}",
                 traceId, page, size, text, statusStr, roleNameStr, sortBy, sortDir);
 
@@ -148,7 +149,7 @@ public class AccountServiceImpl implements AccountService {
      */
     @Override
     public AccountDTO getAccountByUserId(Long userId) {
-        String traceId = MDC.get("traceId");
+        String traceId = TraceUtil.getTraceId();
         log.info("[{}] Retrieving account for userId: {}", traceId, userId);
 
         // Fetch user by ID
@@ -171,7 +172,7 @@ public class AccountServiceImpl implements AccountService {
     @Override
     @Transactional
     public AccountDTO createNewAccount(CreateNewAccountRequest request) {
-        String traceId = MDC.get("traceId");
+        String traceId = TraceUtil.getTraceId();
         log.info("[{}] Creating new account with role: {}", traceId, request.getRoleName());
 
         // Fetch role
@@ -217,7 +218,7 @@ public class AccountServiceImpl implements AccountService {
     @Override
     @Transactional
     public User createAccountForExistUser(User user, String username, String password) {
-        String traceId = MDC.get("traceId");
+        String traceId = TraceUtil.getTraceId();
         log.info("[{}] Creating account for existing user with username: {}", traceId, username);
 
         // Check for username uniqueness
@@ -245,7 +246,7 @@ public class AccountServiceImpl implements AccountService {
     @Override
     @Transactional
     public AccountDTO updateAccount(Long id, @Valid String email) {
-        String traceId = MDC.get("traceId");
+        String traceId = TraceUtil.getTraceId();
 
         if(!DataUtil.isValidEmail(email)){
             throw new ApiException(Const.EMAIL.INVALID, HttpStatus.BAD_REQUEST.value());
@@ -278,7 +279,7 @@ public class AccountServiceImpl implements AccountService {
     @Override
     @Transactional
     public AccountDTO updateStatusAccount(Long id, UserStatus newStatus) {
-        String traceId = MDC.get("traceId");
+        String traceId = TraceUtil.getTraceId();
         log.info("[{}] Updating status for userId: {} to {}", traceId, id, newStatus);
 
         User targetUser = userRepository.findByIdAndDeletedAtIsNull(id)
