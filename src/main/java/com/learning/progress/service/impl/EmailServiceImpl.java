@@ -1,7 +1,7 @@
 package com.learning.progress.service.impl;
 
 import com.learning.progress.common.Const;
-import com.learning.progress.dto.auth.ResetPasswordRequest;
+import com.learning.progress.dto.auth.RequestResetPasswordByEmail;
 import com.learning.progress.entity.User;
 import com.learning.progress.exception.ApiException;
 import com.learning.progress.service.EmailService;
@@ -73,7 +73,7 @@ public class EmailServiceImpl implements EmailService {
 
     @Override
     @Async("taskExecutor")
-    public void sendForgotPasswordEmail(User user, ResetPasswordRequest request, String resetToken) {
+    public void sendForgotPasswordEmail(User user, RequestResetPasswordByEmail request, String resetToken) {
         try {
             String fullName = (user.getFullName() != null ? user.getFullName() : "");
             String username = user.getUserName() != null ? user.getUserName() : "(chưa có)";

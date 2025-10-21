@@ -113,6 +113,7 @@ public class Const {
         public static final String LOGOUT_SUCCESS = "Logout successfully";
         public static final String TOKEN_REFRESH_SUCCESS = "Token refreshed successfully";
         public static final String PASSWORD_RESET_EMAIL_SENT = "Password reset email sent successfully";
+        public static final String PASSWORD_RESET_TEACHER_SENT = "Password reset request sent your teacher successfully";
         public static final String PASSWORD_RESET_BY_TEACHER = "Password has been reset successfully by teacher";
         public static final String REFRESH_TOKEN_EXPIRED = "Refresh token has expired";
 
@@ -137,7 +138,8 @@ public class Const {
         public static final String PENDING_STATUS = "User is not in PENDING status";
         public static final String ADMIN_CANNOT_CHANGE_STATUS = "Admin cannot change status of other Admins or themselves";
         public static final String MANAGER_CANNOT_CHANGE_STATUS = "Manager cannot change status of other Manager or themselves";
-
+        public static final String NO_RESET_REQUEST_FROM_STUDENT =
+                "Cannot reset password because the student has not requested a password reset.";
 
         public static final String DELETED = "User has been deleted";
         public static final String INVALID_ROLE_STUDENT_ONLY = "User must have student role";

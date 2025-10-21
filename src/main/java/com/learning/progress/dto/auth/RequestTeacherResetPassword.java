@@ -11,9 +11,7 @@ import lombok.NoArgsConstructor;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class ConfirmResetPasswordRequest {
-    @NotBlank(message = Const.TOKEN.REQUIRED)
-    private String token;
-    @NotBlank(message = Const.PASSWORD.REQUIRED)
-    private String newPassword;
+public class RequestTeacherResetPassword {
+    @NotBlank(message = Const.USERNAME.REQUIRED)
+    private String userName;
 }
