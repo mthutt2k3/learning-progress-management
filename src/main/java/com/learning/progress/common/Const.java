@@ -180,7 +180,7 @@ public class Const {
 
     public static class LEVEL {
 
-        public static final String LEVEL_NOT_FOUND = "Level does not exist in the system";
+        public static final String NOT_FOUND = "Level does not exist in the system";
         public static final String DUPLICATE_LEVEL_NAME = "Level name already exists";
         public static final String LEVEL_BULK_UPDATE_FORBIDDEN = "Cannot bulk update levels because one or more levels are already PUBLISHED";
         public static final String NOT_PUBLISHED = "Level is not published";
@@ -214,13 +214,12 @@ public class Const {
     }
     public static class SYLLABUS {
         public static final String ID_REQUIRED = "Syllabus ID cannot be empty";
-        public static final String NOT_FOUND = "Syllabus not found";
+        public static final String NOT_FOUND = "Syllabus not found or deleted";
         public static final String NAME_REQUIRED = "Syllabus name cannot be empty";
         public static final String NAME_MAX_LENGTH = "Syllabus name cannot exceed 100 characters";
         public static final String DESCRIPTION_REQUIRED = "Description cannot be empty";
         public static final String INVALID_ID = "Invalid syllabus ID";
-
-
+        public static final String EXIST_NAME = "Syllabus name already exists";
     }
     public static class CLASS_HISTORY {
         public static final String CREATE_CLASS = "Created class %s with syllabus %s";
