@@ -20,4 +20,6 @@ public interface AccountService {
     AccountDTO updateAccount(Long id, String email);
 
     AccountDTO updateStatusAccount(Long id, UserStatus userStatus);
+
+    void deleteAccount(Long id);
 }
