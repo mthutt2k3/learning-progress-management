@@ -129,6 +129,8 @@ public class Const {
         public static final String USER_NOT_FOUND = "User does not exist in the system or has been deleted";
         public static final String USER_INACTIVE = "User account is not active";
         public static final String USERNAME_EXISTS = "Username already exists";
+        public static final String PENDING_STATUS = "User is not in PENDING status";
+        public static final String ADMIN_CANNOT_CHANGE_STATUS = "Admin cannot change status of other Admins or themselves";
 
 
         public static final String DELETED = "User has been deleted";
@@ -144,7 +146,7 @@ public class Const {
         public static final String CANNOT_CHANGE_STATUS_TO_PENDING =
                 "Cannot change account status to PENDING";
         public static final String CANNOT_CHANGE_STATUS_TO_ACTIVE_MANUALLY =
-                "Cannot change account status to ACTIVE manually";
+                "Cannot change account status to ACTIVE/INACTIVE manually";
 
 
     }
@@ -186,10 +188,10 @@ public class Const {
     }
 
     public static class CLASS {
-        public static final String CLASS_NOT_FOUND = "Class not found";
+        public static final String CLASS_NOT_FOUND = "Class not found or be deleted";
         public static final String INACTIVE = "Class is inactive";
         public static final String DELETED = "Class has been deleted";
-        public static final String UPDATE_FINISHED_CLASS = "Cannot update a finished class";
+        public static final String FINISHED_CLASS = "Class has been finished";
 
         public static final String CLASS_NAME_REQUIRED = "Class name cannot be empty";
         public static final String CLASS_NAME_MAX_LENGTH = "Class name cannot exceed 50 characters";

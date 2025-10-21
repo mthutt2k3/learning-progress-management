@@ -32,6 +32,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -115,7 +116,7 @@ public class AccountServiceImpl implements AccountService {
             } else if (roleNames != null && !roleNames.isEmpty()) {
                 userPage = userRepository.findByRoleNameIn(roleNames, pageable);
             } else {
-                userPage = userRepository.findAll(pageable);
+                userPage = userRepository.findAllByDeletedAtIsNull(pageable);
             }
         }
         log.debug("[{}] Retrieved {} users for page {}", traceId, userPage.getTotalElements(), page);
@@ -151,7 +152,7 @@ public class AccountServiceImpl implements AccountService {
         log.info("[{}] Retrieving account for userId: {}", traceId, userId);
 
         // Fetch user by ID
-        User user = userRepository.findById(userId)
+        User user = userRepository.findByIdAndDeletedAtIsNull(userId)
                 .orElseThrow(() -> {
                     log.error("[{}] Account not found for userId: {}", traceId, userId);
                     return new ApiException(Const.ACCOUNT.ACCOUNT_NOT_FOUND, HttpStatus.BAD_REQUEST.value());
@@ -251,7 +252,7 @@ public class AccountServiceImpl implements AccountService {
         }
 
         // Fetch user by ID
-        User user = userRepository.findById(id)
+        User user = userRepository.findByIdAndDeletedAtIsNull(id)
                 .orElseThrow(() -> {
                     log.error("[{}] User not found for userId: {}", traceId, id);
                     return new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value());
@@ -280,7 +281,7 @@ public class AccountServiceImpl implements AccountService {
         String traceId = MDC.get("traceId");
         log.info("[{}] Updating status for userId: {} to {}", traceId, id, newStatus);
 
-        User targetUser = userRepository.findById(id)
+        User targetUser = userRepository.findByIdAndDeletedAtIsNull(id)
                 .orElseThrow(() -> {
                     log.error("[{}] User not found for userId: {}", traceId, id);
                     return new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.BAD_REQUEST.value());
@@ -289,26 +290,23 @@ public class AccountServiceImpl implements AccountService {
         Long userIdFromCurrentRequest = jwtUtil.extractUserIdFromCurrentRequest();
 
         // Lấy thông tin admin đang thao tác
-        User currentUser = userRepository.findById(userIdFromCurrentRequest)
+        User currentUser = userRepository.findByIdAndDeletedAtIsNull(userIdFromCurrentRequest)
                 .orElseThrow(() -> new ApiException("Current user not found", HttpStatus.UNAUTHORIZED.value()));
 
         UserStatus oldStatus = targetUser.getStatus();
 
         // Quy tắc trạng thái
         if (UserStatus.PENDING.equals(oldStatus)) {
-            if (!UserStatus.ACTIVE.equals(newStatus)) {
-                throw new ApiException(Const.ACCOUNT.CANNOT_CHANGE_STATUS_TO_ACTIVE_MANUALLY, HttpStatus.FORBIDDEN.value());
-            }
-        } else { // ACTIVE hoặc INACTIVE
-            if (UserStatus.PENDING.equals(newStatus)) {
-                throw new ApiException(Const.ACCOUNT.CANNOT_CHANGE_STATUS_TO_PENDING, HttpStatus.FORBIDDEN.value());
-            }
+            throw new ApiException(Const.ACCOUNT.CANNOT_CHANGE_STATUS_TO_ACTIVE_MANUALLY, HttpStatus.FORBIDDEN.value());
+        }
+        if (UserStatus.PENDING.equals(newStatus)) {
+            throw new ApiException(Const.ACCOUNT.CANNOT_CHANGE_STATUS_TO_PENDING, HttpStatus.FORBIDDEN.value());
         }
 
         // Quy tắc Admin
         if (RoleName.ADMIN.equals(targetUser.getRole().getName())) {
             if (RoleName.ADMIN.equals(currentUser.getRole().getName())) {
-                throw new ApiException("Admin cannot change status of other Admins or themselves", HttpStatus.FORBIDDEN.value());
+                throw new ApiException(Const.USER.ADMIN_CANNOT_CHANGE_STATUS, HttpStatus.FORBIDDEN.value());
             }
         }
 
@@ -318,6 +316,32 @@ public class AccountServiceImpl implements AccountService {
         log.info("[{}] Successfully updated status for userId: {} to {}", traceId, id, newStatus);
 
         return userMapper.toAccountDTO(targetUser);
+    }
+
+    @Override
+    public void deleteAccount(Long id) {
+        User targetUser = userRepository.findByIdAndDeletedAtIsNull(id)
+                .filter(user -> user.getDeletedAt() == null)
+                .orElseThrow(() -> new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.BAD_REQUEST.value()));
+
+        if(!targetUser.getStatus().equals(UserStatus.PENDING)) {
+            throw new ApiException(Const.USER.PENDING_STATUS, HttpStatus.BAD_REQUEST.value());
+        }
+
+        Long userIdFromCurrentRequest = jwtUtil.extractUserIdFromCurrentRequest();
+
+        // Lấy thông tin admin đang thao tác
+        User currentUser = userRepository.findByIdAndDeletedAtIsNull(userIdFromCurrentRequest)
+                .orElseThrow(() -> new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.UNAUTHORIZED.value()));
+
+        // Quy tắc Admin
+        if (RoleName.ADMIN.equals(targetUser.getRole().getName()) && (RoleName.ADMIN.equals(currentUser.getRole().getName()))) {
+                throw new ApiException(Const.USER.ADMIN_CANNOT_CHANGE_STATUS, HttpStatus.FORBIDDEN.value());
+        }
+
+        targetUser.setDeletedBy(jwtUtil.extractEmailPrefixFromCurrentRequest());
+        targetUser.setDeletedAt(OffsetDateTime.now());
+        userRepository.save(targetUser);
     }
 
 }

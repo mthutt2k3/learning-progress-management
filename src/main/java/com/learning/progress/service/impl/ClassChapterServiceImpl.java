@@ -1,8 +1,6 @@
 package com.learning.progress.service.impl;
 
-import com.learning.progress.common.ActionType;
-import com.learning.progress.common.ClassTeacherStatus;
-import com.learning.progress.common.RoleName;
+import com.learning.progress.common.*;
 import com.learning.progress.dto.clazz.chapter.ClassChapterDTO;
 import com.learning.progress.dto.clazz.chapter.SyncClassChapterRequest;
 import com.learning.progress.dto.DataResponse;
@@ -72,8 +70,11 @@ public class ClassChapterServiceImpl implements ClassChapterService {
         // Validate class
         Clazz classEntity = classRepository.findById(classId)
                 .filter(c -> c.getDeletedAt() == null)
-                .orElseThrow(() -> new ApiException("Clazz không tồn tại", HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> new ApiException(Const.CLASS.CLASS_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
+        if(classEntity.getStatus() == ClassStatus.FINISHED){
+            throw new ApiException(Const.CLASS.FINISHED_CLASS, HttpStatus.BAD_REQUEST.value());
+        }
         // Load existing active class chapters
         List<ClassChapter> existingActiveChapters = classChapterRepository
                 .findByClassIdAndDeletedAtIsNullOrderByOrderNumberAsc(classId);

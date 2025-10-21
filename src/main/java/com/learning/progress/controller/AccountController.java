@@ -69,4 +69,12 @@ public class AccountController {
         return new ResponseEntity<>(DataResponse.success(accountService.updateStatusAccount(id, userStatus), Const.RESULT_MESSAGE_CODE.UPDATE_SUCCESSFUL), HttpStatus.OK);
     }
 
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Delete Pending Account", description = "Delete Pending account (ADMIN only)")
+    public ResponseEntity<DataResponse<?>> deleteAccount(@PathVariable Long id) {
+        accountService.deleteAccount(id);
+        return new ResponseEntity<>(DataResponse.success(null, Const.RESULT_MESSAGE_CODE.DELETE_SUCCESSFUL), HttpStatus.OK);
+    }
+
 }

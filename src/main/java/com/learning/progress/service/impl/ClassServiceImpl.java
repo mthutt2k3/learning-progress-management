@@ -23,7 +23,6 @@ import com.learning.progress.service.ClassService;
 import com.learning.progress.util.AppValidator;
 import com.learning.progress.util.DataUtil;
 import com.learning.progress.util.JwtUtil;
-import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validator;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -40,7 +39,6 @@ import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 @Service
 @Slf4j
@@ -233,7 +231,7 @@ public class ClassServiceImpl implements ClassService {
 
         if (clazz.getStatus() == ClassStatus.FINISHED) {
             throw new ApiException(
-                    Const.CLASS.UPDATE_FINISHED_CLASS,
+                    Const.CLASS.FINISHED_CLASS,
                     HttpStatus.BAD_REQUEST.value()
             );
         }
