@@ -383,7 +383,7 @@ public class UserServiceImpl implements UserService {
             if (username == null || username.trim().isEmpty()) {
                 throw new ApiException(Const.AUTH.INVALID_TOKEN_USERNAME, HttpStatus.UNAUTHORIZED.value());
             }
-            user = userRepository.findByUserName(username)
+            user = userRepository.findByUserNameAndDeletedAtIsNull(username)
                     .orElseThrow(() -> new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
         } else {
             user = userRepository.findById(userId)
@@ -445,7 +445,7 @@ public class UserServiceImpl implements UserService {
             throw new ApiException(Const.AUTH.INVALID_TOKEN_USERNAME, HttpStatus.UNAUTHORIZED.value());
         }
 
-        User user = userRepository.findByUserName(username)
+        User user = userRepository.findByUserNameAndDeletedAtIsNull(username)
                 .orElseThrow(() -> new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         if (!user.getId().equals(userId)) {
@@ -472,7 +472,7 @@ public class UserServiceImpl implements UserService {
             throw new ApiException(Const.AUTH.INVALID_TOKEN_USERNAME, HttpStatus.UNAUTHORIZED.value());
         }
 
-        User currentUser = userRepository.findByUserName(username)
+        User currentUser = userRepository.findByUserNameAndDeletedAtIsNull(username)
                 .orElseThrow(() -> new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         // Lấy user mục tiêu dựa trên userId được truyền vào
@@ -767,7 +767,7 @@ public class UserServiceImpl implements UserService {
                                  List<Long> classIds) {
         // Lấy thông tin user hiện tại
         String currentUsername = jwtUtil.extractUsernameFromCurrentRequest();
-        User currentUser = userRepository.findByUserName(currentUsername)
+        User currentUser = userRepository.findByUserNameAndDeletedAtIsNull(currentUsername)
                 .orElseThrow(() -> new ApiException(Const.AUTH.INVALID_TOKEN_USERNAME, HttpStatus.UNAUTHORIZED.value()));
 
         RoleName currentRole = currentUser.getRole().getName();

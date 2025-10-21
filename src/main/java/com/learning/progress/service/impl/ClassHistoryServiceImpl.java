@@ -97,7 +97,7 @@ public class ClassHistoryServiceImpl implements ClassHistoryService {
         ValidateUtil.validateSortParams(List.of("actionAt", "actionType"), sortBy, sortDir);
 
         String username = jwtUtil.extractUsernameFromCurrentRequest();
-        User user = userRepository.findByUserName(username)
+        User user = userRepository.findByUserNameAndDeletedAtIsNull(username)
                 .orElseThrow(() -> new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.UNAUTHORIZED.value()));
 
         RoleName role = user.getRole().getName();
@@ -140,7 +140,7 @@ public class ClassHistoryServiceImpl implements ClassHistoryService {
         ValidateUtil.validateSortParams(List.of("actionAt", "actionType"), sortBy, sortDir);
 
         String currentUsername = jwtUtil.extractUsernameFromCurrentRequest();
-        User currentUser = userRepository.findByUserName(currentUsername)
+        User currentUser = userRepository.findByUserNameAndDeletedAtIsNull(currentUsername)
                 .orElseThrow(() -> new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.UNAUTHORIZED.value()));
 
         if (!currentUser.getId().equals(userId) && currentUser.getRole().getName() != RoleName.MANAGER) {
