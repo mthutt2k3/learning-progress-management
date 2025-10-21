@@ -1,6 +1,7 @@
 package com.learning.progress.service.impl;
 
 import com.learning.progress.common.Const;
+import com.learning.progress.dto.excel.ValidationResult;
 import com.learning.progress.dto.lesson.LessonDTO;
 import com.learning.progress.dto.DataResponse;
 import com.learning.progress.dto.excel.ImportLessonDTO;
@@ -399,5 +400,238 @@ public class LessonServiceImpl implements LessonService {
         }
 
         return result;
+    }
+
+    @Override
+    public byte[] validateLessonImportFile(MultipartFile file) {
+        ValidationResult<ImportLessonDTO> result = new ValidationResult<>();
+        List<ImportLessonDTO> importList;
+
+        // Bước 1: Đọc file - catch lỗi format
+        try {
+            importList = fileService.readExcelData(file, "Import Data", ImportLessonDTO.class);
+            result.setTotalRows(importList.size());
+
+            if (importList.isEmpty()) {
+                throw new ApiException("File không có dữ liệu để import", HttpStatus.BAD_REQUEST.value());
+            }
+        } catch (ApiException e) {
+            // Lỗi khi đọc file
+            result.setTotalRows(0);
+            result.setValidRows(0);
+            result.setInvalidRows(0);
+
+            ValidationResult.ValidatedRow<ImportLessonDTO> errorRow =
+                    new ValidationResult.ValidatedRow<>();
+            errorRow.setData(new ImportLessonDTO());
+            errorRow.setRowNumber(0);
+            errorRow.setValid(false);
+            errorRow.setErrorMessage("❌ LỖI ĐỌC FILE:\n" + e.getMessage());
+            result.addRow(errorRow);
+
+            return fileService.generateValidationResultFile(
+                    file, "Import Data", result, ImportLessonDTO.class
+            );
+        }
+
+        // Bước 2: Fetch all chapter codes một lần
+        Set<String> chapterCodes = importList.stream()
+                .filter(dto -> dto.getChapterCode() != null && !dto.getChapterCode().trim().isEmpty())
+                .map(dto -> dto.getChapterCode().trim())
+                .collect(Collectors.toSet());
+
+        List<Chapter> chapters = chapterRepository.findByChapterCodeIn(new ArrayList<>(chapterCodes));
+
+        Map<String, Chapter> chapterMap = chapters.stream()
+                .filter(c -> c.getDeletedAt() == null)
+                .collect(Collectors.toMap(
+                        Chapter::getChapterCode,
+                        c -> c
+                ));
+
+        // Bước 3: Nhóm theo chapterCode để validate
+        Map<String, List<ImportLessonDTO>> lessonsByChapter = new LinkedHashMap<>();
+        for (ImportLessonDTO dto : importList) {
+            String chapterCode = dto.getChapterCode() != null ? dto.getChapterCode().trim() : null;
+            if (chapterCode != null && !chapterCode.isEmpty()) {
+                lessonsByChapter
+                        .computeIfAbsent(chapterCode, k -> new ArrayList<>())
+                        .add(dto);
+            }
+        }
+
+        // Bước 4: Validate từng row
+        int validCount = 0;
+        int invalidCount = 0;
+
+        int rowIndex = 2; // Bắt đầu từ dòng 2 (sau header)
+
+        for (int i = 0; i < importList.size(); i++) {
+            ImportLessonDTO dto = importList.get(i);
+            ValidationResult.ValidatedRow<ImportLessonDTO> validatedRow =
+                    new ValidationResult.ValidatedRow<>();
+            validatedRow.setData(dto);
+            validatedRow.setRowNumber(rowIndex);
+
+            StringBuilder errors = new StringBuilder();
+
+            try {
+                // Validate Chapter Code
+                if (dto.getChapterCode() == null || dto.getChapterCode().trim().isEmpty()) {
+                    errors.append("• Chapter Code không được để trống\n");
+                } else {
+                    String chapterCode = dto.getChapterCode().trim();
+                    Chapter chapter = chapterMap.get(chapterCode);
+
+                    if (chapter == null) {
+                        errors.append("• Chapter Code không tồn tại hoặc đã bị xóa: ")
+                                .append(chapterCode).append("\n");
+                    }
+                }
+
+                // Validate Lesson Name
+                if (dto.getLessonName() == null || dto.getLessonName().trim().isEmpty()) {
+                    errors.append("• Lesson Name không được để trống\n");
+                } else {
+                    String trimmedName = dto.getLessonName().trim();
+
+                    if (trimmedName.length() > 255) {
+                        errors.append("• Lesson Name vượt quá 255 ký tự (hiện tại: ")
+                                .append(trimmedName.length()).append(" ký tự)\n");
+                    }
+
+                    // Check duplicate trong file (cùng chapter)
+                    if (dto.getChapterCode() != null) {
+                        String chapterCode = dto.getChapterCode().trim();
+                        List<ImportLessonDTO> sameGroupLessons = lessonsByChapter.get(chapterCode);
+
+                        if (sameGroupLessons != null) {
+                            long duplicateCount = sameGroupLessons.stream()
+                                    .filter(l -> l.getLessonName() != null &&
+                                            l.getLessonName().trim().equalsIgnoreCase(trimmedName))
+                                    .count();
+
+                            if (duplicateCount > 1) {
+                                errors.append("• Lesson Name bị trùng lặp trong file: ")
+                                        .append(trimmedName).append("\n");
+                            }
+                        }
+                    }
+
+                    // Check duplicate trong DB (nếu chapter valid)
+                    if (dto.getChapterCode() != null) {
+                        Chapter chapter = chapterMap.get(dto.getChapterCode().trim());
+                        if (chapter != null) {
+                            boolean exists = lessonRepository.existsByChapterAndLessonNameIgnoreCaseAndDeletedAtIsNull(
+                                    chapter, trimmedName
+                            );
+                            if (exists) {
+                                errors.append("• Lesson Name đã tồn tại trong hệ thống cho chapter này: ")
+                                        .append(trimmedName).append("\n");
+                            }
+                        }
+                    }
+                }
+
+                // Validate Content (optional)
+                if (dto.getContent() != null && dto.getContent().length() > 1000) {
+                    errors.append("• Content vượt quá 1000 ký tự (hiện tại: ")
+                            .append(dto.getContent().length()).append(" ký tự)\n");
+                }
+
+                // Validate Order Number
+                if (dto.getOrderNumber() == null) {
+                    errors.append("• Order Number không được để trống\n");
+                } else {
+                    if (dto.getOrderNumber() < 1) {
+                        errors.append("• Order Number phải là số dương (>= 1), giá trị hiện tại: ")
+                                .append(dto.getOrderNumber()).append("\n");
+                    }
+
+                    // Check duplicate order number trong cùng chapter
+                    if (dto.getChapterCode() != null) {
+                        String chapterCode = dto.getChapterCode().trim();
+                        List<ImportLessonDTO> sameGroupLessons = lessonsByChapter.get(chapterCode);
+
+                        if (sameGroupLessons != null) {
+                            long duplicateOrderCount = sameGroupLessons.stream()
+                                    .filter(l -> l.getOrderNumber() != null &&
+                                            l.getOrderNumber().equals(dto.getOrderNumber()))
+                                    .count();
+
+                            if (duplicateOrderCount > 1) {
+                                errors.append("• Order Number bị trùng lặp trong file: ")
+                                        .append(dto.getOrderNumber()).append("\n");
+                            }
+                        }
+                    }
+                }
+
+                if (errors.length() > 0) {
+                    validatedRow.setValid(false);
+                    validatedRow.setErrorMessage(errors.toString().trim());
+                    invalidCount++;
+                } else {
+                    validatedRow.setValid(true);
+                    validatedRow.setErrorMessage("✓ Hợp lệ");
+                    validCount++;
+                }
+
+            } catch (Exception e) {
+                validatedRow.setValid(false);
+                validatedRow.setErrorMessage("⚠️ Lỗi xử lý dòng: " + e.getMessage());
+                invalidCount++;
+            }
+
+            result.addRow(validatedRow);
+            rowIndex++;
+        }
+
+        // Bước 5: Validate order numbers tuần tự không gap cho từng chapter
+        for (Map.Entry<String, List<ImportLessonDTO>> entry : lessonsByChapter.entrySet()) {
+            String chapterCode = entry.getKey();
+            List<ImportLessonDTO> lessons = entry.getValue();
+
+            Set<Integer> orderNumbers = lessons.stream()
+                    .map(ImportLessonDTO::getOrderNumber)
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toSet());
+
+            if (!orderNumbers.isEmpty()) {
+                int maxOrder = Collections.max(orderNumbers);
+                List<Integer> missingOrders = new ArrayList<>();
+
+                for (int i = 1; i <= maxOrder; i++) {
+                    if (!orderNumbers.contains(i)) {
+                        missingOrders.add(i);
+                    }
+                }
+
+                // Nếu có gap, đánh dấu lại các row trong group này là invalid
+                if (!missingOrders.isEmpty()) {
+                    for (ValidationResult.ValidatedRow<ImportLessonDTO> row : result.getRows()) {
+                        if (row.getData().getChapterCode() != null &&
+                                row.getData().getChapterCode().trim().equals(chapterCode) &&
+                                row.isValid()) {
+
+                            row.setValid(false);
+                            String gapError = "\n• Order Number không tuần tự từ 1 đến " + maxOrder +
+                                    ". Thiếu số: " + missingOrders;
+                            row.setErrorMessage(row.getErrorMessage() + gapError);
+
+                            validCount--;
+                            invalidCount++;
+                        }
+                    }
+                }
+            }
+        }
+
+        result.setValidRows(validCount);
+        result.setInvalidRows(invalidCount);
+
+        return fileService.generateValidationResultFile(
+                file, "Import Data", result, ImportLessonDTO.class
+        );
     }
 }

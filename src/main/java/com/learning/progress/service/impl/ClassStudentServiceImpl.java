@@ -4,6 +4,7 @@ import com.learning.progress.common.*;
 import com.learning.progress.dto.clazz.student.*;
 import com.learning.progress.dto.excel.ImportStudentToClass;
 import com.learning.progress.dto.DataResponse;
+import com.learning.progress.dto.excel.ValidationResult;
 import com.learning.progress.entity.ClassStudent;
 import com.learning.progress.entity.Clazz;
 import com.learning.progress.entity.User;
@@ -408,5 +409,174 @@ public class ClassStudentServiceImpl implements ClassStudentService {
 
             addStudentToClass(entry.getKey(), request);
         }
+    }
+
+    @Override
+    public byte[] validateStudentToClassImportFile(MultipartFile file) {
+        ValidationResult<ImportStudentToClass> result = new ValidationResult<>();
+        List<ImportStudentToClass> importList;
+
+        // Bước 1: Đọc file - catch lỗi format
+        try {
+            importList = fileService.readExcelData(file, "Import Data", ImportStudentToClass.class);
+            result.setTotalRows(importList.size());
+
+            if (importList.isEmpty()) {
+                throw new ApiException("Import file is empty", HttpStatus.BAD_REQUEST.value());
+            }
+        } catch (ApiException e) {
+            // Lỗi khi đọc file
+            result.setTotalRows(0);
+            result.setValidRows(0);
+            result.setInvalidRows(0);
+
+            ValidationResult.ValidatedRow<ImportStudentToClass> errorRow =
+                    new ValidationResult.ValidatedRow<>();
+            errorRow.setData(new ImportStudentToClass());
+            errorRow.setRowNumber(0);
+            errorRow.setValid(false);
+            errorRow.setErrorMessage("❌ LỖI ĐỌC FILE:\n" + e.getMessage());
+            result.addRow(errorRow);
+
+            return fileService.generateValidationResultFile(
+                    file, "Import Data", result, ImportStudentToClass.class
+            );
+        }
+
+        // Bước 2: Fetch all classes và users một lần
+        Set<String> classCodes = importList.stream()
+                .map(record -> record.getClassCode().toLowerCase().trim())
+                .collect(Collectors.toSet());
+
+        Set<String> userNames = importList.stream()
+                .map(record -> record.getUserName().toLowerCase().trim())
+                .collect(Collectors.toSet());
+
+        List<Clazz> classes = classRepository.findByClassCodeInIgnoreCase(new ArrayList<>(classCodes));
+        List<User> users = userRepository.findByUserNameInIgnoreCase(new ArrayList<>(userNames));
+
+        Map<String, Clazz> classMap = classes.stream()
+                .collect(Collectors.toMap(c -> c.getClassCode().toLowerCase(), c -> c));
+
+        Map<String, User> userMap = users.stream()
+                .collect(Collectors.toMap(u -> u.getUserName().toLowerCase(), u -> u));
+
+        // Bước 3: Validate từng row
+        int validCount = 0;
+        int invalidCount = 0;
+
+        // Track duplicate pairs trong file
+        Set<String> seenPairs = new HashSet<>();
+
+        for (int i = 0; i < importList.size(); i++) {
+            ImportStudentToClass record = importList.get(i);
+            ValidationResult.ValidatedRow<ImportStudentToClass> validatedRow =
+                    new ValidationResult.ValidatedRow<>();
+            validatedRow.setData(record);
+            validatedRow.setRowNumber(i + 2); // +2 vì header ở row 1
+
+            StringBuilder errors = new StringBuilder();
+
+            try {
+                // Validate Class Code
+                if (record.getClassCode() == null || record.getClassCode().trim().isEmpty()) {
+                    errors.append("• Class Code không được để trống\n");
+                } else {
+                    String classCode = record.getClassCode().toLowerCase().trim();
+                    Clazz clazz = classMap.get(classCode);
+
+                    if (clazz == null) {
+                        errors.append("• Class Code không tồn tại: ").append(record.getClassCode()).append("\n");
+                    } else {
+                        // Validate class status
+                        if (clazz.getStatus() == ClassStatus.INACTIVE) {
+                            errors.append("• Class đang INACTIVE, không thể thêm học sinh\n");
+                        }
+
+                        if (clazz.getDeletedAt() != null) {
+                            errors.append("• Class đã bị xóa, không thể thêm học sinh\n");
+                        }
+                    }
+                }
+
+                // Validate User Name
+                if (record.getUserName() == null || record.getUserName().trim().isEmpty()) {
+                    errors.append("• User Name không được để trống\n");
+                } else {
+                    String userName = record.getUserName().toLowerCase().trim();
+                    User user = userMap.get(userName);
+
+                    if (user == null) {
+                        errors.append("• Username không tồn tại: ").append(record.getUserName()).append("\n");
+                    } else {
+                        // Validate user status
+                        if (!UserStatus.ACTIVE.equals(user.getStatus())) {
+                            errors.append("• User không ở trạng thái ACTIVE\n");
+                        }
+
+                        // Validate user role
+                        if (user.getRole() == null ||
+                                (!RoleName.STUDENT.equals(user.getRole().getName()) &&
+                                        !RoleName.TEST_TAKER.equals(user.getRole().getName()))) {
+                            errors.append("• User phải có role STUDENT hoặc TEST_TAKER\n");
+                        }
+
+                        if (user.getDeletedAt() != null) {
+                            errors.append("• User đã bị xóa\n");
+                        }
+                    }
+                }
+
+                // Validate duplicate pair trong file
+                String pairKey = record.getClassCode().toLowerCase().trim() + "|" +
+                        record.getUserName().toLowerCase().trim();
+                if (seenPairs.contains(pairKey)) {
+                    errors.append("• Cặp Class Code + Username bị trùng lặp trong file\n");
+                } else {
+                    seenPairs.add(pairKey);
+                }
+
+                // Check if student already in class (nếu cả class và user đều valid)
+                if (record.getClassCode() != null && record.getUserName() != null) {
+                    String classCode = record.getClassCode().toLowerCase().trim();
+                    String userName = record.getUserName().toLowerCase().trim();
+                    Clazz clazz = classMap.get(classCode);
+                    User user = userMap.get(userName);
+
+                    if (clazz != null && user != null) {
+                        Optional<ClassStudent> existing = classStudentRepository
+                                .findByClazzIdAndUserId(clazz.getId(), user.getId());
+
+                        if (existing.isPresent()) {
+                            errors.append("• Học sinh đã có trong lớp này rồi\n");
+                        }
+                    }
+                }
+
+                if (errors.length() > 0) {
+                    validatedRow.setValid(false);
+                    validatedRow.setErrorMessage(errors.toString().trim());
+                    invalidCount++;
+                } else {
+                    validatedRow.setValid(true);
+                    validatedRow.setErrorMessage("✓ Hợp lệ");
+                    validCount++;
+                }
+
+            } catch (Exception e) {
+                validatedRow.setValid(false);
+                validatedRow.setErrorMessage("⚠️ Lỗi xử lý dòng: " + e.getMessage());
+                invalidCount++;
+            }
+
+            result.addRow(validatedRow);
+        }
+
+        result.setValidRows(validCount);
+        result.setInvalidRows(invalidCount);
+
+        return fileService.generateValidationResultFile(
+                file, "Import Data", result, ImportStudentToClass.class
+        );
     }
 }

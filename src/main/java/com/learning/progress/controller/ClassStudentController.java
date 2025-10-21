@@ -19,6 +19,8 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.List;
 
 @RestController
@@ -118,5 +120,28 @@ public class ClassStudentController {
     public ResponseEntity<?> importStudentsFromExcel(@RequestParam("file") MultipartFile file) {
         classStudentService.importStudentsFromExcel(file);
         return ResponseEntity.ok(DataResponse.success(Const.CLASS_STUDENT.STUDENTS_IMPORTED, Const.CLASS_STUDENT.STUDENTS_IMPORTED));
+    }
+
+    @PreAuthorize("hasRole('MANAGER')")
+    @PostMapping("/validate-import")
+    @Operation(
+            summary = "Validate Student to Class Import File",
+            description = "Validate Excel file without importing. Returns validation result file."
+    )
+    public ResponseEntity<ByteArrayResource> validateStudentToClassImport(
+            @RequestParam("file") MultipartFile file) {
+
+        byte[] validationFile = classStudentService.validateStudentToClassImportFile(file);
+        ByteArrayResource resource = new ByteArrayResource(validationFile);
+
+        String filename = "StudentToClass_Validation_" +
+                new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date()) +
+                ".xlsx";
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=" + filename)
+                .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                .contentLength(validationFile.length)
+                .body(resource);
     }
 }

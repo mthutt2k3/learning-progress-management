@@ -19,6 +19,8 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.List;
 
 @RestController
@@ -89,5 +91,30 @@ public class ClassChapterController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("Error generating SAS URL: " + e.getMessage());
         }
+    }
+
+    @PostMapping("/validate-import")
+    @PreAuthorize("hasRole('TEACHER')")
+    @Operation(
+            summary = "Validate Class Chapter Import File",
+            description = "Validate Excel file without importing. Returns validation result file."
+    )
+    public ResponseEntity<ByteArrayResource> validateClassChapterImport(
+            @Parameter(description = "Excel file to validate")
+            @RequestParam("file") MultipartFile file,
+            @RequestParam Long classId) {
+
+        byte[] validationFile = classChapterService.validateClassChapterImportFile(classId, file);
+        ByteArrayResource resource = new ByteArrayResource(validationFile);
+
+        String filename = "ClassChapter_Validation_" +
+                new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date()) +
+                ".xlsx";
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=" + filename)
+                .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                .contentLength(validationFile.length)
+                .body(resource);
     }
 }

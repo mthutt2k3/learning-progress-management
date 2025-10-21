@@ -139,4 +139,28 @@ public class SyllabusController {
                 .contentLength(excelFile.length)
                 .body(resource);
     }
+
+    @PostMapping("/validate-import")
+    @PreAuthorize("hasRole('MANAGER')")
+    @Operation(
+            summary = "Validate Syllabus Import File",
+            description = "Validate Excel file without importing. Returns validation result file."
+    )
+    public ResponseEntity<ByteArrayResource> validateSyllabusImport(
+            @Parameter(description = "Excel file to validate")
+            @RequestParam("file") MultipartFile file) {
+
+        byte[] validationFile = syllabusService.validateSyllabusImportFile(file);
+        ByteArrayResource resource = new ByteArrayResource(validationFile);
+
+        String filename = "Syllabus_Validation_" +
+                new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date()) +
+                ".xlsx";
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=" + filename)
+                .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                .contentLength(validationFile.length)
+                .body(resource);
+    }
 }

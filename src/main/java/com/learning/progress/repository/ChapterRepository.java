@@ -40,4 +40,6 @@ public interface ChapterRepository extends JpaRepository<Chapter, Long> {
 
     boolean existsBySyllabusAndChapterNameAndDeletedAtIsNull(Syllabus syllabus, String chapterName);
 
+    List<Chapter> findByChapterCodeIn(List<String> chapterCodes);
+
 }

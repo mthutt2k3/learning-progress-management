@@ -51,4 +51,7 @@ public interface SyllabusRepository extends JpaRepository<Syllabus, Long> {
     boolean existsBySyllabusNameIgnoreCase(String syllabusName);
 
     Optional<Syllabus> findByIdAndDeletedAtIsNull(Long id);
+
+    List<Syllabus> findBySyllabusCodeIn(List<String> syllabusCodes);
+
 }

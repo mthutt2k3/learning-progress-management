@@ -1,9 +1,6 @@
 package com.learning.progress.service;
 
-import com.learning.progress.dto.excel.ExcelColumn;
-import com.learning.progress.dto.excel.ExportStudentDTO;
-import com.learning.progress.dto.excel.ExportSyllabusDTO;
-import com.learning.progress.dto.excel.ExportTeacherDTO;
+import com.learning.progress.dto.excel.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
@@ -37,4 +34,14 @@ public interface FileService {
 
     byte[] exportSyllabusDetailData(ExportSyllabusDTO syllabus,
                                     Map<String, String> summaryInfo);
+
+    <T> byte[] generateValidationResultFile(MultipartFile originalFile,
+                                            String sheetName,
+                                            ValidationResult<T> validationResult,
+                                            Class<T> clazz);
+
+    <T> byte[] generateValidationResultFile(String originalFileName,
+                                            String sheetName,
+                                            ValidationResult<T> validationResult,
+                                            Class<T> clazz);
 }
