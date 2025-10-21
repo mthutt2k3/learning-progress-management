@@ -102,7 +102,7 @@ public class ManagerClassServiceImpl implements ClassService {
         clazz.setClassName(request.getClassName());
         clazz.setSyllabus(syllabus);
         clazz.setAvatarUrl(request.getAvatarUrl());
-        LocalDate today = LocalDate.now();
+        OffsetDateTime today = OffsetDateTime.now();
         if (request.getStartDate() != null && request.getStartDate().isAfter(today)) {
             clazz.setStatus(ClassStatus.PENDING);
         } else {
