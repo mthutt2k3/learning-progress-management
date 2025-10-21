@@ -80,7 +80,7 @@ public class AuthServiceImpl implements AuthService {
         User user = userRepository.findByUserNameAndDeletedAtIsNull(loginRequest.getUsername())
                 .orElseThrow(() -> {
                     log.error("[{}] User not found: {}", traceId, loginRequest.getUsername());
-                    return new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.UNAUTHORIZED.value());
+                    return new ApiException(Const.USER.NOT_FOUND, HttpStatus.UNAUTHORIZED.value());
                 });
 
         // Validate password
@@ -148,7 +148,7 @@ public class AuthServiceImpl implements AuthService {
         // Fetch user by username
         User user = userRepository.findByUserNameAndDeletedAtIsNull(request.getUserName())
                 .orElseThrow(() -> {
-                    return new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value());
+                    return new ApiException(Const.USER.NOT_FOUND, HttpStatus.NOT_FOUND.value());
                 });
 
         // Check user status
@@ -182,7 +182,7 @@ public class AuthServiceImpl implements AuthService {
         User user = userRepository.findByUserNameAndDeletedAtIsNull(username)
                 .orElseThrow(() -> {
                     log.error("[{}] User not found: {}", traceId, username);
-                    return new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value());
+                    return new ApiException(Const.USER.NOT_FOUND, HttpStatus.NOT_FOUND.value());
                 });
 
         // Check user status
@@ -226,7 +226,7 @@ public class AuthServiceImpl implements AuthService {
         User user = userRepository.findByUserNameAndDeletedAtIsNull(request.getUserName())
                 .orElseThrow(() -> {
                     log.error("[{}] User not found: {}", traceId, request.getUserName());
-                    return new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value());
+                    return new ApiException(Const.USER.NOT_FOUND, HttpStatus.NOT_FOUND.value());
                 });
 
         // Check user status
@@ -243,7 +243,6 @@ public class AuthServiceImpl implements AuthService {
         try {
             emailService.sendForgotPasswordEmail(user, request, resetPasswordToken);
             log.info("[{}] Password reset email sent to: {}", traceId, user.getEmail());
-            user.setForgotPassword(true);
             userRepository.save(user);
             return DataUtil.maskEmail(user.getEmail());
         } catch (Exception e) {
@@ -271,7 +270,7 @@ public class AuthServiceImpl implements AuthService {
         User user = userRepository.findByIdAndDeletedAtIsNull(userId)
                 .orElseThrow(() -> {
                     log.error("[{}] Invalid reset token: {}", traceId, request.getToken());
-                    return new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.BAD_REQUEST.value());
+                    return new ApiException(Const.USER.NOT_FOUND, HttpStatus.BAD_REQUEST.value());
                 });
         if (user.getStatus() == UserStatus.INACTIVE) {
             log.error("[{}] User inactive: {}", traceId, user.getUserName());
@@ -280,7 +279,7 @@ public class AuthServiceImpl implements AuthService {
         if (user.getStatus() == UserStatus.PENDING) {
             user.setStatus(UserStatus.ACTIVE);
         }
-        if (!user.isForgotPassword()) {
+        if (!user.isResetPasswordTokenUsed()) {
             log.error("[{}] Have changed password: {}", traceId, user.getUserName());
             throw new ApiException(Const.AUTH.HAVE_CHANGED_PASSWORD, HttpStatus.FORBIDDEN.value());
         }
@@ -288,7 +287,7 @@ public class AuthServiceImpl implements AuthService {
         // Update password
         user.setPassword(passwordEncoder.encode(request.getNewPassword()));
         user.setMustChangePassword(false);
-        user.setForgotPassword(false);
+        user.setResetPasswordTokenUsed(false);
         userRepository.save(user);
         log.info("[{}] Password reset successful for user: {}", traceId, user.getUserName());
 
@@ -317,7 +316,7 @@ public class AuthServiceImpl implements AuthService {
         User user = userRepository.findByUserNameAndDeletedAtIsNull(username)
                 .orElseThrow(() -> {
                     log.error("[{}] User not found: {}", traceId, username);
-                    return new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value());
+                    return new ApiException(Const.USER.NOT_FOUND, HttpStatus.NOT_FOUND.value());
                 });
         // Check user status
         if (user.getStatus() != UserStatus.ACTIVE) {

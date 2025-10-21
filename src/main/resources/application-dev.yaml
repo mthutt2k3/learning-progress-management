@@ -101,3 +101,9 @@ azure:
 app:
   pagination:
     max-size: 100
+  scheduler:
+    class-status-job:
+      enabled: true               # có thể bật/tắt job nếu cần
+      cron: "0 0 0 * * *"         # chạy mỗi ngày lúc 0h00
+      upcoming-end-days: 7        # số ngày trước endDate để chuyển sang UPCOMING_END
+

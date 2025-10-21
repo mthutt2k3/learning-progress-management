@@ -89,7 +89,21 @@ azure:
   storage:
     connection-string: ${CONNECTION_STRING}
     container-name: ${CONTAINER_NAME}
+    student-to-class-template: student-to-class-template.xlsx
+    student-template: student-template.xlsx
+    teacher-template: teacher-template.xlsx
+    syllabus-template: syllabus-template.xlsx
+    chapter-template: chapter-template.xlsx
+    lesson-template: lesson-template.xlsx
+    chapter-in-class-template: chapter-in-class-template.xlsx
+    lesson-in-class-template: lesson-in-class-template.xlsx
 
 app:
   pagination:
     max-size: 100
+  scheduler:
+    class-status-job:
+      enabled: true               # có thể bật/tắt job nếu cần
+      cron: "0 0 0 * * *"         # chạy mỗi ngày lúc 0h00
+      upcoming-end-days: 7        # số ngày trước endDate để chuyển sang UPCOMING_END
+

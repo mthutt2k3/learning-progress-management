@@ -120,7 +120,7 @@ public class ClassStudentServiceImpl implements ClassStudentService {
 
         // Kiểm tra sự tồn tại của người dùng
         User user = userRepository.findByIdAndDeletedAtIsNull(userId)
-                .orElseThrow(() -> new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> new ApiException(Const.USER.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         // Kiểm tra trạng thái người dùng
         if (!UserStatus.ACTIVE.equals(user.getStatus())) {
@@ -255,7 +255,7 @@ public class ClassStudentServiceImpl implements ClassStudentService {
 
         // Fetch and validate user
         User user = userRepository.findByIdAndDeletedAtIsNull(userId)
-                .orElseThrow(() -> new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> new ApiException(Const.USER.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         // Validate user status
         if (!UserStatus.ACTIVE.equals(user.getStatus())) {

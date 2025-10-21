@@ -238,7 +238,7 @@ public class ClassTeacherServiceImpl implements ClassTeacherService {
         }
 
         User user = userRepository.findByIdAndDeletedAtIsNull(userId)
-                .orElseThrow(() -> new ApiException(Const.USER.USER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> new ApiException(Const.USER.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         if (!UserStatus.ACTIVE.equals(user.getStatus())) {
             throw new ApiException(Const.USER.INACTIVE, HttpStatus.BAD_REQUEST.value());
