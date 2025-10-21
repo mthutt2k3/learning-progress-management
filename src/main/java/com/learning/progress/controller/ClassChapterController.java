@@ -40,14 +40,14 @@ public class ClassChapterController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasRole('MANAGER') or hasRole('TEACHER')")
+    @PreAuthorize("hasAnyRole('MANAGER', 'TEACHER', 'TEACHING_ASSISTANT', 'STUDENT', 'TEST_TAKER')")
     @Operation(summary = "Lấy class chapter", description = "Lấy thông tin class chapter theo ID")
     public ResponseEntity<DataResponse<ClassChapterDTO>> getClassChapter(@PathVariable Long id) {
         return ResponseEntity.ok(DataResponse.success(classChapterService.getClassChapter(id), Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL));
     }
 
     @GetMapping
-    @PreAuthorize("hasRole('MANAGER') or hasRole('TEACHER')")
+    @PreAuthorize("hasAnyRole('MANAGER', 'TEACHER', 'TEACHING_ASSISTANT', 'STUDENT', 'TEST_TAKER')")
     @Operation(summary = "Lấy danh sách class chapter", description = "Lấy danh sách class chapter phân trang")
     public ResponseEntity<DataResponse<List<ClassChapterDTO>>> getClassChapterList(
             @RequestParam Long classId,

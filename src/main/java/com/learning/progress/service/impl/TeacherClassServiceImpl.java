@@ -58,7 +58,7 @@ public class TeacherClassServiceImpl implements ClassService {
                 .orElseThrow(() -> new ApiException(Const.SECURITY.FORBIDDEN_ROLE, HttpStatus.FORBIDDEN.value()));
 
         Clazz clazz = classRepository.findByIdAndDeletedAtIsNull(id)
-                .orElseThrow(() -> new ApiException(Const.CLASS.CLASS_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> new ApiException(Const.CLASS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         ClassOverviewDTO.SyllabusDTO syllabusDTO = null;
         if (clazz.getSyllabus() != null) {
@@ -100,7 +100,7 @@ public class TeacherClassServiceImpl implements ClassService {
                 .orElseThrow(() -> new ApiException(Const.SECURITY.FORBIDDEN_ROLE, HttpStatus.FORBIDDEN.value()));
 
         Clazz clazz = classRepository.findByIdAndDeletedAtIsNull(id)
-                .orElseThrow(() -> new ApiException(Const.CLASS.CLASS_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> new ApiException(Const.CLASS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
         return classMapper.toClassDTO(clazz);
     }
 

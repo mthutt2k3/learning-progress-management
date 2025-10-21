@@ -14,10 +14,8 @@ import com.learning.progress.repository.ClassRepository;
 import com.learning.progress.repository.ClassTeacherRepository;
 import com.learning.progress.repository.UserRepository;
 import com.learning.progress.service.ClassHistoryService;
-import com.learning.progress.util.EnumUtil;
-import com.learning.progress.util.JwtUtil;
-import com.learning.progress.util.TraceUtil;
-import com.learning.progress.util.ValidateUtil;
+import com.learning.progress.util.*;
+import org.apache.poi.ss.usermodel.DateUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -27,6 +25,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.util.Arrays;
@@ -93,7 +92,7 @@ public class ClassHistoryServiceImpl implements ClassHistoryService {
 
     @Override
     @Transactional(readOnly = true)
-    public DataResponse<List<ClassHistoryDTO>> getClassHistory(Long classId, int page, int size, String sortBy, String sortDir) {
+    public DataResponse<List<ClassHistoryDTO>> getClassHistory(Long classId, int page, int size, String sortBy, String sortDir, String startDate, String endDate, Long actionBy) {
         ValidateUtil.validatePaginationParams(page, size);
         ValidateUtil.validateSortParams(List.of("actionAt", "actionType"), sortBy, sortDir);
 
@@ -109,9 +108,32 @@ public class ClassHistoryServiceImpl implements ClassHistoryService {
             }
         }
 
+        // Validate actionBy
+        if (actionBy != null) {
+            userRepository.findByIdAndDeletedAtIsNull(actionBy)
+                    .orElseThrow(() -> new ApiException(Const.USER.NOT_FOUND, HttpStatus.BAD_REQUEST.value()));
+        }
+
+        // Xử lý startDate và endDate
+        OffsetDateTime start = DataUtil.parseAndValidateOffsetDateTime(startDate, "yyyy-MM-dd", "startDate");
+        OffsetDateTime end = DataUtil.parseAndValidateOffsetDateTime(endDate, "yyyy-MM-dd", "endDate");
+
+        // Mặc định lấy 30 ngày gần nhất nếu không có startDate và endDate
+        if (start == null && end == null) {
+            end = OffsetDateTime.now();
+            start = end.minusDays(30);
+        } else if (start == null) {
+            start = end.minusDays(30); // Nếu chỉ có endDate, lấy startDate là 30 ngày trước
+        } else if (end == null) {
+            end = start.plusDays(30); // Nếu chỉ có startDate, lấy endDate là 30 ngày sau
+        }
+
+        // Validate startDate <= endDate
+        DataUtil.validateStartAndEndDate(start, end);
+
         Sort sort = Sort.by(Sort.Direction.fromString(sortDir), sortBy);
         Pageable pageable = PageRequest.of(page, size, sort);
-        Page<ClassHistory> historyPage = classHistoryRepository.findByClazzId(classId, pageable);
+        Page<ClassHistory> historyPage = classHistoryRepository.findByFilters(classId, start, end, actionBy, pageable);
 
         // Lọc bản ghi dựa trên visible_to_roles
         List<ClassHistory> histories = historyPage.getContent().stream()
@@ -124,73 +146,7 @@ public class ClassHistoryServiceImpl implements ClassHistoryService {
         return DataResponse.<List<ClassHistoryDTO>>builder()
                 .traceId(TraceUtil.getTraceId())
                 .success(true)
-                .message("Successful")
-                .data(historiesDTO)
-                .timestamp(LocalDateTime.now())
-                .page(page)
-                .size(size)
-                .totalElements(historyPage.getTotalElements())
-                .totalPages(historyPage.getTotalPages())
-                .build();
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public DataResponse<List<ClassHistoryDTO>> getClassHistoryByUser(Long userId, int page, int size, String sortBy, String sortDir) {
-        ValidateUtil.validatePaginationParams(page, size);
-        ValidateUtil.validateSortParams(List.of("actionAt", "actionType"), sortBy, sortDir);
-
-        String currentUsername = jwtUtil.extractUsernameFromCurrentRequest();
-        User currentUser = userRepository.findByUserNameAndDeletedAtIsNull(currentUsername)
-                .orElseThrow(() -> new ApiException(Const.USER.NOT_FOUND, HttpStatus.UNAUTHORIZED.value()));
-
-        if (!currentUser.getId().equals(userId) && currentUser.getRole().getName() != RoleName.MANAGER) {
-            throw new ApiException("You are not authorized to view this user's class history", HttpStatus.FORBIDDEN.value());
-        }
-
-        User targetUser = userRepository.findByIdAndDeletedAtIsNull(userId)
-                .orElseThrow(() -> new ApiException(Const.USER.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
-
-        RoleName role = targetUser.getRole().getName();
-        List<Long> classIds;
-        if (role == RoleName.MANAGER) {
-            classIds = clazzRepository.findAll().stream().map(Clazz::getId).collect(Collectors.toList());
-        } else {
-            classIds = classTeacherRepository.findByUser_Id(userId)
-                    .stream()
-                    .map(ct -> ct.getClazz().getId())
-                    .collect(Collectors.toList());
-        }
-
-        if (classIds.isEmpty()) {
-            return DataResponse.<List<ClassHistoryDTO>>builder()
-                    .traceId(TraceUtil.getTraceId())
-                    .success(true)
-                    .message("No class history found")
-                    .data(List.of())
-                    .timestamp(LocalDateTime.now())
-                    .page(page)
-                    .size(size)
-                    .totalElements(0L)
-                    .totalPages(0)
-                    .build();
-        }
-
-        Sort sort = Sort.by(Sort.Direction.fromString(sortDir), sortBy);
-        Pageable pageable = PageRequest.of(page, size, sort);
-        Page<ClassHistory> historyPage = classHistoryRepository.findByClazzIdIn(classIds, pageable);
-
-        // Lọc bản ghi dựa trên visible_to_roles
-        List<ClassHistory> histories = historyPage.getContent().stream()
-                .filter(history -> isVisibleToUser(history, currentUser.getRole().getName()))
-                .collect(Collectors.toList());
-        List<ClassHistoryDTO> historiesDTO = histories.stream()
-                .map(classHistoryMapper::toClassHistoryDTO)
-                .collect(Collectors.toList());
-        return DataResponse.<List<ClassHistoryDTO>>builder()
-                .traceId(TraceUtil.getTraceId())
-                .success(true)
-                .message("Successful")
+                .message(Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL)
                 .data(historiesDTO)
                 .timestamp(LocalDateTime.now())
                 .page(page)

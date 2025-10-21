@@ -10,6 +10,7 @@ import org.hibernate.annotations.OnDeleteAction;
 import org.hibernate.annotations.Where;
 
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.util.List;
 
 @SuperBuilder
@@ -41,10 +42,10 @@ public class Clazz extends BaseEntity{
     private String classCode;
 
     @Column(name = "start_date")
-    private LocalDate startDate;
+    private OffsetDateTime startDate;
 
     @Column(name = "end_date")
-    private LocalDate endDate;
+    private OffsetDateTime endDate;
 
     @OneToMany(mappedBy = "clazz", fetch = FetchType.LAZY)
     @Where(clause = "status = 'ACTIVE' AND deleted_at IS NULL")

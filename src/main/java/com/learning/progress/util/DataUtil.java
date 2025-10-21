@@ -60,20 +60,41 @@ public class DataUtil {
         }
     }
 
+    public static OffsetDateTime parseAndValidateOffsetDateTime(String dateStr, String pattern, String fieldName) {
+        if (dateStr == null || dateStr.trim().isEmpty()) {
+            return null;
+        }
 
-    public static void validateStartAndEndDate(LocalDate startDate, LocalDate endDate) {
+        try {
+            DateTimeFormatter formatter = DateTimeFormatter.ofPattern(pattern);
+            return OffsetDateTime.parse(dateStr.trim(), formatter);
+        } catch (DateTimeParseException e) {
+            throw new ApiException(
+                    String.format(Const.CLASS.INVALID_DATE_FORMAT, fieldName, pattern),
+                    HttpStatus.BAD_REQUEST.value()
+            );
+        }
+    }
+
+
+    public static void validateStartAndEndDate(OffsetDateTime startDate, OffsetDateTime endDate) {
         if (startDate == null || endDate == null) {
             log.error("Start date or end date is null");
-            throw new ApiException(Const.CLASS.INVALID_DATE_RANGE,
-                    HttpStatus.BAD_REQUEST.value());
+            throw new ApiException(
+                    Const.CLASS.INVALID_DATE_RANGE,
+                    HttpStatus.BAD_REQUEST.value()
+            );
         }
 
         if (endDate.isBefore(startDate)) {
             log.error("Invalid date range: endDate {} is before startDate {}", endDate, startDate);
-            throw new ApiException(Const.CLASS.END_DATE_INVALID,
-                    HttpStatus.BAD_REQUEST.value());
+            throw new ApiException(
+                    Const.CLASS.END_DATE_INVALID,
+                    HttpStatus.BAD_REQUEST.value()
+            );
         }
     }
+
 
 
     public static void validateDateOfBirth(Date dateOfBirth) {

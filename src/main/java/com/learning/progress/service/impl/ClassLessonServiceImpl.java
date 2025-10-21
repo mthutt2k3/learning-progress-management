@@ -2,6 +2,7 @@ package com.learning.progress.service.impl;
 
 import com.learning.progress.common.ActionType;
 import com.learning.progress.common.ClassTeacherStatus;
+import com.learning.progress.common.Const;
 import com.learning.progress.common.RoleName;
 import com.learning.progress.dto.clazz.lesson.ClassLessonDTO;
 import com.learning.progress.dto.clazz.lesson.SyncClassLessonRequest;
@@ -72,7 +73,7 @@ public class ClassLessonServiceImpl implements ClassLessonService {
         // Validate class chapter and class
         ClassChapter classChapter = classChapterRepository.findById(classChapterId)
                 .filter(c -> c.getDeletedAt() == null)
-                .orElseThrow(() -> new ApiException("Class chapter không tồn tại hoặc không thuộc lớp này", HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> new ApiException(Const.CLASS_CHAPTER.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
         Long classId = classChapter.getClazz().getId();
 
         // Load existing active class lessons
@@ -98,7 +99,7 @@ public class ClassLessonServiceImpl implements ClassLessonService {
             }
             Long deleteId = deleteReq.getId();
             if (deleteId == null || !existingActiveIds.contains(deleteId)) {
-                throw new ApiException("Class lesson ID không tồn tại: " + deleteId, HttpStatus.BAD_REQUEST.value());
+                throw new ApiException(String.format(Const.CLASS_LESSON.INVALID_ID, deleteId), HttpStatus.BAD_REQUEST.value());
             }
         }
 
@@ -123,7 +124,7 @@ public class ClassLessonServiceImpl implements ClassLessonService {
                 .collect(Collectors.toSet()));
 
         if (!invalidRequestIds.isEmpty()) {
-            throw new ApiException("Các lesson ID không tồn tại: " + invalidRequestIds, HttpStatus.BAD_REQUEST.value());
+            throw new ApiException(String.format(Const.CLASS_LESSON.LESSONS_NOT_FOUND, invalidRequestIds), HttpStatus.BAD_REQUEST.value());
         }
 
         // Check 2: Tất cả DB lessons phải được handle
@@ -137,7 +138,7 @@ public class ClassLessonServiceImpl implements ClassLessonService {
 
         if (!unhandledDbIds.isEmpty()) {
             throw new ApiException(
-                    String.format("Các lesson không được handle: %s. FE phải include TẤT CẢ active lessons!", unhandledDbIds),
+                    String.format(String.format(Const.CLASS_LESSON.UNHANDLED_LESSONS, unhandledDbIds), unhandledDbIds),
                     HttpStatus.BAD_REQUEST.value()
             );
         }
@@ -148,7 +149,7 @@ public class ClassLessonServiceImpl implements ClassLessonService {
 
         if (actualNonDeletedCount != expectedNonDeletedCount) {
             throw new ApiException(
-                    String.format("Số lượng non-deleted lessons không khớp! Expected: %d, Actual: %d",
+                    String.format(Const.CLASS_LESSON.NON_DELETED_COUNT_MISMATCH,
                             expectedNonDeletedCount, actualNonDeletedCount),
                     HttpStatus.BAD_REQUEST.value()
             );
@@ -187,14 +188,14 @@ public class ClassLessonServiceImpl implements ClassLessonService {
         for (SyncClassLessonRequest deleteReq : deleteRequests) {
             ClassLesson classLesson = classLessonRepository.findById(deleteReq.getId())
                     .filter(l -> l.getDeletedAt() == null)
-                    .orElseThrow(() -> new ApiException("Class lesson không tồn tại", HttpStatus.NOT_FOUND.value()));
+                    .orElseThrow(() -> new ApiException(Const.CLASS_LESSON.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
             classLesson.setDeletedBy(jwtUtil.extractEmailPrefixFromCurrentRequest());
             classLesson.setDeletedAt(now);
             classLessonRepository.save(classLesson);
 
             // Ghi lịch sử
             String actionDetails = String.format(
-                    "Đã xóa bài học %s của chương %s, lớp %s",
+                    Const.CLASS_LESSON.ACTION_DELETE,
                     classLesson.getClassLessonName(),
                     classChapter.getClassChapterName(),
                     classChapter.getClazz().getClassName()
@@ -216,7 +217,7 @@ public class ClassLessonServiceImpl implements ClassLessonService {
         for (SyncClassLessonRequest req : updateRequests) {
             ClassLesson classLesson = classLessonRepository.findById(req.getId())
                     .filter(l -> l.getDeletedAt() == null)
-                    .orElseThrow(() -> new ApiException("Class lesson không tồn tại", HttpStatus.NOT_FOUND.value()));
+                    .orElseThrow(() -> new ApiException(Const.CLASS_LESSON.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
             classLesson.setClassLessonName(req.getClassLessonName());
             classLesson.setClassLessonContent(req.getClassLessonContent());
             classLesson.setOrderNumber(req.getOrderNumber());
@@ -225,7 +226,7 @@ public class ClassLessonServiceImpl implements ClassLessonService {
 
             // Ghi lịch sử
             String actionDetails = String.format(
-                    "Đã cập nhật bài học %s của chương %s, lớp %s với thứ tự %d",
+                    Const.CLASS_LESSON.ACTION_UPDATE,
                     req.getClassLessonName(),
                     classChapter.getClassChapterName(),
                     classChapter.getClazz().getClassName(),
@@ -255,7 +256,7 @@ public class ClassLessonServiceImpl implements ClassLessonService {
 
             // Ghi lịch sử
             String actionDetails = String.format(
-                    "Đã tạo bài học %s cho chương %s, lớp %s với thứ tự %d",
+                    Const.CLASS_LESSON.ACTION_CREATE,
                     req.getClassLessonName(),
                     classChapter.getClassChapterName(),
                     classChapter.getClazz().getClassName(),
@@ -277,7 +278,7 @@ public class ClassLessonServiceImpl implements ClassLessonService {
     public ClassLessonDTO getClassLesson(Long id) {
         ClassLesson classLesson = classLessonRepository.findById(id)
                 .filter(l -> l.getDeletedAt() == null)
-                .orElseThrow(() -> new ApiException("Class lesson không tồn tại", HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> new ApiException(Const.CLASS_LESSON.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
         return classLessonMapper.toClassLessonDTO(classLesson);
     }
 
@@ -285,7 +286,7 @@ public class ClassLessonServiceImpl implements ClassLessonService {
     public DataResponse<List<ClassLessonDTO>> getClassLessonList(Long classChapterId, int page, int size, String searchText) {
         classChapterRepository.findById(classChapterId)
                 .filter(c -> c.getDeletedAt() == null)
-                .orElseThrow(() -> new ApiException("Class chapter không tồn tại", HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> new ApiException(Const.CLASS_CHAPTER.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         Page<ClassLesson> lessonPage = classLessonRepository.findByClassChapterIdAndSearchText(
                 classChapterId, searchText, PageRequest.of(page, size, Sort.by("orderNumber").ascending()));
@@ -295,7 +296,7 @@ public class ClassLessonServiceImpl implements ClassLessonService {
 
         return DataResponse.<List<ClassLessonDTO>>builder()
                 .success(true)
-                .message("Thành công")
+                .message(Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL)
                 .data(responses)
                 .page(page)
                 .size(size)
@@ -317,15 +318,10 @@ public class ClassLessonServiceImpl implements ClassLessonService {
     @Override
     @Transactional
     public List<ClassLessonDTO> importLessonsInClassFromExcel(MultipartFile file, Long classId) {
-
-        Clazz classEntity = classRepository.findById(classId)
-                .filter(c -> c.getDeletedAt() == null)
-                .orElseThrow(() -> new ApiException("Class không tồn tại", HttpStatus.NOT_FOUND.value()));
-
         // Validate teacher assignment
         Long currentUserId = jwtUtil.extractUserIdFromCurrentRequest();
         if ( !classTeacherRepository.existsByClazz_IdAndUser_IdAndStatus(classId, currentUserId, ClassTeacherStatus.ACTIVE)) {
-            throw new ApiException("Giáo viên không được phân công cho lớp này", HttpStatus.FORBIDDEN.value());
+            throw new ApiException(Const.CLASS.TEACHER_NOT_ASSIGNED, HttpStatus.FORBIDDEN.value());
         }
 
         List<ImportLessonDTO> importList = fileService.readExcelData(file, "Import Data", ImportLessonDTO.class);
@@ -344,21 +340,21 @@ public class ClassLessonServiceImpl implements ClassLessonService {
             // 1. Kiểm tra chapterCode
             ClassChapter chapter = classChapterRepository.findByClassChapterCode(chapterCode)
                     .filter(c -> c.getDeletedAt() == null)
-                    .orElseThrow(() -> new ApiException("Chapter không tìm thấy hoặc đã bị xóa với mã: " + chapterCode, HttpStatus.NOT_FOUND.value()));
+                    .orElseThrow(() -> new ApiException(String.format(Const.CLASS_LESSON.CHAPTER_CODE_NOT_FOUND, chapterCode), HttpStatus.NOT_FOUND.value()));
 
             // 2. Validate lessons
             for (ImportLessonDTO req : lessons) {
                 if (req.getLessonName() == null || req.getLessonName().trim().isEmpty()) {
-                    throw new ApiException("Lesson name là bắt buộc: " + req.getLessonName(), HttpStatus.BAD_REQUEST.value());
+                    throw new ApiException(String.format(Const.CLASS_LESSON.LESSON_NAME_REQUIRED, req.getLessonName()), HttpStatus.BAD_REQUEST.value());
                 }
                 if (req.getLessonName().length() > 255) {
-                    throw new ApiException("Lesson name vượt quá 255 ký tự: " + req.getLessonName(), HttpStatus.BAD_REQUEST.value());
+                    throw new ApiException(String.format(Const.CLASS_LESSON.LESSON_NAME_TOO_LONG, req.getLessonName()), HttpStatus.BAD_REQUEST.value());
                 }
                 if (req.getContent() != null && req.getContent().length() > 1000) {
-                    throw new ApiException("Content vượt quá 1000 ký tự: " + req.getContent(), HttpStatus.BAD_REQUEST.value());
+                    throw new ApiException(String.format(Const.CLASS_LESSON.LESSON_CONTENT_TOO_LONG, req.getContent()), HttpStatus.BAD_REQUEST.value());
                 }
                 if (req.getOrderNumber() == null || req.getOrderNumber() < 1) {
-                    throw new ApiException("Order number phải là số dương: " + req.getOrderNumber(), HttpStatus.BAD_REQUEST.value());
+                    throw new ApiException(String.format(Const.CLASS_LESSON.ORDER_NUMBER_INVALID, req.getOrderNumber()), HttpStatus.BAD_REQUEST.value());
                 }
             }
 
@@ -373,7 +369,7 @@ public class ClassLessonServiceImpl implements ClassLessonService {
 
             if (orderNumbers.size() != lessonSize || !orderNumbers.equals(expectedOrders)) {
                 throw new ApiException(
-                        String.format("Order numbers phải tuần tự từ 1 đến %d, không trùng lặp và không có gap. Current: %s",
+                        String.format(Const.CLASS_LESSON.ORDER_NUMBER_SEQUENCE_INVALID,
                                 lessonSize, orderNumbers),
                         HttpStatus.BAD_REQUEST.value()
                 );

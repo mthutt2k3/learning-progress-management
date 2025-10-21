@@ -22,7 +22,6 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -60,7 +59,7 @@ public class ManagerClassServiceImpl implements ClassService {
     @Transactional(readOnly = true)
     public ClassOverviewDTO getClassOverview(Long id) {
         Clazz clazz = classRepository.findByIdAndDeletedAtIsNull(id)
-                .orElseThrow(() -> new ApiException(Const.CLASS.CLASS_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> new ApiException(Const.CLASS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         ClassOverviewDTO.SyllabusDTO syllabusDTO = null;
         if (clazz.getSyllabus() != null) {
@@ -103,7 +102,7 @@ public class ManagerClassServiceImpl implements ClassService {
         clazz.setClassName(request.getClassName());
         clazz.setSyllabus(syllabus);
         clazz.setAvatarUrl(request.getAvatarUrl());
-        LocalDate today = LocalDate.now();
+        OffsetDateTime today = OffsetDateTime.now();
         if (request.getStartDate() != null && request.getStartDate().isAfter(today)) {
             clazz.setStatus(ClassStatus.PENDING);
         } else {
@@ -159,7 +158,7 @@ public class ManagerClassServiceImpl implements ClassService {
     @Transactional(readOnly = true)
     public ClassDTO getClass(Long id) {
         Clazz clazz = classRepository.findByIdAndDeletedAtIsNull(id)
-                .orElseThrow(() -> new ApiException(Const.CLASS.CLASS_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> new ApiException(Const.CLASS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
         return classMapper.toClassDTO(clazz);
     }
 
@@ -208,7 +207,7 @@ public class ManagerClassServiceImpl implements ClassService {
     @Transactional
     public ClassDTO updateClass(Long id, UpdateClassRequest request) {
         Clazz clazz = classRepository.findByIdAndDeletedAtIsNull(id)
-                .orElseThrow(() -> new ApiException(Const.CLASS.CLASS_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> new ApiException(Const.CLASS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         if (clazz.getStatus() == ClassStatus.FINISHED) {
             throw new ApiException(Const.CLASS.FINISHED_CLASS, HttpStatus.BAD_REQUEST.value());
@@ -262,7 +261,7 @@ public class ManagerClassServiceImpl implements ClassService {
     @Transactional
     public String changeClassStatusManually(Long id, String status) {
         Clazz clazz = classRepository.findByIdAndDeletedAtIsNull(id)
-                .orElseThrow(() -> new ApiException(Const.CLASS.CLASS_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> new ApiException(Const.CLASS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
         Long actionByUserId = jwtUtil.extractUserIdFromCurrentRequest();
         ClassStatus oldStatus = clazz.getStatus();
 
@@ -294,7 +293,7 @@ public class ManagerClassServiceImpl implements ClassService {
     @Transactional
     public void deleteClass(Long id) {
         Clazz clazz = classRepository.findByIdAndDeletedAtIsNull(id)
-                .orElseThrow(() -> new ApiException(Const.CLASS.CLASS_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> new ApiException(Const.CLASS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         if (clazz.getStatus() != ClassStatus.PENDING) {
             throw new ApiException(String.format(Const.CLASS.CANNOT_DELETE_ACTIVE_CLASS, clazz.getClassName(), clazz.getStatus()),

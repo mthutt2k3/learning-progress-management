@@ -81,7 +81,7 @@ public class ClassStudentServiceImpl implements ClassStudentService {
         Pageable pageable = PageRequest.of(page, size, sort);
 
         Clazz clazz = classRepository.findById(classId)
-                .orElseThrow(() -> new ApiException(Const.CLASS.CLASS_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> new ApiException(Const.CLASS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         Page<ClassStudent> studentPage;
         if (text != null && !text.isBlank()) {
@@ -112,7 +112,7 @@ public class ClassStudentServiceImpl implements ClassStudentService {
     public ClassStudentResponse getStudentProfile(Long classId, Long userId) {
         // Kiểm tra sự tồn tại của lớp học
         Clazz clazz = classRepository.findById(classId)
-                .orElseThrow(() -> new ApiException(Const.CLASS.CLASS_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> new ApiException(Const.CLASS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         // Kiểm tra lớp học chưa bị xóa mềm
         if (clazz.getDeletedAt() != null) {
@@ -151,7 +151,7 @@ public class ClassStudentServiceImpl implements ClassStudentService {
     public void addStudentToClass(Long classId, AddStudentToClassRequest request) {
         // 1️⃣ Validate class
         Clazz clazz = classRepository.findById(classId)
-                .orElseThrow(() -> new ApiException(Const.CLASS.CLASS_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> new ApiException(Const.CLASS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         if (clazz.getStatus() == ClassStatus.INACTIVE) {
             throw new ApiException(Const.CLASS.INACTIVE, HttpStatus.BAD_REQUEST.value());
@@ -242,7 +242,7 @@ public class ClassStudentServiceImpl implements ClassStudentService {
     public void removeStudentFromClass(Long classId, Long userId) {
         // Fetch and validate class
         Clazz clazz = classRepository.findById(classId)
-                .orElseThrow(() -> new ApiException(Const.CLASS.CLASS_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> new ApiException(Const.CLASS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         // Validate class is active
         if (clazz.getStatus() == ClassStatus.INACTIVE) {
