@@ -70,11 +70,11 @@ public class SyllabusServiceImpl implements SyllabusService {
     public SyllabusDTO createSyllabus(CreateSyllabusRequest request) {
 
         if (syllabusRepository.existsBySyllabusNameIgnoreCase(request.getSyllabusName())) {
-            throw new ApiException("Syllabus name already exists", HttpStatus.BAD_REQUEST.value());
+            throw new ApiException(Const.SYLLABUS.EXIST_NAME, HttpStatus.BAD_REQUEST.value());
         }
 
         Level level = levelRepository.findById(request.getLevelId())
-                .orElseThrow(() -> new ApiException("Level not found", HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> new ApiException(Const.SYLLABUS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         Syllabus syllabus = syllabusMapper.toSyllabus(request);
         syllabus.setLevel(level);
@@ -90,12 +90,11 @@ public class SyllabusServiceImpl implements SyllabusService {
     @Override
     @Transactional
     public SyllabusDTO updateSyllabus(Long id, UpdateSyllabusRequest request) {
-        Syllabus syllabus = syllabusRepository.findById(id)
-                .filter(s -> s.getDeletedAt() == null)
-                .orElseThrow(() -> new ApiException("Syllabus not found or deleted", HttpStatus.NOT_FOUND.value()));
+        Syllabus syllabus = syllabusRepository.findByIdAndDeletedAtIsNull(id)
+                .orElseThrow(() -> new ApiException(Const.SYLLABUS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         Level level = levelRepository.findById(request.getLevelId())
-                .orElseThrow(() -> new ApiException("Level not found", HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> new ApiException(Const.LEVEL.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         Syllabus updatedSyllabus = syllabusMapper.toSyllabus(request);
         syllabus.setSyllabusName(updatedSyllabus.getSyllabusName());
@@ -109,9 +108,8 @@ public class SyllabusServiceImpl implements SyllabusService {
     @Override
     @Transactional
     public void deleteSyllabus(Long id) {
-        Syllabus syllabus = syllabusRepository.findById(id)
-                .filter(s -> s.getDeletedAt() == null)
-                .orElseThrow(() -> new ApiException("Syllabus not found or deleted", HttpStatus.NOT_FOUND.value()));
+        Syllabus syllabus = syllabusRepository.findByIdAndDeletedAtIsNull(id)
+                .orElseThrow(() -> new ApiException(Const.SYLLABUS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         syllabus.setDeletedBy(jwtUtil.extractUsernameFromCurrentRequest());
         syllabus.setDeletedAt(OffsetDateTime.now());
@@ -120,9 +118,8 @@ public class SyllabusServiceImpl implements SyllabusService {
 
     @Override
     public SyllabusDetailDTO getSyllabusDetail(Long id, String include) {
-        Syllabus syllabus = syllabusRepository.findById(id)
-                .filter(s -> s.getDeletedAt() == null)
-                .orElseThrow(() -> new ApiException("Syllabus not found or deleted", HttpStatus.NOT_FOUND.value()));
+        Syllabus syllabus = syllabusRepository.findByIdAndDeletedAtIsNull(id)
+                .orElseThrow(() -> new ApiException(Const.SYLLABUS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         SyllabusDetailDTO syllabusDetailDTO = syllabusMapper.toSyllabusDetailDTO(syllabus);
 

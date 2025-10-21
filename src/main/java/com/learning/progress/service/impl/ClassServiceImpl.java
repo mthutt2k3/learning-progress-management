@@ -69,8 +69,7 @@ public class ClassServiceImpl implements ClassService {
 
     @Override
     public ClassOverviewDTO getClassOverview(Long id) {
-        Clazz clazz = classRepository.findById(id)
-                .filter(c -> c.getDeletedAt() == null)
+        Clazz clazz = classRepository.findByIdAndDeletedAtIsNull(id)
                 .orElseThrow(() -> new ApiException(Const.CLASS.CLASS_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         ClassOverviewDTO.SyllabusDTO syllabusDTO = null;
@@ -168,8 +167,7 @@ public class ClassServiceImpl implements ClassService {
 
     @Override
     public ClassDTO getClass(Long id) {
-        Clazz clazz = classRepository.findById(id)
-                .filter(c -> c.getDeletedAt() == null)
+        Clazz clazz = classRepository.findByIdAndDeletedAtIsNull(id)
                 .orElseThrow(() -> new ApiException(Const.CLASS.CLASS_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
         return classMapper.toClassDTO(clazz);
     }
@@ -225,8 +223,7 @@ public class ClassServiceImpl implements ClassService {
     @Override
     @Transactional
     public ClassDTO updateClass(Long id, UpdateClassRequest request) {
-        Clazz clazz = classRepository.findById(id)
-                .filter(c -> c.getDeletedAt() == null)
+        Clazz clazz = classRepository.findByIdAndDeletedAtIsNull(id)
                 .orElseThrow(() -> new ApiException(Const.CLASS.CLASS_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         if (clazz.getStatus() == ClassStatus.FINISHED) {
@@ -288,8 +285,7 @@ public class ClassServiceImpl implements ClassService {
     @Override
     @Transactional
     public String changeClassStatusManually(Long id, String newStatus) {
-        Clazz clazz = classRepository.findById(id)
-                .filter(c -> c.getDeletedAt() == null)
+        Clazz clazz = classRepository.findByIdAndDeletedAtIsNull(id)
                 .orElseThrow(() -> new ApiException(Const.CLASS.CLASS_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
         Long actionByUserId = jwtUtil.extractUserIdFromCurrentRequest();
         ClassStatus oldStatus = clazz.getStatus();
@@ -325,8 +321,7 @@ public class ClassServiceImpl implements ClassService {
     @Override
     @Transactional
     public void deleteClass(Long id) {
-        Clazz clazz = classRepository.findById(id)
-                .filter(c -> c.getDeletedAt() == null)
+        Clazz clazz = classRepository.findByIdAndDeletedAtIsNull(id)
                 .orElseThrow(() -> new ApiException(Const.CLASS.CLASS_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         if(clazz.getStatus() != ClassStatus.PENDING){

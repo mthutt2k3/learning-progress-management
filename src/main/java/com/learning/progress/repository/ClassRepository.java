@@ -47,4 +47,5 @@ public interface ClassRepository extends JpaRepository<Clazz, Long> {
     @Query("SELECT c FROM Clazz c WHERE LOWER(c.classCode) IN :classCodes")
     List<Clazz> findByClassCodeInIgnoreCase(@Param("classCodes") List<String> classCodes);
 
+    Optional<Clazz> findByIdAndDeletedAtIsNull(Long id);
 }

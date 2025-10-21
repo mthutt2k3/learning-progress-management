@@ -100,7 +100,7 @@ public class LevelServiceImpl implements LevelService {
     @Transactional(readOnly = true)
     public LevelDetailsResponse getLevelDetails(Long id) {
         Level level = levelRepository.findByIdWithPrerequisite(id)
-                .orElseThrow(() -> new ApiException(Const.LEVEL.LEVEL_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> new ApiException(Const.LEVEL.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
         return levelMapper.toLevelDetailsResponse(level);
     }
 
@@ -109,7 +109,7 @@ public class LevelServiceImpl implements LevelService {
         // Kiểm tra level tồn tại và active
         Level level = levelRepository.findById(id)
                 .filter(l -> l.getDeletedAt() == null)
-                .orElseThrow(() -> new ApiException(Const.LEVEL.LEVEL_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> new ApiException(Const.LEVEL.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         if (level.getStatus() == LevelEnum.DRAFT) {
             // Kiểm tra trùng lặp levelName và orderNumber
@@ -128,9 +128,6 @@ public class LevelServiceImpl implements LevelService {
         level.setDescription(request.getDescription());
         level.setPromotionCriteria(request.getPromotionCriteria());
         level.setLearningObjectives(request.getLearningObjectives());
-
-        // 5. Update audit fields nếu có
-        String currentUser = jwtUtil.extractUsernameFromCurrentRequest();
 
         levelRepository.save(level);
     }
