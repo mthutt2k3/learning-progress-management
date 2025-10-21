@@ -339,6 +339,10 @@ public class AccountServiceImpl implements AccountService {
         if (RoleName.ADMIN.equals(targetUser.getRole().getName()) && (RoleName.ADMIN.equals(currentUser.getRole().getName()))) {
                 throw new ApiException(Const.USER.ADMIN_CANNOT_CHANGE_STATUS, HttpStatus.FORBIDDEN.value());
         }
+        // Quy tắc Manager
+        if (RoleName.MANAGER.equals(targetUser.getRole().getName()) && (RoleName.MANAGER.equals(currentUser.getRole().getName()))) {
+            throw new ApiException(Const.USER.MANAGER_CANNOT_CHANGE_STATUS, HttpStatus.FORBIDDEN.value());
+        }
 
         targetUser.setDeletedBy(jwtUtil.extractEmailPrefixFromCurrentRequest());
         targetUser.setDeletedAt(OffsetDateTime.now());

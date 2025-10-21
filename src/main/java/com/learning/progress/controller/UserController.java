@@ -328,5 +328,4 @@ public class UserController {
                 DataResponse.success(response, Const.RESULT_MESSAGE_CODE.UPDATE_SUCCESSFUL)
         );
     }
-
 }
