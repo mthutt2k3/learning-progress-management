@@ -26,7 +26,8 @@ public interface UserRepository extends JpaRepository<User, Long> {
       AND (:statuses IS NULL OR u.status IN :statuses)
       AND (:text IS NULL OR 
            (LOWER(u.fullName) LIKE LOWER(CONCAT('%', CAST(:text AS string), '%'))
-         OR LOWER(u.email) LIKE LOWER(CONCAT('%', CAST(:text AS string), '%'))))
+         OR LOWER(u.email) LIKE LOWER(CONCAT('%', CAST(:text AS string), '%'))
+         OR LOWER(u.userName) LIKE LOWER(CONCAT('%', CAST(:text AS string), '%'))))
          AND u.deletedAt is null
 """)
     Page<User> findByRoleNameInAndStatusInAndSearchText(
@@ -40,9 +41,6 @@ public interface UserRepository extends JpaRepository<User, Long> {
     @Query("SELECT CASE WHEN COUNT(u) > 0 THEN true ELSE false END FROM User u WHERE LOWER(u.userName) = LOWER(:userName)")
     boolean existsByUserName(String userName);
 
-    @Query("SELECT u FROM User u WHERE LOWER(u.email) LIKE LOWER(CONCAT('%', :text, '%')) OR LOWER(u.fullName) LIKE LOWER(CONCAT('%', :text, '%')) AND u.deletedAt IS NULL")
-    Page<User> findByText(@Param("text") String text, Pageable pageable);
-
     @Query("SELECT u FROM User u WHERE u.status IN :statuses AND u.deletedAt IS NULL")
     Page<User> findByStatusIn(@Param("statuses") List<UserStatus> statuses, Pageable pageable);
 
@@ -52,18 +50,21 @@ public interface UserRepository extends JpaRepository<User, Long> {
     @Query("SELECT u FROM User u WHERE u.status IN :statuses AND u.role.name IN :roleNames AND u.deletedAt IS NULL")
     Page<User> findByStatusInAndRoleNameIn(@Param("statuses") List<UserStatus> statuses, @Param("roleNames") List<RoleName> roleNames, Pageable pageable);
 
-    @Query("SELECT u FROM User u WHERE (LOWER(u.email) LIKE LOWER(CONCAT('%', :text, '%')) OR LOWER(u.fullName) LIKE LOWER(CONCAT('%', :text, '%'))) AND u.status IN :statuses AND u.deletedAt IS NULL")
-    Page<User> findByTextAndStatusIn(@Param("text") String text, @Param("statuses") List<UserStatus> statuses, Pageable pageable);
-
-    @Query("SELECT u FROM User u WHERE (LOWER(u.email) LIKE LOWER(CONCAT('%', :text, '%')) OR LOWER(u.fullName) LIKE LOWER(CONCAT('%', :text, '%'))) AND u.role.name IN :roleNames AND u.deletedAt IS NULL")
-    Page<User> findByTextAndRoleNameIn(@Param("text") String text, @Param("roleNames") List<RoleName> roleNames, Pageable pageable);
-
-    @Query("SELECT u FROM User u WHERE (LOWER(u.email) LIKE LOWER(CONCAT('%', :text, '%')) OR LOWER(u.fullName) LIKE LOWER(CONCAT('%', :text, '%'))) AND u.status IN :statuses AND u.role.name IN :roleNames AND u.deletedAt IS NULL")
-    Page<User> findByTextAndStatusInAndRoleNameIn(@Param("text") String text, @Param("statuses") List<UserStatus> statuses, @Param("roleNames") List<RoleName> roleNames, Pageable pageable);
-
     @Query("SELECT NEW com.learning.progress.dto.level.LevelInfo(sl.level.id, sl.level.levelCode , sl.level.levelName) " +
             "FROM StudentLevel sl WHERE sl.user.id = :userId AND sl.status = 'ACTIVE'")
     Optional<LevelInfo> findActiveLevelInfoByUserId(Long userId);
+
+    @Query("SELECT u FROM User u WHERE (LOWER(u.email) LIKE LOWER(CONCAT('%', :text, '%')) OR LOWER(u.fullName) LIKE LOWER(CONCAT('%', :text, '%')) OR LOWER(u.userName) LIKE LOWER(CONCAT('%', :text, '%'))) AND u.deletedAt IS NULL")
+    Page<User> findByText(@Param("text") String text, Pageable pageable);
+
+    @Query("SELECT u FROM User u WHERE (LOWER(u.email) LIKE LOWER(CONCAT('%', :text, '%')) OR LOWER(u.fullName) LIKE LOWER(CONCAT('%', :text, '%')) OR LOWER(u.userName) LIKE LOWER(CONCAT('%', :text, '%'))) AND u.status IN :statuses AND u.deletedAt IS NULL")
+    Page<User> findByTextAndStatusIn(@Param("text") String text, @Param("statuses") List<UserStatus> statuses, Pageable pageable);
+
+    @Query("SELECT u FROM User u WHERE (LOWER(u.email) LIKE LOWER(CONCAT('%', :text, '%')) OR LOWER(u.fullName) LIKE LOWER(CONCAT('%', :text, '%')) OR LOWER(u.userName) LIKE LOWER(CONCAT('%', :text, '%'))) AND u.role.name IN :roleNames AND u.deletedAt IS NULL")
+    Page<User> findByTextAndRoleNameIn(@Param("text") String text, @Param("roleNames") List<RoleName> roleNames, Pageable pageable);
+
+    @Query("SELECT u FROM User u WHERE (LOWER(u.email) LIKE LOWER(CONCAT('%', :text, '%')) OR LOWER(u.fullName) LIKE LOWER(CONCAT('%', :text, '%')) OR LOWER(u.userName) LIKE LOWER(CONCAT('%', :text, '%'))) AND u.status IN :statuses AND u.role.name IN :roleNames AND u.deletedAt IS NULL")
+    Page<User> findByTextAndStatusInAndRoleNameIn(@Param("text") String text, @Param("statuses") List<UserStatus> statuses, @Param("roleNames") List<RoleName> roleNames, Pageable pageable);
 
     @Query("""
     SELECT u FROM User u 

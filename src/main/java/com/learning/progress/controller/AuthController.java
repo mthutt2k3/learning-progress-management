@@ -59,7 +59,7 @@ public class AuthController {
     @Operation(summary = "Request reset pass by teacher", description = "Request reset pass by teacher")
     public ResponseEntity<?> requestResetPasswordByTeacher(@RequestBody RequestTeacherResetPassword request) {
         authService.requestTeacherResetPassword(request);
-        return ResponseEntity.ok(DataResponse.success(Const.RESULT_MESSAGE_CODE.PASSWORD_RESET_EMAIL_SENT, Const.RESULT_MESSAGE_CODE.PASSWORD_RESET_EMAIL_SENT));
+        return ResponseEntity.ok(DataResponse.success(Const.RESULT_MESSAGE_CODE.PASSWORD_RESET_TEACHER_SENT, Const.RESULT_MESSAGE_CODE.PASSWORD_RESET_EMAIL_SENT));
     }
 
     @PreAuthorize("hasRole('MANAGER') or hasRole('TEACHER')")
