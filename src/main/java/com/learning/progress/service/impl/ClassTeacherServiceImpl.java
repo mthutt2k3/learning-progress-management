@@ -60,7 +60,7 @@ public class ClassTeacherServiceImpl implements ClassTeacherService {
     private int maxTeacherInClass;
 
     @Override
-    public DataResponse<List<ClassTeacherResponse>> getTeachersInClass(Long classId, int page, int size, String text, ClassTeacherStatus status, String sortBy, String sortDir) {
+    public DataResponse<List<ClassTeacherResponse>> getTeachersInClass(Long classId, int page, int size, String text, List<ClassTeacherStatus> status, String sortBy, String sortDir) {
         // Validate pagination and sort parameters
         appValidator.validatePaginationParams(page, size);
         appValidator.validateSortParams(List.of("id", "userName", "fullName", "email", "joinedAt", "status"), sortBy, sortDir);
@@ -71,11 +71,19 @@ public class ClassTeacherServiceImpl implements ClassTeacherService {
         Clazz clazz = classRepository.findById(classId)
                 .orElseThrow(() -> new ApiException(Const.CLASS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
+        // Nếu không truyền status thì lấy tất cả
+        List<ClassTeacherStatus> statuses;
+        if (status == null || status.isEmpty()) {
+            statuses = Arrays.asList(ClassTeacherStatus.values());
+        } else {
+            statuses = status;
+        }
+
         Page<ClassTeacher> teacherPage;
         if (text != null && !text.isBlank()) {
-            teacherPage = classTeacherRepository.findByClassIdAndText(classId, text, status, pageable);
+            teacherPage = classTeacherRepository.findByClassIdAndText(classId, text, statuses, pageable);
         } else {
-            teacherPage = classTeacherRepository.findByClazzIdAndStatus(classId, status, pageable);
+            teacherPage = classTeacherRepository.findByClazzIdAndStatusIn(classId, statuses, pageable);
         }
 
         List<ClassTeacherResponse> teachers = teacherPage.getContent().stream()
