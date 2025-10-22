@@ -435,6 +435,11 @@ public class UserServiceImpl implements UserService {
 
         userRepository.findActiveLevelInfoByUserId(user.getId()).ifPresent(response::setCurrentLevelInfo);
 
+        classStudentRepository.findActiveClassIdByUserId(
+                user.getId(),
+                ClassStudentStatus.ACTIVE
+        ).ifPresent(response::setClassId);
+
         return response;
     }
 

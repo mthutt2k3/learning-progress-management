@@ -20,16 +20,17 @@ public interface ClassRepository extends JpaRepository<Clazz, Long> {
     Page<Clazz> findBySearchText(String searchText, Pageable pageable);
 
     @Query("""
-       SELECT c FROM Clazz c
-       WHERE (:searchText IS NULL 
-              OR LOWER(c.className) LIKE LOWER(CONCAT('%', :searchText, '%'))
-              OR LOWER(c.classCode) LIKE LOWER(CONCAT('%', :searchText, '%')))
-         AND (:status IS NULL OR c.status = :status)
-         AND (:syllabusId IS NULL OR c.syllabus.id = :syllabusId)
-       """)
+   SELECT c FROM Clazz c
+   WHERE (:searchText IS NULL 
+          OR LOWER(c.className) LIKE LOWER(CONCAT('%', :searchText, '%'))
+          OR LOWER(c.classCode) LIKE LOWER(CONCAT('%', :searchText, '%')))
+     AND (:statuses IS NULL OR c.status IN :statuses)
+     AND (:syllabusId IS NULL OR c.syllabus.id = :syllabusId)
+     AND c.deletedAt IS NULL
+   """)
     Page<Clazz> searchClassesWithFilters(
             @Param("searchText") String searchText,
-            @Param("status") ClassStatus status,
+            @Param("statuses") List<ClassStatus> statuses,
             @Param("syllabusId") Long syllabusId,
             Pageable pageable
     );
@@ -38,12 +39,12 @@ public interface ClassRepository extends JpaRepository<Clazz, Long> {
             "(:searchText = '' " +
             "OR LOWER(c.className) LIKE LOWER(CONCAT('%', :searchText, '%')) " +
             "OR LOWER(c.classCode) LIKE LOWER(CONCAT('%', :searchText, '%'))) " +
-            "AND (:status IS NULL OR c.status = :status) " +
+            "AND (:statuses IS NULL OR c.status IN :statuses) " +
             "AND (:syllabusId IS NULL OR c.syllabus.id = :syllabusId) " +
             "AND c.id IN :classIds")
     Page<Clazz> searchClassesWithFiltersAndIds(
             @Param("searchText") String searchText,
-            @Param("status") ClassStatus status,
+            @Param("statuses") List<ClassStatus> statuses,
             @Param("syllabusId") Long syllabusId,
             @Param("classIds") List<Long> classIds,
             Pageable pageable);

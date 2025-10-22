@@ -59,7 +59,7 @@ public class ClassController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(required = false) String searchText,
-            @RequestParam(required = false) ClassStatus status,
+            @RequestParam(required = false) List<ClassStatus> status,
             @RequestParam(required = false) Long syllabusId,
             @Parameter(description = "Field to sort by (e.g., createdAt, className, startDate)")
             @RequestParam(defaultValue = "createdAt") String sortBy,

@@ -11,6 +11,7 @@ import lombok.experimental.SuperBuilder;
 @NoArgsConstructor
 @AllArgsConstructor
 public class StudentProfileDTO extends UserProfileDTO {
+    private Long classId;
     private ParentInfo parentInfo;
     private LevelInfo currentLevelInfo;
 }
