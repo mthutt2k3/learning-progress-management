@@ -232,6 +232,37 @@ public class ClassStudentServiceImpl implements ClassStudentService {
             );
         }
 
+        // 🧩 Check xem học sinh có đang học ở lớp nào khác không (status = ACTIVE)
+        List<ClassStudent> enrolledStudents = classStudentRepository
+                .findByUserIdInAndStatus(userIds, ClassStudentStatus.ACTIVE);
+
+        Map<Long, List<Long>> userToClasses = enrolledStudents.stream()
+                .collect(Collectors.groupingBy(cs -> cs.getUser().getId(),
+                        Collectors.mapping(cs -> cs.getClazz().getId(), Collectors.toList())));
+
+        List<String> alreadyInClass = new ArrayList<>();
+        for (Long userId : userToClasses.keySet()) {
+            List<Long> classIds = userToClasses.get(userId);
+            if (classIds.stream().anyMatch(id -> !id.equals(classId))) {
+                alreadyInClass.add(String.format("User ID %d is already active in classes %s", userId, classIds));
+            }
+        }
+
+        if (!alreadyInClass.isEmpty()) {
+            throw new ApiException(
+                    "Some students are already active in other classes: " + String.join("; ", alreadyInClass),
+                    HttpStatus.CONFLICT.value()
+            );
+        }
+
+
+        if (!alreadyInClass.isEmpty()) {
+            throw new ApiException(
+                    "Some students are already enrolled in other classes: " + String.join("; ", alreadyInClass),
+                    HttpStatus.CONFLICT.value()
+            );
+        }
+
         // 6️⃣ Check existing ACTIVE students
         List<Long> existingActiveUserIds = classStudentRepository
                 .findUserIdsByClassIdAndUserIdInAndStatus(classId, userIds, ClassStudentStatus.ACTIVE);

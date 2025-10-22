@@ -299,7 +299,7 @@ public class ClassTeacherServiceImpl implements ClassTeacherService {
             throw new ApiException(Const.USER.INACTIVE, HttpStatus.BAD_REQUEST.value());
         }
 
-        if (user.getRole() == null || !RoleName.TEACHER.equals(user.getRole().getName())) {
+        if (user.getRole() == null || (!RoleName.TEACHER.equals(user.getRole().getName()) && !RoleName.TEACHING_ASSISTANT.equals(user.getRole().getName()))) {
             throw new ApiException(Const.USER.INVALID_ROLE_TEACHER_ONLY, HttpStatus.BAD_REQUEST.value());
         }
 
