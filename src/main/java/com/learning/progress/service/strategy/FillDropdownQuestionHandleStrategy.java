@@ -13,6 +13,19 @@ import java.util.Map;
 public class FillDropdownQuestionHandleStrategy implements QuestionHandleStrategy {
 
     @Override
+    public void validateQuestionType(Question question) {
+        if (question.getQuestionType() != QuestionType.FILL_IN_THE_BLANK && question.getQuestionType() != QuestionType.DROPDOWN) {
+            throw new IllegalArgumentException("Question is not of type FILL_IN_THE_BLANK or DROPDOWN");
+        }
+    }
+
+    @Override
+    public boolean supports(String questionType) {
+        return QuestionType.FILL_IN_THE_BLANK.name().equalsIgnoreCase(questionType) ||
+                QuestionType.DROPDOWN.name().equalsIgnoreCase(questionType);
+    }
+
+    @Override
     public Question createQuestion(QuestionDto dto, ChallengeSection section) {
         Map<String, Object> contentJson = new HashMap<>();
         contentJson.put("answerOptions", dto.getQuestionContentJson().get("answerOptions"));
@@ -30,8 +43,6 @@ public class FillDropdownQuestionHandleStrategy implements QuestionHandleStrateg
     @Override
     public QuestionDto getQuestion(Question question) {
         QuestionDto dto = new QuestionDto();
-        dto.setId(question.getId());
-        dto.setSectionId(question.getSection().getId().toString());
         dto.setQuestionText(question.getQuestionText());
         dto.setQuestionContentJson(question.getQuestionContentJson());
         dto.setOrderNumber(question.getOrderNumber());
@@ -41,10 +52,9 @@ public class FillDropdownQuestionHandleStrategy implements QuestionHandleStrateg
     }
 
     @Override
-    public Question updateQuestion(Long id, QuestionDto dto, ChallengeSection section) {
+    public Question updateQuestion(Long id, QuestionDto dto) {
         Question question = Question.builder()
                 .id(id)
-                .section(section)
                 .questionText(dto.getQuestionText())
                 .questionContentJson(new HashMap<>(Map.of("answerOptions", dto.getQuestionContentJson().get("answerOptions"))))
                 .orderNumber(dto.getOrderNumber())
@@ -54,16 +64,4 @@ public class FillDropdownQuestionHandleStrategy implements QuestionHandleStrateg
         return question;
     }
 
-    @Override
-    public void validateQuestionType(Question question) {
-        if (question.getQuestionType() != QuestionType.FILL_IN_THE_BLANK && question.getQuestionType() != QuestionType.DROPDOWN) {
-            throw new IllegalArgumentException("Question is not of type FILL_IN_THE_BLANK or DROPDOWN");
-        }
-    }
-
-    @Override
-    public boolean supports(String questionType) {
-        return QuestionType.FILL_IN_THE_BLANK.name().equalsIgnoreCase(questionType) ||
-               QuestionType.DROPDOWN.name().equalsIgnoreCase(questionType);
-    }
 }

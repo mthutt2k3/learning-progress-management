@@ -22,7 +22,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/class")
-@Tag(name = "Clazz", description = "Clazz management APIs")
+@Tag(name = "Clazz Management", description = "Clazz management APIs")
 public class ClassController {
 
     @Autowired

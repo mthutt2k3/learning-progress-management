@@ -1,5 +1,6 @@
 package com.learning.progress.service.impl;
 
+import com.learning.progress.common.Const;
 import com.learning.progress.dto.challenge.section.QuestionDto;
 import com.learning.progress.entity.ChallengeSection;
 import com.learning.progress.entity.Question;
@@ -29,15 +30,13 @@ public class QuestionServiceImpl implements QuestionService {
     @Override
     public QuestionDto createQuestion(QuestionDto dto, Long sectionId) {
         ChallengeSection section = sectionRepository.findById(sectionId)
-                .orElseThrow(() -> new IllegalArgumentException("Section not found"));
+                .orElseThrow(() -> new IllegalArgumentException(Const.SECTION.NOT_FOUND));
 
         QuestionHandleStrategy strategy = questionStrategyFactory.getStrategy(dto.getQuestionType());
         Question question = strategy.createQuestion(dto, section);
         Question savedQuestion = questionRepository.save(question);
 
-        QuestionDto resultDto = strategy.getQuestion(savedQuestion);
-        resultDto.setSectionId(String.valueOf(sectionId));
-        return resultDto;
+        return strategy.getQuestion(savedQuestion);
     }
 
     @Override
@@ -55,12 +54,9 @@ public class QuestionServiceImpl implements QuestionService {
         Question question = questionRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Question not found"));
 
-        ChallengeSection section = sectionRepository.findById(Long.valueOf(dto.getSectionId()))
-                .orElseThrow(() -> new IllegalArgumentException("Section not found"));
-
         QuestionHandleStrategy strategy = questionStrategyFactory.getStrategy(dto.getQuestionType());
         strategy.validateQuestionType(question);
-        Question updatedQuestion = strategy.updateQuestion(id, dto, section);
+        Question updatedQuestion = strategy.updateQuestion(id, dto);
         Question savedQuestion = questionRepository.save(updatedQuestion);
 
         return strategy.getQuestion(savedQuestion);
@@ -79,7 +75,7 @@ public class QuestionServiceImpl implements QuestionService {
     @Override
     public List<QuestionDto> getQuestionsBySection(Long sectionId) {
         sectionRepository.findById(sectionId)
-                .orElseThrow(() -> new IllegalArgumentException("Section not found"));
+                .orElseThrow(() -> new IllegalArgumentException(Const.SECTION.NOT_FOUND));
 
         List<Question> questions = questionRepository.findBySectionId(sectionId);
         return questions.stream()

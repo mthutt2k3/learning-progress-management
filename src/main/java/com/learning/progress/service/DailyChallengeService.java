@@ -1,5 +1,6 @@
 package com.learning.progress.service;
 
+import com.learning.progress.dto.DataResponse;
 import com.learning.progress.dto.challenge.CreateDailyChallengeRequest;
 import com.learning.progress.dto.challenge.DailyChallengeDTO;
 import jakarta.validation.Valid;
@@ -10,11 +11,11 @@ public interface DailyChallengeService {
 
     DailyChallengeDTO createChallenge(@Valid CreateDailyChallengeRequest dto);
 
-    List<DailyChallengeDTO> getAllChallenges(int page, int size);
+    DataResponse<List<DailyChallengeDTO>> getAllChallenges(Long classId, int page, int size, String text, String sortBy, String sortDir);
 
     DailyChallengeDTO getChallengeById(Long id);
 
     DailyChallengeDTO updateChallenge(Long id, DailyChallengeDTO dto);
 
-    void deleteChallenge(Long id, String deletedBy);
+    void deleteChallenge(Long id);
 }

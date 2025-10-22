@@ -13,6 +13,19 @@ import java.util.Map;
 public class DragDropReorderQuestionHandleStrategy implements QuestionHandleStrategy {
 
     @Override
+    public void validateQuestionType(Question question) {
+        if (question.getQuestionType() != QuestionType.DRAG_AND_DROP && question.getQuestionType() != QuestionType.REORDER) {
+            throw new IllegalArgumentException("Question is not of type DRAG_AND_DROP or REORDER");
+        }
+    }
+
+    @Override
+    public boolean supports(String questionType) {
+        return QuestionType.DRAG_AND_DROP.name().equalsIgnoreCase(questionType) ||
+                QuestionType.REORDER.name().equalsIgnoreCase(questionType);
+    }
+
+    @Override
     public Question createQuestion(QuestionDto dto, ChallengeSection section) {
         Map<String, Object> contentJson = new HashMap<>();
         contentJson.put("items", dto.getQuestionContentJson().get("items"));
@@ -30,8 +43,6 @@ public class DragDropReorderQuestionHandleStrategy implements QuestionHandleStra
     @Override
     public QuestionDto getQuestion(Question question) {
         QuestionDto dto = new QuestionDto();
-        dto.setId(question.getId());
-        dto.setSectionId(question.getSection().getId().toString());
         dto.setQuestionText(question.getQuestionText());
         dto.setQuestionContentJson(question.getQuestionContentJson());
         dto.setOrderNumber(question.getOrderNumber());
@@ -41,10 +52,9 @@ public class DragDropReorderQuestionHandleStrategy implements QuestionHandleStra
     }
 
     @Override
-    public Question updateQuestion(Long id, QuestionDto dto, ChallengeSection section) {
+    public Question updateQuestion(Long id, QuestionDto dto) {
         Question question = Question.builder()
                 .id(id)
-                .section(section)
                 .questionText(dto.getQuestionText())
                 .questionContentJson(new HashMap<>(Map.of("items", dto.getQuestionContentJson().get("items"))))
                 .orderNumber(dto.getOrderNumber())
@@ -54,16 +64,4 @@ public class DragDropReorderQuestionHandleStrategy implements QuestionHandleStra
         return question;
     }
 
-    @Override
-    public void validateQuestionType(Question question) {
-        if (question.getQuestionType() != QuestionType.DRAG_AND_DROP && question.getQuestionType() != QuestionType.REORDER) {
-            throw new IllegalArgumentException("Question is not of type DRAG_AND_DROP or REORDER");
-        }
-    }
-
-    @Override
-    public boolean supports(String questionType) {
-        return QuestionType.DRAG_AND_DROP.name().equalsIgnoreCase(questionType) ||
-               QuestionType.REORDER.name().equalsIgnoreCase(questionType);
-    }
 }

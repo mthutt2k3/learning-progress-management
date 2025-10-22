@@ -13,6 +13,18 @@ import java.util.Map;
 public class RewriteQuestionHandleStrategy implements QuestionHandleStrategy {
 
     @Override
+    public void validateQuestionType(Question question) {
+        if (question.getQuestionType() != QuestionType.REWRITE) {
+            throw new IllegalArgumentException("Question is not of type REWRITE");
+        }
+    }
+
+    @Override
+    public boolean supports(String questionType) {
+        return QuestionType.REWRITE.name().equalsIgnoreCase(questionType);
+    }
+
+    @Override
     public Question createQuestion(QuestionDto dto, ChallengeSection section) {
         Map<String, Object> contentJson = new HashMap<>();
         contentJson.put("instructions", dto.getQuestionContentJson().get("instructions"));
@@ -30,8 +42,6 @@ public class RewriteQuestionHandleStrategy implements QuestionHandleStrategy {
     @Override
     public QuestionDto getQuestion(Question question) {
         QuestionDto dto = new QuestionDto();
-        dto.setId(question.getId());
-        dto.setSectionId(question.getSection().getId().toString());
         dto.setQuestionText(question.getQuestionText());
         dto.setQuestionContentJson(question.getQuestionContentJson());
         dto.setOrderNumber(question.getOrderNumber());
@@ -41,10 +51,9 @@ public class RewriteQuestionHandleStrategy implements QuestionHandleStrategy {
     }
 
     @Override
-    public Question updateQuestion(Long id, QuestionDto dto, ChallengeSection section) {
+    public Question updateQuestion(Long id, QuestionDto dto) {
         Question question = Question.builder()
                 .id(id)
-                .section(section)
                 .questionText(dto.getQuestionText())
                 .questionContentJson(new HashMap<>(Map.of("instructions", dto.getQuestionContentJson().get("instructions"))))
                 .orderNumber(dto.getOrderNumber())
@@ -54,15 +63,4 @@ public class RewriteQuestionHandleStrategy implements QuestionHandleStrategy {
         return question;
     }
 
-    @Override
-    public void validateQuestionType(Question question) {
-        if (question.getQuestionType() != QuestionType.REWRITE) {
-            throw new IllegalArgumentException("Question is not of type REWRITE");
-        }
-    }
-
-    @Override
-    public boolean supports(String questionType) {
-        return QuestionType.REWRITE.name().equalsIgnoreCase(questionType);
-    }
 }

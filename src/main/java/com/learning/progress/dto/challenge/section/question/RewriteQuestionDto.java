@@ -1,16 +1,16 @@
-package com.learning.progress.dto.challenge.section;
+package com.learning.progress.dto.challenge.section.question;
 
 import lombok.Data;
 
 import java.math.BigDecimal;
-import java.util.Map;
 
 @Data
-public class QuestionDto {
+public class RewriteQuestionDto {
     private Long id;
+    private String sectionId;
     private String questionText;
+    private String instructions;
     private Integer orderNumber;
     private BigDecimal score;
     private String questionType;
-    private Map<String, Object> questionContentJson;
 }
