@@ -19,6 +19,7 @@ import com.learning.progress.util.AppValidator;
 import com.learning.progress.util.JwtUtil;
 import com.learning.progress.util.TraceUtil;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -51,6 +52,13 @@ public class ClassTeacherServiceImpl implements ClassTeacherService {
 
     @Autowired
     private AppValidator appValidator;
+
+    @Value("${env.class.max-teaching-assistant-in-class}")
+    private int maxTeachingAssistantInClass;
+
+    @Value("${env.class.max-teacher-in-class}")
+    private int maxTeacherInClass;
+
     @Override
     public DataResponse<List<ClassTeacherResponse>> getTeachersInClass(Long classId, int page, int size, String text, ClassTeacherStatus status, String sortBy, String sortDir) {
         // Validate pagination and sort parameters
@@ -90,6 +98,7 @@ public class ClassTeacherServiceImpl implements ClassTeacherService {
     @Override
     @Transactional
     public void addTeacherToClass(Long classId, AddTeacherToClassRequest request) {
+        // 1️⃣ Validate class
         Clazz clazz = classRepository.findById(classId)
                 .orElseThrow(() -> new ApiException(Const.CLASS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
@@ -101,19 +110,29 @@ public class ClassTeacherServiceImpl implements ClassTeacherService {
             throw new ApiException(Const.CLASS.DELETED, HttpStatus.BAD_REQUEST.value());
         }
 
-        // 2️⃣ Extract user IDs
+        // 2️⃣ Extract user IDs and validate roles
         List<Long> userIds = request.getTeachers().stream()
                 .map(TeacherWithRole::getUserId)
                 .collect(Collectors.toList());
 
+        // Validate roleInClass
+        for (TeacherWithRole teacher : request.getTeachers()) {
+            if (!RoleInClass.TEACHER.equals(teacher.getRoleInClass()) &&
+                    !RoleInClass.TEACHING_ASSISTANT.equals(teacher.getRoleInClass())) {
+                throw new ApiException(
+                        String.format("Invalid role in class: %s", teacher.getRoleInClass()),
+                        HttpStatus.BAD_REQUEST.value()
+                );
+            }
+        }
+
+        // Check for duplicate user IDs
         Set<Long> uniqueIds = new HashSet<>(userIds);
         if (uniqueIds.size() != userIds.size()) {
-            // Tìm ra ID bị trùng
             List<Long> duplicateIds = userIds.stream()
                     .filter(id -> Collections.frequency(userIds, id) > 1)
                     .distinct()
                     .collect(Collectors.toList());
-
             throw new ApiException(
                     String.format("Duplicate user IDs found in request: %s", duplicateIds),
                     HttpStatus.BAD_REQUEST.value()
@@ -122,7 +141,6 @@ public class ClassTeacherServiceImpl implements ClassTeacherService {
 
         // 3️⃣ Fetch all users at once
         List<User> users = userRepository.findAllById(userIds);
-
         if (users.size() != userIds.size()) {
             List<Long> foundIds = users.stream().map(User::getId).collect(Collectors.toList());
             List<Long> notFoundIds = userIds.stream()
@@ -146,8 +164,8 @@ public class ClassTeacherServiceImpl implements ClassTeacherService {
                         user.getId(), user.getUserName()));
             }
 
-            if (user.getRole() == null || !RoleName.TEACHER.equals(user.getRole().getName())) {
-                validationErrors.add(String.format("User ID %d (%s) is not a teacher",
+            if (user.getRole() == null || (!RoleName.TEACHER.equals(user.getRole().getName()) && !RoleName.TEACHING_ASSISTANT.equals(user.getRole().getName()))) {
+                validationErrors.add(String.format("User ID %d (%s) is not a teacher or a teaching assistant",
                         user.getId(), user.getUserName()));
             }
 
@@ -164,12 +182,12 @@ public class ClassTeacherServiceImpl implements ClassTeacherService {
             );
         }
 
-        // 6️⃣ Check for TEACHER role limit (only 1 TEACHER allowed)
+        // 6️⃣ Check TEACHER role limit
         long teacherCount = request.getTeachers().stream()
                 .filter(t -> RoleInClass.TEACHER.equals(t.getRoleInClass()))
                 .count();
 
-        if (teacherCount > 1) {
+        if (teacherCount > maxTeacherInClass) {
             throw new ApiException(
                     "Cannot add more than 1 teacher with TEACHER role",
                     HttpStatus.BAD_REQUEST.value()
@@ -177,9 +195,9 @@ public class ClassTeacherServiceImpl implements ClassTeacherService {
         }
 
         // Check if class already has a TEACHER
-        if (teacherCount == 1) {
+        if (teacherCount == maxTeacherInClass) {
             boolean hasExistingTeacher = classTeacherRepository
-                    .existsByClazzIdAndRoleInClass(classId, RoleInClass.TEACHER);
+                    .existsByClazzIdAndRoleInClassAndStatus(classId, RoleInClass.TEACHER, ClassTeacherStatus.ACTIVE);
 
             if (hasExistingTeacher) {
                 throw new ApiException(
@@ -189,38 +207,75 @@ public class ClassTeacherServiceImpl implements ClassTeacherService {
             }
         }
 
-        // 7️⃣ Check existing teachers
-        List<Long> existingUserIds = classTeacherRepository
-                .findUserIdsByClazzIdAndUserIdIn(classId, userIds);
+        // 7️⃣ Check TEACHING_ASSISTANT limit
+        long newAssistantCount = request.getTeachers().stream()
+                .filter(t -> RoleInClass.TEACHING_ASSISTANT.equals(t.getRoleInClass()))
+                .count();
+        long existingAssistantCount = classTeacherRepository
+                .countByClazzIdAndRoleInClassAndStatus(classId, RoleInClass.TEACHING_ASSISTANT, ClassTeacherStatus.ACTIVE);
 
-        if (!existingUserIds.isEmpty()) {
+        if (existingAssistantCount + newAssistantCount > maxTeachingAssistantInClass) {
+            throw new ApiException(
+                    String.format("Cannot add more than %d teaching assistants. Current: %d, Requested: %d",
+                            maxTeachingAssistantInClass, existingAssistantCount, newAssistantCount),
+                    HttpStatus.BAD_REQUEST.value()
+            );
+        }
+
+        // 8️⃣ Check existing ACTIVE teachers
+        List<Long> existingActiveUserIds = classTeacherRepository
+                .findUserIdsByClazzIdAndUserIdInAndStatus(classId, userIds, ClassTeacherStatus.ACTIVE);
+
+        if (!existingActiveUserIds.isEmpty()) {
             List<String> existingUserNames = users.stream()
-                    .filter(u -> existingUserIds.contains(u.getId()))
+                    .filter(u -> existingActiveUserIds.contains(u.getId()))
                     .map(User::getUserName)
                     .collect(Collectors.toList());
             throw new ApiException(
-                    String.format("Users %s are already in the class", existingUserNames),
+                    String.format("Users %s are already active in the class", existingUserNames),
                     HttpStatus.CONFLICT.value()
             );
         }
 
-        // 8️⃣ Create class-teacher relationships
-        OffsetDateTime joinedAt = OffsetDateTime.now();
-        List<ClassTeacher> classTeachers = request.getTeachers().stream()
-                .map(teacherWithRole -> {
-                    User user = userMap.get(teacherWithRole.getUserId());
+        // 9️⃣ Handle INACTIVE teachers (re-activate instead of creating new)
+        List<ClassTeacher> existingInactiveTeachers = classTeacherRepository
+                .findByClazzIdAndUserIdInAndStatus(classId, userIds, ClassTeacherStatus.INACTIVE);
 
-                    ClassTeacher classTeacher = new ClassTeacher();
-                    classTeacher.setClazz(clazz);
-                    classTeacher.setUser(user);
-                    classTeacher.setRoleInClass(teacherWithRole.getRoleInClass());
-                    classTeacher.setStatus(ClassTeacherStatus.ACTIVE);
-                    classTeacher.setJoinedAt(joinedAt);
-                    return classTeacher;
-                })
-                .collect(Collectors.toList());
+        List<ClassTeacher> classTeachersToSave = new ArrayList<>();
+        OffsetDateTime now = OffsetDateTime.now();
 
-        classTeacherRepository.saveAll(classTeachers);
+        for (TeacherWithRole teacherWithRole : request.getTeachers()) {
+            Long userId = teacherWithRole.getUserId();
+            User user = userMap.get(userId);
+
+            // Check if user was previously INACTIVE in the class
+            Optional<ClassTeacher> existingInactive = existingInactiveTeachers.stream()
+                    .filter(ct -> ct.getUser().getId().equals(userId))
+                    .findFirst();
+
+            if (existingInactive.isPresent()) {
+                // Re-activate existing record
+                ClassTeacher classTeacher = existingInactive.get();
+                classTeacher.setRoleInClass(teacherWithRole.getRoleInClass());
+                classTeacher.setStatus(ClassTeacherStatus.ACTIVE);
+                classTeacher.setJoinedAt(now);
+                classTeacher.setDeletedAt(null);
+                classTeacher.setUpdatedAt(now);
+                classTeachersToSave.add(classTeacher);
+            } else {
+                // Create new record
+                ClassTeacher classTeacher = new ClassTeacher();
+                classTeacher.setClazz(clazz);
+                classTeacher.setUser(user);
+                classTeacher.setRoleInClass(teacherWithRole.getRoleInClass());
+                classTeacher.setStatus(ClassTeacherStatus.ACTIVE);
+                classTeacher.setJoinedAt(now);
+                classTeachersToSave.add(classTeacher);
+            }
+        }
+
+        // 10️⃣ Save all class-teacher relationships
+        classTeacherRepository.saveAll(classTeachersToSave);
     }
 
     @Override
