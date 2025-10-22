@@ -166,7 +166,7 @@ public class ManagerClassServiceImpl implements ClassService {
 
     @Override
     @Transactional(readOnly = true)
-    public DataResponse<List<ClassDTO>> getClassList(int page, int size, String searchText, String status, Long syllabusId,
+    public DataResponse<List<ClassDTO>> getClassList(int page, int size, String searchText, ClassStatus status, Long syllabusId,
                                                      String sortBy, String sortDir) {
         appValidator.validatePaginationParams(page, size);
         appValidator.validateSortParams(

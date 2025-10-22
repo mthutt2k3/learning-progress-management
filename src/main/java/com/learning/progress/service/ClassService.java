@@ -1,5 +1,6 @@
 package com.learning.progress.service;
 
+import com.learning.progress.common.ClassStatus;
 import com.learning.progress.dto.clazz.ClassDTO;
 import com.learning.progress.dto.clazz.ClassOverviewDTO;
 import com.learning.progress.dto.clazz.CreateClassRequest;
@@ -15,7 +16,7 @@ public interface ClassService {
 
     ClassDTO getClass(Long id);
 
-    DataResponse<List<ClassDTO>> getClassList(int page, int size, String searchText, String status, Long syllabusId, String sortBy, String sortDir);
+    DataResponse<List<ClassDTO>> getClassList(int page, int size, String searchText, ClassStatus status, Long syllabusId, String sortBy, String sortDir);
 
     ClassDTO updateClass(Long id, UpdateClassRequest request);
 
