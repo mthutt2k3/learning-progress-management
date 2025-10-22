@@ -78,4 +78,10 @@ public interface ClassStudentRepository extends JpaRepository<ClassStudent, Long
             @Param("userIds") List<Long> userIds,
             @Param("status") ClassStudentStatus status
     );
+
+    // Trong ClassStudentRepository
+    @Query("SELECT cs.clazz.id FROM ClassStudent cs WHERE cs.user.id = :userId AND cs.status = :status ORDER BY cs.joinedAt DESC")
+    Optional<Long> findActiveClassIdByUserId(@Param("userId") Long userId, @Param("status") ClassStudentStatus status);
+
+    List<ClassStudent> findByUserIdInAndStatus(List<Long> userIds, ClassStudentStatus status);
 }

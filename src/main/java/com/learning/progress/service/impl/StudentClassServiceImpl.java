@@ -93,7 +93,7 @@ public class StudentClassServiceImpl implements ClassService {
 
     @Override
     @Transactional(readOnly = true)
-    public DataResponse<List<ClassDTO>> getClassList(int page, int size, String searchText, ClassStatus status, Long syllabusId,
+    public DataResponse<List<ClassDTO>> getClassList(int page, int size, String searchText, List<ClassStatus> status, Long syllabusId,
                                                      String sortBy, String sortDir) {
         // Validate role
         String username = SecurityContextHolder.getContext().getAuthentication().getName();

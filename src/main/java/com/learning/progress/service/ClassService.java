@@ -16,7 +16,7 @@ public interface ClassService {
 
     ClassDTO getClass(Long id);
 
-    DataResponse<List<ClassDTO>> getClassList(int page, int size, String searchText, ClassStatus status, Long syllabusId, String sortBy, String sortDir);
+    DataResponse<List<ClassDTO>> getClassList(int page, int size, String searchText, List<ClassStatus> status, Long syllabusId, String sortBy, String sortDir);
 
     ClassDTO updateClass(Long id, UpdateClassRequest request);
 
