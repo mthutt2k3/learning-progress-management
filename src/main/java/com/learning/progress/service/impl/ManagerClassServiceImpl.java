@@ -12,6 +12,7 @@ import com.learning.progress.mapper.ClassMapper;
 import com.learning.progress.repository.*;
 import com.learning.progress.service.ClassHistoryService;
 import com.learning.progress.service.ClassService;
+import com.learning.progress.service.strategy.ClassServiceStrategy;
 import com.learning.progress.util.AppValidator;
 import com.learning.progress.util.DataUtil;
 import com.learning.progress.util.JwtUtil;
@@ -33,7 +34,7 @@ import java.util.Set;
 
 @Service
 @Slf4j
-public class ManagerClassServiceImpl implements ClassService {
+public class ManagerClassServiceImpl implements ClassServiceStrategy {
     @Autowired
     private ClassRepository classRepository;
     @Autowired
@@ -54,6 +55,11 @@ public class ManagerClassServiceImpl implements ClassService {
     private JwtUtil jwtUtil;
     @Autowired
     private AppValidator appValidator;
+
+    @Override
+    public boolean supports(RoleName role) {
+        return role == RoleName.MANAGER;
+    }
 
     @Override
     @Transactional(readOnly = true)
@@ -318,4 +324,5 @@ public class ManagerClassServiceImpl implements ClassService {
         clazz.setDeletedAt(now);
         classRepository.save(clazz);
     }
+
 }
