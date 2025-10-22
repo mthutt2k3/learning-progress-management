@@ -75,7 +75,7 @@ public class ClassStudentServiceImpl implements ClassStudentService {
     private int maxStudentInClass;
 
     @Override
-    public DataResponse<List<ClassStudentResponse>> getStudentsInClass(Long classId, int page, int size, String text, ClassStudentStatus status, String sortBy, String sortDir) {
+    public DataResponse<List<ClassStudentResponse>> getStudentsInClass(Long classId, int page, int size, String text, List<ClassStudentStatus> status, String sortBy, String sortDir) {
         // Validate pagination and sort parameters
         appValidator.validatePaginationParams(page, size);
         appValidator.validateSortParams(List.of("id", "userName", "fullName", "email", "joinedAt", "status"), sortBy, sortDir);
@@ -86,11 +86,18 @@ public class ClassStudentServiceImpl implements ClassStudentService {
         Clazz clazz = classRepository.findById(classId)
                 .orElseThrow(() -> new ApiException(Const.CLASS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
+        List<ClassStudentStatus> statuses;
+        if (status == null || status.isEmpty()) {
+            statuses = Arrays.asList(ClassStudentStatus.values());
+        } else {
+            statuses = status;
+        }
+
         Page<ClassStudent> studentPage;
         if (text != null && !text.isBlank()) {
-            studentPage = classStudentRepository.findByClassIdAndText(classId, text, status, pageable);
+            studentPage = classStudentRepository.findByClassIdAndText(classId, text, statuses, pageable);
         } else {
-            studentPage = classStudentRepository.findByClassIdAndStatus(classId, status, pageable);
+            studentPage = classStudentRepository.findByClassIdAndStatus(classId, statuses, pageable);
         }
 
         List<ClassStudentResponse> students = studentPage.getContent().stream()

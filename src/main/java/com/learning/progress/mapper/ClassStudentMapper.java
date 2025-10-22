@@ -9,6 +9,7 @@ import org.mapstruct.Mapping;
 public interface ClassStudentMapper {
 
     @Mapping(source = "user.id", target = "userId")
+    @Mapping(source = "user.userName", target = "userName")
     @Mapping(source = "user.fullName", target = "fullName")
     @Mapping(source = "user.email", target = "email")
     @Mapping(source = "clazz.id", target = "classId")

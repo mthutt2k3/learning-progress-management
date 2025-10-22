@@ -11,7 +11,7 @@ import java.util.List;
 public interface ClassTeacherService {
 
     DataResponse<List<ClassTeacherResponse>> getTeachersInClass(Long classId, int page, int size,
-                                                                String text, ClassTeacherStatus status,
+                                                                String text, List<ClassTeacherStatus> status,
                                                                 String sortBy, String sortDir);
 
     void addTeacherToClass(Long classId, AddTeacherToClassRequest request);
