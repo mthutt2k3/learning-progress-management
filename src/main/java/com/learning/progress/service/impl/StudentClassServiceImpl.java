@@ -99,9 +99,8 @@ public class StudentClassServiceImpl implements ClassServiceStrategy {
 
     @Override
     @Transactional(readOnly = true)
-    public DataResponse<List<ClassDTO>> getClassList(int page, int size, String searchText, String status, Long syllabusId,
-                                                    String startDateFrom, String startDateTo, String endDateFrom, String endDateTo,
-                                                    String sortBy, String sortDir) {
+    public DataResponse<List<ClassDTO>> getClassList(int page, int size, String searchText, ClassStatus status, Long syllabusId,
+                                                     String sortBy, String sortDir) {
         // Validate role
         String username = SecurityContextHolder.getContext().getAuthentication().getName();
         User currentUser = userRepository.findByUserNameAndDeletedAtIsNull(username)
@@ -121,11 +120,6 @@ public class StudentClassServiceImpl implements ClassServiceStrategy {
                 sortDir.equalsIgnoreCase("asc") ? Sort.by(sortBy).ascending() : Sort.by(sortBy).descending()
         );
 
-        LocalDate startFrom = DataUtil.parseAndValidateDate(startDateFrom, Const.VALIDATE_INPUT.regexDate, "startDateFrom");
-        LocalDate startTo = DataUtil.parseAndValidateDate(startDateTo, Const.VALIDATE_INPUT.regexDate, "startDateTo");
-        LocalDate endFrom = DataUtil.parseAndValidateDate(endDateFrom, Const.VALIDATE_INPUT.regexDate, "endDateFrom");
-        LocalDate endTo = DataUtil.parseAndValidateDate(endDateTo, Const.VALIDATE_INPUT.regexDate, "endDateTo");
-
         // Student: Only view ACTIVE classes
         List<Long> studentClassIds = classStudentRepository.findByUserIdAndStatus(currentUser.getId(), ClassStudentStatus.ACTIVE)
                 .stream()
@@ -134,7 +128,7 @@ public class StudentClassServiceImpl implements ClassServiceStrategy {
         Page<Clazz> classPage = studentClassIds.isEmpty() ? Page.empty(pageable) :
                 classRepository.searchClassesWithFiltersAndIds(
                         searchText == null ? "" : searchText,
-                        status, syllabusId, startFrom, startTo, endFrom, endTo,
+                        status, syllabusId,
                         studentClassIds, pageable);
 
         List<ClassDTO> classDTOs = classPage.getContent()

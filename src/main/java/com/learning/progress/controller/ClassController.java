@@ -1,5 +1,6 @@
 package com.learning.progress.controller;
 
+import com.learning.progress.common.ClassStatus;
 import com.learning.progress.common.Const;
 import com.learning.progress.dto.clazz.ClassDTO;
 import com.learning.progress.dto.clazz.ClassOverviewDTO;
@@ -58,16 +59,8 @@ public class ClassController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(required = false) String searchText,
-
-            // ✅ Filters (optional)
-            @RequestParam(required = false) String status,
+            @RequestParam(required = false) ClassStatus status,
             @RequestParam(required = false) Long syllabusId,
-            @RequestParam(required = false) String startDateFrom,
-            @RequestParam(required = false) String startDateTo,
-            @RequestParam(required = false) String endDateFrom,
-            @RequestParam(required = false) String endDateTo,
-
-            // ✅ Sorting
             @Parameter(description = "Field to sort by (e.g., createdAt, className, startDate)")
             @RequestParam(defaultValue = "createdAt") String sortBy,
             @Parameter(description = "Sort direction (asc or desc)")
@@ -81,10 +74,6 @@ public class ClassController {
                         searchText,
                         status,
                         syllabusId,
-                        startDateFrom,
-                        startDateTo,
-                        endDateFrom,
-                        endDateTo,
                         sortBy,
                         sortDir
                 )

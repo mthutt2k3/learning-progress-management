@@ -15,5 +15,4 @@ public class LoginResponse {
     private String username;
     private String role;
     private boolean mustChangePassword;
-    private boolean mustUpdateProfile;
 }
