@@ -29,19 +29,21 @@ public interface ClassRepository extends JpaRepository<Clazz, Long> {
        """)
     Page<Clazz> searchClassesWithFilters(
             @Param("searchText") String searchText,
-            @Param("status") String status,
+            @Param("status") ClassStatus status,
             @Param("syllabusId") Long syllabusId,
             Pageable pageable
     );
 
     @Query("SELECT c FROM Clazz c WHERE " +
-            "(:searchText = '' OR c.className LIKE %:searchText% OR c.classCode LIKE %:searchText%) " +
+            "(:searchText = '' " +
+            "OR LOWER(c.className) LIKE LOWER(CONCAT('%', :searchText, '%')) " +
+            "OR LOWER(c.classCode) LIKE LOWER(CONCAT('%', :searchText, '%'))) " +
             "AND (:status IS NULL OR c.status = :status) " +
             "AND (:syllabusId IS NULL OR c.syllabus.id = :syllabusId) " +
             "AND c.id IN :classIds")
     Page<Clazz> searchClassesWithFiltersAndIds(
             @Param("searchText") String searchText,
-            @Param("status") String status,
+            @Param("status") ClassStatus status,
             @Param("syllabusId") Long syllabusId,
             @Param("classIds") List<Long> classIds,
             Pageable pageable);
