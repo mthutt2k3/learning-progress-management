@@ -58,4 +58,52 @@ public interface ClassTeacherRepository extends JpaRepository<ClassTeacher, Long
             @Param("userId") Long userId,
             @Param("clazzId") Long clazzId,
             @Param("status") ClassTeacherStatus status);
+
+    // Check if a class has an active teacher with a specific role
+    @Query("SELECT COUNT(ct) > 0 FROM ClassTeacher ct " +
+            "WHERE ct.clazz.id = :classId " +
+            "AND ct.roleInClass = :roleInClass " +
+            "AND ct.status = :status " +
+            "AND ct.deletedAt IS NULL")
+    boolean existsByClazzIdAndRoleInClassAndStatus(
+            @Param("classId") Long classId,
+            @Param("roleInClass") RoleInClass roleInClass,
+            @Param("status") ClassTeacherStatus status
+    );
+
+    // Count active teachers with a specific role in a class
+    @Query("SELECT COUNT(ct) FROM ClassTeacher ct " +
+            "WHERE ct.clazz.id = :classId " +
+            "AND ct.roleInClass = :roleInClass " +
+            "AND ct.status = :status " +
+            "AND ct.deletedAt IS NULL")
+    long countByClazzIdAndRoleInClassAndStatus(
+            @Param("classId") Long classId,
+            @Param("roleInClass") RoleInClass roleInClass,
+            @Param("status") ClassTeacherStatus status
+    );
+
+    // Find user IDs of active teachers in a class for a given list of user IDs
+    @Query("SELECT ct.user.id FROM ClassTeacher ct " +
+            "WHERE ct.clazz.id = :classId " +
+            "AND ct.user.id IN :userIds " +
+            "AND ct.status = :status " +
+            "AND ct.deletedAt IS NULL")
+    List<Long> findUserIdsByClazzIdAndUserIdInAndStatus(
+            @Param("classId") Long classId,
+            @Param("userIds") List<Long> userIds,
+            @Param("status") ClassTeacherStatus status
+    );
+
+    // Find ClassTeacher entities by class ID, user IDs, and status
+    @Query("SELECT ct FROM ClassTeacher ct " +
+            "WHERE ct.clazz.id = :classId " +
+            "AND ct.user.id IN :userIds " +
+            "AND ct.status = :status " +
+            "AND ct.deletedAt IS NULL")
+    List<ClassTeacher> findByClazzIdAndUserIdInAndStatus(
+            @Param("classId") Long classId,
+            @Param("userIds") List<Long> userIds,
+            @Param("status") ClassTeacherStatus status
+    );
 }

@@ -71,6 +71,9 @@ public class ClassStudentServiceImpl implements ClassStudentService {
     @Value("${azure.storage.student-to-class-template}")
     private String studentToClassTemplate;
 
+    @Value("${env.class.max-student-in-class}")
+    private int maxStudentInClass;
+
     @Override
     public DataResponse<List<ClassStudentResponse>> getStudentsInClass(Long classId, int page, int size, String text, ClassStudentStatus status, String sortBy, String sortDir) {
         // Validate pagination and sort parameters
@@ -161,13 +164,38 @@ public class ClassStudentServiceImpl implements ClassStudentService {
             throw new ApiException(Const.CLASS.DELETED, HttpStatus.BAD_REQUEST.value());
         }
 
-        // 2️⃣ Fetch all users at once
-        List<User> users = userRepository.findAllById(request.getUserIds());
+        // 2️⃣ Check for duplicate user IDs
+        List<Long> userIds = request.getUserIds();
+        Set<Long> uniqueIds = new HashSet<>(userIds);
+        if (uniqueIds.size() != userIds.size()) {
+            List<Long> duplicateIds = userIds.stream()
+                    .filter(id -> Collections.frequency(userIds, id) > 1)
+                    .distinct()
+                    .collect(Collectors.toList());
+            throw new ApiException(
+                    String.format("Duplicate user IDs found in request: %s", duplicateIds),
+                    HttpStatus.BAD_REQUEST.value()
+            );
+        }
 
-        // Check if all users exist
-        if (users.size() != request.getUserIds().size()) {
+        // 3️⃣ Check student limit (max 15)
+        long newStudentCount = userIds.size();
+        long existingStudentCount = classStudentRepository
+                .countByClassIdAndStatus(classId, ClassStudentStatus.ACTIVE);
+
+        if (existingStudentCount + newStudentCount > maxStudentInClass) {
+            throw new ApiException(
+                    String.format("Cannot add more than %d students. Current: %d, Requested: %d",
+                            maxStudentInClass, existingStudentCount, newStudentCount),
+                    HttpStatus.BAD_REQUEST.value()
+            );
+        }
+
+        // 4️⃣ Fetch all users at once
+        List<User> users = userRepository.findAllById(userIds);
+        if (users.size() != userIds.size()) {
             List<Long> foundIds = users.stream().map(User::getId).collect(Collectors.toList());
-            List<Long> notFoundIds = request.getUserIds().stream()
+            List<Long> notFoundIds = userIds.stream()
                     .filter(id -> !foundIds.contains(id))
                     .collect(Collectors.toList());
             throw new ApiException(
@@ -176,7 +204,7 @@ public class ClassStudentServiceImpl implements ClassStudentService {
             );
         }
 
-        // 3️⃣ Validate all users
+        // 5️⃣ Validate all users
         List<String> validationErrors = new ArrayList<>();
         for (User user : users) {
             if (!UserStatus.ACTIVE.equals(user.getStatus())) {
@@ -204,37 +232,55 @@ public class ClassStudentServiceImpl implements ClassStudentService {
             );
         }
 
-        // 4️⃣ Check existing students
-        List<Long> userIds = users.stream().map(User::getId).collect(Collectors.toList());
-        List<Long> existingUserIds = classStudentRepository
-                .findUserIdsByClassIdAndUserIdIn(classId, userIds);
+        // 6️⃣ Check existing ACTIVE students
+        List<Long> existingActiveUserIds = classStudentRepository
+                .findUserIdsByClassIdAndUserIdInAndStatus(classId, userIds, ClassStudentStatus.ACTIVE);
 
-        if (!existingUserIds.isEmpty()) {
+        if (!existingActiveUserIds.isEmpty()) {
             List<String> existingUserNames = users.stream()
-                    .filter(u -> existingUserIds.contains(u.getId()))
+                    .filter(u -> existingActiveUserIds.contains(u.getId()))
                     .map(User::getUserName)
                     .collect(Collectors.toList());
             throw new ApiException(
-                    String.format("Users %s are already in the class", existingUserNames),
+                    String.format("Users %s are already active in the class", existingUserNames),
                     HttpStatus.CONFLICT.value()
             );
         }
 
-        // 5️⃣ Create class-student relationships
-        OffsetDateTime joinedAt = OffsetDateTime.now();
-        List<ClassStudent> classStudents = users.stream()
-                .map(user -> {
-                    ClassStudent classStudent = new ClassStudent();
-                    classStudent.setClazz(clazz);
-                    classStudent.setUser(user);
-                    classStudent.setStatus(ClassStudentStatus.ACTIVE);
-                    classStudent.setJoinedAt(joinedAt);
-                    return classStudent;
-                })
-                .collect(Collectors.toList());
+        // 7️⃣ Handle INACTIVE students (re-activate instead of creating new)
+        List<ClassStudent> existingInactiveStudents = classStudentRepository
+                .findByClassIdAndUserIdInAndStatus(classId, userIds, ClassStudentStatus.INACTIVE);
 
-        // 6️⃣ Batch save
-        classStudentRepository.saveAll(classStudents);
+        List<ClassStudent> classStudentsToSave = new ArrayList<>();
+        OffsetDateTime now = OffsetDateTime.now();
+
+        for (User user : users) {
+            // Check if user was previously INACTIVE in the class
+            Optional<ClassStudent> existingInactive = existingInactiveStudents.stream()
+                    .filter(cs -> cs.getUser().getId().equals(user.getId()))
+                    .findFirst();
+
+            if (existingInactive.isPresent()) {
+                // Re-activate existing record
+                ClassStudent classStudent = existingInactive.get();
+                classStudent.setStatus(ClassStudentStatus.ACTIVE);
+                classStudent.setJoinedAt(now);
+                classStudent.setDeletedAt(null);
+                classStudent.setUpdatedAt(now);
+                classStudentsToSave.add(classStudent);
+            } else {
+                // Create new record
+                ClassStudent classStudent = new ClassStudent();
+                classStudent.setClazz(clazz);
+                classStudent.setUser(user);
+                classStudent.setStatus(ClassStudentStatus.ACTIVE);
+                classStudent.setJoinedAt(now);
+                classStudentsToSave.add(classStudent);
+            }
+        }
+
+        // 8️⃣ Batch save
+        classStudentRepository.saveAll(classStudentsToSave);
     }
 
     @Override
@@ -264,7 +310,7 @@ public class ClassStudentServiceImpl implements ClassStudentService {
         }
 
         // Validate user role
-        if (user.getRole() == null || !RoleName.STUDENT.equals(user.getRole().getName())) {
+        if (user.getRole() == null || (!RoleName.STUDENT.equals(user.getRole().getName()) && !RoleName.TEST_TAKER.equals(user.getRole().getName()))) {
             throw new ApiException(Const.USER.INVALID_ROLE_STUDENT_ONLY, HttpStatus.BAD_REQUEST.value());
         }
 

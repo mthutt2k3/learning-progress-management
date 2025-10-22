@@ -107,3 +107,8 @@ app:
       cron: "0 0 0 * * *"         # chạy mỗi ngày lúc 0h00
       upcoming-end-days: 7        # số ngày trước endDate để chuyển sang UPCOMING_END
 
+env:
+  class:
+    max-teaching-assistant-in-class: 2
+    max-teacher-in-class: 1
+    max-student-in-class: 15

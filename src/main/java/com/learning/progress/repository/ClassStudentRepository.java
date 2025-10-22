@@ -44,4 +44,38 @@ public interface ClassStudentRepository extends JpaRepository<ClassStudent, Long
             @Param("userIds") List<Long> userIds);
 
     Optional<ClassStudent> findByUserIdAndClazzIdAndStatus(Long userId, Long classId, ClassStudentStatus classStudentStatus);
+
+    // Count active students in a class
+    @Query("SELECT COUNT(cs) FROM ClassStudent cs " +
+            "WHERE cs.clazz.id = :classId " +
+            "AND cs.status = :status " +
+            "AND cs.deletedAt IS NULL")
+    long countByClassIdAndStatus(
+            @Param("classId") Long classId,
+            @Param("status") ClassStudentStatus status
+    );
+
+    // Find user IDs of active students in a class for a given list of user IDs
+    @Query("SELECT cs.user.id FROM ClassStudent cs " +
+            "WHERE cs.clazz.id = :classId " +
+            "AND cs.user.id IN :userIds " +
+            "AND cs.status = :status " +
+            "AND cs.deletedAt IS NULL")
+    List<Long> findUserIdsByClassIdAndUserIdInAndStatus(
+            @Param("classId") Long classId,
+            @Param("userIds") List<Long> userIds,
+            @Param("status") ClassStudentStatus status
+    );
+
+    // Find ClassStudent entities by class ID, user IDs, and status
+    @Query("SELECT cs FROM ClassStudent cs " +
+            "WHERE cs.clazz.id = :classId " +
+            "AND cs.user.id IN :userIds " +
+            "AND cs.status = :status " +
+            "AND cs.deletedAt IS NULL")
+    List<ClassStudent> findByClassIdAndUserIdInAndStatus(
+            @Param("classId") Long classId,
+            @Param("userIds") List<Long> userIds,
+            @Param("status") ClassStudentStatus status
+    );
 }
