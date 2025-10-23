@@ -11,6 +11,7 @@ import com.learning.progress.exception.ApiException;
 import com.learning.progress.mapper.ClassMapper;
 import com.learning.progress.repository.*;
 import com.learning.progress.service.ClassService;
+import com.learning.progress.service.strategy.ClassServiceStrategy;
 import com.learning.progress.util.AppValidator;
 import com.learning.progress.util.DataUtil;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,7 +29,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Service
-public class StudentClassServiceImpl implements ClassService {
+public class StudentClassServiceImpl implements ClassServiceStrategy {
 
     @Autowired
     private ClassRepository classRepository;
@@ -40,6 +41,11 @@ public class StudentClassServiceImpl implements ClassService {
     private ClassMapper classMapper;
     @Autowired
     private AppValidator appValidator;
+
+    @Override
+    public boolean supports(RoleName role) {
+        return role == RoleName.STUDENT || role == RoleName.TEST_TAKER;
+    }
 
     @Override
     @Transactional(readOnly = true)

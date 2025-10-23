@@ -13,12 +13,19 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class LoginRequest {
     @NotBlank(message = Const.USERNAME.REQUIRED)
+    @Size(min = Const.USERNAME.MIN_LENGTH_VALUE, max = Const.USERNAME.MAX_LENGTH_VALUE, message = Const.USERNAME.LENGTH_INVALID)
     private String username;
+
     @NotBlank(message = Const.PASSWORD.REQUIRED)
+    @Pattern(
+            regexp = Const.VALIDATE_INPUT.regexPass,
+            message = Const.PASSWORD.INVALID_PASSWORD_FORMAT
+    )
     private String password;
+
     @NotBlank(message = Const.ROLE.REQUIRED)
     @Pattern(
-            regexp = "TEACHER|STUDENT",
+            regexp = Const.ROLE.LOGIN_ROLE_VALUE,
             message = Const.ROLE.INVALID_LOGIN_ROLE
     )
     private String loginRole;

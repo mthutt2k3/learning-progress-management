@@ -32,11 +32,11 @@ public class ChallengeSection extends BaseEntity{
     @Column(name = "sections_content")
     private String sectionsContent;
 
-    @Column(name = "order_number", nullable = false)
+    @Column(name = "order_number")
     private Integer orderNumber;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "sections_type", nullable = false)
-    private ResourceType sectionsType = ResourceType.NONE;
+    private ResourceType resourceType = ResourceType.NONE;
 
 }

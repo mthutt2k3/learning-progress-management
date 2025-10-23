@@ -1,22 +1,25 @@
 package com.learning.progress.dto.chapter;
 
+import com.learning.progress.common.Const;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 @Data
 public class SyncChapterRequest {
-    @NotNull(message = "ID bắt buộc khi xóa", groups = Deleted.class)
+    @NotNull(message = Const.CHAPTER.ID_REQUIRED, groups = Deleted.class)
     private Long id; // Required cho delete/update, null cho new
 
     // Chỉ validate khi !toBeDeleted
-    @NotBlank(message = "Tên chapter không được để trống", groups = NotDeleted.class)
+    @NotBlank(message = Const.CHAPTER.CHAPTER_NAME_REQUIRED, groups = NotDeleted.class)
+    @Size(max = Const.CHAPTER.CHAPTER_NAME_MAX_LENGTH_VALUE, message = Const.CHAPTER.CHAPTER_NAME_MAX_LENGTH, groups = NotDeleted.class)
     private String chapterName;
 
     // Chỉ validate khi !toBeDeleted
-    @NotNull(message = "Order number không được null", groups = NotDeleted.class)
-    @Min(value = 1, message = "Order number phải từ 1 trở lên", groups = NotDeleted.class)
+    @NotNull(message = Const.ORDER_NUMBER.ORDER_NUMBER_REQUIRED , groups = NotDeleted.class)
+    @Min(value = 1, message = Const.ORDER_NUMBER.ORDER_NUMBER_MIN, groups = NotDeleted.class)
     private Integer orderNumber;
 
     private boolean toBeDeleted; // true = chỉ cần id để delete
