@@ -80,7 +80,6 @@ public class FileServiceImpl implements FileService {
                 List.of("- Last Name: Họ của học sinh, tối đa 50 ký tự"),
                 List.of("- Role Name: [STUDENT, TEST_TAKER]"),
                 List.of("- Parent Email: Email phụ huynh (tùy chọn)"),
-                List.of("- Avatar URL: URL ảnh đại diện, tối đa 1024 ký tự (tùy chọn)"),
                 List.of("- Date of Birth: Định dạng yyyy-MM-dd (tùy chọn)"),
                 List.of("- Address: Địa chỉ, tối đa 255 ký tự (tùy chọn)"),
                 List.of("- Phone Number: Số điện thoại, tối đa 20 ký tự (tùy chọn)"),
@@ -95,8 +94,8 @@ public class FileServiceImpl implements FileService {
 
         ExcelSheetSpec importSheet = new ExcelSheetSpec("Import Data", columns);
         importSheet.setSampleData(List.of(
-                List.of("student1@example.com", "John Doe", "STUDENT", "parent1@example.com","Le Duc Dung", "0987654321", "Bố", "http://example.com/avatar1.jpg", "2000-01-01", "123 Main St", "0123456789", "MALE", "LEVEL_CODE"),
-                List.of("student2@example.com", "Alice Smith", "TEST_TAKER", "parent2@example.com","Le Duc Dung", "0987654321", "Mẹ", "http://example.com/avatar1.jpg", "2000-01-01", "123 Main St", "0123456789", "MALE", "LEVEL_CODE")
+                List.of("student1@example.com", "John Doe", "STUDENT", "parent1@example.com","Le Duc Dung", "0987654321", "Bố", "2000-01-01", "123 Main St", "0123456789", "MALE", "LEVEL_CODE"),
+                List.of("student2@example.com", "Alice Smith", "TEST_TAKER", "parent2@example.com","Le Duc Dung", "0987654321", "Mẹ", "2000-01-01", "123 Main St", "0123456789", "MALE", "LEVEL_CODE")
         ));
 
         byte[] templateFile = generateTemplate(List.of(sampleSheet, importSheet));
@@ -119,7 +118,6 @@ public class FileServiceImpl implements FileService {
                 List.of("- First Name: Tên của giáo viên, tối đa 50 ký tự"),
                 List.of("- Last Name: Họ của giáo viên, tối đa 50 ký tự"),
                 List.of("- Role Name: [TEACHER, TEACHING_ASSISTANT]"),
-                List.of("- Avatar URL: URL ảnh đại diện, tối đa 1024 ký tự (tùy chọn)"),
                 List.of("- Date of Birth: Định dạng yyyy-MM-dd (tùy chọn)"),
                 List.of("- Address: Địa chỉ, tối đa 255 ký tự (tùy chọn)"),
                 List.of("- Phone Number: Số điện thoại, tối đa 20 ký tự (tùy chọn)"),
@@ -133,8 +131,8 @@ public class FileServiceImpl implements FileService {
 
         ExcelSheetSpec importSheet = new ExcelSheetSpec("Import Data", columns);
         importSheet.setSampleData(List.of(
-                List.of("teacher1@example.com", "Jane Smith", "TEACHER", "http://example.com/avatar2.jpg", "1980-01-01", "456 Elm St", "0987654321", "FEMALE"),
-                List.of("teacher2@example.com", "Bob Johnson", "TEACHING_ASSISTANT", "http://example.com/avatar2.jpg", "1980-01-01", "456 Elm St", "0987654321", "MALE")
+                List.of("teacher1@example.com", "Jane Smith", "TEACHER", "1980-01-01", "456 Elm St", "0987654321", "FEMALE"),
+                List.of("teacher2@example.com", "Bob Johnson", "TEACHING_ASSISTANT", "1980-01-01", "456 Elm St", "0987654321", "MALE")
         ));
 
         byte[] templateFile = generateTemplate(List.of(sampleSheet, importSheet));
