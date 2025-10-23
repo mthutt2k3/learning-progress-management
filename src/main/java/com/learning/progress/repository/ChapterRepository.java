@@ -42,4 +42,6 @@ public interface ChapterRepository extends JpaRepository<Chapter, Long> {
 
     List<Chapter> findByChapterCodeIn(List<String> chapterCodes);
 
+    List<Chapter> findBySyllabusAndDeletedAtIsNullOrderByOrderNumberAsc(Syllabus syllabus);
+
 }
