@@ -10,6 +10,7 @@ import lombok.NoArgsConstructor;
 import org.slf4j.MDC;
 
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 
 @Data
 @Builder
@@ -23,6 +24,9 @@ public class DataResponse<T> {
     private String message;
     private T data;
     private String error;
+
+    private OffsetDateTime startDate;
+    private OffsetDateTime endDate;
 
     private Integer status;
     private LocalDateTime timestamp;

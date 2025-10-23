@@ -6,14 +6,16 @@ import com.learning.progress.dto.clazz.ClassOverviewDTO;
 import com.learning.progress.dto.clazz.CreateClassRequest;
 import com.learning.progress.dto.clazz.UpdateClassRequest;
 import com.learning.progress.dto.DataResponse;
+import com.learning.progress.dto.clazz.history.ClassHistoryDTO;
 import com.learning.progress.entity.*;
 import com.learning.progress.exception.ApiException;
+import com.learning.progress.mapper.ClassHistoryMapper;
 import com.learning.progress.mapper.ClassMapper;
 import com.learning.progress.repository.*;
+import com.learning.progress.service.ClassHistoryService;
 import com.learning.progress.service.ClassService;
 import com.learning.progress.service.strategy.ClassServiceStrategy;
-import com.learning.progress.util.AppValidator;
-import com.learning.progress.util.DataUtil;
+import com.learning.progress.util.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -25,8 +27,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 public class TeacherClassServiceImpl implements ClassServiceStrategy {
@@ -37,6 +43,8 @@ public class TeacherClassServiceImpl implements ClassServiceStrategy {
     private ClassTeacherRepository classTeacherRepository;
     @Autowired
     private UserRepository userRepository;
+    @Autowired
+    private ClassHistoryService classHistoryService;
     @Autowired
     private ClassMapper classMapper;
     @Autowired
@@ -88,6 +96,12 @@ public class TeacherClassServiceImpl implements ClassServiceStrategy {
                 .syllabus(syllabusDTO)
                 .build();
     }
+
+    @Override
+    public DataResponse<List<ClassHistoryDTO>> getClassHistory(Long classId, int page, int size, String sortBy, String sortDir, String startDate, String endDate, Long actionBy) {
+        return classHistoryService.getClassHistory(classId, page, size, sortBy, sortDir, startDate, endDate, actionBy);
+    }
+
 
     @Override
     @Transactional(readOnly = true)

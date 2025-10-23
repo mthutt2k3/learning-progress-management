@@ -16,6 +16,8 @@ import org.mapstruct.ReportingPolicy;
 public interface ClassMapper {
 
     @Mapping(source = "classTeachers", target = "teacherInfos")
+    @Mapping(target = "teacherCount", expression = "java(clazzEntity.getClassTeachers() != null ? clazzEntity.getClassTeachers().size() : 0)")
+    @Mapping(target = "studentCount", expression = "java(clazzEntity.getClassStudents() != null ? clazzEntity.getClassStudents().size() : 0)")
     ClassDTO toClassDTO(Clazz clazzEntity);
 
     @Mapping(source = "user.id" , target = "teacherId")

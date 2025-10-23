@@ -19,10 +19,6 @@ public interface ClassTeacherRepository extends JpaRepository<ClassTeacher, Long
     @Query("SELECT ct FROM ClassTeacher ct WHERE ct.user.id = :userId AND ct.status = 'ACTIVE'")
     List<ClassTeacher> findActiveClassesByUserId(Long userId);
 
-    Collection<ClassTeacher> findByUser_Id(Long userId);
-
-    boolean existsByUser_IdAndClazz_Id(Long id, Long classId);
-
     @Query("SELECT ct FROM ClassTeacher ct WHERE ct.clazz.id = :classId AND ct.status IN :statuses " +
             "AND (LOWER(ct.user.userName) LIKE LOWER(CONCAT('%', :text, '%')) " +
             "OR LOWER(ct.user.fullName) LIKE LOWER(CONCAT('%', :text, '%')) " +
@@ -36,21 +32,10 @@ public interface ClassTeacherRepository extends JpaRepository<ClassTeacher, Long
 
     Optional<ClassTeacher> findByClazzIdAndUserId(Long classId, Long userId);
 
-    boolean existsByClazzIdAndUserId(Long classId, Long userId);
-
     boolean existsByClazz_IdAndUser_IdAndStatus(Long classId, Long userId, ClassTeacherStatus status);
 
     @Query("SELECT ct FROM ClassTeacher ct WHERE ct.clazz.id = :classId")
     List<ClassTeacher> findByClazzId(@Param("classId") Long classId);
-
-    boolean existsByClazzIdAndRoleInClass(Long clazzId, RoleInClass roleInClass);
-
-    @Query("SELECT ct.user.id FROM ClassTeacher ct WHERE ct.clazz.id = :clazzId AND ct.user.id IN :userIds")
-    List<Long> findUserIdsByClazzIdAndUserIdIn(@Param("clazzId") Long clazzId, @Param("userIds") List<Long> userIds);
-
-    @Query("SELECT ct FROM ClassTeacher ct WHERE ct.user.id = :userId AND ct.clazz.id = :clazzId")
-    Optional<ClassTeacher> findByUserIdAndClazzId(@Param("userId") Long userId,
-                                                  @Param("clazzId") Long clazzId);
 
     @Query("SELECT ct FROM ClassTeacher ct WHERE ct.user.id = :userId AND ct.status = :status")
     List<ClassTeacher> findByUserIdAndStatus(@Param("userId") Long userId, @Param("status") ClassTeacherStatus status);
@@ -108,4 +93,6 @@ public interface ClassTeacherRepository extends JpaRepository<ClassTeacher, Long
             @Param("userIds") List<Long> userIds,
             @Param("status") ClassTeacherStatus status
     );
+
+    boolean existsByUser_IdAndClazz_IdAndStatus(Long id, Long classId, ClassTeacherStatus classTeacherStatus);
 }
