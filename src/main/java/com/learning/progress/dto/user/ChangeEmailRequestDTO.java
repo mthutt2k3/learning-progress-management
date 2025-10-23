@@ -1,11 +1,12 @@
 package com.learning.progress.dto.user;
 
+import com.learning.progress.common.Const;
 import jakarta.validation.constraints.*;
 import lombok.Data;
 
 @Data
 public class ChangeEmailRequestDTO {
-    @Email(message = "Invalid email format")
-    @Size(max = 100, message = "Email must not exceed 100 characters")
+    @NotBlank(message = Const.EMAIL.REQUIRED)
+    @Pattern(regexp = Const.VALIDATE_INPUT.regexEmail, message = Const.EMAIL.INVALID)
     private String newEmail;
 }

@@ -1,5 +1,6 @@
 package com.learning.progress.dto.user;
 
+import com.learning.progress.common.Const;
 import com.learning.progress.common.UserStatus;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
@@ -16,9 +17,9 @@ import java.util.List;
 @AllArgsConstructor
 public class BulkUpdateStatusRequest {
 
-    @NotEmpty(message = "User IDs list cannot be empty")
+    @NotEmpty(message = Const.USER.DELETED)
     private List<Long> userIds;
 
-    @NotNull(message = "Target status is required")
+    @NotNull(message = Const.USER.DELETED)
     private UserStatus targetStatus;
 }

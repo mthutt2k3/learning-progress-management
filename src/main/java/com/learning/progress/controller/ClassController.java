@@ -8,7 +8,7 @@ import com.learning.progress.dto.clazz.CreateClassRequest;
 import com.learning.progress.dto.clazz.UpdateClassRequest;
 import com.learning.progress.dto.DataResponse;
 import com.learning.progress.service.ClassService;
-import com.learning.progress.service.factory.ClassServiceFactory;
+import com.learning.progress.service.strategy.ClassServiceStrategyFactory;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -22,17 +22,17 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/class")
-@Tag(name = "Clazz", description = "Clazz management APIs")
+@Tag(name = "Clazz Management", description = "Clazz management APIs")
 public class ClassController {
 
     @Autowired
-    private ClassServiceFactory classServiceFactory;
+    private ClassServiceStrategyFactory classServiceStrategyFactory;
 
     @GetMapping("/{classId}/overview")
     @PreAuthorize("hasAnyRole('MANAGER', 'TEACHER', 'TEACHING_ASSISTANT', 'STUDENT', 'TEST_TAKER')")
     @Operation(summary = "Lấy tổng quan lớp học", description = "Lấy thông tin tổng quan của lớp học bao gồm giáo viên, trợ giảng, ngày bắt đầu, ngày kết thúc, trạng thái, cấp độ và giáo trình")
     public ResponseEntity<DataResponse<ClassOverviewDTO>> getClassOverview(@PathVariable Long classId) {
-        ClassService classService = classServiceFactory.getClassService();
+        ClassService classService = classServiceStrategyFactory.getClassService();
         return ResponseEntity.ok(DataResponse.success(classService.getClassOverview(classId), Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL));
     }
 
@@ -40,7 +40,7 @@ public class ClassController {
     @PreAuthorize("hasRole('MANAGER')")
     @Operation(summary = "Tạo class", description = "Tạo class mới và tự động sao chép chapters, lessons")
     public ResponseEntity<DataResponse<ClassDTO>> createClass(@Valid @RequestBody CreateClassRequest request) {
-        ClassService classService = classServiceFactory.getClassService();
+        ClassService classService = classServiceStrategyFactory.getClassService();
         return ResponseEntity.ok(DataResponse.success(classService.createClass(request), Const.RESULT_MESSAGE_CODE.CREATE_SUCCESSFUL));
     }
 
@@ -48,7 +48,7 @@ public class ClassController {
     @PreAuthorize("hasAnyRole('MANAGER', 'TEACHER', 'TEACHING_ASSISTANT', 'STUDENT', 'TEST_TAKER')")
     @Operation(summary = "Lấy class", description = "Lấy thông tin class theo ID")
     public ResponseEntity<DataResponse<ClassDTO>> getClass(@PathVariable Long id) {
-        ClassService classService = classServiceFactory.getClassService();
+        ClassService classService = classServiceStrategyFactory.getClassService();
         return ResponseEntity.ok(DataResponse.success(classService.getClass(id), Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL));
     }
 
@@ -66,7 +66,7 @@ public class ClassController {
             @Parameter(description = "Sort direction (asc or desc)")
             @RequestParam(defaultValue = "desc") String sortDir
     ) {
-        ClassService classService = classServiceFactory.getClassService();
+        ClassService classService = classServiceStrategyFactory.getClassService();
         return ResponseEntity.ok(
                 classService.getClassList(
                         page,
@@ -85,7 +85,7 @@ public class ClassController {
     @Operation(summary = "Cập nhật class", description = "Cập nhật thông tin class")
     public ResponseEntity<DataResponse<ClassDTO>> updateClass(
             @PathVariable Long id, @Valid @RequestBody UpdateClassRequest request) {
-        ClassService classService = classServiceFactory.getClassService();
+        ClassService classService = classServiceStrategyFactory.getClassService();
         return ResponseEntity.ok(DataResponse.success(classService.updateClass(id, request), Const.RESULT_MESSAGE_CODE.UPDATE_SUCCESSFUL));
     }
 
@@ -94,7 +94,7 @@ public class ClassController {
     @Operation(summary = "Kết thúc lớp học", description = "Thay đổi trạng thái class")
     public ResponseEntity<DataResponse<String>> changeClassStatusManually(
             @PathVariable Long id, @RequestParam String status) {
-        ClassService classService = classServiceFactory.getClassService();
+        ClassService classService = classServiceStrategyFactory.getClassService();
         var responseMsg = classService.changeClassStatusManually(id, status);
         return ResponseEntity.ok(DataResponse.success(responseMsg, Const.RESULT_MESSAGE_CODE.UPDATE_SUCCESSFUL));
     }
@@ -104,7 +104,7 @@ public class ClassController {
     @Operation(summary = "Xóa class", description = "Xóa mềm class theo ID")
     public ResponseEntity<DataResponse<Void>> deleteClass(
             @Parameter(description = "Class ID") @PathVariable Long id) {
-        ClassService classService = classServiceFactory.getClassService();
+        ClassService classService = classServiceStrategyFactory.getClassService();
         classService.deleteClass(id);
         return ResponseEntity.ok(DataResponse.success(null, Const.RESULT_MESSAGE_CODE.DELETE_SUCCESSFUL));
     }

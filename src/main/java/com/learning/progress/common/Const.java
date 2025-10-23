@@ -2,12 +2,18 @@ package com.learning.progress.common;
 
 public class Const {
     public static class VALIDATE_INPUT {
-        public static final String regexEmail = "^(?=.{1,64}@)[A-Za-z0-9_-]+(\\.[A-Za-z0-9_-]+)*@"
-                + "[^-][A-Za-z0-9-]+(\\.[A-Za-z0-9-]+)*(\\.[A-Za-z]{2,})$";
+        public static final String regexEmail =
+                "^(?=.{6,254}$)(?=.{1,64}@)[A-Za-z0-9._%+-]+@" +
+                        "[^-][A-Za-z0-9-]+(\\.[A-Za-z0-9-]+)*(\\.[A-Za-z]{2,})$";
         public static final String regexPhone = "^(?:0|\\+84)(?:\\s?\\d){9,10}$";
-        public static final String regexPass = "^[A-Za-z0-9]{4,20}$";
+        public static final String regexPass = "^[A-Za-z0-9]{6,20}$";
         public static final String regexGender = "MALE|FEMALE|OTHER";
         public static final String regexDate = "yyyy-MM-dd";
+    }
+    public static class SECTION {
+        public static final String NOT_FOUND = "SectionDto not found";
+        public static final String QUESTIONS_REQUIRED = "At least one question is required";
+        public static final String INVALID_CHALLENGE_ID = "Challenge ID in DTO does not match path variable";
     }
     public static class STUDENT {
         public static final String LEVEL_ID_REQUIRED = "Level is required for student";
@@ -17,6 +23,26 @@ public class Const {
         public static final String INVALID_ROLE_STUDENT_UPDATE = "Role update from STUDENT to TEST_TAKER is not allowed.";
         public static final String INVALID_ROLE_TEACHER_UPDATE = "Role update from TEACHER to TEACHING_ASSISTANT is not allowed.";
 
+
+    }
+    public static class CHAPTER {
+        public static final String ID_REQUIRED = "ID bắt buộc khi xóa";
+        public static final String CHAPTER_NAME_REQUIRED = "Tên chapter không được để trống";
+        public static final String CHAPTER_NAME_MAX_LENGTH = "Tên chapter không được vượt quá 100 ký tự";
+        public static final int CHAPTER_NAME_MAX_LENGTH_VALUE = 100;
+    }
+
+    public static class LESSON {
+        public static final String ID_REQUIRED = "ID bắt buộc khi xóa";
+        public static final String LESSON_NAME_REQUIRED = "Tên lesson không được để trống";
+        public static final String LESSON_NAME_MAX_LENGTH = "Tên lesson không được vượt quá 200 ký tự";
+        public static final int LESSON_NAME_MAX_LENGTH_VALUE = 200;
+
+    }
+    public static class CHALLENGE {
+        public static final String NAME_REQUIRED = "Challenge name is required";
+        public static final String CLASS_LESSON_REQUIRED = "Class lesson is required";
+        public static final String NOT_FOUND = "Challenge does not exist or has been deleted";
 
     }
     public static class DOB {
@@ -43,15 +69,18 @@ public class Const {
     }
     public static class USERNAME {
         public static final String REQUIRED = "User Name is required";
+        public static final String LENGTH_INVALID = "Username must be between 3 and 30 characters";
+        public static final int MAX_LENGTH_VALUE = 30;
+        public static final int MIN_LENGTH_VALUE = 3;
+
     }
+
     public static class PASSWORD {
         public static final String REQUIRED = "Password is required";
         public static final String OLD_PASSWORD_REQUIRED = "Old password is required";
         public static final String NEW_PASSWORD_REQUIRED = "New password is required";
         public static final String CONFIRM_PASSWORD_REQUIRED = "Confirm password is required";
-        public static final String INVALID_PASSWORD_FORMAT = "Invalid password format. Must be 4-20 characters, containing only letters and digits";
-
-
+        public static final String INVALID_PASSWORD_FORMAT = "Invalid password format. Must be 6-20 characters, containing only letters and digits";
     }
     public static class GENDER {
         public static final String REQUIRED = "Gender is required";
@@ -67,19 +96,25 @@ public class Const {
     }
     public static class EMAIL {
         public static final String REQUIRED = "Email is required";
-        public static final String INVALID = "Invalid email format";
-
-
+        public static final String INVALID =
+                "Invalid email format. Email must follow the standard structure (e.g., user@example.com), "
+                        + "contain a valid local part and domain, and not exceed 254 characters.";
     }
+
     public static class ID {
         public static final String USER_ID_REQUIRED = "UserId is required";
 
     }
 
     public static class ROLE {
+        public static final String LOGIN_ROLE_VALUE = "TEACHER|STUDENT";
+
         public static final String REQUIRED = "Role is required";
         public static final String INVALID_LOGIN_ROLE = "Login role must be either TEACHER or STUDENT";
         public static final String NOT_FOUND = "Role is not found";
+        public static final String ROLE_NAME_MAX_LENGTH = "Role name must not exceed 50 characters";
+        public static final int ROLE_NAME_MAX_LENGTH_VALUE = 50;
+        public static final String ROLE_NAME_REQUIRED = "Role name is required";
 
     }
     public static class ENUM {
@@ -246,13 +281,27 @@ public class Const {
         public static final String DUPLICATE_LEVEL_NAME = "Level name already exists";
         public static final String LEVEL_BULK_UPDATE_FORBIDDEN = "Cannot bulk update levels because one or more levels are already PUBLISHED";
         public static final String NOT_PUBLISHED = "Level is not published";
+        public static final String ID_REQUIRED_WHEN_DELETING = "ID is required when deleting";
+        public static final String LEVEL_NAME_REQUIRED = "Level name is required";
+        public static final String ESTIMATED_DURATION_REQUIRED = "Estimated duration is required";
+        public static final String DURATION_NON_NEGATIVE = "Duration must be non-negative";
+        public static final String DESCRIPTION_MAX_LENGTH = "Description cannot exceed 1000 characters";
+        public static final String PROMOTION_CRITERIA_MAX_LENGTH = "Promotion criteria cannot exceed 1000 characters";
+        public static final String LEARNING_OBJECTIVES_MAX_LENGTH = "Learning objectives cannot exceed 1000 characters";
+        public static final int DESCRIPTION_MAX_LENGTH_VALUE = 1000;
+        public static final int PROMOTION_CRITERIA_MAX_LENGTH_VALUE = 1000;
+        public static final int LEARNING_OBJECTIVES_MAX_LENGTH_VALUE = 1000;
+
 
         public static final String LIST_RETRIEVED = "Level list retrieved successfully";
         public static final String DETAILS_RETRIEVED = "Level details retrieved successfully";
         public static final String LEVEL_UPDATED = "Level updated successfully";
-        public static final String STATUS_UPDATED = "Level status updated successfully";
-        public static final String DUPLICATE_ORDER_NUMBER = "Order number already exists";
-        public static final String INVALID_ORDER_SEQUENCE = "Order number have to be in order one by one";
+
+    }
+
+    public static class ORDER_NUMBER {
+        public static final String ORDER_NUMBER_REQUIRED = "Order number is required";
+        public static final String ORDER_NUMBER_MIN = "Order number must be 1 or greater";
     }
 
     public static class CLASS {

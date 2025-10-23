@@ -26,5 +26,5 @@ public class ParentInfo {
     @NotBlank(message = Const.STUDENT.PARENT_PHONE_REQUIRED)
     private String parentPhone;
 
-    private String relationship; // e.g., "Father", "Mother"
+    private String relationship;
 }

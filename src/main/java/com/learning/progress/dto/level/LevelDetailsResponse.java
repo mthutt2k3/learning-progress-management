@@ -47,7 +47,4 @@ public class LevelDetailsResponse {
         this.orderNumber = orderNumber;
         this.status = status;
     }
-
-
-
 }

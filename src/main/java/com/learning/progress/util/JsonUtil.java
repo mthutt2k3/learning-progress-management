@@ -8,6 +8,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
 @Slf4j
 public final class JsonUtil {
@@ -56,5 +57,20 @@ public final class JsonUtil {
 
         return list;
     }
+    public static Map<String, Object> objectToMap(Object obj) {
+        if (obj == null) return Collections.emptyMap();
+        try {
+            ObjectMapper objectMapper = new ObjectMapper();
+            // Convert object -> JSON string
+            String json = objectMapper.writeValueAsString(obj);
+            // Convert JSON string -> Map
+            return objectMapper.readValue(json, Map.class);
+        } catch (JsonProcessingException e) {
+            log.error("Error converting object to map [{}]", e.getMessage());
+            return Collections.emptyMap();
+        }
+    }
+
+
 }
 

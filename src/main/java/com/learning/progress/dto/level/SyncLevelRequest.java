@@ -1,9 +1,7 @@
 package com.learning.progress.dto.level;
 
-import jakarta.validation.constraints.Min;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.PositiveOrZero;
+import com.learning.progress.common.Const;
+import jakarta.validation.constraints.*;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -15,16 +13,19 @@ import lombok.Setter;
 @AllArgsConstructor
 public class SyncLevelRequest {
 
-    @NotNull(message = "ID is required when deleting", groups = Deleted.class)
+    @NotNull(message = Const.LEVEL.ID_REQUIRED_WHEN_DELETING, groups = Deleted.class)
     private Long id;
 
-    @NotBlank(message = "Level name is required", groups = NotDeleted.class)
+    @NotBlank(message = Const.LEVEL.LEVEL_NAME_REQUIRED, groups = NotDeleted.class)
     private String levelName;
 
+    @Size(max = Const.LEVEL.DESCRIPTION_MAX_LENGTH_VALUE, message = Const.LEVEL.DESCRIPTION_MAX_LENGTH)
     private String description;
 
+    @Size(max = Const.LEVEL.PROMOTION_CRITERIA_MAX_LENGTH_VALUE, message = Const.LEVEL.PROMOTION_CRITERIA_MAX_LENGTH)
     private String promotionCriteria;
 
+    @Size(max = Const.LEVEL.LEARNING_OBJECTIVES_MAX_LENGTH_VALUE, message = Const.LEVEL.LEARNING_OBJECTIVES_MAX_LENGTH)
     private String learningObjectives;
 
     @NotNull(message = "Order number is required", groups = NotDeleted.class)
