@@ -283,13 +283,13 @@ public class ClassChapterServiceImpl implements ClassChapterService {
             newChapter.setClazz(classEntity);
             newChapter.setClassChapterName(req.getClassChapterName());
             newChapter.setOrderNumber(req.getOrderNumber());
-            result.add(classChapterMapper.toClassChapterDTO(classChapterRepository.save(newChapter)));
+//            result.add(classChapterMapper.toClassChapterDTO(classChapterRepository.save(newChapter)));
 
             ClassChapter saved = classChapterRepository.saveAndFlush(newChapter);
             String chapterCode = DataUtil.generateClassChapterCode(saved.getId(), saved.getClazz().getId());
             saved.setClassChapterCode(chapterCode);
-
-            result.add(classChapterMapper.toClassChapterDTO(classChapterRepository.save(saved)));
+            saved = classChapterRepository.save(saved);
+            result.add(classChapterMapper.toClassChapterDTO(saved));
 
             // Ghi lịch sử
             String actionDetails = String.format(
@@ -358,13 +358,17 @@ public class ClassChapterServiceImpl implements ClassChapterService {
 
         // Validate teacher assignment
         Long currentUserId = jwtUtil.extractUserIdFromCurrentRequest();
-        if ( !classTeacherRepository.existsByClazz_IdAndUser_IdAndStatus(classId, currentUserId, ClassTeacherStatus.ACTIVE)) {
+        if (!classTeacherRepository.existsByClazz_IdAndUser_IdAndStatus(classId, currentUserId, ClassTeacherStatus.ACTIVE)) {
             throw new ApiException(Const.CLASS.TEACHER_NOT_ASSIGNED, HttpStatus.FORBIDDEN.value());
         }
 
         // Read Excel data
         List<ImportChapterInClassDTO> importList = fileService.readExcelData(
                 file, "Import Data", ImportChapterInClassDTO.class);
+
+        if (importList.isEmpty()) {
+            throw new ApiException("File không có dữ liệu để import", HttpStatus.BAD_REQUEST.value());
+        }
 
         List<ClassChapterDTO> result = new ArrayList<>();
         String currentUser = jwtUtil.extractUsernameFromCurrentRequest();
@@ -375,84 +379,89 @@ public class ClassChapterServiceImpl implements ClassChapterService {
                 RoleName.TEACHER.name(),
                 RoleName.TEACHING_ASSISTANT.name());
 
-        // Group by classCode
-        Map<String, List<ImportChapterInClassDTO>> chaptersByClass = importList.stream()
-                .collect(Collectors.groupingBy(ImportChapterInClassDTO::getClassCode));
+        // Kiểm tra số lượng chapters hiện có và xác định order number bắt đầu
+        List<ClassChapter> existingChapters = classChapterRepository.findByClazzAndDeletedAtIsNull(classEntity);
+        int nextOrderNumber = existingChapters.isEmpty() ? 1 :
+                existingChapters.stream()
+                        .map(ClassChapter::getOrderNumber)
+                        .max(Integer::compare)
+                        .orElse(0) + 1;
 
-        for (Map.Entry<String, List<ImportChapterInClassDTO>> entry : chaptersByClass.entrySet()) {
-            String classCode = entry.getKey();
-            List<ImportChapterInClassDTO> chapters = entry.getValue();
+        // Validate chapters
+        Set<String> usedChapterNames = new HashSet<>();
+        int rowIndex = 2; // Bắt đầu từ dòng 2 (sau header)
 
-            // Validate classCode
-            if (!classEntity.getClassCode().equals(classCode)) {
-                throw new ApiException("Class code không khớp: " + classCode, HttpStatus.BAD_REQUEST.value());
-            }
+        for (int i = 0; i < importList.size(); i++) {
+            ImportChapterInClassDTO req = importList.get(i);
+            int rowNumber = rowIndex + i;
 
-            // Validate chapters
-            for (ImportChapterInClassDTO req : chapters) {
-                if (req.getChapterName() == null || req.getChapterName().trim().isEmpty()) {
-                    throw new ApiException("Chapter name là bắt buộc: " + req.getChapterName(),
-                            HttpStatus.BAD_REQUEST.value());
-                }
-                if (req.getChapterName().length() > 255) {
-                    throw new ApiException("Chapter name vượt quá 255 ký tự: " + req.getChapterName(),
-                            HttpStatus.BAD_REQUEST.value());
-                }
-                if (req.getOrderNumber() == null || req.getOrderNumber() < 1) {
-                    throw new ApiException("Order number phải là số dương: " + req.getOrderNumber(),
-                            HttpStatus.BAD_REQUEST.value());
-                }
-            }
-
-            // Validate order numbers
-            Set<Integer> orderNumbers = chapters.stream()
-                    .map(ImportChapterInClassDTO::getOrderNumber)
-                    .filter(Objects::nonNull)
-                    .collect(Collectors.toSet());
-            int chapterSize = chapters.size();
-            Set<Integer> expectedOrders = IntStream.rangeClosed(1, chapterSize).boxed().collect(Collectors.toSet());
-            if (orderNumbers.size() != chapterSize || !orderNumbers.equals(expectedOrders)) {
+            // Validate Chapter Name
+            if (req.getChapterName() == null || req.getChapterName().trim().isEmpty()) {
                 throw new ApiException(
-                        String.format("Order numbers phải tuần tự từ 1 đến %d, không trùng lặp và không có gap. Current: %s",
-                                chapterSize, orderNumbers),
-                        HttpStatus.BAD_REQUEST.value()
-                );
+                        String.format("Dòng %d, Cột 'Chapter Name': Không được để trống", rowNumber),
+                        HttpStatus.BAD_REQUEST.value());
             }
 
-            log.info("Validation passed for classCode={}: total chapters={}", classCode, chapterSize);
-
-            // Create new class chapters
-            for (ImportChapterInClassDTO req : chapters) {
-                ClassChapter newChapter = new ClassChapter();
-                newChapter.setClazz(classEntity);
-                newChapter.setClassChapterName(req.getChapterName());
-                newChapter.setOrderNumber(req.getOrderNumber());
-                newChapter.setCreatedBy(currentUser);
-                newChapter.setUpdatedBy(currentUser);
-                newChapter.setCreatedAt(now);
-                newChapter.setUpdatedAt(now);
-
-                ClassChapter saved = classChapterRepository.saveAndFlush(newChapter);
-                String chapterCode = DataUtil.generateClassChapterCode(saved.getId(), saved.getClazz().getId());
-                saved.setClassChapterCode(chapterCode);
-                saved = classChapterRepository.save(saved);
-                result.add(classChapterMapper.toClassChapterDTO(saved));
-
-                // Record history
-                String actionDetails = String.format(
-                        Const.CLASS_CHAPTER.ACTION_CREATE,
-                        req.getChapterName(),
-                        classEntity.getClassName(),
-                        req.getOrderNumber()
-                );
-                classHistoryService.saveClassHistory(
-                        classId,
-                        actionDetails,
-                        actionByUserId,
-                        ActionType.CREATE_CHAPTER.name(),
-                        visibleToRoles
-                );
+            String trimmedName = req.getChapterName().trim();
+            if (trimmedName.length() > 255) {
+                throw new ApiException(
+                        String.format("Dòng %d, Cột 'Chapter Name': Vượt quá 255 ký tự (hiện tại: %d ký tự)",
+                                rowNumber, trimmedName.length()),
+                        HttpStatus.BAD_REQUEST.value());
             }
+
+            // Kiểm tra trùng tên trong cùng batch
+            if (usedChapterNames.contains(trimmedName.toLowerCase())) {
+                throw new ApiException(
+                        String.format("Dòng %d, Cột 'Chapter Name': Tên '%s' bị trùng lặp trong file",
+                                rowNumber, trimmedName),
+                        HttpStatus.BAD_REQUEST.value());
+            }
+            usedChapterNames.add(trimmedName.toLowerCase());
+
+            // Kiểm tra trùng tên với DB
+            boolean exists = classChapterRepository.existsByClazzAndClassChapterNameIgnoreCaseAndDeletedAtIsNull(
+                    classEntity, trimmedName);
+            if (exists) {
+                throw new ApiException(
+                        String.format("Dòng %d, Cột 'Chapter Name': Tên '%s' đã tồn tại trong lớp này",
+                                rowNumber, trimmedName),
+                        HttpStatus.BAD_REQUEST.value());
+            }
+        }
+
+        // Create new class chapters
+        for (int i = 0; i < importList.size(); i++) {
+            ImportChapterInClassDTO req = importList.get(i);
+            ClassChapter newChapter = new ClassChapter();
+            newChapter.setClazz(classEntity);
+            newChapter.setClassChapterName(req.getChapterName().trim());
+            newChapter.setOrderNumber(nextOrderNumber + i);
+            newChapter.setCreatedBy(currentUser);
+            newChapter.setUpdatedBy(currentUser);
+            newChapter.setCreatedAt(now);
+            newChapter.setUpdatedAt(now);
+
+            ClassChapter saved = classChapterRepository.saveAndFlush(newChapter);
+            String chapterCode = DataUtil.generateClassChapterCode(saved.getId(), saved.getClazz().getId());
+            saved.setClassChapterCode(chapterCode);
+            saved = classChapterRepository.save(saved);
+            result.add(classChapterMapper.toClassChapterDTO(saved));
+
+            // Record history
+            String actionDetails = String.format(
+                    Const.CLASS_CHAPTER.ACTION_CREATE,
+                    req.getChapterName(),
+                    classEntity.getClassName(),
+                    newChapter.getOrderNumber()
+            );
+            classHistoryService.saveClassHistory(
+                    classId,
+                    actionDetails,
+                    actionByUserId,
+                    ActionType.CREATE_CHAPTER.name(),
+                    visibleToRoles
+            );
         }
 
         return result;
@@ -461,7 +470,6 @@ public class ClassChapterServiceImpl implements ClassChapterService {
     @Override
     public byte[] validateClassChapterImportFile(Long classId, MultipartFile file) {
         ValidationResult<ImportChapterInClassDTO> result = new ValidationResult<>();
-        List<ImportChapterInClassDTO> importList;
 
         // Bước 1: Validate class exists
         Clazz classEntity;
@@ -509,6 +517,7 @@ public class ClassChapterServiceImpl implements ClassChapterService {
         }
 
         // Bước 3: Đọc file - catch lỗi format
+        List<ImportChapterInClassDTO> importList;
         try {
             importList = fileService.readExcelData(file, "Import Data", ImportChapterInClassDTO.class);
             result.setTotalRows(importList.size());
@@ -534,22 +543,11 @@ public class ClassChapterServiceImpl implements ClassChapterService {
             );
         }
 
-        // Bước 4: Group by classCode để validate
-        Map<String, List<ImportChapterInClassDTO>> chaptersByClass = new LinkedHashMap<>();
-        for (ImportChapterInClassDTO dto : importList) {
-            String classCode = dto.getClassCode() != null ? dto.getClassCode().trim() : null;
-            if (classCode != null && !classCode.isEmpty()) {
-                chaptersByClass
-                        .computeIfAbsent(classCode, k -> new ArrayList<>())
-                        .add(dto);
-            }
-        }
-
-        // Bước 5: Validate từng row
+        // Bước 4: Validate từng row
         int validCount = 0;
         int invalidCount = 0;
-
         int rowIndex = 2; // Bắt đầu từ dòng 2 (sau header)
+        Set<String> usedChapterNames = new HashSet<>();
 
         for (int i = 0; i < importList.size(); i++) {
             ImportChapterInClassDTO dto = importList.get(i);
@@ -561,20 +559,6 @@ public class ClassChapterServiceImpl implements ClassChapterService {
             StringBuilder errors = new StringBuilder();
 
             try {
-                // Validate Class Code
-                if (dto.getClassCode() == null || dto.getClassCode().trim().isEmpty()) {
-                    errors.append("• Class Code không được để trống\n");
-                } else {
-                    String classCode = dto.getClassCode().trim();
-
-                    // Check class code khớp với classId
-                    if (!classEntity.getClassCode().equals(classCode)) {
-                        errors.append("• Class Code không khớp với lớp đang import: ")
-                                .append(classCode)
-                                .append(" (Expected: ").append(classEntity.getClassCode()).append(")\n");
-                    }
-                }
-
                 // Validate Chapter Name
                 if (dto.getChapterName() == null || dto.getChapterName().trim().isEmpty()) {
                     errors.append("• Chapter Name không được để trống\n");
@@ -586,63 +570,22 @@ public class ClassChapterServiceImpl implements ClassChapterService {
                                 .append(trimmedName.length()).append(" ký tự)\n");
                     }
 
-                    // Check duplicate trong file (cùng class)
-                    if (dto.getClassCode() != null) {
-                        String classCode = dto.getClassCode().trim();
-                        List<ImportChapterInClassDTO> sameGroupChapters = chaptersByClass.get(classCode);
-
-                        if (sameGroupChapters != null) {
-                            long duplicateCount = sameGroupChapters.stream()
-                                    .filter(c -> c.getChapterName() != null &&
-                                            c.getChapterName().trim().equalsIgnoreCase(trimmedName))
-                                    .count();
-
-                            if (duplicateCount > 1) {
-                                errors.append("• Chapter Name bị trùng lặp trong file: ")
-                                        .append(trimmedName).append("\n");
-                            }
-                        }
+                    // Check duplicate trong file
+                    if (usedChapterNames.contains(trimmedName.toLowerCase())) {
+                        errors.append("• Chapter Name bị trùng lặp trong file: ")
+                                .append(trimmedName).append("\n");
+                    } else {
+                        usedChapterNames.add(trimmedName.toLowerCase());
                     }
 
-                    // Check duplicate trong DB (nếu class code valid)
-                    if (dto.getClassCode() != null &&
-                            classEntity.getClassCode().equals(dto.getClassCode().trim())) {
-                        boolean exists = classChapterRepository
-                                .existsByClazzAndClassChapterNameIgnoreCaseAndDeletedAtIsNull(
-                                        classEntity, trimmedName
-                                );
-                        if (exists) {
-                            errors.append("• Chapter Name đã tồn tại trong lớp này: ")
-                                    .append(trimmedName).append("\n");
-                        }
-                    }
-                }
-
-                // Validate Order Number
-                if (dto.getOrderNumber() == null) {
-                    errors.append("• Order Number không được để trống\n");
-                } else {
-                    if (dto.getOrderNumber() < 1) {
-                        errors.append("• Order Number phải là số dương (>= 1), giá trị hiện tại: ")
-                                .append(dto.getOrderNumber()).append("\n");
-                    }
-
-                    // Check duplicate order number trong cùng class
-                    if (dto.getClassCode() != null) {
-                        String classCode = dto.getClassCode().trim();
-                        List<ImportChapterInClassDTO> sameGroupChapters = chaptersByClass.get(classCode);
-
-                        if (sameGroupChapters != null) {
-                            long duplicateOrderCount = sameGroupChapters.stream()
-                                    .filter(c -> c.getOrderNumber() != null &&
-                                            c.getOrderNumber().equals(dto.getOrderNumber()))
-                                    .count();
-
-                            if (duplicateOrderCount > 1) {
-                                errors.append("• Order Number bị trùng lặp trong file: ")
-                                        .append(dto.getOrderNumber()).append("\n");
-                            }
-                        }
+                    // Check duplicate trong DB
+                    boolean exists = classChapterRepository
+                            .existsByClazzAndClassChapterNameIgnoreCaseAndDeletedAtIsNull(
+                                    classEntity, trimmedName
+                            );
+                    if (exists) {
+                        errors.append("• Chapter Name đã tồn tại trong lớp này: ")
+                                .append(trimmedName).append("\n");
                     }
                 }
 
@@ -664,46 +607,6 @@ public class ClassChapterServiceImpl implements ClassChapterService {
 
             result.addRow(validatedRow);
             rowIndex++;
-        }
-
-        // Bước 6: Validate order numbers tuần tự không gap cho từng class
-        for (Map.Entry<String, List<ImportChapterInClassDTO>> entry : chaptersByClass.entrySet()) {
-            String classCode = entry.getKey();
-            List<ImportChapterInClassDTO> chapters = entry.getValue();
-
-            Set<Integer> orderNumbers = chapters.stream()
-                    .map(ImportChapterInClassDTO::getOrderNumber)
-                    .filter(Objects::nonNull)
-                    .collect(Collectors.toSet());
-
-            if (!orderNumbers.isEmpty()) {
-                int maxOrder = Collections.max(orderNumbers);
-                List<Integer> missingOrders = new ArrayList<>();
-
-                for (int i = 1; i <= maxOrder; i++) {
-                    if (!orderNumbers.contains(i)) {
-                        missingOrders.add(i);
-                    }
-                }
-
-                // Nếu có gap, đánh dấu lại các row trong group này là invalid
-                if (!missingOrders.isEmpty()) {
-                    for (ValidationResult.ValidatedRow<ImportChapterInClassDTO> row : result.getRows()) {
-                        if (row.getData().getClassCode() != null &&
-                                row.getData().getClassCode().trim().equals(classCode) &&
-                                row.isValid()) {
-
-                            row.setValid(false);
-                            String gapError = "\n• Order Number không tuần tự từ 1 đến " + maxOrder +
-                                    ". Thiếu số: " + missingOrders;
-                            row.setErrorMessage(row.getErrorMessage() + gapError);
-
-                            validCount--;
-                            invalidCount++;
-                        }
-                    }
-                }
-            }
         }
 
         result.setValidRows(validCount);

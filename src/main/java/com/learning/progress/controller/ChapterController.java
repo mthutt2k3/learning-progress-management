@@ -91,8 +91,9 @@ public class ChapterController {
     @PreAuthorize("hasRole('MANAGER')")
     @Operation(summary = "Import Chapters from Excel", description = "Import multiple chapters from an Excel file")
     public ResponseEntity<DataResponse<List<ChapterDTO>>> importChaptersFromExcel(
+            @Parameter(description = "Syllabus ID") @RequestParam("syllabusId") Long syllabusId,
             @Parameter(description = "Excel file containing chapter data") @RequestParam("file") MultipartFile file) {
-        var response = chapterService.importChaptersFromExcel(file);
+        var response = chapterService.importChaptersFromExcel(syllabusId, file);
         return new ResponseEntity<>(DataResponse.success(response, Const.RESULT_MESSAGE_CODE.IMPORT_SUCCESSFUL), HttpStatus.OK);
     }
     @PostMapping("/validate-import")
@@ -102,10 +103,11 @@ public class ChapterController {
             description = "Validate Excel file without importing. Returns validation result file."
     )
     public ResponseEntity<ByteArrayResource> validateChapterImport(
+            @Parameter(description = "Syllabus ID") @RequestParam("syllabusId") Long syllabusId,
             @Parameter(description = "Excel file to validate")
             @RequestParam("file") MultipartFile file) {
 
-        byte[] validationFile = chapterService.validateChapterImportFile(file);
+        byte[] validationFile = chapterService.validateChapterImportFile(syllabusId, file);
         ByteArrayResource resource = new ByteArrayResource(validationFile);
 
         String filename = "Chapter_Validation_" +
