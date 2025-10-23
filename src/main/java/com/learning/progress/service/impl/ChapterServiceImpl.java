@@ -169,6 +169,22 @@ public class ChapterServiceImpl implements ChapterService {
             }
         }
 
+        // 1. CHECK TRÙNG chapterName trong REQUEST
+        Set<String> usedNames = new HashSet<>();
+        for (SyncChapterRequest req : nonDeletedRequests) {
+            if (req.getChapterName() != null) {
+                String normalizedName = req.getChapterName().trim().toLowerCase();
+
+                if (usedNames.contains(normalizedName)) {
+                    throw new ApiException(
+                            "Chapter name bị trùng lặp trong request: " + req.getChapterName(),
+                            HttpStatus.BAD_REQUEST.value()
+                    );
+                }
+                usedNames.add(normalizedName);
+            }
+        }
+
         // 5. Validate EXISTING IDs - Strict Matching
         Set<Long> requestExistingIds = nonDeletedRequests.stream()
                 .filter(req -> req.getId() != null) // Existing chapters cần update

@@ -126,6 +126,26 @@ public class ClassChapterServiceImpl implements ClassChapterService {
             }
         }
 
+        // ========== THÊM VALIDATION MỚI ==========
+
+// 1. CHECK TRÙNG classChapterName trong REQUEST
+        Set<String> usedNames = new HashSet<>();
+        for (SyncClassChapterRequest req : nonDeletedRequests) {
+            if (req.getClassChapterName() != null) {
+                String normalizedName = req.getClassChapterName().trim().toLowerCase();
+
+                if (usedNames.contains(normalizedName)) {
+                    throw new ApiException(
+                            "Chapter name bị trùng lặp trong request: " + req.getClassChapterName(),
+                            HttpStatus.BAD_REQUEST.value()
+                    );
+                }
+                usedNames.add(normalizedName);
+            }
+        }
+
+// ========== KẾT THÚC VALIDATION MỚI ==========
+
         // 5. Validate EXISTING IDs - Strict Matching
         Set<Long> requestExistingIds = nonDeletedRequests.stream()
                 .filter(req -> req.getId() != null) // Existing chapters cần update

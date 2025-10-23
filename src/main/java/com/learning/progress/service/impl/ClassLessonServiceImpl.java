@@ -163,6 +163,22 @@ public class ClassLessonServiceImpl implements ClassLessonService {
             }
         }
 
+        // 1. CHECK TRÙNG classLessonName trong REQUEST
+        Set<String> usedNames = new HashSet<>();
+        for (SyncClassLessonRequest req : nonDeletedRequests) {
+            if (req.getClassLessonName() != null) {
+                String normalizedName = req.getClassLessonName().trim().toLowerCase();
+
+                if (usedNames.contains(normalizedName)) {
+                    throw new ApiException(
+                            "Lesson name bị trùng lặp trong request: " + req.getClassLessonName(),
+                            HttpStatus.BAD_REQUEST.value()
+                    );
+                }
+                usedNames.add(normalizedName);
+            }
+        }
+
         // Validate order numbers
         Set<Integer> orderNumbers = nonDeletedRequests.stream()
                 .map(SyncClassLessonRequest::getOrderNumber)
