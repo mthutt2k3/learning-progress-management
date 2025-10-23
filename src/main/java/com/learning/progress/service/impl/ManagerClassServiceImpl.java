@@ -29,6 +29,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
 
@@ -172,21 +173,30 @@ public class ManagerClassServiceImpl implements ClassServiceStrategy {
 
     @Override
     @Transactional(readOnly = true)
-    public DataResponse<List<ClassDTO>> getClassList(int page, int size, String searchText, ClassStatus status, Long syllabusId,
+    public DataResponse<List<ClassDTO>> getClassList(int page, int size, String searchText, List<ClassStatus> status, Long syllabusId,
                                                      String sortBy, String sortDir) {
         appValidator.validatePaginationParams(page, size);
         appValidator.validateSortParams(
                 List.of("createdAt", "className", "classCode", "status", "startDate", "endDate"),
                 sortBy, sortDir);
 
+        // Nếu không truyền status thì lấy tất cả
+        List<ClassStatus> statuses;
+        if (status == null || status.isEmpty()) {
+            statuses = Arrays.asList(ClassStatus.values());
+        } else {
+            statuses = status;
+        }
+
         Pageable pageable = PageRequest.of(
                 page, size,
                 sortDir.equalsIgnoreCase("asc") ? Sort.by(sortBy).ascending() : Sort.by(sortBy).descending()
         );
+
         // Manager: View ALL classes
         Page<Clazz> classPage = classRepository.searchClassesWithFilters(
                 searchText == null ? "" : searchText,
-                status, syllabusId, pageable);
+                statuses, syllabusId, pageable);
 
         List<ClassDTO> classDTOs = classPage.getContent()
                 .stream()

@@ -39,7 +39,7 @@ public class ClassStudentController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(required = false) String text,
-            @RequestParam(required = false, defaultValue = "ACTIVE") ClassStudentStatus status,
+            @RequestParam(required = false, defaultValue = "ACTIVE") List<ClassStudentStatus> status,
             @RequestParam(defaultValue = "joinedAt") String sortBy,
             @RequestParam(defaultValue = "desc") String sortDir) {
         return new ResponseEntity<>(

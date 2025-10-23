@@ -20,6 +20,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -69,6 +70,9 @@ public class UserServiceImpl implements UserService {
 
     @Autowired
     private FileService fileService;
+
+    @Autowired
+    private PasswordEncoder passwordEncoder;
 
     @Autowired
     private LevelRepository levelRepository;
@@ -435,6 +439,18 @@ public class UserServiceImpl implements UserService {
 
         userRepository.findActiveLevelInfoByUserId(user.getId()).ifPresent(response::setCurrentLevelInfo);
 
+        classStudentRepository.findFirstByUserIdAndStatusOrderByJoinedAtDesc(
+                user.getId(),
+                ClassStudentStatus.ACTIVE
+        ).ifPresent(cs -> {
+            ClassInfo classInfo = ClassInfo.builder()
+                    .id(cs.getClazz().getId())
+                    .className(cs.getClazz().getClassName())
+                    .roleInClass(null)
+                    .build();
+            response.setClassInfo(classInfo);
+        });
+
         return response;
     }
 
@@ -546,15 +562,13 @@ public class UserServiceImpl implements UserService {
 
         String newEmail = request.getNewEmail();
 
-        // Validate email mới không trùng với email hiện tại
-        if (newEmail.equals(targetUser.getEmail())) {
-            throw new ApiException("Email mới trùng với email hiện tại", HttpStatus.BAD_REQUEST.value());
-        }
         targetUser.setEmail(newEmail);
 
         switch (targetUser.getStatus()) {
             case PENDING:
                 String password = DataUtil.generateRandomPassword(8);
+                targetUser.setPassword(passwordEncoder.encode(password));
+                userRepository.save(targetUser);
                 emailService.sendNewAccountEmail(targetUser, targetUser.getUserName(), password);
                 break;
 

@@ -151,6 +151,16 @@ public class AuthServiceImpl implements AuthService {
                     return new ApiException(Const.USER.NOT_FOUND, HttpStatus.NOT_FOUND.value());
                 });
 
+        // Check user role
+        if (user.getRole() == null ||
+                !(RoleName.STUDENT.equals(user.getRole().getName())
+                        || RoleName.TEST_TAKER.equals(user.getRole().getName()))) {
+            throw new ApiException(
+                    Const.SECURITY.FORBIDDEN_ROLE_STUDENT_ONLY,
+                    HttpStatus.FORBIDDEN.value()
+            );
+        }
+
         // Check user status
         if (user.getStatus() != UserStatus.ACTIVE) {
             throw new ApiException(Const.USER.USER_INACTIVE, HttpStatus.FORBIDDEN.value());
