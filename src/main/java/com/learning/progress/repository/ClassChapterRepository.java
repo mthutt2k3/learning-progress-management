@@ -30,4 +30,9 @@ public interface ClassChapterRepository extends JpaRepository<ClassChapter, Long
 
     List<ClassChapter> findByClassChapterCodeIn(Collection<String> chapterCodes);
 
+    boolean existsByClazzAndClassChapterNameIgnoreCaseAndDeletedAtIsNullAndIdNot(
+            Clazz clazz,
+            String classChapterName,
+            Long id
+    );
 }
