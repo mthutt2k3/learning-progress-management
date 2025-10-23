@@ -1,5 +1,6 @@
 package com.learning.progress.entity;
 
+import com.learning.progress.common.ChallengeStatus;
 import com.learning.progress.common.ChallengeType;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
@@ -24,7 +25,7 @@ public class DailyChallenge extends BaseEntity{
     @Column(name = "challenge_name", nullable = false, length = 100)
     private String challengeName;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne()
     @OnDelete(action = OnDeleteAction.SET_NULL)
     @JoinColumn(name = "class_lesson_id")
     private ClassLesson classLesson;
@@ -51,9 +52,6 @@ public class DailyChallenge extends BaseEntity{
     @Column(name = "ai_feedback_enabled")
     private Boolean aiFeedbackEnabled;
 
-    @ColumnDefault("true")
-    @Column(name = "is_active")
-    private Boolean isActive;
 
     @Column(name = "start_date")
     private OffsetDateTime startDate;
@@ -65,4 +63,7 @@ public class DailyChallenge extends BaseEntity{
     @Column(name = "challenge_type", nullable = false)
     private ChallengeType challengeType;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false)
+    private ChallengeStatus challengeStatus = ChallengeStatus.DRAFT;
 }

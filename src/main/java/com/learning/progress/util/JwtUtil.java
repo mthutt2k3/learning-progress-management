@@ -116,6 +116,9 @@ public class JwtUtil {
         return getClaim(token, JwtTokenType.AUTH, Claims::getSubject);
     }
 
+    private String getRoleFromAuthToken(String token) {
+        return getClaim(token, JwtTokenType.AUTH, claims -> (String) claims.get("role"));
+    }
     public Long getUserIdFromAuthToken(String token) {
         return getClaim(token, JwtTokenType.AUTH, claims -> ((Number) claims.get("userId")).longValue());
     }
@@ -204,6 +207,11 @@ public class JwtUtil {
         }
         return authHeader.substring(7);
     }
+
+    public String extractRoleFromCurrentRequest() {
+        return getRoleFromAuthToken(extractTokenFromRequest(getCurrentRequest()));
+    }
+
 
     public String extractUsernameFromCurrentRequest() {
         return getUsernameFromAuthToken(extractTokenFromRequest(getCurrentRequest()));

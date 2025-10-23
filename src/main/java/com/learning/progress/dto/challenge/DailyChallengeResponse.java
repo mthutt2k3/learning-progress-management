@@ -1,9 +1,7 @@
 package com.learning.progress.dto.challenge;
 
+import com.learning.progress.common.ChallengeStatus;
 import com.learning.progress.common.ChallengeType;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Positive;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -12,20 +10,17 @@ import java.util.List;
 
 @Getter
 @Setter
-public class DailyChallengeDTO {
+public class DailyChallengeResponse {
     private Long id;
 
-    @NotBlank(message = "Challenge name is required")
     private String challengeName;
-
-    private Long classLessonId;
 
     private String description;
 
-    @NotNull(message = "Challenge type is required")
     private ChallengeType challengeType;
 
-    @Positive(message = "Duration must be positive")
+    private ChallengeStatus challengeStatus;
+
     private Integer durationMinutes;
 
     private Boolean hasAntiCheat;
@@ -36,8 +31,6 @@ public class DailyChallengeDTO {
 
     private Boolean aiFeedbackEnabled;
 
-    private Boolean isActive;
-
     private OffsetDateTime startDate;
 
     private OffsetDateTime endDate;
@@ -47,4 +40,13 @@ public class DailyChallengeDTO {
     private OffsetDateTime createdAt;
 
     private List<ChallengeSectionDTO> sections;
+
+    private ClassLessonInfo classLesson;
+
+    @Getter
+    @Setter
+    public static class ClassLessonInfo {
+        private Long id;
+        private String classLessonName;
+    }
 }

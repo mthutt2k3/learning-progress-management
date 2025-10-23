@@ -1,21 +1,26 @@
 package com.learning.progress.service;
 
+import com.learning.progress.common.ChallengeStatus;
 import com.learning.progress.dto.DataResponse;
 import com.learning.progress.dto.challenge.CreateDailyChallengeRequest;
-import com.learning.progress.dto.challenge.DailyChallengeDTO;
+import com.learning.progress.dto.challenge.DailyChallengeResponse;
+import com.learning.progress.dto.challenge.DailyChallengeListDTO;
+import com.learning.progress.dto.challenge.UpdateDailyChallengeDTO;
 import jakarta.validation.Valid;
 
 import java.util.List;
 
 public interface DailyChallengeService {
 
-    DailyChallengeDTO createChallenge(@Valid CreateDailyChallengeRequest dto);
+    DailyChallengeResponse createChallenge(@Valid CreateDailyChallengeRequest dto);
 
-    DataResponse<List<DailyChallengeDTO>> getAllChallenges(Long classId, int page, int size, String text, String sortBy, String sortDir);
+    DataResponse<List<DailyChallengeListDTO>> getAllChallenges(Long classId, int page, int size, String text, String sortBy, String sortDir);
 
-    DailyChallengeDTO getChallengeById(Long id);
+    DailyChallengeResponse getChallengeById(Long id);
 
-    DailyChallengeDTO updateChallenge(Long id, DailyChallengeDTO dto);
+    DailyChallengeResponse updateChallenge(Long id, @Valid UpdateDailyChallengeDTO dto);
 
     void deleteChallenge(Long id);
+
+    DailyChallengeResponse updateChallengeStatus(Long id, ChallengeStatus challengeStatus);
 }

@@ -1,7 +1,15 @@
 package com.learning.progress.util;
 
+import com.learning.progress.common.ClassStudentStatus;
+import com.learning.progress.common.ClassTeacherStatus;
 import com.learning.progress.common.Const;
+import com.learning.progress.common.RoleName;
+import com.learning.progress.entity.User;
 import com.learning.progress.exception.ApiException;
+import com.learning.progress.repository.ClassStudentRepository;
+import com.learning.progress.repository.ClassTeacherRepository;
+import com.learning.progress.repository.UserRepository;
+import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
@@ -12,10 +20,53 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 @Component
+@RequiredArgsConstructor
 public class AppValidator {
 
     @Value("${app.pagination.max-size}")
     private int maxSize;
+
+    private final JwtUtil jwtUtil;
+    private final UserRepository userRepository;
+    private final ClassTeacherRepository classTeacherRepository;
+    private final ClassStudentRepository classStudentRepository;
+
+    public boolean hasRole(RoleName roleName) {
+        String currentRole = jwtUtil.extractRoleFromCurrentRequest();
+        RoleName currentRoleName = this.validateAndConvertEnum(currentRole, RoleName.class);
+        return currentRoleName.equals(roleName);
+    }
+    /**
+     * Validate that the current user is allowed to access a specific class.
+     * MANAGERs are always allowed.
+     * TEACHERs and STUDENTs must belong to that class.
+     */
+    public void validateUserAccessToClass(Long classId) {
+        String username = jwtUtil.extractUsernameFromCurrentRequest();
+        User user = userRepository.findByUserNameAndDeletedAtIsNull(username)
+                .orElseThrow(() -> new ApiException(Const.USER.NOT_FOUND, HttpStatus.UNAUTHORIZED.value()));
+        RoleName roleName = user.getRole().getName();
+        // MANAGER has full access
+        if (roleName == RoleName.MANAGER) {
+            return;
+        }
+
+        boolean hasAccess = false;
+
+        // Teacher in this class?
+        if (roleName == RoleName.TEACHER) {
+            hasAccess = classTeacherRepository.existsByUser_IdAndClazz_IdAndStatus(user.getId(), classId, ClassTeacherStatus.ACTIVE);
+        }
+
+        // Student in this class?
+        if (roleName == RoleName.STUDENT) {
+            hasAccess = classStudentRepository.existsByUser_IdAndClazz_IdAndStatus(user.getId(), classId, ClassStudentStatus.ACTIVE);
+        }
+
+        if (!hasAccess) {
+            throw new ApiException("You are not authorized to access this class", HttpStatus.FORBIDDEN.value());
+        }
+    }
 
     public <E extends Enum<E>> void validateEnumValue(
             Class<E> enumClass,
@@ -38,6 +89,22 @@ public class AppValidator {
         if (!EnumUtil.isAllowedEnumValue(enumClass, value, allowedValues)) {
             String enumName = enumClass.getSimpleName(); // Ví dụ: RoleName, UserStatus
             String message = String.format(Const.ENUM.INVALID_ENUM_VALUE, enumName, value);
+            throw new ApiException(message, HttpStatus.BAD_REQUEST.value());
+        }
+    }
+    public <E extends Enum<E>> E validateAndConvertEnum(String value, Class<E> enumClass) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+
+        try {
+            return Enum.valueOf(enumClass, value);
+        } catch (IllegalArgumentException ex) {
+            String message = String.format(
+                    Const.ENUM.INVALID_ENUM_VALUE,
+                    enumClass.getSimpleName(),
+                    value
+            );
             throw new ApiException(message, HttpStatus.BAD_REQUEST.value());
         }
     }
@@ -95,4 +162,5 @@ public class AppValidator {
             );
         }
     }
+
 }
