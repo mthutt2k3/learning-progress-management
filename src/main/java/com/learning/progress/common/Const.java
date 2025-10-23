@@ -11,7 +11,7 @@ public class Const {
         public static final String regexDate = "yyyy-MM-dd";
     }
     public static class SECTION {
-        public static final String NOT_FOUND = "Section not found";
+        public static final String NOT_FOUND = "SectionDto not found";
         public static final String QUESTIONS_REQUIRED = "At least one question is required";
         public static final String INVALID_CHALLENGE_ID = "Challenge ID in DTO does not match path variable";
     }

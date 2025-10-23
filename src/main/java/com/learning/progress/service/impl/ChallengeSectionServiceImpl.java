@@ -1,15 +1,15 @@
 package com.learning.progress.service.impl;
 
 import com.learning.progress.common.Const;
-import com.learning.progress.common.Gender;
 import com.learning.progress.common.ResourceType;
-import com.learning.progress.dto.challenge.section.ChallengeSectionDto;
+import com.learning.progress.dto.DataResponse;
+import com.learning.progress.dto.challenge.section.SectionDto;
 import com.learning.progress.dto.challenge.section.QuestionDto;
 import com.learning.progress.dto.challenge.section.SectionWithQuestionsDto;
-import com.learning.progress.dto.DataResponse;
 import com.learning.progress.entity.ChallengeSection;
 import com.learning.progress.entity.DailyChallenge;
 import com.learning.progress.exception.ApiException;
+import com.learning.progress.mapper.ChallengeSectionMapper;
 import com.learning.progress.repository.ChallengeSectionRepository;
 import com.learning.progress.repository.DailyChallengeRepository;
 import com.learning.progress.service.ChallengeSectionService;
@@ -28,7 +28,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.OffsetDateTime;
 import java.util.List;
 
 @Service
@@ -44,6 +43,9 @@ public class ChallengeSectionServiceImpl implements ChallengeSectionService {
 
     @Autowired
     private QuestionService questionService;
+
+    @Autowired
+    private ChallengeSectionMapper challengeSectionMapper;
 
     @Autowired
     private AppValidator appValidator;
@@ -69,149 +71,56 @@ public class ChallengeSectionServiceImpl implements ChallengeSectionService {
                 });
 
         // Validate section DTO
-        ChallengeSectionDto sectionDto = dto.getSection();
-        appValidator.validateEnumValue(ResourceType.class, sectionDto.getSectionsType());
+        SectionDto sectionDto = dto.getSection();
+
+        appValidator.validateEnumValue(ResourceType.class, sectionDto.getResourceType());
 
         // Create the section
-        ChallengeSection section = ChallengeSection.builder()
-                .challenge(challenge)
-                .sectionTitle(sectionDto.getSectionTitle())
-                .sectionsUrl(sectionDto.getSectionsUrl())
-                .sectionsContent(sectionDto.getSectionsContent())
-                .orderNumber(sectionDto.getOrderNumber())
-                .sectionsType(ResourceType.valueOf(sectionDto.getSectionsType()))
-                .createdBy(jwtUtil.extractEmailPrefixFromCurrentRequest())
-                .createdAt(OffsetDateTime.now())
-                .build();
-
+        ChallengeSection section = challengeSectionMapper.toChallengeSectionEntity(sectionDto);
+        section.setChallenge(challenge);
+        section.setResourceType(ResourceType.valueOf(sectionDto.getResourceType()));
         ChallengeSection savedSection = sectionRepository.save(section);
-        sectionDto.setSectionsType(savedSection.getSectionsType().name());
 
         // Create questions
-        List<QuestionDto> createdQuestions = dto.getQuestions().stream()
-                .map(questionDto -> {
-                    return questionService.createQuestion(questionDto, savedSection.getId());
-                })
-                .toList();
+        questionService.createQuestion(dto.getQuestions(), savedSection.getId());
 
-        dto.setQuestions(createdQuestions);
         log.info("[{}] Successfully created section with ID: {} for challengeId: {}", traceId, savedSection.getId(), challengeId);
         return dto;
     }
 
     @Override
     public SectionWithQuestionsDto getSection(Long id) {
-        String traceId = TraceUtil.getTraceId();
-        log.info("[{}] Retrieving section with id: {}", traceId, id);
-
-        ChallengeSection section = sectionRepository.findByIdAndDeletedAtIsNull(id)
-                .orElseThrow(() -> {
-                    log.error("[{}] Section not found with ID: {}", traceId, id);
-                    return new ApiException(Const.SECTION.NOT_FOUND, HttpStatus.NOT_FOUND.value());
-                });
-
-        ChallengeSectionDto sectionDto = new ChallengeSectionDto();
-        sectionDto.setSectionTitle(section.getSectionTitle());
-        sectionDto.setSectionsUrl(section.getSectionsUrl());
-        sectionDto.setSectionsContent(section.getSectionsContent());
-        sectionDto.setOrderNumber(section.getOrderNumber());
-        sectionDto.setSectionsType(section.getSectionsType().name());
-
-        List<QuestionDto> questions = questionService.getQuestionsBySection(id);
-
-        SectionWithQuestionsDto result = new SectionWithQuestionsDto();
-        result.setSection(sectionDto);
-        result.setQuestions(questions);
-        log.info("[{}] Successfully retrieved section with ID: {}", traceId, id);
-        return result;
+        throw new UnsupportedOperationException("getQuestion not implemented yet");
     }
 
     @Override
     @Transactional
     public SectionWithQuestionsDto updateSection(Long id, SectionWithQuestionsDto dto) {
-        String traceId = TraceUtil.getTraceId();
-        log.info("[{}] Updating section with id: {}", traceId, id);
-
-        if (dto.getQuestions() == null || dto.getQuestions().isEmpty()) {
-            log.error("[{}] At least one question is required to update a section", traceId);
-            throw new ApiException(Const.SECTION.QUESTIONS_REQUIRED, HttpStatus.BAD_REQUEST.value());
-        }
-
-        // Update section
-        ChallengeSection section = sectionRepository.findByIdAndDeletedAtIsNull(id)
-                .orElseThrow(() -> {
-                    log.error("[{}] Section not found with ID: {}", traceId, id);
-                    return new ApiException(Const.SECTION.NOT_FOUND, HttpStatus.NOT_FOUND.value());
-                });
-
-        ChallengeSectionDto sectionDto = dto.getSection();
-        section.setSectionTitle(sectionDto.getSectionTitle());
-        section.setSectionsUrl(sectionDto.getSectionsUrl());
-        section.setSectionsContent(sectionDto.getSectionsContent());
-        section.setOrderNumber(sectionDto.getOrderNumber());
-        section.setSectionsType(ResourceType.valueOf(sectionDto.getSectionsType()));
-        section.setUpdatedBy(jwtUtil.extractEmailPrefixFromCurrentRequest());
-        section.setUpdatedAt(OffsetDateTime.now());
-
-        ChallengeSection updatedSection = sectionRepository.save(section);
-        sectionDto.setSectionsType(updatedSection.getSectionsType().name());
-
-//        // Delete existing questions
-//        questionService.getQuestionsBySection(id).forEach(question -> questionService.deleteQuestion(question.getId()));
-
-        // Create new questions
-        List<QuestionDto> createdQuestions = dto.getQuestions().stream()
-                .map(questionDto -> {
-                    return questionService.createQuestion(questionDto, id);
-                })
-                .toList();
-
-        SectionWithQuestionsDto result = new SectionWithQuestionsDto();
-        result.setSection(sectionDto);
-        result.setQuestions(createdQuestions);
-        log.info("[{}] Successfully updated section with ID: {}", traceId, id);
-        return result;
+        throw new UnsupportedOperationException("getQuestion not implemented yet");
     }
 
     @Override
     @Transactional
     public void deleteSection(Long id) {
-        String traceId = TraceUtil.getTraceId();
-        log.info("[{}] Deleting section with id: {}", traceId, id);
-
-        ChallengeSection section = sectionRepository.findByIdAndDeletedAtIsNull(id)
-                .orElseThrow(() -> {
-                    log.error("[{}] Section not found with ID: {}", traceId, id);
-                    return new ApiException(Const.SECTION.NOT_FOUND, HttpStatus.NOT_FOUND.value());
-                });
-
-        section.setDeletedBy(jwtUtil.extractEmailPrefixFromCurrentRequest());
-        section.setDeletedAt(OffsetDateTime.now());
-        sectionRepository.save(section);
-        log.info("[{}] Successfully deleted section with ID: {}", traceId, id);
+        throw new UnsupportedOperationException("getQuestion not implemented yet");
     }
 
     @Override
-    public DataResponse<List<SectionWithQuestionsDto>> listSections(Long challengeId, int page, int size, String text, String sortBy, String sortDir) {
+    public DataResponse<List<SectionWithQuestionsDto>> listSections(Long challengeId, int page, int size, String text) {
         String traceId = TraceUtil.getTraceId();
-        log.info("[{}] Listing sections for challengeId: {}, page: {}, size: {}, text: {}, sortBy: {}, sortDir: {}",
-                traceId, challengeId, page, size, text, sortBy, sortDir);
-
         // Validate pagination and sort parameters
         appValidator.validatePaginationParams(page, size);
-        appValidator.validateSortParams(List.of("orderNumber", "sectionTitle", "createdAt"), sortBy, sortDir);
         log.debug("[{}] Pagination and sort parameters validated", traceId);
 
         // Validate challenge
-        DailyChallenge challenge = challengeRepository.findByIdAndDeletedAtIsNull(challengeId)
+        challengeRepository.findByIdAndDeletedAtIsNull(challengeId)
                 .orElseThrow(() -> {
                     log.error("[{}] Challenge not found for challengeId: {}", traceId, challengeId);
                     return new ApiException(Const.CHALLENGE.NOT_FOUND, HttpStatus.NOT_FOUND.value());
                 });
 
         // Create Sort and Pageable objects
-        Sort sort = Sort.by(sortDir.equalsIgnoreCase("asc") ? Sort.Direction.ASC : Sort.Direction.DESC, sortBy);
-        Pageable pageable = PageRequest.of(page, size, sort);
+        Pageable pageable = PageRequest.of(page, size);
 
         // Fetch sections
         Page<ChallengeSection> sectionPage;
@@ -223,30 +132,20 @@ public class ChallengeSectionServiceImpl implements ChallengeSectionService {
         log.debug("[{}] Retrieved {} sections for page {} in challengeId: {}", traceId, sectionPage.getTotalElements(), page, challengeId);
 
         // Map to DTOs
-        List<SectionWithQuestionsDto> sections = sectionPage.getContent().stream()
-                .map(section -> {
-                    ChallengeSectionDto sectionDto = new ChallengeSectionDto();
-                    sectionDto.setSectionTitle(section.getSectionTitle());
-                    sectionDto.setSectionsUrl(section.getSectionsUrl());
-                    sectionDto.setSectionsContent(section.getSectionsContent());
-                    sectionDto.setOrderNumber(section.getOrderNumber());
-                    sectionDto.setSectionsType(section.getSectionsType().name());
-
-                    List<QuestionDto> questions = questionService.getQuestionsBySection(section.getId());
-
-                    SectionWithQuestionsDto result = new SectionWithQuestionsDto();
-                    result.setSection(sectionDto);
-                    result.setQuestions(questions);
-                    return result;
-                })
+        List<ChallengeSection> sectionEntities = sectionPage.getContent();
+        List<List<QuestionDto>> questionsList = sectionEntities.stream()
+                .map(section -> questionService.getQuestionsBySection(section.getId()))
                 .toList();
 
-        log.info("[{}] Successfully retrieved {} sections for challengeId: {}", traceId, sections.size(), challengeId);
+        List<SectionWithQuestionsDto> sectionsWithQuestions =
+                challengeSectionMapper.toSectionWithQuestionsDtoList(sectionEntities, questionsList);
+
+        log.info("[{}] Successfully retrieved {} sections for challengeId: {}", traceId, sectionsWithQuestions.size(), challengeId);
         return DataResponse.<List<SectionWithQuestionsDto>>builder()
                 .traceId(traceId)
                 .success(true)
                 .message(Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL)
-                .data(sections)
+                .data(sectionsWithQuestions)
                 .timestamp(java.time.LocalDateTime.now())
                 .page(page)
                 .size(size)

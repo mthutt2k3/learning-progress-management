@@ -10,5 +10,5 @@ public interface ChallengeSectionService {
     SectionWithQuestionsDto getSection(Long id);
     SectionWithQuestionsDto updateSection(Long id, SectionWithQuestionsDto dto);
     void deleteSection(Long id);
-    DataResponse<List<SectionWithQuestionsDto>> listSections(Long challengeId, int page, int size, String text, String sortBy, String sortDir);
+    DataResponse<List<SectionWithQuestionsDto>> listSections(Long challengeId, int page, int size, String text);
 }

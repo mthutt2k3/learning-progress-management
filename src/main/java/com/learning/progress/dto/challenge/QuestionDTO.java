@@ -16,13 +16,13 @@ import java.util.Map;
 public class QuestionDTO {
     private Long id;
 
-    @NotNull(message = "Section ID is required")
+    @NotNull(message = "SectionDto ID is required")
     private Long sectionId;
 
-    @NotBlank(message = "Question text is required")
+    @NotBlank(message = "QuestionDto text is required")
     private String questionText;
 
-    @NotNull(message = "Question type is required")
+    @NotNull(message = "QuestionDto type is required")
     private QuestionType questionType;
 
     private Map<String, Object> questionContentJson;

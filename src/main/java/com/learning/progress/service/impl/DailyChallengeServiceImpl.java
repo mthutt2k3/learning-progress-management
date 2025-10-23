@@ -71,8 +71,6 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
         // Map request to entity
         DailyChallenge challenge = dailyChallengeMapper.mapToEntity(request);
         challenge.setClassLesson(classLesson);
-        challenge.setCreatedAt(OffsetDateTime.now());
-        challenge.setCreatedBy(jwtUtil.extractEmailPrefixFromCurrentRequest());
 
         // Save challenge
         challenge = dailyChallengeRepository.save(challenge);

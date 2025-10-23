@@ -1,16 +1,19 @@
 package com.learning.progress.dto.challenge.section;
 
-import lombok.Data;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
-import java.math.BigDecimal;
-import java.util.Map;
-
-@Data
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
 public class QuestionDto {
     private Long id;
-    private String questionText;
-    private Integer orderNumber;
-    private BigDecimal score;
-    private String questionType;
-    private Map<String, Object> questionContentJson;
+    private int orderNumber; // Thứ tự câu hỏi
+    private double score; // Điểm số của câu hỏi
+    private String questionType; // Loại câu hỏi (MULTIPLE_CHOICE, REWRITE_SENTENCE, DROPDOWN, FILL_IN_THE_BLANK, DRAG_AND_DROP, REORDER)
+    private String questionText; // Nội dung câu hỏi
+    private QuestionContent content; // Nội dung chi tiết của câu hỏi
 }

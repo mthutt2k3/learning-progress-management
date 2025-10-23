@@ -1,14 +1,11 @@
 package com.learning.progress.controller;
 
 import com.learning.progress.common.Const;
-import com.learning.progress.dto.challenge.section.SectionWithQuestionsDto;
 import com.learning.progress.dto.DataResponse;
+import com.learning.progress.dto.challenge.section.SectionWithQuestionsDto;
 import com.learning.progress.service.ChallengeSectionService;
-import com.learning.progress.util.TraceUtil;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -19,7 +16,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/sections")
-@Tag(name = "Section Management", description = "Challenge Section Management APIs")
+@Tag(name = "Challenge Section Management", description = "Challenge Section Management APIs")
 public class ChallengeSectionController {
 
     @Autowired
@@ -70,10 +67,8 @@ public class ChallengeSectionController {
             @PathVariable Long challengeId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
-            @RequestParam(required = false) String text,
-            @RequestParam(defaultValue = "orderNumber") String sortBy,
-            @RequestParam(defaultValue = "asc") String sortDir) {
-        DataResponse<List<SectionWithQuestionsDto>> response = sectionService.listSections(challengeId, page, size, text, sortBy, sortDir);
+            @RequestParam(required = false) String text) {
+        DataResponse<List<SectionWithQuestionsDto>> response = sectionService.listSections(challengeId, page, size, text);
         return new ResponseEntity<>(response, HttpStatus.OK);
     }
 }

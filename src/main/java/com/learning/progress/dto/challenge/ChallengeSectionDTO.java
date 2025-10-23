@@ -18,7 +18,7 @@ public class ChallengeSectionDTO {
 
     private String sectionTitle;
 
-    @NotNull(message = "Section type is required")
+    @NotNull(message = "SectionDto type is required")
     private ResourceType sectionsType;
 
     private String sectionsUrl;

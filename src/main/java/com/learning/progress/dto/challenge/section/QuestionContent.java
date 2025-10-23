@@ -11,7 +11,6 @@ import java.util.List;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-public class SectionWithQuestionsDto {
-    private SectionDto section; // Thông tin challengeSectionDto
-    private List<QuestionDto> questions; // Danh sách các câu hỏi
+public class QuestionContent {
+    private List<DataItem> data; // Danh sách các lựa chọn hoặc câu trả lời
 }

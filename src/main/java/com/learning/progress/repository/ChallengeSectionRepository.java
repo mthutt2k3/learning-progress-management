@@ -26,7 +26,7 @@ public interface ChallengeSectionRepository extends JpaRepository<ChallengeSecti
      * @param pageable    Pagination and sorting information.
      * @return A Page of ChallengeSections for the specified challenge that are not deleted.
      */
-    @Query("SELECT s FROM ChallengeSection s WHERE s.challenge.id = :challengeId AND s.deletedAt IS NULL")
+    @Query("SELECT s FROM ChallengeSection s WHERE s.challenge.id = :challengeId AND s.deletedAt IS NULL order by s.orderNumber asc ")
     Page<ChallengeSection> findByChallengeIdAndDeletedAtIsNull(@Param("challengeId") Long challengeId, Pageable pageable);
 
     /**
@@ -39,6 +39,6 @@ public interface ChallengeSectionRepository extends JpaRepository<ChallengeSecti
      */
     @Query("SELECT s FROM ChallengeSection s WHERE s.challenge.id = :challengeId AND s.deletedAt IS NULL " +
             "AND (:text IS NULL OR LOWER(s.sectionTitle) LIKE LOWER(CONCAT('%', :text, '%')) " +
-            "OR LOWER(s.sectionsContent) LIKE LOWER(CONCAT('%', :text, '%')))")
+            "OR LOWER(s.sectionsContent) LIKE LOWER(CONCAT('%', :text, '%'))) order by s.orderNumber asc ")
     Page<ChallengeSection> findByChallengeIdAndTextAndDeletedAtIsNull(@Param("challengeId") Long challengeId, @Param("text") String text, Pageable pageable);
 }

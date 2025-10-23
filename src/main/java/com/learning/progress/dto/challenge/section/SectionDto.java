@@ -5,13 +5,15 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-import java.util.List;
-
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-public class SectionWithQuestionsDto {
-    private SectionDto section; // Thông tin challengeSectionDto
-    private List<QuestionDto> questions; // Danh sách các câu hỏi
+public class SectionDto {
+    private Long id;
+    private String sectionTitle;
+    private String sectionsUrl;
+    private String sectionsContent;
+    private Integer orderNumber;
+    private String resourceType;
 }

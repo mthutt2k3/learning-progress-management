@@ -14,4 +14,6 @@ public interface QuestionRepository extends JpaRepository<Question, Long> {
 
     @Query("SELECT q FROM Question q WHERE q.section.id = :sectionId AND q.deletedAt IS NULL")
     List<Question> findBySectionId(@Param("sectionId") Long sectionId);
+
+    List<Question> findBySectionIdAndDeletedAtIsNull(Long sectionId);
 }
