@@ -148,6 +148,8 @@ public class ClassHistoryServiceImpl implements ClassHistoryService {
                 .success(true)
                 .message(Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL)
                 .data(historiesDTO)
+                .startDate(start)
+                .endDate(end)
                 .timestamp(LocalDateTime.now())
                 .page(page)
                 .size(size)

@@ -18,6 +18,7 @@ public class ClassHistoryDTO {
     private String className;
     private String actionDetails;
     private Long actionById;
+    private String actionByEmailPrefix;
     private String actionByUsername;
     private String actionByFullName;
     private OffsetDateTime actionAt;

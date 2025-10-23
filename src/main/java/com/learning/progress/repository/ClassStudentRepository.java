@@ -94,4 +94,6 @@ public interface ClassStudentRepository extends JpaRepository<ClassStudent, Long
     Optional<ClassStudent> findFirstByUserIdAndStatusOrderByJoinedAtDesc(@Param("userId") Long userId, @Param("status") ClassStudentStatus status);
 
     List<ClassStudent> findByUserIdInAndStatus(List<Long> userIds, ClassStudentStatus status);
+
+    boolean existsByUser_IdAndClazz_Id(Long id, Long classId);
 }

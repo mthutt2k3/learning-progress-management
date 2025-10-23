@@ -64,7 +64,6 @@ public class Const {
         public static final String REFRESH_TOKEN_REQUIRED = "Refresh token is required";
 
         public static final String REQUIRED = "Token is required";
-        public static final String EXPIRED = "Token has expired";
 
     }
     public static class USERNAME {
@@ -138,9 +137,6 @@ public class Const {
         public static final String CREATE_SUCCESSFUL = "Created successful";
         public static final String UPDATE_SUCCESSFUL = "Updated successful";
         public static final String DELETE_SUCCESSFUL = "Deleted successful";
-        public static final String REMOVE_SUCCESSFUL = "Removed successful";
-        public static final String ACTIVATE_SUCCESSFUL = "Activated successful";
-        public static final String DEACTIVATE_SUCCESSFUL = "Deactivated successful";
         public static final String RETRIEVE_SUCCESSFUL = "Retrieved successful";
         public static final String IMPORT_SUCCESSFUL = "Imported successful";
         public static final String REQUEST_SENT = "Request sent successful";
@@ -177,7 +173,6 @@ public class Const {
         // Validation & logic errors
         public static final String UNHANDLED_LESSONS = "Unhandled lessons: %s. FE must include ALL active lessons!";
         public static final String NON_DELETED_COUNT_MISMATCH = "Mismatch in non-deleted lesson count! Expected: %d, actual: %d";
-        public static final String INVALID_ORDER_SEQUENCE = "Order numbers must be sequential from 1 to %d. Current: %s";
         public static final String LESSON_NAME_REQUIRED = "Lesson name is required: %s";
         public static final String LESSON_NAME_TOO_LONG = "Lesson name exceeds 255 characters: %s";
         public static final String LESSON_CONTENT_TOO_LONG = "Lesson content exceeds 1000 characters: %s";
@@ -199,21 +194,6 @@ public class Const {
 
         // Not found & invalid
         public static final String NOT_FOUND = "Class chapter not found";
-        public static final String INVALID_ID = "Invalid class chapter ID: %s";
-        public static final String CHAPTERS_NOT_FOUND = "Chapter IDs not found: %s";
-        public static final String CLASS_NOT_FOUND = "Class not found or deleted";
-
-        // Validation & logic errors
-        public static final String UNHANDLED_CHAPTERS = "Unhandled chapters: %s. FE must include ALL active chapters!";
-        public static final String NON_DELETED_COUNT_MISMATCH = "Mismatch in non-deleted chapter count! Expected: %d, actual: %d";
-        public static final String INVALID_ORDER_SEQUENCE = "Order numbers must be sequential from 1 to %d. Current: %s";
-        public static final String CHAPTER_NAME_REQUIRED = "Chapter name is required: %s";
-        public static final String CHAPTER_NAME_TOO_LONG = "Chapter name exceeds 255 characters: %s";
-        public static final String DESCRIPTION_TOO_LONG = "Chapter description exceeds 1000 characters: %s";
-        public static final String ORDER_NUMBER_INVALID = "Order number must be positive: %s";
-        public static final String ORDER_NUMBER_SEQUENCE_INVALID =
-                "Order numbers must be sequential from 1 to %d, without duplicates or gaps. Current: %s";
-
         // Action / history log
         public static final String ACTION_DELETE =
                 "Deleted chapter %s from class %s";
@@ -222,8 +202,6 @@ public class Const {
         public static final String ACTION_CREATE =
                 "Created chapter %s for class %s with order number %d";
 
-        // Common
-        public static final String SUCCESS = "Success";
     }
 
     public static class USER {
@@ -256,8 +234,6 @@ public class Const {
     public static class VALIDATION {
         public static final String MISSING_FIELD = "Required field is missing";
         public static final String INVALID_FORMAT = "Invalid format";
-        public static final String INVALID_DIFFICULTY = "Invalid difficulty format"; // Thêm mới
-        public static final String REQUEST_NULL = "Request body cannot be null";
         public static final String EMAIL_REQUIRED = "Email address is required";
         public static final String REFRESH_TOKEN_REQUIRED = "Refresh token is required";
         public static final String EMAIL_SEND_FAILED = "Failed to send reset password email. Please try again";
@@ -283,8 +259,6 @@ public class Const {
         public static final String NOT_PUBLISHED = "Level is not published";
         public static final String ID_REQUIRED_WHEN_DELETING = "ID is required when deleting";
         public static final String LEVEL_NAME_REQUIRED = "Level name is required";
-        public static final String ESTIMATED_DURATION_REQUIRED = "Estimated duration is required";
-        public static final String DURATION_NON_NEGATIVE = "Duration must be non-negative";
         public static final String DESCRIPTION_MAX_LENGTH = "Description cannot exceed 1000 characters";
         public static final String PROMOTION_CRITERIA_MAX_LENGTH = "Promotion criteria cannot exceed 1000 characters";
         public static final String LEARNING_OBJECTIVES_MAX_LENGTH = "Learning objectives cannot exceed 1000 characters";
@@ -329,10 +303,6 @@ public class Const {
     public static class SYLLABUS {
         public static final String ID_REQUIRED = "Syllabus ID cannot be empty";
         public static final String NOT_FOUND = "Syllabus not found or deleted";
-        public static final String NAME_REQUIRED = "Syllabus name cannot be empty";
-        public static final String NAME_MAX_LENGTH = "Syllabus name cannot exceed 100 characters";
-        public static final String DESCRIPTION_REQUIRED = "Description cannot be empty";
-        public static final String INVALID_ID = "Invalid syllabus ID";
         public static final String EXIST_NAME = "Syllabus name already exists";
     }
     public static class CLASS_HISTORY {
@@ -346,13 +316,10 @@ public class Const {
     public static class CLASS_STUDENT {
         public static final String LIST_RETRIEVED = "Student list retrieved successfully";
         public static final String PROFILE_RETRIEVED = "Student profile retrieved successfully";
-        public static final String PERFORMANCE_RETRIEVED = "Student performance report retrieved successfully";
-        public static final String PROGRESS_RETRIEVED = "Student progress overview retrieved successfully";
         public static final String STUDENT_ADDED = "Student added to class successfully";
         public static final String STUDENT_REMOVED = "Student removed from class successfully";
         public static final String STUDENTS_IMPORTED = "Students imported successfully";
         public static final String STUDENT_NOT_FOUND = "Student not found in class";
-        public static final String STUDENT_ALREADY_IN_CLASS = "Student is already in the class";
     }
 
     public static class CLASS_TEACHER {
@@ -361,6 +328,5 @@ public class Const {
         public static final String LIST_RETRIEVED = "Teacher list retrieved successfully";
         public static final String PERFORMANCE_RETRIEVED = "Teacher performance report retrieved successfully";
         public static final String TEACHER_NOT_FOUND = "Teacher not found in class";
-        public static final String TEACHER_ALREADY_IN_CLASS = "Teacher is already in the class";
     }
 }
