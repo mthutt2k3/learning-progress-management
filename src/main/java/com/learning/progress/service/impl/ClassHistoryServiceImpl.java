@@ -48,7 +48,7 @@ public class ClassHistoryServiceImpl implements ClassHistoryService {
     private ClassHistoryMapper classHistoryMapper;
 
     @Autowired
-    private ClassTeacherRepository classTeacherRepository;
+    private AppValidator appValidator;
 
     @Autowired
     private JwtUtil jwtUtil;
@@ -93,20 +93,13 @@ public class ClassHistoryServiceImpl implements ClassHistoryService {
     @Override
     @Transactional(readOnly = true)
     public DataResponse<List<ClassHistoryDTO>> getClassHistory(Long classId, int page, int size, String sortBy, String sortDir, String startDate, String endDate, Long actionBy) {
-        ValidateUtil.validatePaginationParams(page, size);
-        ValidateUtil.validateSortParams(List.of("actionAt", "actionType"), sortBy, sortDir);
-
+        appValidator.validatePaginationParams(page, size);
+        appValidator.validateSortParams(List.of("actionAt", "actionType"), sortBy, sortDir);
+        appValidator.validateUserAccessToClass(classId);
         String username = jwtUtil.extractUsernameFromCurrentRequest();
+
         User user = userRepository.findByUserNameAndDeletedAtIsNull(username)
                 .orElseThrow(() -> new ApiException(Const.USER.NOT_FOUND, HttpStatus.UNAUTHORIZED.value()));
-
-        RoleName role = user.getRole().getName();
-        if (role != RoleName.MANAGER) {
-            boolean isAssignedToClass = classTeacherRepository.existsByUser_IdAndClazz_Id(user.getId(), classId);
-            if (!isAssignedToClass) {
-                throw new ApiException("You are not authorized to view history of this class", HttpStatus.FORBIDDEN.value());
-            }
-        }
 
         // Validate actionBy
         if (actionBy != null) {
@@ -137,7 +130,7 @@ public class ClassHistoryServiceImpl implements ClassHistoryService {
 
         // Lọc bản ghi dựa trên visible_to_roles
         List<ClassHistory> histories = historyPage.getContent().stream()
-                .filter(history -> isVisibleToUser(history, role))
+                .filter(history -> isVisibleToUser(history, user.getRole().getName()))
                 .collect(Collectors.toList());
         List<ClassHistoryDTO> historiesDTO = histories.stream()
                 .map(classHistoryMapper::toClassHistoryDTO)

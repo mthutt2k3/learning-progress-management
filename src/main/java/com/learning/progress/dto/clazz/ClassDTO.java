@@ -24,6 +24,8 @@ public class ClassDTO {
     private SyllabusInfo syllabus;
     private List<TeacherInfo> teacherInfos;
     private String avatarUrl;
+    private int teacherCount;
+    private int studentCount;
     private ClassStatus status;
     private String createdBy;
     private OffsetDateTime startDate;
