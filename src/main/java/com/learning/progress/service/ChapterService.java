@@ -11,8 +11,8 @@ public interface ChapterService {
     ChapterDTO getChapter(Long id);
     DataResponse<List<ChapterDTO>> getChapterList(Long syllabusId, int page, int size, String searchText);
     List<ChapterDTO> syncChapters(Long syllabusId, List<SyncChapterRequest> request);
-    List<ChapterDTO> importChaptersFromExcel(MultipartFile file);
+    List<ChapterDTO> importChaptersFromExcel(Long syllabusId, MultipartFile file);
     byte[] generateChapterImportTemplate();
     String getChapterTemplateSasUrl();
-    byte[] validateChapterImportFile(MultipartFile file);
+    byte[] validateChapterImportFile(Long syllabusId, MultipartFile file);
 }

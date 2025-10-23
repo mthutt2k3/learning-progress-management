@@ -35,4 +35,6 @@ public interface ClassChapterRepository extends JpaRepository<ClassChapter, Long
             String classChapterName,
             Long id
     );
+
+    List<ClassChapter> findByClazzAndDeletedAtIsNull(Clazz classEntity);
 }
