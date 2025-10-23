@@ -22,8 +22,6 @@ public class ImportStudentDTO {
 
     private String relationship;
 
-    private String avatarUrl;
-
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = Const.VALIDATE_INPUT.regexDate)
     private Date dateOfBirth;
 

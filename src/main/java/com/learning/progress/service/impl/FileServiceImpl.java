@@ -13,6 +13,7 @@ import com.learning.progress.exception.ApiException;
 import com.learning.progress.service.BlobSasService;
 import com.learning.progress.service.FileService;
 import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.xssf.usermodel.XSSFColor;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -62,6 +63,9 @@ public class FileServiceImpl implements FileService {
     @Value("${azure.storage.lesson-in-class-template}")
     private String lessonInClassTemplate;
 
+    XSSFColor errorColor = new XSSFColor(new java.awt.Color(251, 114, 114), null);
+    XSSFColor successColor = new XSSFColor(new java.awt.Color(78, 250, 37), null);
+
     @Override
     public byte[] generateStudentImportTemplate() {
         List<ExcelColumn> columns = fromClass(ImportStudentDTO.class);
@@ -76,7 +80,6 @@ public class FileServiceImpl implements FileService {
                 List.of("- Last Name: Họ của học sinh, tối đa 50 ký tự"),
                 List.of("- Role Name: [STUDENT, TEST_TAKER]"),
                 List.of("- Parent Email: Email phụ huynh (tùy chọn)"),
-                List.of("- Avatar URL: URL ảnh đại diện, tối đa 1024 ký tự (tùy chọn)"),
                 List.of("- Date of Birth: Định dạng yyyy-MM-dd (tùy chọn)"),
                 List.of("- Address: Địa chỉ, tối đa 255 ký tự (tùy chọn)"),
                 List.of("- Phone Number: Số điện thoại, tối đa 20 ký tự (tùy chọn)"),
@@ -91,8 +94,8 @@ public class FileServiceImpl implements FileService {
 
         ExcelSheetSpec importSheet = new ExcelSheetSpec("Import Data", columns);
         importSheet.setSampleData(List.of(
-                List.of("student1@example.com", "John Doe", "STUDENT", "parent1@example.com","Le Duc Dung", "0987654321", "Bố", "http://example.com/avatar1.jpg", "2000-01-01", "123 Main St", "0123456789", "MALE", "LEVEL_CODE"),
-                List.of("student2@example.com", "Alice Smith", "TEST_TAKER", "parent2@example.com","Le Duc Dung", "0987654321", "Mẹ", "http://example.com/avatar1.jpg", "2000-01-01", "123 Main St", "0123456789", "MALE", "LEVEL_CODE")
+                List.of("student1@example.com", "John Doe", "STUDENT", "parent1@example.com","Le Duc Dung", "0987654321", "Bố", "2000-01-01", "123 Main St", "0123456789", "MALE", "LEVEL_CODE"),
+                List.of("student2@example.com", "Alice Smith", "TEST_TAKER", "parent2@example.com","Le Duc Dung", "0987654321", "Mẹ", "2000-01-01", "123 Main St", "0123456789", "MALE", "LEVEL_CODE")
         ));
 
         byte[] templateFile = generateTemplate(List.of(sampleSheet, importSheet));
@@ -115,7 +118,6 @@ public class FileServiceImpl implements FileService {
                 List.of("- First Name: Tên của giáo viên, tối đa 50 ký tự"),
                 List.of("- Last Name: Họ của giáo viên, tối đa 50 ký tự"),
                 List.of("- Role Name: [TEACHER, TEACHING_ASSISTANT]"),
-                List.of("- Avatar URL: URL ảnh đại diện, tối đa 1024 ký tự (tùy chọn)"),
                 List.of("- Date of Birth: Định dạng yyyy-MM-dd (tùy chọn)"),
                 List.of("- Address: Địa chỉ, tối đa 255 ký tự (tùy chọn)"),
                 List.of("- Phone Number: Số điện thoại, tối đa 20 ký tự (tùy chọn)"),
@@ -129,8 +131,8 @@ public class FileServiceImpl implements FileService {
 
         ExcelSheetSpec importSheet = new ExcelSheetSpec("Import Data", columns);
         importSheet.setSampleData(List.of(
-                List.of("teacher1@example.com", "Jane Smith", "TEACHER", "http://example.com/avatar2.jpg", "1980-01-01", "456 Elm St", "0987654321", "FEMALE"),
-                List.of("teacher2@example.com", "Bob Johnson", "TEACHING_ASSISTANT", "http://example.com/avatar2.jpg", "1980-01-01", "456 Elm St", "0987654321", "MALE")
+                List.of("teacher1@example.com", "Jane Smith", "TEACHER", "1980-01-01", "456 Elm St", "0987654321", "FEMALE"),
+                List.of("teacher2@example.com", "Bob Johnson", "TEACHING_ASSISTANT", "1980-01-01", "456 Elm St", "0987654321", "MALE")
         ));
 
         byte[] templateFile = generateTemplate(List.of(sampleSheet, importSheet));
@@ -225,11 +227,7 @@ public class FileServiceImpl implements FileService {
                 List.of("Sheet này dùng để import thông tin chapter cho một syllabus vào hệ thống."),
                 List.of("Mỗi dòng tương ứng với một chapter."),
                 List.of("Cần đảm bảo đúng định dạng và tuân theo các giá trị quy định bên dưới:"),
-                List.of("- Syllabus ID: ID của syllabus (bắt buộc, phải tồn tại trong hệ thống)"),
-                List.of("- Chapter Name: Tên chapter, tối đa 255 ký tự (bắt buộc nếu không xóa)"),
-                List.of("- Order Number: Số thứ tự chapter, từ 1 đến n, không trùng lặp, không gap (bắt buộc nếu không xóa)"),
-                List.of("- Chapter ID: ID của chapter (tùy chọn, để trống nếu tạo mới, điền nếu cập nhật/xóa)"),
-                List.of("- To Be Deleted: TRUE để xóa chapter, FALSE hoặc để trống nếu tạo/cập nhật")
+                List.of("- Chapter Name: Tên chapter, tối đa 255 ký tự (bắt buộc nếu không xóa)")
         );
         List<List<Object>> sheetData = new ArrayList<>();
         sheetData.addAll(guideRows);
@@ -239,9 +237,9 @@ public class FileServiceImpl implements FileService {
 
         ExcelSheetSpec importSheet = new ExcelSheetSpec("Import Data", columns);
         importSheet.setSampleData(List.of(
-                List.of("SYLLABUS_CODE", "Chapter 1", 1),
-                List.of("SYLLABUS_CODE", "Chapter 2", 2),
-                List.of("SYLLABUS_CODE", "Chapter 3", 3)
+                List.of("Chapter 1"),
+                List.of("Chapter 2"),
+                List.of("Chapter 3")
         ));
 
         byte[] templateFile = generateTemplate(List.of(sampleSheet, importSheet));
@@ -327,11 +325,7 @@ public class FileServiceImpl implements FileService {
                 List.of("Sheet này dùng để import thông tin chapter cho một class vào hệ thống."),
                 List.of("Mỗi dòng tương ứng với một chapter."),
                 List.of("Cần đảm bảo đúng định dạng và tuân theo các giá trị quy định bên dưới:"),
-                List.of("- Class Code: Code của Class (bắt buộc, phải tồn tại trong hệ thống)"),
-                List.of("- Chapter Name: Tên chapter, tối đa 255 ký tự (bắt buộc nếu không xóa)"),
-                List.of("- Order Number: Số thứ tự chapter, từ 1 đến n, không trùng lặp, không gap (bắt buộc nếu không xóa)"),
-                List.of("- Chapter ID: ID của chapter (tùy chọn, để trống nếu tạo mới, điền nếu cập nhật/xóa)"),
-                List.of("- To Be Deleted: TRUE để xóa chapter, FALSE hoặc để trống nếu tạo/cập nhật")
+                List.of("- Chapter Name: Tên chapter, tối đa 255 ký tự (bắt buộc nếu không xóa)")
         );
         List<List<Object>> sheetData = new ArrayList<>();
         sheetData.addAll(guideRows);
@@ -341,9 +335,9 @@ public class FileServiceImpl implements FileService {
 
         ExcelSheetSpec importSheet = new ExcelSheetSpec("Import Data", columns);
         importSheet.setSampleData(List.of(
-                List.of("CLASS_CODE", "Chapter 1", 1),
-                List.of("CLASS_CODE", "Chapter 2", 2),
-                List.of("CLASS_CODE", "Chapter 3", 3)
+                List.of("Chapter 1"),
+                List.of("Chapter 2"),
+                List.of("Chapter 3")
         ));
 
         byte[] templateFile = generateTemplate(List.of(sampleSheet, importSheet));
@@ -1596,7 +1590,7 @@ public class FileServiceImpl implements FileService {
                 validStyle.setBorderRight(BorderStyle.THIN);
 
                 CellStyle invalidStyle = newWorkbook.createCellStyle();
-                invalidStyle.setFillForegroundColor(IndexedColors.LIGHT_ORANGE.getIndex());
+                invalidStyle.setFillForegroundColor(errorColor);
                 invalidStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
                 invalidStyle.setBorderBottom(BorderStyle.THIN);
                 invalidStyle.setBorderTop(BorderStyle.THIN);
@@ -1653,7 +1647,7 @@ public class FileServiceImpl implements FileService {
 
                 // Tạo thêm styles cho validation
                 CellStyle validStyle = newWorkbook.createCellStyle();
-                validStyle.setFillForegroundColor(IndexedColors.LIGHT_GREEN.getIndex());
+                validStyle.setFillForegroundColor(successColor);
                 validStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
                 validStyle.setBorderBottom(BorderStyle.THIN);
                 validStyle.setBorderTop(BorderStyle.THIN);
@@ -1661,7 +1655,7 @@ public class FileServiceImpl implements FileService {
                 validStyle.setBorderRight(BorderStyle.THIN);
 
                 CellStyle invalidStyle = newWorkbook.createCellStyle();
-                invalidStyle.setFillForegroundColor(IndexedColors.LIGHT_ORANGE.getIndex());
+                invalidStyle.setFillForegroundColor(errorColor);
                 invalidStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
                 invalidStyle.setBorderBottom(BorderStyle.THIN);
                 invalidStyle.setBorderTop(BorderStyle.THIN);

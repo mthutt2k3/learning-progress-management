@@ -14,8 +14,6 @@ public class ImportTeacherDTO {
 
     private String roleName;
 
-    private String avatarUrl;
-
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = Const.VALIDATE_INPUT.regexDate)
     private Date dateOfBirth;
 

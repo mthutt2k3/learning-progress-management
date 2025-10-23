@@ -36,6 +36,7 @@ import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -343,6 +344,24 @@ public class LessonServiceImpl implements LessonService {
             String chapterCode = entry.getKey();
             List<ImportLessonDTO> lessons = entry.getValue();
 
+            // Kiểm tra trùng tên trong chính file import
+            Set<String> duplicateNames = lessons.stream()
+                    .map(l -> l.getLessonName() == null ? "" : l.getLessonName().trim().toLowerCase())
+                    .filter(name -> !name.isEmpty())
+                    .collect(Collectors.groupingBy(Function.identity(), Collectors.counting()))
+                    .entrySet().stream()
+                    .filter(e -> e.getValue() > 1)
+                    .map(Map.Entry::getKey)
+                    .collect(Collectors.toSet());
+
+            if (!duplicateNames.isEmpty()) {
+                throw new ApiException(
+                        String.format("Trong chapter '%s' có các lessonName bị trùng trong file import: %s",
+                                chapterCode, String.join(", ", duplicateNames)),
+                        HttpStatus.BAD_REQUEST.value()
+                );
+            }
+
             // 1. Kiểm tra chapterCode
             Chapter chapter = chapterRepository.findByChapterCode(chapterCode)
                     .filter(c -> c.getDeletedAt() == null)
@@ -361,6 +380,17 @@ public class LessonServiceImpl implements LessonService {
                 }
                 if (req.getOrderNumber() == null || req.getOrderNumber() < 1) {
                     throw new ApiException("Order number phải là số dương: " + req.getOrderNumber(), HttpStatus.BAD_REQUEST.value());
+                }
+                String trimmedLessonName = req.getLessonName().trim();
+                boolean exists = lessonRepository.existsByChapterAndLessonNameIgnoreCaseAndDeletedAtIsNull(
+                        chapter, trimmedLessonName
+                );
+                if (exists) {
+                    throw new ApiException(
+                            String.format("Lesson name '%s' đã tồn tại trong chapter '%s'",
+                                    trimmedLessonName, chapterCode),
+                            HttpStatus.BAD_REQUEST.value()
+                    );
                 }
             }
 
