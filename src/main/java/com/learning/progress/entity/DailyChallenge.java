@@ -52,7 +52,6 @@ public class DailyChallenge extends BaseEntity{
     @Column(name = "ai_feedback_enabled")
     private Boolean aiFeedbackEnabled;
 
-
     @Column(name = "start_date")
     private OffsetDateTime startDate;
 
