@@ -34,6 +34,7 @@ public class Const {
 
 
     public static class SECTION {
+        public static final String ID_REQUIRED = "Section ID is required when deleting a section";
         public static final String NOT_FOUND = "Section not found";
         public static final String QUESTIONS_REQUIRED = "At least one question is required";
         public static final String INVALID_CHALLENGE_ID = "Challenge ID in DTO does not match path variable";

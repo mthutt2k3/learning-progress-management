@@ -2,10 +2,13 @@ package com.learning.progress.controller;
 
 import com.learning.progress.common.Const;
 import com.learning.progress.dto.DataResponse;
+import com.learning.progress.dto.challenge.section.QuickBulkSectionRequest;
 import com.learning.progress.dto.challenge.section.SectionWithQuestionsDto;
 import com.learning.progress.service.ChallengeSectionService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -22,14 +25,26 @@ public class ChallengeSectionController {
     @Autowired
     private ChallengeSectionService sectionService;
 
+
     @PostMapping("/{challengeId}")
     @PreAuthorize("hasRole('TEACHER')")
-    @Operation(summary = "Create a new section", description = "Create a new section with questions for a specific challenge (ADMIN only)")
+    @Operation(summary = "Save section", description = "Save section with questions for a specific challenge (ADMIN only)")
     public ResponseEntity<DataResponse<SectionWithQuestionsDto>> saveSection(
             @PathVariable Long challengeId,
             @RequestBody SectionWithQuestionsDto dto) {
         SectionWithQuestionsDto response = sectionService.saveSection(challengeId, dto);
         return new ResponseEntity<>(DataResponse.success(response, Const.RESULT_MESSAGE_CODE.CREATE_SUCCESSFUL), HttpStatus.CREATED);
+    }
+
+    @PutMapping("/bulk/{challengeId}")
+    @PreAuthorize("hasRole('TEACHER')")
+    @Operation(summary = "Sync and order sections",
+            description = "Update/delete/reorder existing sections in one API call (TEACHER only)")
+    public ResponseEntity<DataResponse<Void>> bulkSection(
+            @Parameter(description = "Challenge ID") @PathVariable Long challengeId,
+            @Valid @RequestBody List<QuickBulkSectionRequest> dtos) {
+        sectionService.bulkOrderSection(challengeId, dtos);
+        return ResponseEntity.ok(DataResponse.success(null, Const.RESULT_MESSAGE_CODE.UPDATE_SUCCESSFUL));
     }
 
     @GetMapping("/{id}")

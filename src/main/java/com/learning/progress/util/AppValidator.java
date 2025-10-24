@@ -10,15 +10,20 @@ import com.learning.progress.repository.ClassStudentRepository;
 import com.learning.progress.repository.ClassTeacherRepository;
 import com.learning.progress.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class AppValidator {
@@ -30,7 +35,35 @@ public class AppValidator {
     private final UserRepository userRepository;
     private final ClassTeacherRepository classTeacherRepository;
     private final ClassStudentRepository classStudentRepository;
+    /**
+     * Validates that the order numbers in the given list of DTOs are sequential from 1 to expectedCount.
+     *
+     * @param dtos              List of DTOs containing order numbers
+     * @param orderNumberMapper Function to extract order number from DTO
+     * @param expectedCount     Expected number of order numbers (must match size of unique order numbers)
+     * @param traceId           Trace ID for logging
+     * @param entityName        Name of the entity for error messaging (e.g., "Section", "Question")
+     * @param <T>               Type of DTO
+     * @throws ApiException if order numbers are not sequential or do not match expected count
+     */
+    public static <T> void validateSequentialOrderNumbers(List<T> dtos, Function<T, Integer> orderNumberMapper,
+                                                          int expectedCount, String traceId, String entityName) {
+        Set<Integer> orderNumbers = dtos.stream()
+                .map(orderNumberMapper)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
 
+        Set<Integer> expectedOrders = IntStream.rangeClosed(1, expectedCount).boxed()
+                .collect(Collectors.toSet());
+
+        if (orderNumbers.size() != expectedCount || !orderNumbers.equals(expectedOrders)) {
+            log.error("[{}] {} order numbers must be sequential from 1 to {}. Found: {}", traceId, entityName, expectedCount, orderNumbers);
+            throw new ApiException(
+                    String.format("%s order numbers must be sequential from 1 to %d. Found: %s", entityName, expectedCount, orderNumbers),
+                    HttpStatus.BAD_REQUEST.value()
+            );
+        }
+    }
     public boolean hasRole(RoleName roleName) {
         String currentRole = jwtUtil.extractRoleFromCurrentRequest();
         RoleName currentRoleName = this.validateAndConvertEnum(currentRole, RoleName.class);
