@@ -1,11 +1,13 @@
 package com.learning.progress.repository;
 
+import com.learning.progress.entity.ChallengeSection;
 import com.learning.progress.entity.Question;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.List;
+import java.util.Optional;
 
 public interface QuestionRepository extends JpaRepository<Question, Long> {
 
@@ -16,4 +18,12 @@ public interface QuestionRepository extends JpaRepository<Question, Long> {
     List<Question> findBySectionId(@Param("sectionId") Long sectionId);
 
     List<Question> findBySectionIdAndDeletedAtIsNull(Long sectionId);
+
+    Optional<Question> findByIdAndDeletedAtIsNull(Long id);
+
+    List<Question> findBySectionIdAndDeletedAtIsNullOrderByOrderNumberAsc(Long sectionId);
+
+    boolean existsBySectionAndQuestionTextIgnoreCaseAndDeletedAtIsNull(ChallengeSection section, String trimmedText);
+
+    List<Question> findAllByIdInAndDeletedAtIsNull(List<Long> ids);
 }

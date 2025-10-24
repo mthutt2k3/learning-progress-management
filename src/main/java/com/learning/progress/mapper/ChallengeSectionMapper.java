@@ -1,14 +1,20 @@
 package com.learning.progress.mapper;
 
-import com.learning.progress.common.ResourceType;
+import com.learning.progress.dto.challenge.section.DataItem;
 import com.learning.progress.dto.challenge.section.QuestionDto;
 import com.learning.progress.dto.challenge.section.SectionDto;
 import com.learning.progress.dto.challenge.section.SectionWithQuestionsDto;
 import com.learning.progress.entity.ChallengeSection;
+import com.learning.progress.entity.DailyChallenge;
+import com.learning.progress.entity.Question;
+import com.learning.progress.util.JsonUtil;
 import org.mapstruct.Mapper;
+import org.mapstruct.Mapping;
 import org.mapstruct.ReportingPolicy;
 
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
 @Mapper(
         componentModel = "spring",
@@ -16,7 +22,10 @@ import java.util.List;
 )
 public interface ChallengeSectionMapper {
     // DTO -> Entity
-    ChallengeSection toChallengeSectionEntity(SectionDto sectionDto);
+
+    @Mapping(target = "challenge", source = "challenge")
+    @Mapping(target = "id", source = "sectionDto.id")
+    ChallengeSection toChallengeSectionEntity(SectionDto sectionDto, DailyChallenge challenge);
 
     // Entity -> DTO
     SectionDto toSectionDto(ChallengeSection entity);
@@ -24,13 +33,34 @@ public interface ChallengeSectionMapper {
     // List<Entity> -> List<DTO>
     List<SectionDto> toSectionDtoList(List<ChallengeSection> entities);
 
-    // Custom mapping Section + Questions -> SectionWithQuestionsDto
-    default SectionWithQuestionsDto toSectionWithQuestionsDto(ChallengeSection section, List<QuestionDto> questions) {
-        SectionDto sectionDto = toSectionDto(section);
-        SectionWithQuestionsDto result = new SectionWithQuestionsDto();
-        result.setSection(sectionDto);
-        result.setQuestions(questions);
-        return result;
+    List<QuestionDto> toQuestionDtos(List<Question> savedQuestions);
+
+    @Mapping(target = "content", source = "questionContentJson")
+    QuestionDto toQuestionDto(Question question);
+
+    Question toQuestionDtos(QuestionDto dto);
+
+    @Mapping(source = "section",target = "section")
+    @Mapping(source = "questions",target = "questions")
+    SectionWithQuestionsDto toSectionWithQuestionsDto(ChallengeSection section, List<QuestionDto> questions);
+
+    // Object <-> Map<String,Object> for question content
+    default Map<String, Object> map(Object content) {
+        return JsonUtil.objectToMap(content);
+    }
+
+    default Object map(Map<String, Object> map) {
+        return JsonUtil.responseToObject(map, Object.class); // hoặc QuestionContent.class nếu có
+    }
+    // Chuyển Object (thường là List hoặc Map) sang List<DataItem>
+    default List<DataItem> mapToDataItemList(Object value) {
+        if (value == null) return Collections.emptyList();
+        return JsonUtil.responseToListObject(value, DataItem.class);
+    }
+
+    // Ngược lại: List<DataItem> -> Object (Map hoặc JSON)
+    default Object mapFromDataItemList(List<DataItem> list) {
+        return JsonUtil.responseToObject(list, Object.class);
     }
 
     default List<SectionWithQuestionsDto> toSectionWithQuestionsDtoList(List<ChallengeSection> sections,
@@ -44,4 +74,5 @@ public interface ChallengeSectionMapper {
         }
         return result;
     }
+
 }

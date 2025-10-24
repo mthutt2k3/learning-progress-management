@@ -25,10 +25,10 @@ public class ChallengeSectionController {
     @PostMapping("/{challengeId}")
     @PreAuthorize("hasRole('TEACHER')")
     @Operation(summary = "Create a new section", description = "Create a new section with questions for a specific challenge (ADMIN only)")
-    public ResponseEntity<DataResponse<SectionWithQuestionsDto>> createSection(
+    public ResponseEntity<DataResponse<SectionWithQuestionsDto>> saveSection(
             @PathVariable Long challengeId,
             @RequestBody SectionWithQuestionsDto dto) {
-        SectionWithQuestionsDto response = sectionService.createSection(challengeId, dto);
+        SectionWithQuestionsDto response = sectionService.saveSection(challengeId, dto);
         return new ResponseEntity<>(DataResponse.success(response, Const.RESULT_MESSAGE_CODE.CREATE_SUCCESSFUL), HttpStatus.CREATED);
     }
 
@@ -39,16 +39,6 @@ public class ChallengeSectionController {
             @PathVariable Long id) {
         SectionWithQuestionsDto response = sectionService.getSection(id);
         return new ResponseEntity<>(DataResponse.success(response, Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL), HttpStatus.OK);
-    }
-
-    @PutMapping("/{id}")
-    @PreAuthorize("hasRole('TEACHER')")
-    @Operation(summary = "Update section", description = "Update a specific section with its questions (ADMIN only)")
-    public ResponseEntity<DataResponse<SectionWithQuestionsDto>> updateSection(
-            @PathVariable Long id,
-            @RequestBody SectionWithQuestionsDto dto) {
-        SectionWithQuestionsDto response = sectionService.updateSection(id, dto);
-        return new ResponseEntity<>(DataResponse.success(response, Const.RESULT_MESSAGE_CODE.UPDATE_SUCCESSFUL), HttpStatus.OK);
     }
 
     @DeleteMapping("/{id}")

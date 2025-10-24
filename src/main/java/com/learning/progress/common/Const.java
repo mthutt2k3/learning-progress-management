@@ -1,5 +1,7 @@
 package com.learning.progress.common;
 
+import java.util.regex.Pattern;
+
 public class Const {
     public static class VALIDATE_INPUT {
         public static final String regexEmail =
@@ -10,8 +12,29 @@ public class Const {
         public static final String regexGender = "MALE|FEMALE|OTHER";
         public static final String regexDate = "yyyy-MM-dd";
     }
+
+    public static class QUESTION {
+        public static final String NULL_OBJECT = "Question DTO cannot be null";
+        public static final String EMPTY_TEXT = "Question text cannot be empty";
+        public static final String INVALID_SCORE = "Score must be positive";
+        public static final String EMPTY_CONTENT = "Question content cannot be empty";
+        public static final String NO_CORRECT_ANSWER = "Question must have at least one correct answer";
+        public static final String MISSING_CONTENT_DATA = "Missing content data for placeholders";
+        public static final String MISSING_POSITION_ID = "Missing positionId '%s' in content.data";
+
+        public static final String ID_REQUIRED = "Question ID is required";
+        public static final String TYPE_REQUIRED = "Question type is required";
+        public static final String CONTENT_REQUIRED = "Question content is required";
+
+        public static final Pattern POSITION_PATTERN = Pattern.compile("\\[\\[(.*?)]]");
+        public static final String NOT_FOUND = "Question does not exist or has been deleted";
+        public static final String IDS_REQUIRED = "Question IDs are required";
+
+    }
+
+
     public static class SECTION {
-        public static final String NOT_FOUND = "SectionDto not found";
+        public static final String NOT_FOUND = "Section not found";
         public static final String QUESTIONS_REQUIRED = "At least one question is required";
         public static final String INVALID_CHALLENGE_ID = "Challenge ID in DTO does not match path variable";
     }
