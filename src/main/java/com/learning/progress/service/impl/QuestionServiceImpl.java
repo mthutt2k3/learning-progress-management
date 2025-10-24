@@ -2,8 +2,6 @@ package com.learning.progress.service.impl;
 
 import com.learning.progress.common.Const;
 import com.learning.progress.common.QuestionType;
-import com.learning.progress.dto.challenge.section.DataItem;
-import com.learning.progress.dto.challenge.section.QuestionContent;
 import com.learning.progress.dto.challenge.section.QuestionDto;
 import com.learning.progress.entity.ChallengeSection;
 import com.learning.progress.entity.Question;
@@ -11,6 +9,7 @@ import com.learning.progress.exception.ApiException;
 import com.learning.progress.mapper.QuestionMapper;
 import com.learning.progress.repository.ChallengeSectionRepository;
 import com.learning.progress.repository.QuestionRepository;
+import com.learning.progress.service.QuestionService;
 import com.learning.progress.service.validator.QuestionValidator;
 import com.learning.progress.util.JsonUtil;
 import com.learning.progress.util.JwtUtil;
@@ -33,7 +32,7 @@ import java.util.stream.IntStream;
 
 @Service
 @Slf4j
-public class QuestionServiceImpl implements com.learning.progress.service.QuestionService {
+public class QuestionServiceImpl implements QuestionService {
 
     @Autowired
     private QuestionValidator questionValidator;
@@ -321,6 +320,27 @@ public class QuestionServiceImpl implements com.learning.progress.service.Questi
 
         // Ánh xạ sang QuestionDto
         return questionMapper.toQuestionDtos(questions);
+    }
+
+    @Override
+    public void updateScoreQuestion(Long questionId, double score) {
+        String traceId = TraceUtil.getTraceId();
+        log.info("[{}] Updating score for question ID: {}, new score: {}", traceId, questionId, score);
+
+        // Fetch existing question
+        Question question = questionRepository.findByIdAndDeletedAtIsNull(questionId)
+                .orElseThrow(() -> {
+                    log.error("[{}] Question not found for id: {}", traceId, questionId);
+                    return new ApiException(Const.QUESTION.NOT_FOUND, HttpStatus.NOT_FOUND.value());
+                });
+
+        // Update score
+        question.setScore(BigDecimal.valueOf(score));
+        questionRepository.save(question);
+
+        // Optional: record to history if you’re tracking changes
+        log.info("[{}] Updated score for question ID {} to {}", traceId, questionId, score);
+
     }
 
 }

@@ -2,6 +2,7 @@ package com.learning.progress.service;
 
 
 import com.learning.progress.dto.challenge.section.QuestionDto;
+import com.learning.progress.entity.Question;
 
 import java.util.List;
 
@@ -10,4 +11,7 @@ public interface QuestionService {
     QuestionDto getQuestion(Long id);
     void deleteQuestions(List<Long> ids);
     List<QuestionDto> getQuestionsBySection(Long sectionId);
+
+    void updateScoreQuestion(Long questionId, double score);
+
 }
