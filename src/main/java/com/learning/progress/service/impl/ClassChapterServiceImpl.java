@@ -330,7 +330,21 @@ public class ClassChapterServiceImpl implements ClassChapterService {
 
         appValidator.validateUserAccessToClass(clazz.getId());
 
-        Page<ClassChapter> chapterPage = classChapterRepository.findByClassIdAndSearchText(classId, searchText, PageRequest.of(page, size, Sort.by("orderNumber").ascending()));
+        Page<ClassChapter> chapterPage;
+
+        if (searchText == null || searchText.trim().isEmpty()) {
+            chapterPage = classChapterRepository.findByClassId(
+                    classId,
+                    PageRequest.of(page, size, Sort.by("orderNumber").ascending())
+            );
+        } else {
+            chapterPage = classChapterRepository.findByClassIdAndSearchText(
+                    classId,
+                    searchText.trim(),
+                    PageRequest.of(page, size, Sort.by("orderNumber").ascending())
+            );
+        }
+
         List<ClassChapterDTO> responses = chapterPage.getContent().stream()
                 .map(classChapterMapper::toClassChapterDTO)
                 .collect(Collectors.toList());
