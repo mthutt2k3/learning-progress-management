@@ -23,16 +23,6 @@ public interface ChallengeSectionRepository extends JpaRepository<ChallengeSecti
     Optional<ChallengeSection> findByIdAndDeletedAtIsNull(Long id);
 
     /**
-     * Find ChallengeSections by challenge ID with soft deletion check.
-     *
-     * @param challengeId The ID of the DailyChallenge to filter by.
-     * @param pageable    Pagination and sorting information.
-     * @return A Page of ChallengeSections for the specified challenge that are not deleted.
-     */
-    @Query("SELECT s FROM ChallengeSection s WHERE s.challenge.id = :challengeId AND s.deletedAt IS NULL order by s.orderNumber asc ")
-    Page<ChallengeSection> findByChallengeIdAndDeletedAtIsNull(@Param("challengeId") Long challengeId, Pageable pageable);
-
-    /**
      * Find ChallengeSections by challenge ID and text search in sectionTitle or sectionsContent, with soft deletion check.
      *
      * @param challengeId The ID of the DailyChallenge to filter by.

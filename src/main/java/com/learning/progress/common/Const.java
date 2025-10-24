@@ -38,6 +38,7 @@ public class Const {
         public static final String NOT_FOUND = "Section not found";
         public static final String QUESTIONS_REQUIRED = "At least one question is required";
         public static final String INVALID_CHALLENGE_ID = "Challenge ID in DTO does not match path variable";
+        public static final String SECTION_REQUIRED = "Section is required";
     }
     public static class STUDENT {
         public static final String LEVEL_ID_REQUIRED = "Level is required for student";
