@@ -9,6 +9,10 @@ import lombok.Setter;
 import lombok.experimental.SuperBuilder;
 import org.hibernate.annotations.OnDelete;
 import org.hibernate.annotations.OnDeleteAction;
+import org.hibernate.annotations.Where;
+
+import java.util.ArrayList;
+import java.util.List;
 
 @SuperBuilder
 @NoArgsConstructor
@@ -39,4 +43,7 @@ public class ChallengeSection extends BaseEntity{
     @Column(name = "sections_type", nullable = false)
     private ResourceType resourceType = ResourceType.NONE;
 
+    @OneToMany(mappedBy = "section", fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
+    @Where(clause = "deleted_at IS NULL")
+    private List<Question> questions = new ArrayList<>();
 }
