@@ -14,6 +14,7 @@ import com.learning.progress.mapper.ClassTeacherMapper;
 import com.learning.progress.repository.ClassRepository;
 import com.learning.progress.repository.ClassTeacherRepository;
 import com.learning.progress.repository.UserRepository;
+import com.learning.progress.service.ClassHistoryService;
 import com.learning.progress.service.ClassTeacherService;
 import com.learning.progress.util.AppValidator;
 import com.learning.progress.util.JwtUtil;
@@ -43,6 +44,9 @@ public class ClassTeacherServiceImpl implements ClassTeacherService {
 
     @Autowired
     private UserRepository userRepository;
+
+    @Autowired
+    private ClassHistoryService classHistoryService;
 
     @Autowired
     private ClassTeacherMapper classTeacherMapper;
@@ -129,7 +133,7 @@ public class ClassTeacherServiceImpl implements ClassTeacherService {
             if (!RoleInClass.TEACHER.equals(teacher.getRoleInClass()) &&
                     !RoleInClass.TEACHING_ASSISTANT.equals(teacher.getRoleInClass())) {
                 throw new ApiException(
-                        String.format("Invalid role in class: %s", teacher.getRoleInClass()),
+                        Const.USER.INVALID_ROLE_TEACHER_ONLY,
                         HttpStatus.BAD_REQUEST.value()
                 );
             }
@@ -143,7 +147,7 @@ public class ClassTeacherServiceImpl implements ClassTeacherService {
                     .distinct()
                     .collect(Collectors.toList());
             throw new ApiException(
-                    String.format("Duplicate user IDs found in request: %s", duplicateIds),
+                    String.format(Const.CLASS_STUDENT.DUPLICATE_ID, duplicateIds),
                     HttpStatus.BAD_REQUEST.value()
             );
         }
@@ -156,7 +160,7 @@ public class ClassTeacherServiceImpl implements ClassTeacherService {
                     .filter(id -> !foundIds.contains(id))
                     .collect(Collectors.toList());
             throw new ApiException(
-                    String.format("Users with IDs %s not found", notFoundIds),
+                    Const.USER.NOT_FOUND,
                     HttpStatus.NOT_FOUND.value()
             );
         }
@@ -198,7 +202,7 @@ public class ClassTeacherServiceImpl implements ClassTeacherService {
 
         if (teacherCount > maxTeacherInClass) {
             throw new ApiException(
-                    "Cannot add more than 1 teacher with TEACHER role",
+                    String.format(Const.CLASS_TEACHER.TEACHER_LIMIT_EXCEEDED, maxTeacherInClass),
                     HttpStatus.BAD_REQUEST.value()
             );
         }
@@ -210,7 +214,7 @@ public class ClassTeacherServiceImpl implements ClassTeacherService {
 
             if (hasExistingTeacher) {
                 throw new ApiException(
-                        "Class already has a teacher with TEACHER role",
+                        Const.CLASS_TEACHER.TEACHER_EXISTED,
                         HttpStatus.CONFLICT.value()
                 );
             }
@@ -225,8 +229,8 @@ public class ClassTeacherServiceImpl implements ClassTeacherService {
 
         if (existingAssistantCount + newAssistantCount > maxTeachingAssistantInClass) {
             throw new ApiException(
-                    String.format("Cannot add more than %d teaching assistants. Current: %d, Requested: %d",
-                            maxTeachingAssistantInClass, existingAssistantCount, newAssistantCount),
+                    String.format(Const.CLASS_TEACHER.TEACHING_ASSISTANT_LIMIT_EXCEEDED,
+                            maxTeachingAssistantInClass),
                     HttpStatus.BAD_REQUEST.value()
             );
         }
@@ -236,12 +240,8 @@ public class ClassTeacherServiceImpl implements ClassTeacherService {
                 .findUserIdsByClazzIdAndUserIdInAndStatus(classId, userIds, ClassTeacherStatus.ACTIVE);
 
         if (!existingActiveUserIds.isEmpty()) {
-            List<String> existingUserNames = users.stream()
-                    .filter(u -> existingActiveUserIds.contains(u.getId()))
-                    .map(User::getUserName)
-                    .collect(Collectors.toList());
             throw new ApiException(
-                    String.format("Users %s are already active in the class", existingUserNames),
+                    Const.CLASS_TEACHER.TEACHER_EXISTED,
                     HttpStatus.CONFLICT.value()
             );
         }
@@ -251,6 +251,10 @@ public class ClassTeacherServiceImpl implements ClassTeacherService {
                 .findByClazzIdAndUserIdInAndStatus(classId, userIds, ClassTeacherStatus.INACTIVE);
 
         List<ClassTeacher> classTeachersToSave = new ArrayList<>();
+        List<User> newTeachers = new ArrayList<>();
+        List<User> newTAs = new ArrayList<>();
+        List<User> reactivatedTeachers = new ArrayList<>();
+        List<User> reactivatedTAs = new ArrayList<>();
         OffsetDateTime now = OffsetDateTime.now();
 
         for (TeacherWithRole teacherWithRole : request.getTeachers()) {
@@ -274,6 +278,12 @@ public class ClassTeacherServiceImpl implements ClassTeacherService {
                 classTeacher.setDeletedBy(null);
                 classTeacher.setLeftAt(null);
                 classTeachersToSave.add(classTeacher);
+
+                if (RoleInClass.TEACHER.equals(teacherWithRole.getRoleInClass())) {
+                    reactivatedTeachers.add(user);
+                } else {
+                    reactivatedTAs.add(user);
+                }
             } else {
                 // Create new record
                 ClassTeacher classTeacher = new ClassTeacher();
@@ -283,11 +293,112 @@ public class ClassTeacherServiceImpl implements ClassTeacherService {
                 classTeacher.setStatus(ClassTeacherStatus.ACTIVE);
                 classTeacher.setJoinedAt(now);
                 classTeachersToSave.add(classTeacher);
+
+                if (RoleInClass.TEACHER.equals(teacherWithRole.getRoleInClass())) {
+                    newTeachers.add(user);
+                } else {
+                    newTAs.add(user);
+                }
             }
         }
 
         // 10️⃣ Save all class-teacher relationships
         classTeacherRepository.saveAll(classTeachersToSave);
+
+        // 1️⃣1️⃣ Save history
+        Long actionByUserId = jwtUtil.extractUserIdFromCurrentRequest();
+        String visibleToRoles = String.format("%s,%s,%s",
+                RoleName.MANAGER.name(),
+                RoleName.TEACHER.name(),
+                RoleName.TEACHING_ASSISTANT.name());
+
+        // Log history for newly added teachers
+        if (!newTeachers.isEmpty()) {
+            String teacherNames = newTeachers.stream()
+                    .map(User::getFullName)
+                    .collect(Collectors.joining(", "));
+
+            String actionDetails = String.format(
+                    Const.CLASS_TEACHER.ADD_TEACHER_SUCCESSFULLY,
+                    newTeachers.size(),
+                    clazz.getClassName(),
+                    teacherNames
+            );
+
+            classHistoryService.saveClassHistory(
+                    classId,
+                    actionDetails,
+                    actionByUserId,
+                    ActionType.ADD_TEACHER.name(),
+                    visibleToRoles
+            );
+        }
+
+        // Log history for newly added teaching assistants
+        if (!newTAs.isEmpty()) {
+            String taNames = newTAs.stream()
+                    .map(User::getFullName)
+                    .collect(Collectors.joining(", "));
+
+            String actionDetails = String.format(
+                    Const.CLASS_TEACHER.ADD_TEACHING_ASSISTANT_SUCCESSFULLY,
+                    newTAs.size(),
+                    clazz.getClassName(),
+                    taNames
+            );
+
+            classHistoryService.saveClassHistory(
+                    classId,
+                    actionDetails,
+                    actionByUserId,
+                    ActionType.ADD_TEACHING_ASSISTANT.name(),
+                    visibleToRoles
+            );
+        }
+
+        // Log history for reactivated teachers
+        if (!reactivatedTeachers.isEmpty()) {
+            String teacherNames = reactivatedTeachers.stream()
+                    .map(User::getFullName)
+                    .collect(Collectors.joining(", "));
+
+            String actionDetails = String.format(
+                    Const.CLASS_TEACHER.REACTIVE_TEACHER_SUCCESSFULLY,
+                    reactivatedTeachers.size(),
+                    clazz.getClassName(),
+                    teacherNames
+            );
+
+            classHistoryService.saveClassHistory(
+                    classId,
+                    actionDetails,
+                    actionByUserId,
+                    ActionType.REACTIVATE_TEACHER.name(),
+                    visibleToRoles
+            );
+        }
+
+        // Log history for reactivated teaching assistants
+        if (!reactivatedTAs.isEmpty()) {
+            String taNames = reactivatedTAs.stream()
+                    .map(User::getFullName)
+                    .collect(Collectors.joining(", "));
+
+            String actionDetails = String.format(
+                    Const.CLASS_TEACHER.REACTIVE_TEACHING_ASSISTANT_SUCCESSFULLY,
+                    reactivatedTAs.size(),
+                    clazz.getClassName(),
+                    taNames
+            );
+
+            classHistoryService.saveClassHistory(
+                    classId,
+                    actionDetails,
+                    actionByUserId,
+                    ActionType.REACTIVATE_TEACHING_ASSISTANT.name(),
+                    visibleToRoles
+            );
+        }
     }
 
     @Override
@@ -330,6 +441,33 @@ public class ClassTeacherServiceImpl implements ClassTeacherService {
         classTeacher.setLeftAt(OffsetDateTime.now());
 
         classTeacherRepository.save(classTeacher);
+
+        // Save history
+        Long actionByUserId = jwtUtil.extractUserIdFromCurrentRequest();
+        String visibleToRoles = String.format("%s,%s,%s",
+                RoleName.MANAGER.name(),
+                RoleName.TEACHER.name(),
+                RoleName.TEACHING_ASSISTANT.name());
+
+        String roleType = RoleInClass.TEACHER.equals(classTeacher.getRoleInClass()) ? "teacher" : "teaching assistant";
+        String actionDetails = String.format(
+                Const.CLASS_TEACHER.REMOVE_TEACHER_SUCCESSFULLY,
+                roleType,
+                user.getFullName(),
+                clazz.getClassName()
+        );
+
+        ActionType actionType = RoleInClass.TEACHER.equals(classTeacher.getRoleInClass())
+                ? ActionType.REMOVE_TEACHER
+                : ActionType.REMOVE_TEACHING_ASSISTANT;
+
+        classHistoryService.saveClassHistory(
+                classId,
+                actionDetails,
+                actionByUserId,
+                actionType.name(),
+                visibleToRoles
+        );
     }
 
     @Override

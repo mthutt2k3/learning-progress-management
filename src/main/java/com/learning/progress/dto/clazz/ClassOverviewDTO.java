@@ -20,6 +20,7 @@ public class ClassOverviewDTO {
     private String classCode;
     private ClassTeacherDTO teachers;
     private List<ClassTeacherDTO> teachingAssistants;
+    private Integer numberOfStudents;
     private OffsetDateTime startDate;
     private OffsetDateTime endDate;
     private ClassStatus status;

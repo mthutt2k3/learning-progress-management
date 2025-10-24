@@ -11,11 +11,9 @@ import com.learning.progress.exception.ApiException;
 import com.learning.progress.mapper.ClassHistoryMapper;
 import com.learning.progress.repository.ClassHistoryRepository;
 import com.learning.progress.repository.ClassRepository;
-import com.learning.progress.repository.ClassTeacherRepository;
 import com.learning.progress.repository.UserRepository;
 import com.learning.progress.service.ClassHistoryService;
 import com.learning.progress.util.*;
-import org.apache.poi.ss.usermodel.DateUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -25,7 +23,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.util.Arrays;
@@ -58,7 +55,7 @@ public class ClassHistoryServiceImpl implements ClassHistoryService {
     @Transactional
     public void saveClassHistory(Long classId, String actionDetails, Long actionByUserId, String actionType, String visibleToRoles) {
         Clazz clazz = clazzRepository.findById(classId)
-                .orElseThrow(() -> new ApiException("Class not found", HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> new ApiException(Const.CLASS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         User actionBy = userRepository.findById(actionByUserId)
                 .orElseThrow(() -> new ApiException(Const.USER.NOT_FOUND, HttpStatus.NOT_FOUND.value()));

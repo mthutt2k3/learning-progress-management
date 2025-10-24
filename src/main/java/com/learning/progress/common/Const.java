@@ -34,6 +34,7 @@ public class Const {
 
 
     public static class SECTION {
+        public static final String ID_REQUIRED = "Section ID is required when deleting a section";
         public static final String NOT_FOUND = "Section not found";
         public static final String QUESTIONS_REQUIRED = "At least one question is required";
         public static final String INVALID_CHALLENGE_ID = "Challenge ID in DTO does not match path variable";
@@ -49,19 +50,26 @@ public class Const {
 
     }
     public static class CHAPTER {
-        public static final String ID_REQUIRED = "ID bắt buộc khi xóa";
-        public static final String CHAPTER_NAME_REQUIRED = "Tên chapter không được để trống";
-        public static final String CHAPTER_NAME_MAX_LENGTH = "Tên chapter không được vượt quá 100 ký tự";
+        public static final String ID_REQUIRED = "ID is required when deleting";
+        public static final String NOT_FOUND = "Chapter not found";
+        public static final String IDS_NOT_FOUND = "Some chapter IDs do not exist or have been deleted: ";
+        public static final String CHAPTER_NAME_REQUIRED = "Chapter name cannot be empty";
+        public static final String CHAPTER_NAME_MAX_LENGTH = "Chapter name cannot exceed 100 characters";
         public static final int CHAPTER_NAME_MAX_LENGTH_VALUE = 100;
+        public static final String UNHANDLED_CHAPTER = "Unhandled chapters: %s. FE must include ALL active chapters!";
+        public static final String CHAPTER_COUNT_MISMATCH = "Number of non-deleted chapters does not match! Expected: %d, Actual: %d";
+        public static final String ORDER_NUMBER_SEQUENCE_INVALID =
+                "Order numbers must be sequential from 1 to %d, without duplicates or gaps.";
+
     }
 
     public static class LESSON {
-        public static final String ID_REQUIRED = "ID bắt buộc khi xóa";
-        public static final String LESSON_NAME_REQUIRED = "Tên lesson không được để trống";
-        public static final String LESSON_NAME_MAX_LENGTH = "Tên lesson không được vượt quá 200 ký tự";
+        public static final String ID_REQUIRED = "ID is required when deleting";
+        public static final String LESSON_NAME_REQUIRED = "Lesson name cannot be empty";
+        public static final String LESSON_NAME_MAX_LENGTH = "Lesson name cannot exceed 200 characters";
         public static final int LESSON_NAME_MAX_LENGTH_VALUE = 200;
-
     }
+
     public static class CHALLENGE {
         public static final String NAME_REQUIRED = "Challenge name is required";
         public static final String CLASS_LESSON_REQUIRED = "Class lesson is required";
@@ -71,11 +79,12 @@ public class Const {
     public static class DOB {
         public static final String DOB_IN_FUTURE = "Date of birth cannot be in the future.";
         public static final String DOB_UNDER_AGE = "User must be at least %d years old.";
-        public static final String DOB_OVER_AGE = "Tuổi không được lớn hơn %d";
+        public static final String DOB_OVER_AGE = "Age cannot be greater than %d";
     }
     public static class FILE {
         public static final String AVATAR_REQUIRED = "Avatar file is required.";
         public static final String AVATAR_UPLOAD_FAILED = "Failed to upload avatar.";
+        public static final String EMPTY= "The file has no data to import.";
     }
     public static class PATH {
         public static final String REQUIRED = "Path is required";
@@ -194,6 +203,8 @@ public class Const {
         public static final String CHAPTER_CODE_NOT_FOUND = "Chapter not found or deleted with code: %s";
 
         // Validation & logic errors
+
+        public static final String DUPLICATE_NAME_LESSONS = "Duplicate lesson names found in the request: %s";
         public static final String UNHANDLED_LESSONS = "Unhandled lessons: %s. FE must include ALL active lessons!";
         public static final String NON_DELETED_COUNT_MISMATCH = "Mismatch in non-deleted lesson count! Expected: %d, actual: %d";
         public static final String LESSON_NAME_REQUIRED = "Lesson name is required: %s";
@@ -217,6 +228,7 @@ public class Const {
 
         // Not found & invalid
         public static final String NOT_FOUND = "Class chapter not found";
+        public static final String ID_NOT_FOUND = "Class chapter ID not found : %d";
         // Action / history log
         public static final String ACTION_DELETE =
                 "Deleted chapter %s from class %s";
@@ -224,6 +236,8 @@ public class Const {
                 "Updated chapter %s in class %s with order number %d";
         public static final String ACTION_CREATE =
                 "Created chapter %s for class %s with order number %d";
+        public static final String INVALID_EXISTING_CHAPTER_IDS = "Existing chapter IDs do not exist: ";
+        public static final String DUPLICATE_NAME_CHAPTER = "Duplicate chapter names found in the request: %s";
 
     }
 
@@ -343,6 +357,16 @@ public class Const {
         public static final String STUDENT_REMOVED = "Student removed from class successfully";
         public static final String STUDENTS_IMPORTED = "Students imported successfully";
         public static final String STUDENT_NOT_FOUND = "Student not found in class";
+        public static final String DUPLICATE_ID = "Duplicate user IDs found in request: %s";
+        public static final String STUDENT_LIMIT_EXCEEDED = "Cannot add more than %d students. Current: %d, Requested: %d";
+        public static final String USER_EXISTS = "User %d is already active in classes %s";
+        public static final String USER_ALREADY_ENROLLED = "Some students are already active in other classes: ";
+        public static final String USERS_ALREADY_ACTIVE_IN_CLASS = "Users %s are already active in the class";
+        public static final String ADD_STUDENT_SUCCESSFULLY = "Added %d student(s) to class '%s': %s";
+        public static final String REACTIVE_STUDENT_SUCCESSFULLY = "Re-activated %d student(s) in class '%s': %s";
+        public static final String REMOVE_STUDENT_SUCCESSFULLY = "Removed student '%s' from class '%s'";
+        public static final String IMPORT_STUDENT_SUCCESSFULLY = "Imported %d student(s) to class '%s' from Excel file";
+
     }
 
     public static class CLASS_TEACHER {
@@ -351,5 +375,13 @@ public class Const {
         public static final String LIST_RETRIEVED = "Teacher list retrieved successfully";
         public static final String PERFORMANCE_RETRIEVED = "Teacher performance report retrieved successfully";
         public static final String TEACHER_NOT_FOUND = "Teacher not found in class";
+        public static final String TEACHER_LIMIT_EXCEEDED= "Cannot add more than %d teacher with TEACHER role";
+        public static final String TEACHING_ASSISTANT_LIMIT_EXCEEDED= "Cannot add more than %d teacher with TEACHING ASSISTANT role";
+        public static final String TEACHER_EXISTED= "Class already has teacher";
+        public static final String ADD_TEACHER_SUCCESSFULLY = "Added %d teacher to class '%s': %s";
+        public static final String REACTIVE_TEACHER_SUCCESSFULLY = "Re-activated %d teacher in class '%s': %s";
+        public static final String ADD_TEACHING_ASSISTANT_SUCCESSFULLY = "Added %d teaching assistant(s) to class '%s': %s";
+        public static final String REACTIVE_TEACHING_ASSISTANT_SUCCESSFULLY = "Re-activated %d teaching assistant(s) in class '%s': %s";
+        public static final String REMOVE_TEACHER_SUCCESSFULLY = "Removed %s '%s' from class '%s'";
     }
 }
