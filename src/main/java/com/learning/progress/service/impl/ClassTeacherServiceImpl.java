@@ -64,6 +64,7 @@ public class ClassTeacherServiceImpl implements ClassTeacherService {
         // Validate pagination and sort parameters
         appValidator.validatePaginationParams(page, size);
         appValidator.validateSortParams(List.of("id", "userName", "fullName", "email", "joinedAt", "status"), sortBy, sortDir);
+        appValidator.validateUserAccessToClass(classId);
 
         Sort sort = Sort.by(sortDir.equalsIgnoreCase("asc") ? Sort.Direction.ASC : Sort.Direction.DESC, sortBy);
         Pageable pageable = PageRequest.of(page, size, sort);
@@ -269,6 +270,9 @@ public class ClassTeacherServiceImpl implements ClassTeacherService {
                 classTeacher.setJoinedAt(now);
                 classTeacher.setDeletedAt(null);
                 classTeacher.setUpdatedAt(now);
+                classTeacher.setDeletedAt(null);
+                classTeacher.setDeletedBy(null);
+                classTeacher.setLeftAt(null);
                 classTeachersToSave.add(classTeacher);
             } else {
                 // Create new record
@@ -330,6 +334,7 @@ public class ClassTeacherServiceImpl implements ClassTeacherService {
 
     @Override
     public TeacherPerformanceReport getTeacherPerformanceReport(Long classId, Long userId) {
+        appValidator.validateUserAccessToClass(classId);
         ClassTeacher classTeacher = classTeacherRepository.findByClazzIdAndUserId(classId, userId)
                 .orElseThrow(() -> new ApiException(Const.CLASS_TEACHER.TEACHER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
