@@ -54,12 +54,12 @@ public class AppValidator {
         boolean hasAccess = false;
 
         // Teacher in this class?
-        if (roleName == RoleName.TEACHER) {
+        if (roleName == RoleName.TEACHER || roleName == RoleName.TEACHING_ASSISTANT) {
             hasAccess = classTeacherRepository.existsByUser_IdAndClazz_IdAndStatus(user.getId(), classId, ClassTeacherStatus.ACTIVE);
         }
 
         // Student in this class?
-        if (roleName == RoleName.STUDENT) {
+        if (roleName == RoleName.STUDENT ||  roleName == RoleName.TEST_TAKER) {
             hasAccess = classStudentRepository.existsByUser_IdAndClazz_IdAndStatus(user.getId(), classId, ClassStudentStatus.ACTIVE);
         }
 

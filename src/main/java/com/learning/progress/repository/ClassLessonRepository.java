@@ -18,7 +18,17 @@ public interface ClassLessonRepository extends JpaRepository<ClassLesson, Long> 
     @Query("SELECT cl FROM ClassLesson cl WHERE cl.classChapter.id = :classChapterId AND cl.deletedAt IS NULL ORDER BY cl.orderNumber ASC")
     List<ClassLesson> findByClassChapterIdAndDeletedAtIsNullOrderByOrderNumberAsc(Long classChapterId);
 
-    @Query("SELECT cl FROM ClassLesson cl WHERE cl.classChapter.id = :classChapterId AND cl.deletedAt IS NULL AND (:searchText IS NULL OR cl.classLessonName LIKE %:searchText%)")
+    @Query("""
+       SELECT cl 
+       FROM ClassLesson cl 
+       WHERE cl.classChapter.id = :classChapterId 
+         AND cl.deletedAt IS NULL 
+         AND (
+             :searchText IS NULL 
+             OR LOWER(cl.classLessonName) LIKE LOWER(CONCAT('%', :searchText, '%'))
+             OR LOWER(cl.classLessonContent) LIKE LOWER(CONCAT('%', :searchText, '%'))
+         )
+       """)
     Page<ClassLesson> findByClassChapterIdAndSearchText(Long classChapterId, String searchText, Pageable pageable);
 
     Optional<ClassLesson> findByIdAndDeletedAtIsNull(Long id);

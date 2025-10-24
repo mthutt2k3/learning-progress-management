@@ -1,9 +1,6 @@
 package com.learning.progress.service.impl;
 
-import com.learning.progress.common.ActionType;
-import com.learning.progress.common.ClassTeacherStatus;
-import com.learning.progress.common.Const;
-import com.learning.progress.common.RoleName;
+import com.learning.progress.common.*;
 import com.learning.progress.dto.clazz.lesson.ClassLessonDTO;
 import com.learning.progress.dto.clazz.lesson.SyncClassLessonRequest;
 import com.learning.progress.dto.DataResponse;
@@ -12,14 +9,12 @@ import com.learning.progress.dto.excel.ValidationResult;
 import com.learning.progress.entity.*;
 import com.learning.progress.exception.ApiException;
 import com.learning.progress.mapper.ClassLessonMapper;
-import com.learning.progress.repository.ClassChapterRepository;
-import com.learning.progress.repository.ClassLessonRepository;
-import com.learning.progress.repository.ClassRepository;
-import com.learning.progress.repository.ClassTeacherRepository;
+import com.learning.progress.repository.*;
 import com.learning.progress.service.BlobSasService;
 import com.learning.progress.service.ClassHistoryService;
 import com.learning.progress.service.ClassLessonService;
 import com.learning.progress.service.FileService;
+import com.learning.progress.util.AppValidator;
 import com.learning.progress.util.JwtUtil;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validator;
@@ -61,6 +56,8 @@ public class ClassLessonServiceImpl implements ClassLessonService {
     @Autowired
     private ClassTeacherRepository classTeacherRepository;
     @Autowired
+    private AppValidator appValidator;
+    @Autowired
     private FileService fileService;
     @Autowired
     private BlobSasService blobSasService;
@@ -75,6 +72,8 @@ public class ClassLessonServiceImpl implements ClassLessonService {
                 .filter(c -> c.getDeletedAt() == null)
                 .orElseThrow(() -> new ApiException(Const.CLASS_CHAPTER.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
         Long classId = classChapter.getClazz().getId();
+
+        appValidator.validateUserAccessToClass(classChapter.getClazz().getId());
 
         // Load existing active class lessons
         List<ClassLesson> existingActiveLessons = classLessonRepository
@@ -295,14 +294,17 @@ public class ClassLessonServiceImpl implements ClassLessonService {
         ClassLesson classLesson = classLessonRepository.findById(id)
                 .filter(l -> l.getDeletedAt() == null)
                 .orElseThrow(() -> new ApiException(Const.CLASS_LESSON.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+        appValidator.validateUserAccessToClass(classLesson.getClassChapter().getClazz().getId());
         return classLessonMapper.toClassLessonDTO(classLesson);
     }
 
     @Override
     public DataResponse<List<ClassLessonDTO>> getClassLessonList(Long classChapterId, int page, int size, String searchText) {
-        classChapterRepository.findById(classChapterId)
+        ClassChapter classChapter = classChapterRepository.findById(classChapterId)
                 .filter(c -> c.getDeletedAt() == null)
                 .orElseThrow(() -> new ApiException(Const.CLASS_CHAPTER.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+
+        appValidator.validateUserAccessToClass(classChapter.getClazz().getId());
 
         Page<ClassLesson> lessonPage = classLessonRepository.findByClassChapterIdAndSearchText(
                 classChapterId, searchText, PageRequest.of(page, size, Sort.by("orderNumber").ascending()));
