@@ -17,6 +17,7 @@ import com.learning.progress.service.BlobSasService;
 import com.learning.progress.service.ClassChapterService;
 import com.learning.progress.service.ClassHistoryService;
 import com.learning.progress.service.FileService;
+import com.learning.progress.util.AppValidator;
 import com.learning.progress.util.DataUtil;
 import com.learning.progress.util.JwtUtil;
 import jakarta.transaction.Transactional;
@@ -53,6 +54,8 @@ public class ClassChapterServiceImpl implements ClassChapterService {
     @Autowired
     private ClassChapterMapper classChapterMapper;
     @Autowired
+    private AppValidator appValidator;
+    @Autowired
     private JwtUtil jwtUtil;
     @Autowired
     private Validator validator;
@@ -72,6 +75,8 @@ public class ClassChapterServiceImpl implements ClassChapterService {
         Clazz classEntity = classRepository.findById(classId)
                 .filter(c -> c.getDeletedAt() == null)
                 .orElseThrow(() -> new ApiException(Const.CLASS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+
+        appValidator.validateUserAccessToClass(classEntity.getId());
 
         if(classEntity.getStatus() == ClassStatus.FINISHED){
             throw new ApiException(Const.CLASS.FINISHED_CLASS, HttpStatus.BAD_REQUEST.value());
@@ -314,13 +319,16 @@ public class ClassChapterServiceImpl implements ClassChapterService {
         ClassChapter classChapter = classChapterRepository.findById(id)
                 .filter(c -> c.getDeletedAt() == null)
                 .orElseThrow(() -> new ApiException(Const.CLASS_CHAPTER.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+        appValidator.validateUserAccessToClass(classChapter.getClazz().getId());
         return classChapterMapper.toClassChapterDTO(classChapter);
     }
 
     public DataResponse<List<ClassChapterDTO>> getClassChapterList(Long classId, int page, int size, String searchText) {
-        classRepository.findById(classId)
+        Clazz clazz = classRepository.findById(classId)
                 .filter(c -> c.getDeletedAt() == null)
                 .orElseThrow(() -> new ApiException(Const.CLASS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+
+        appValidator.validateUserAccessToClass(clazz.getId());
 
         Page<ClassChapter> chapterPage = classChapterRepository.findByClassIdAndSearchText(classId, searchText, PageRequest.of(page, size, Sort.by("orderNumber").ascending()));
         List<ClassChapterDTO> responses = chapterPage.getContent().stream()

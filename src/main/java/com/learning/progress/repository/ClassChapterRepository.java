@@ -16,7 +16,17 @@ import java.util.Optional;
 @Repository
 public interface ClassChapterRepository extends JpaRepository<ClassChapter, Long> {
 
-    @Query("SELECT cc FROM ClassChapter cc WHERE cc.clazz.id = :classId AND cc.deletedAt IS NULL AND (:searchText IS NULL OR cc.classChapterName LIKE %:searchText%)")
+    @Query("""
+       SELECT cc 
+       FROM ClassChapter cc 
+       WHERE cc.clazz.id = :classId 
+         AND cc.deletedAt IS NULL 
+         AND (
+             :searchText IS NULL 
+             OR LOWER(cc.classChapterName) LIKE LOWER(CONCAT('%', :searchText, '%'))
+             OR LOWER(cc.classChapterCode) LIKE LOWER(CONCAT('%', :searchText, '%'))
+         )
+       """)
     Page<ClassChapter> findByClassIdAndSearchText(Long classId, String searchText, Pageable pageable);
 
     @Query("SELECT cc FROM ClassChapter cc WHERE cc.clazz.id = :classId AND cc.deletedAt IS NULL ORDER BY cc.orderNumber ASC")
