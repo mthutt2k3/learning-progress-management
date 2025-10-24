@@ -306,8 +306,21 @@ public class ClassLessonServiceImpl implements ClassLessonService {
 
         appValidator.validateUserAccessToClass(classChapter.getClazz().getId());
 
-        Page<ClassLesson> lessonPage = classLessonRepository.findByClassChapterIdAndSearchText(
-                classChapterId, searchText, PageRequest.of(page, size, Sort.by("orderNumber").ascending()));
+        Page<ClassLesson> lessonPage;
+
+        if (searchText == null || searchText.trim().isEmpty()) {
+            lessonPage = classLessonRepository.findByClassChapterId(
+                    classChapterId,
+                    PageRequest.of(page, size, Sort.by("orderNumber").ascending())
+            );
+        } else {
+            lessonPage = classLessonRepository.findByClassChapterIdAndSearchText(
+                    classChapterId,
+                    searchText.trim(),
+                    PageRequest.of(page, size, Sort.by("orderNumber").ascending())
+            );
+        }
+
         List<ClassLessonDTO> responses = lessonPage.getContent().stream()
                 .map(classLessonMapper::toClassLessonDTO)
                 .collect(Collectors.toList());
