@@ -78,7 +78,7 @@ public class ClassChapterServiceImpl implements ClassChapterService {
 
         appValidator.validateUserAccessToClass(classEntity.getId());
 
-        if(classEntity.getStatus() == ClassStatus.FINISHED){
+        if (classEntity.getStatus() == ClassStatus.FINISHED) {
             throw new ApiException(Const.CLASS.FINISHED_CLASS, HttpStatus.BAD_REQUEST.value());
         }
         // Load existing active class chapters
@@ -104,7 +104,7 @@ public class ClassChapterServiceImpl implements ClassChapterService {
             }
             Long deleteId = deleteReq.getId();
             if (deleteId == null || !existingActiveIds.contains(deleteId)) {
-                throw new ApiException("Clazz chapter ID không tồn tại: " + deleteId, HttpStatus.BAD_REQUEST.value());
+                throw new ApiException(String.format(Const.CLASS_CHAPTER.ID_NOT_FOUND,deleteId), HttpStatus.BAD_REQUEST.value());
             }
         }
         // 3. Validate EXISTING IDs trong non-deleted requests
@@ -119,7 +119,7 @@ public class ClassChapterServiceImpl implements ClassChapterService {
 
         if (!invalidExistingIds.isEmpty()) {
             throw new ApiException(
-                    "Các existing chapter ID không tồn tại: " + invalidExistingIds,
+                    Const.CLASS_CHAPTER.INVALID_EXISTING_CHAPTER_IDS + invalidExistingIds,
                     HttpStatus.BAD_REQUEST.value()
             );
         }
@@ -141,7 +141,7 @@ public class ClassChapterServiceImpl implements ClassChapterService {
 
                 if (usedNames.contains(normalizedName)) {
                     throw new ApiException(
-                            "Chapter name bị trùng lặp trong request: " + req.getClassChapterName(),
+                            String.format(Const.CLASS_CHAPTER.DUPLICATE_NAME_CHAPTER, req.getClassChapterName()),
                             HttpStatus.BAD_REQUEST.value()
                     );
                 }
@@ -173,7 +173,7 @@ public class ClassChapterServiceImpl implements ClassChapterService {
 
         if (!invalidRequestIds.isEmpty()) {
             throw new ApiException(
-                    "Các chapter ID không tồn tại hoặc đã bị xóa: " + invalidRequestIds,
+                    Const.CHAPTER.IDS_NOT_FOUND + invalidRequestIds,
                     HttpStatus.BAD_REQUEST.value()
             );
         }
@@ -189,7 +189,7 @@ public class ClassChapterServiceImpl implements ClassChapterService {
 
         if (!unhandledDbIds.isEmpty()) {
             throw new ApiException(
-                    String.format("Các chapter sau không được handle trong sync request: %s. FE phải bao gồm tất cả active chapters!", unhandledDbIds),
+                    String.format(Const.CHAPTER.UNHANDLED_CHAPTER, unhandledDbIds),
                     HttpStatus.BAD_REQUEST.value()
             );
         }
@@ -330,20 +330,11 @@ public class ClassChapterServiceImpl implements ClassChapterService {
 
         appValidator.validateUserAccessToClass(clazz.getId());
 
-        Page<ClassChapter> chapterPage;
-
-        if (searchText == null || searchText.trim().isEmpty()) {
-            chapterPage = classChapterRepository.findByClassId(
-                    classId,
-                    PageRequest.of(page, size, Sort.by("orderNumber").ascending())
-            );
-        } else {
-            chapterPage = classChapterRepository.findByClassIdAndSearchText(
-                    classId,
-                    searchText.trim(),
-                    PageRequest.of(page, size, Sort.by("orderNumber").ascending())
-            );
-        }
+        Page<ClassChapter> chapterPage = classChapterRepository.findByClassIdAndSearchText(
+                classId,
+                (searchText == null || searchText.isBlank()) ? "" : searchText,
+                PageRequest.of(page, size, Sort.by("orderNumber").ascending())
+        );
 
         List<ClassChapterDTO> responses = chapterPage.getContent().stream()
                 .map(classChapterMapper::toClassChapterDTO)

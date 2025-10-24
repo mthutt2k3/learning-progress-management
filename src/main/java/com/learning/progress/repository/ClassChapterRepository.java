@@ -29,14 +29,6 @@ public interface ClassChapterRepository extends JpaRepository<ClassChapter, Long
        """)
     Page<ClassChapter> findByClassIdAndSearchText(Long classId, String searchText, Pageable pageable);
 
-    @Query("""
-       SELECT cc 
-       FROM ClassChapter cc 
-       WHERE cc.clazz.id = :classId 
-         AND cc.deletedAt IS NULL 
-       """)
-    Page<ClassChapter> findByClassId(Long classId, Pageable pageable);
-
 
     @Query("SELECT cc FROM ClassChapter cc WHERE cc.clazz.id = :classId AND cc.deletedAt IS NULL ORDER BY cc.orderNumber ASC")
     List<ClassChapter> findByClassIdAndDeletedAtIsNullOrderByOrderNumberAsc(Long classId);
@@ -48,12 +40,6 @@ public interface ClassChapterRepository extends JpaRepository<ClassChapter, Long
     boolean existsByClazzAndClassChapterNameIgnoreCaseAndDeletedAtIsNull(Clazz clazz, String classChapterName);
 
     List<ClassChapter> findByClassChapterCodeIn(Collection<String> chapterCodes);
-
-    boolean existsByClazzAndClassChapterNameIgnoreCaseAndDeletedAtIsNullAndIdNot(
-            Clazz clazz,
-            String classChapterName,
-            Long id
-    );
 
     List<ClassChapter> findByClazzAndDeletedAtIsNull(Clazz classEntity);
 }

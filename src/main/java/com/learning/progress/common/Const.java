@@ -26,19 +26,22 @@ public class Const {
 
     }
     public static class CHAPTER {
-        public static final String ID_REQUIRED = "ID bắt buộc khi xóa";
-        public static final String CHAPTER_NAME_REQUIRED = "Tên chapter không được để trống";
-        public static final String CHAPTER_NAME_MAX_LENGTH = "Tên chapter không được vượt quá 100 ký tự";
+        public static final String ID_REQUIRED = "ID is required when deleting";
+        public static final String NOT_FOUND = "Chapter not found";
+        public static final String IDS_NOT_FOUND = "Some chapter IDs do not exist or have been deleted: ";
+        public static final String CHAPTER_NAME_REQUIRED = "Chapter name cannot be empty";
+        public static final String CHAPTER_NAME_MAX_LENGTH = "Chapter name cannot exceed 100 characters";
         public static final int CHAPTER_NAME_MAX_LENGTH_VALUE = 100;
+        public static final String UNHANDLED_CHAPTER = "Unhandled chapters: %s. FE must include ALL active chapters!";
     }
 
     public static class LESSON {
-        public static final String ID_REQUIRED = "ID bắt buộc khi xóa";
-        public static final String LESSON_NAME_REQUIRED = "Tên lesson không được để trống";
-        public static final String LESSON_NAME_MAX_LENGTH = "Tên lesson không được vượt quá 200 ký tự";
+        public static final String ID_REQUIRED = "ID is required when deleting";
+        public static final String LESSON_NAME_REQUIRED = "Lesson name cannot be empty";
+        public static final String LESSON_NAME_MAX_LENGTH = "Lesson name cannot exceed 200 characters";
         public static final int LESSON_NAME_MAX_LENGTH_VALUE = 200;
-
     }
+
     public static class CHALLENGE {
         public static final String NAME_REQUIRED = "Challenge name is required";
         public static final String CLASS_LESSON_REQUIRED = "Class lesson is required";
@@ -53,6 +56,7 @@ public class Const {
     public static class FILE {
         public static final String AVATAR_REQUIRED = "Avatar file is required.";
         public static final String AVATAR_UPLOAD_FAILED = "Failed to upload avatar.";
+        public static final String EMPTY= "The file has no data to import.";
     }
     public static class PATH {
         public static final String REQUIRED = "Path is required";
@@ -171,6 +175,8 @@ public class Const {
         public static final String CHAPTER_CODE_NOT_FOUND = "Chapter not found or deleted with code: %s";
 
         // Validation & logic errors
+
+        public static final String DUPLICATE_NAME_LESSONS = "Duplicate lesson names found in the request: %s";
         public static final String UNHANDLED_LESSONS = "Unhandled lessons: %s. FE must include ALL active lessons!";
         public static final String NON_DELETED_COUNT_MISMATCH = "Mismatch in non-deleted lesson count! Expected: %d, actual: %d";
         public static final String LESSON_NAME_REQUIRED = "Lesson name is required: %s";
@@ -194,6 +200,7 @@ public class Const {
 
         // Not found & invalid
         public static final String NOT_FOUND = "Class chapter not found";
+        public static final String ID_NOT_FOUND = "Class chapter ID not found : %d";
         // Action / history log
         public static final String ACTION_DELETE =
                 "Deleted chapter %s from class %s";
@@ -201,6 +208,8 @@ public class Const {
                 "Updated chapter %s in class %s with order number %d";
         public static final String ACTION_CREATE =
                 "Created chapter %s for class %s with order number %d";
+        public static final String INVALID_EXISTING_CHAPTER_IDS = "Existing chapter IDs do not exist: ";
+        public static final String DUPLICATE_NAME_CHAPTER = "Duplicate chapter names found in the request: %s";
 
     }
 
