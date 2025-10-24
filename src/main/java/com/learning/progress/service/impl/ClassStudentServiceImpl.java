@@ -85,6 +85,11 @@ public class ClassStudentServiceImpl implements ClassStudentService {
 
         Clazz clazz = classRepository.findById(classId)
                 .orElseThrow(() -> new ApiException(Const.CLASS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+        if (clazz.getDeletedAt() != null) {
+            throw new ApiException(Const.CLASS.DELETED, HttpStatus.BAD_REQUEST.value());
+        }
+
+        appValidator.validateUserAccessToClass(classId);
 
         List<ClassStudentStatus> statuses;
         if (status == null || status.isEmpty()) {
@@ -120,6 +125,7 @@ public class ClassStudentServiceImpl implements ClassStudentService {
     @Override
     @Transactional(readOnly = true)
     public ClassStudentResponse getStudentProfile(Long classId, Long userId) {
+        appValidator.validateUserAccessToClass(classId);
         // Kiểm tra sự tồn tại của lớp học
         Clazz clazz = classRepository.findById(classId)
                 .orElseThrow(() -> new ApiException(Const.CLASS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
@@ -134,12 +140,12 @@ public class ClassStudentServiceImpl implements ClassStudentService {
                 .orElseThrow(() -> new ApiException(Const.USER.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         // Kiểm tra trạng thái người dùng
-        if (!UserStatus.ACTIVE.equals(user.getStatus())) {
+        if (UserStatus.INACTIVE.equals(user.getStatus())) {
             throw new ApiException(Const.USER.INACTIVE, HttpStatus.BAD_REQUEST.value());
         }
 
         // Kiểm tra vai trò người dùng
-        if (user.getRole() == null || !RoleName.STUDENT.equals(user.getRole().getName())) {
+        if (user.getRole() == null || (!RoleName.STUDENT.equals(user.getRole().getName()) && !RoleName.TEST_TAKER.equals(user.getRole().getName()))) {
             throw new ApiException(Const.USER.INVALID_ROLE_STUDENT_ONLY, HttpStatus.BAD_REQUEST.value());
         }
 
@@ -214,8 +220,8 @@ public class ClassStudentServiceImpl implements ClassStudentService {
         // 5️⃣ Validate all users
         List<String> validationErrors = new ArrayList<>();
         for (User user : users) {
-            if (!UserStatus.ACTIVE.equals(user.getStatus())) {
-                validationErrors.add(String.format("User ID %d (%s) is not active",
+            if (UserStatus.INACTIVE.equals(user.getStatus())) {
+                validationErrors.add(String.format("User ID %d (%s) is inactive",
                         user.getId(), user.getUserName()));
             }
 
@@ -305,6 +311,9 @@ public class ClassStudentServiceImpl implements ClassStudentService {
                 classStudent.setJoinedAt(now);
                 classStudent.setDeletedAt(null);
                 classStudent.setUpdatedAt(now);
+                classStudent.setDeletedAt(null);
+                classStudent.setDeletedBy(null);
+                classStudent.setLeftAt(null);
                 classStudentsToSave.add(classStudent);
             } else {
                 // Create new record
@@ -343,7 +352,7 @@ public class ClassStudentServiceImpl implements ClassStudentService {
                 .orElseThrow(() -> new ApiException(Const.USER.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         // Validate user status
-        if (!UserStatus.ACTIVE.equals(user.getStatus())) {
+        if (UserStatus.INACTIVE.equals(user.getStatus())) {
             throw new ApiException(Const.USER.INACTIVE, HttpStatus.BAD_REQUEST.value());
         }
 
@@ -594,7 +603,7 @@ public class ClassStudentServiceImpl implements ClassStudentService {
                         errors.append("• Username không tồn tại: ").append(record.getUserName()).append("\n");
                     } else {
                         // Validate user status
-                        if (!UserStatus.ACTIVE.equals(user.getStatus())) {
+                        if (UserStatus.INACTIVE.equals(user.getStatus())) {
                             errors.append("• User không ở trạng thái ACTIVE\n");
                         }
 

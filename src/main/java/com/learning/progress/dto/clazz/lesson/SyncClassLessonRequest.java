@@ -23,6 +23,7 @@ public class SyncClassLessonRequest {
     @Size(groups = NotDeleted.class, max = 100, message = "Tên lesson không được vượt quá 100 ký tự")
     private String classLessonName;
 
+    @Size(groups = NotDeleted.class, max = 1000, message = "Nội dung của lesson không được vượt quá 1000 ký tự")
     private String classLessonContent; // Có thể null
 
     @NotNull(groups = NotDeleted.class, message = "Thứ tự không được để trống")
