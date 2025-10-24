@@ -10,7 +10,6 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
-import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -95,4 +94,7 @@ public interface ClassTeacherRepository extends JpaRepository<ClassTeacher, Long
     );
 
     boolean existsByUser_IdAndClazz_IdAndStatus(Long id, Long classId, ClassTeacherStatus classTeacherStatus);
+
+    // Trong ClassUserRepository
+    List<ClassTeacher> findByClazzIdAndRoleInClassAndDeletedAtIsNull(Long clazzId, RoleInClass role);
 }

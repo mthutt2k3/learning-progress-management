@@ -36,7 +36,9 @@ public interface ClassRepository extends JpaRepository<Clazz, Long> {
     );
 
     @Query("SELECT c FROM Clazz c WHERE " +
-            "(:searchText = '' " +
+            "c.deletedAt IS NULL " +
+            "AND c.status <> 'INACTIVE'" +
+            "AND (:searchText = '' " +
             "OR LOWER(c.className) LIKE LOWER(CONCAT('%', :searchText, '%')) " +
             "OR LOWER(c.classCode) LIKE LOWER(CONCAT('%', :searchText, '%'))) " +
             "AND (:statuses IS NULL OR c.status IN :statuses) " +
@@ -59,4 +61,7 @@ public interface ClassRepository extends JpaRepository<Clazz, Long> {
     List<Clazz> findByStatusAndStartDateLessThanEqualAndDeletedAtIsNull(ClassStatus classStatus, LocalDate today);
 
     List<Clazz> findByStatusAndEndDateLessThanEqualAndDeletedAtIsNull(ClassStatus classStatus, LocalDate upcomingThreshold);
+
+    Optional<Clazz> findByIdAndDeletedAtIsNullAndStatusNot(Long id, ClassStatus status);
+
 }
