@@ -7,13 +7,12 @@ import com.learning.progress.dto.clazz.CreateClassRequest;
 import com.learning.progress.dto.clazz.UpdateClassRequest;
 import com.learning.progress.dto.DataResponse;
 import com.learning.progress.dto.clazz.history.ClassHistoryDTO;
+import com.learning.progress.dto.level.LevelInfo;
 import com.learning.progress.entity.*;
 import com.learning.progress.exception.ApiException;
-import com.learning.progress.mapper.ClassHistoryMapper;
 import com.learning.progress.mapper.ClassMapper;
 import com.learning.progress.repository.*;
 import com.learning.progress.service.ClassHistoryService;
-import com.learning.progress.service.ClassService;
 import com.learning.progress.service.strategy.ClassServiceStrategy;
 import com.learning.progress.util.*;
 import lombok.extern.slf4j.Slf4j;
@@ -26,8 +25,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -58,6 +55,10 @@ public class ManagerClassServiceImpl implements ClassServiceStrategy {
     private JwtUtil jwtUtil;
     @Autowired
     private AppValidator appValidator;
+    @Autowired
+    private ClassTeacherRepository classTeacherRepository;
+    @Autowired
+    private ClassStudentRepository classStudentRepository;
 
     @Override
     public boolean supports(RoleName role) {
@@ -67,28 +68,76 @@ public class ManagerClassServiceImpl implements ClassServiceStrategy {
     @Override
     @Transactional(readOnly = true)
     public ClassOverviewDTO getClassOverview(Long id) {
-        Clazz clazz = classRepository.findByIdAndDeletedAtIsNull(id)
+        appValidator.validateUserAccessToClass(id);
+        Clazz clazz = classRepository.findByIdAndDeletedAtIsNullAndStatusNot(id, ClassStatus.INACTIVE)
                 .orElseThrow(() -> new ApiException(Const.CLASS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
+
         ClassOverviewDTO.SyllabusDTO syllabusDTO = null;
+        LevelInfo levelInfo = null;
+
         if (clazz.getSyllabus() != null) {
+            Syllabus syllabus = clazz.getSyllabus();
             syllabusDTO = ClassOverviewDTO.SyllabusDTO.builder()
-                    .id(clazz.getSyllabus().getId())
-                    .syllabusName(clazz.getSyllabus().getSyllabusName())
-                    .syllabusCode(clazz.getSyllabus().getSyllabusCode())
+                    .id(syllabus.getId())
+                    .syllabusName(syllabus.getSyllabusName())
+                    .syllabusCode(syllabus.getSyllabusCode())
+                    .build();
+
+            // Get level info from syllabus
+            if (syllabus.getLevel() != null) {
+                levelInfo = LevelInfo.builder()
+                        .id(syllabus.getLevel().getId())
+                        .levelName(syllabus.getLevel().getLevelName())
+                        .levelCode(syllabus.getLevel().getLevelCode())
+                        .build();
+            }
+        }
+
+        // Fetch Main Teacher (assuming one main teacher per class)
+        ClassOverviewDTO.ClassTeacherDTO mainTeacher = null;
+        List<ClassTeacher> teacherList = classTeacherRepository
+                .findByClazzIdAndRoleInClassAndDeletedAtIsNull(id, RoleInClass.TEACHER);
+
+        if (!teacherList.isEmpty()) {
+            User teacher = teacherList.get(0).getUser(); // Get first teacher as main
+            mainTeacher = ClassOverviewDTO.ClassTeacherDTO.builder()
+                    .id(teacher.getId())
+                    .fullName(teacher.getFullName())
+                    .email(teacher.getEmail())
+                    .phone(teacher.getPhoneNumber())
                     .build();
         }
+
+        // Fetch Teaching Assistants
+        List<ClassOverviewDTO.ClassTeacherDTO> teachingAssistants = classTeacherRepository
+                .findByClazzIdAndRoleInClassAndDeletedAtIsNull(id, RoleInClass.TEACHING_ASSISTANT)
+                .stream()
+                .map(classUser -> {
+                    User ta = classUser.getUser();
+                    return ClassOverviewDTO.ClassTeacherDTO.builder()
+                            .id(ta.getId())
+                            .fullName(ta.getFullName())
+                            .email(ta.getEmail())
+                            .phone(ta.getPhoneNumber())
+                            .build();
+                })
+                .collect(Collectors.toList());
+
+        int numberOfStudents = classStudentRepository
+                .countByClazzIdAndDeletedAtIsNull(id);
 
         return ClassOverviewDTO.builder()
                 .id(clazz.getId())
                 .className(clazz.getClassName())
                 .classCode(clazz.getClassCode())
-                .teachers(null) // TODO: Fetch teacher data
-                .teachingAssistants(new ArrayList<>()) // TODO: Fetch teaching assistants
-                .startDate(null) // TODO: Add startDate to Clazz
-                .endDate(null) // TODO: Add endDate to Clazz
+                .teachers(mainTeacher)
+                .teachingAssistants(teachingAssistants)
+                .numberOfStudents(numberOfStudents)
+                .startDate(clazz.getStartDate())
+                .endDate(clazz.getEndDate())
                 .status(clazz.getStatus())
-                .level(null) // TODO: Add level to Clazz
+                .level(levelInfo)
                 .syllabus(syllabusDTO)
                 .build();
     }

@@ -15,6 +15,7 @@ import com.learning.progress.repository.ClassStudentRepository;
 import com.learning.progress.repository.SubmissionDailyChallengeRepository;
 import com.learning.progress.repository.UserRepository;
 import com.learning.progress.service.BlobSasService;
+import com.learning.progress.service.ClassHistoryService;
 import com.learning.progress.service.ClassStudentService;
 import com.learning.progress.service.FileService;
 import com.learning.progress.util.AppValidator;
@@ -52,6 +53,9 @@ public class ClassStudentServiceImpl implements ClassStudentService {
 
     @Autowired
     private SubmissionDailyChallengeRepository submissionRepository;
+
+    @Autowired
+    private ClassHistoryService classHistoryService;
 
     @Autowired
     private ClassStudentMapper classStudentMapper;
@@ -187,7 +191,7 @@ public class ClassStudentServiceImpl implements ClassStudentService {
                     .distinct()
                     .collect(Collectors.toList());
             throw new ApiException(
-                    String.format("Duplicate user IDs found in request: %s", duplicateIds),
+                    String.format(Const.CLASS_STUDENT.DUPLICATE_ID, duplicateIds),
                     HttpStatus.BAD_REQUEST.value()
             );
         }
@@ -199,7 +203,7 @@ public class ClassStudentServiceImpl implements ClassStudentService {
 
         if (existingStudentCount + newStudentCount > maxStudentInClass) {
             throw new ApiException(
-                    String.format("Cannot add more than %d students. Current: %d, Requested: %d",
+                    String.format(Const.CLASS_STUDENT.STUDENT_LIMIT_EXCEEDED,
                             maxStudentInClass, existingStudentCount, newStudentCount),
                     HttpStatus.BAD_REQUEST.value()
             );
@@ -208,12 +212,8 @@ public class ClassStudentServiceImpl implements ClassStudentService {
         // 4️⃣ Fetch all users at once
         List<User> users = userRepository.findAllById(userIds);
         if (users.size() != userIds.size()) {
-            List<Long> foundIds = users.stream().map(User::getId).collect(Collectors.toList());
-            List<Long> notFoundIds = userIds.stream()
-                    .filter(id -> !foundIds.contains(id))
-                    .collect(Collectors.toList());
             throw new ApiException(
-                    String.format("Users with IDs %s not found", notFoundIds),
+                    Const.USER.NOT_FOUND,
                     HttpStatus.NOT_FOUND.value()
             );
         }
@@ -222,20 +222,17 @@ public class ClassStudentServiceImpl implements ClassStudentService {
         List<String> validationErrors = new ArrayList<>();
         for (User user : users) {
             if (UserStatus.INACTIVE.equals(user.getStatus())) {
-                validationErrors.add(String.format("User ID %d (%s) is inactive",
-                        user.getId(), user.getUserName()));
+                validationErrors.add(Const.USER.INACTIVE);
             }
 
             if (user.getRole() == null ||
                     (!RoleName.STUDENT.equals(user.getRole().getName()) &&
                             !RoleName.TEST_TAKER.equals(user.getRole().getName()))) {
-                validationErrors.add(String.format("User ID %d (%s) has invalid role for class",
-                        user.getId(), user.getUserName()));
+                validationErrors.add(Const.USER.INVALID_ROLE_FOR_CLASS);
             }
 
             if (user.getDeletedAt() != null) {
-                validationErrors.add(String.format("User ID %d (%s) has been deleted",
-                        user.getId(), user.getUserName()));
+                validationErrors.add(Const.USER.NOT_FOUND);
             }
         }
 
@@ -258,21 +255,13 @@ public class ClassStudentServiceImpl implements ClassStudentService {
         for (Long userId : userToClasses.keySet()) {
             List<Long> classIds = userToClasses.get(userId);
             if (classIds.stream().anyMatch(id -> !id.equals(classId))) {
-                alreadyInClass.add(String.format("User ID %d is already active in classes %s", userId, classIds));
+                alreadyInClass.add(String.format(Const.CLASS_STUDENT.USER_EXISTS, userId, classIds));
             }
         }
 
         if (!alreadyInClass.isEmpty()) {
             throw new ApiException(
-                    "Some students are already active in other classes: " + String.join("; ", alreadyInClass),
-                    HttpStatus.CONFLICT.value()
-            );
-        }
-
-
-        if (!alreadyInClass.isEmpty()) {
-            throw new ApiException(
-                    "Some students are already enrolled in other classes: " + String.join("; ", alreadyInClass),
+                    Const.CLASS_STUDENT.USER_ALREADY_ENROLLED + String.join("; ", alreadyInClass),
                     HttpStatus.CONFLICT.value()
             );
         }
@@ -287,7 +276,7 @@ public class ClassStudentServiceImpl implements ClassStudentService {
                     .map(User::getUserName)
                     .collect(Collectors.toList());
             throw new ApiException(
-                    String.format("Users %s are already active in the class", existingUserNames),
+                    String.format(Const.CLASS_STUDENT.USERS_ALREADY_ACTIVE_IN_CLASS, existingUserNames),
                     HttpStatus.CONFLICT.value()
             );
         }
@@ -297,6 +286,8 @@ public class ClassStudentServiceImpl implements ClassStudentService {
                 .findByClassIdAndUserIdInAndStatus(classId, userIds, ClassStudentStatus.INACTIVE);
 
         List<ClassStudent> classStudentsToSave = new ArrayList<>();
+        List<User> reactivatedUsers = new ArrayList<>();
+        List<User> newlyAddedUsers = new ArrayList<>();
         OffsetDateTime now = OffsetDateTime.now();
 
         for (User user : users) {
@@ -316,6 +307,7 @@ public class ClassStudentServiceImpl implements ClassStudentService {
                 classStudent.setDeletedBy(null);
                 classStudent.setLeftAt(null);
                 classStudentsToSave.add(classStudent);
+                reactivatedUsers.add(user);
             } else {
                 // Create new record
                 ClassStudent classStudent = new ClassStudent();
@@ -324,11 +316,63 @@ public class ClassStudentServiceImpl implements ClassStudentService {
                 classStudent.setStatus(ClassStudentStatus.ACTIVE);
                 classStudent.setJoinedAt(now);
                 classStudentsToSave.add(classStudent);
+                newlyAddedUsers.add(user);
             }
         }
 
         // 8️⃣ Batch save
         classStudentRepository.saveAll(classStudentsToSave);
+
+        // 9️⃣ Save history
+        Long actionByUserId = jwtUtil.extractUserIdFromCurrentRequest();
+        String visibleToRoles = String.format("%s,%s,%s",
+                RoleName.MANAGER.name(),
+                RoleName.TEACHER.name(),
+                RoleName.TEACHING_ASSISTANT.name());
+
+        // Log history cho newly added students
+        if (!newlyAddedUsers.isEmpty()) {
+            String studentNames = newlyAddedUsers.stream()
+                    .map(User::getFullName)
+                    .collect(Collectors.joining(", "));
+
+            String actionDetails = String.format(
+                    Const.CLASS_STUDENT.ADD_STUDENT_SUCCESSFULLY,
+                    newlyAddedUsers.size(),
+                    clazz.getClassName(),
+                    studentNames
+            );
+
+            classHistoryService.saveClassHistory(
+                    classId,
+                    actionDetails,
+                    actionByUserId,
+                    ActionType.CREATE_STUDENT.name(),
+                    visibleToRoles
+            );
+        }
+
+        // Log history cho reactivated students
+        if (!reactivatedUsers.isEmpty()) {
+            String studentNames = reactivatedUsers.stream()
+                    .map(User::getFullName)
+                    .collect(Collectors.joining(", "));
+
+            String actionDetails = String.format(
+                    Const.CLASS_STUDENT.REACTIVE_STUDENT_SUCCESSFULLY,
+                    reactivatedUsers.size(),
+                    clazz.getClassName(),
+                    studentNames
+            );
+
+            classHistoryService.saveClassHistory(
+                    classId,
+                    actionDetails,
+                    actionByUserId,
+                    ActionType.REACTIVATE_STUDENT.name(),
+                    visibleToRoles
+            );
+        }
     }
 
     @Override
@@ -383,6 +427,26 @@ public class ClassStudentServiceImpl implements ClassStudentService {
 
         // Save the updated class-student relationship
         classStudentRepository.save(classStudent);
+
+        Long actionByUserId = jwtUtil.extractUserIdFromCurrentRequest();
+        String visibleToRoles = String.format("%s,%s,%s",
+                RoleName.MANAGER.name(),
+                RoleName.TEACHER.name(),
+                RoleName.TEACHING_ASSISTANT.name());
+
+        String actionDetails = String.format(
+                Const.CLASS_STUDENT.REMOVE_STUDENT_SUCCESSFULLY,
+                user.getFullName(),
+                clazz.getClassName()
+        );
+
+        classHistoryService.saveClassHistory(
+                classId,
+                actionDetails,
+                actionByUserId,
+                ActionType.DELETE_STUDENT.name(),
+                visibleToRoles
+        );
     }
 
 
@@ -498,11 +562,39 @@ public class ClassStudentServiceImpl implements ClassStudentService {
         }
 
         // 4️⃣ Gọi addStudentsToClass cho từng class
+        Long actionByUserId = jwtUtil.extractUserIdFromCurrentRequest();
+        String visibleToRoles = String.format("%s,%s,%s",
+                RoleName.MANAGER.name(),
+                RoleName.TEACHER.name(),
+                RoleName.TEACHING_ASSISTANT.name());
+
         for (Map.Entry<Long, List<Long>> entry : classToUserIds.entrySet()) {
             AddStudentToClassRequest request = new AddStudentToClassRequest();
             request.setUserIds(entry.getValue());
 
             addStudentToClass(entry.getKey(), request);
+
+            // Save import history (summary)
+            Clazz clazz = classMap.values().stream()
+                    .filter(c -> c.getId().equals(entry.getKey()))
+                    .findFirst()
+                    .orElse(null);
+
+            if (clazz != null) {
+                String actionDetails = String.format(
+                        Const.CLASS_STUDENT.IMPORT_STUDENT_SUCCESSFULLY,
+                        entry.getValue().size(),
+                        clazz.getClassName()
+                );
+
+                classHistoryService.saveClassHistory(
+                        entry.getKey(),
+                        actionDetails,
+                        actionByUserId,
+                        ActionType.IMPORT_STUDENTS.name(),
+                        visibleToRoles
+                );
+            }
         }
     }
 
@@ -517,7 +609,7 @@ public class ClassStudentServiceImpl implements ClassStudentService {
             result.setTotalRows(importList.size());
 
             if (importList.isEmpty()) {
-                throw new ApiException("Import file is empty", HttpStatus.BAD_REQUEST.value());
+                throw new ApiException(Const.FILE.EMPTY, HttpStatus.BAD_REQUEST.value());
             }
         } catch (ApiException e) {
             // Lỗi khi đọc file

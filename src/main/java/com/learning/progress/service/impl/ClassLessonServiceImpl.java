@@ -170,7 +170,8 @@ public class ClassLessonServiceImpl implements ClassLessonService {
 
                 if (usedNames.contains(normalizedName)) {
                     throw new ApiException(
-                            "Lesson name bị trùng lặp trong request: " + req.getClassLessonName(),
+                            String.format(Const.CLASS_LESSON.DUPLICATE_NAME_LESSONS,
+                                    req.getClassLessonName()),
                             HttpStatus.BAD_REQUEST.value()
                     );
                 }
@@ -189,7 +190,7 @@ public class ClassLessonServiceImpl implements ClassLessonService {
 
         if (orderNumbers.size() != nonDeletedSize || !orderNumbers.equals(expectedOrders)) {
             throw new ApiException(
-                    String.format("Order numbers phải tuần tự từ 1 đến %d. Current: %s", nonDeletedSize, orderNumbers),
+                    String.format(Const.CLASS_LESSON.ORDER_NUMBER_SEQUENCE_INVALID, nonDeletedSize, orderNumbers),
                     HttpStatus.BAD_REQUEST.value()
             );
         }
@@ -306,20 +307,11 @@ public class ClassLessonServiceImpl implements ClassLessonService {
 
         appValidator.validateUserAccessToClass(classChapter.getClazz().getId());
 
-        Page<ClassLesson> lessonPage;
-
-        if (searchText == null || searchText.trim().isEmpty()) {
-            lessonPage = classLessonRepository.findByClassChapterId(
-                    classChapterId,
-                    PageRequest.of(page, size, Sort.by("orderNumber").ascending())
-            );
-        } else {
-            lessonPage = classLessonRepository.findByClassChapterIdAndSearchText(
-                    classChapterId,
-                    searchText.trim(),
-                    PageRequest.of(page, size, Sort.by("orderNumber").ascending())
-            );
-        }
+        Page<ClassLesson> lessonPage = classLessonRepository.findByClassChapterIdAndSearchText(
+                classChapterId,
+                (searchText == null || searchText.isBlank()) ? "" : searchText,
+                PageRequest.of(page, size, Sort.by("orderNumber").ascending())
+        );
 
         List<ClassLessonDTO> responses = lessonPage.getContent().stream()
                 .map(classLessonMapper::toClassLessonDTO)
@@ -437,7 +429,7 @@ public class ClassLessonServiceImpl implements ClassLessonService {
         try {
             classEntity = classRepository.findById(classId)
                     .filter(c -> c.getDeletedAt() == null)
-                    .orElseThrow(() -> new ApiException("Class không tồn tại", HttpStatus.NOT_FOUND.value()));
+                    .orElseThrow(() -> new ApiException(Const.CLASS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
         } catch (ApiException e) {
             result.setTotalRows(0);
             result.setValidRows(0);
@@ -483,7 +475,7 @@ public class ClassLessonServiceImpl implements ClassLessonService {
             result.setTotalRows(importList.size());
 
             if (importList.isEmpty()) {
-                throw new ApiException("File không có dữ liệu để import", HttpStatus.BAD_REQUEST.value());
+                throw new ApiException(Const.FILE.EMPTY, HttpStatus.BAD_REQUEST.value());
             }
         } catch (ApiException e) {
             result.setTotalRows(0);
