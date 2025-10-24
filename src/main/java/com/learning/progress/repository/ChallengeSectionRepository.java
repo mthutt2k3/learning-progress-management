@@ -7,7 +7,10 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 public interface ChallengeSectionRepository extends JpaRepository<ChallengeSection, Long> {
 
@@ -41,4 +44,8 @@ public interface ChallengeSectionRepository extends JpaRepository<ChallengeSecti
             "AND (:text IS NULL OR LOWER(s.sectionTitle) LIKE LOWER(CONCAT('%', :text, '%')) " +
             "OR LOWER(s.sectionsContent) LIKE LOWER(CONCAT('%', :text, '%'))) order by s.orderNumber asc ")
     Page<ChallengeSection> findByChallengeIdAndTextAndDeletedAtIsNull(@Param("challengeId") Long challengeId, @Param("text") String text, Pageable pageable);
+
+    List<ChallengeSection> findByChallengeIdAndDeletedAtIsNullOrderByOrderNumberAsc(Long challengeId);
+
+    Collection<ChallengeSection> findByIdInAndDeletedAtIsNull(Set<Long> allSectionIds);
 }
