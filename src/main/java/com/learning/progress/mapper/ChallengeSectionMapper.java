@@ -44,6 +44,10 @@ public interface ChallengeSectionMapper {
     @Mapping(source = "questions",target = "questions")
     SectionWithQuestionsDto toSectionWithQuestionsDto(ChallengeSection section, List<QuestionDto> questions);
 
+    @Mapping(target = "section", source = "section")
+    @Mapping(target = "questions", source = "section.questions")
+    SectionWithQuestionsDto toSectionWithQuestionsDto(ChallengeSection section);
+
     // Object <-> Map<String,Object> for question content
     default Map<String, Object> map(Object content) {
         return JsonUtil.objectToMap(content);
