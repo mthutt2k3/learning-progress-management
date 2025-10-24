@@ -31,6 +31,14 @@ public interface ClassLessonRepository extends JpaRepository<ClassLesson, Long> 
        """)
     Page<ClassLesson> findByClassChapterIdAndSearchText(Long classChapterId, String searchText, Pageable pageable);
 
+    @Query("""
+       SELECT cl 
+       FROM ClassLesson cl 
+       WHERE cl.classChapter.id = :classChapterId 
+         AND cl.deletedAt IS NULL 
+       """)
+    Page<ClassLesson> findByClassChapterId(Long classChapterId, Pageable pageable);
+
     Optional<ClassLesson> findByIdAndDeletedAtIsNull(Long id);
 
     boolean existsByClassChapterAndClassLessonNameIgnoreCaseAndDeletedAtIsNull(
