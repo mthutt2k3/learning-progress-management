@@ -165,6 +165,7 @@ public class ClassStudentServiceImpl implements ClassStudentService {
     @Override
     @Transactional
     public void addStudentToClass(Long classId, AddStudentToClassRequest request) {
+        appValidator.validateUserAccessToClass(classId);
         // 1️⃣ Validate class
         Clazz clazz = classRepository.findById(classId)
                 .orElseThrow(() -> new ApiException(Const.CLASS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
@@ -333,6 +334,7 @@ public class ClassStudentServiceImpl implements ClassStudentService {
     @Override
     @Transactional
     public void removeStudentFromClass(Long classId, Long userId) {
+        appValidator.validateUserAccessToClass(classId);
         // Fetch and validate class
         Clazz clazz = classRepository.findById(classId)
                 .orElseThrow(() -> new ApiException(Const.CLASS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
