@@ -61,4 +61,7 @@ public interface ClassRepository extends JpaRepository<Clazz, Long> {
     List<Clazz> findByStatusAndStartDateLessThanEqualAndDeletedAtIsNull(ClassStatus classStatus, LocalDate today);
 
     List<Clazz> findByStatusAndEndDateLessThanEqualAndDeletedAtIsNull(ClassStatus classStatus, LocalDate upcomingThreshold);
+
+    Optional<Clazz> findByIdAndDeletedAtIsNullAndStatusNot(Long id, ClassStatus status);
+
 }

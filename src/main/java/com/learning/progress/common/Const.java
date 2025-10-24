@@ -56,6 +56,10 @@ public class Const {
         public static final String CHAPTER_NAME_MAX_LENGTH = "Chapter name cannot exceed 100 characters";
         public static final int CHAPTER_NAME_MAX_LENGTH_VALUE = 100;
         public static final String UNHANDLED_CHAPTER = "Unhandled chapters: %s. FE must include ALL active chapters!";
+        public static final String CHAPTER_COUNT_MISMATCH = "Number of non-deleted chapters does not match! Expected: %d, Actual: %d";
+        public static final String ORDER_NUMBER_SEQUENCE_INVALID =
+                "Order numbers must be sequential from 1 to %d, without duplicates or gaps.";
+
     }
 
     public static class LESSON {
@@ -74,7 +78,7 @@ public class Const {
     public static class DOB {
         public static final String DOB_IN_FUTURE = "Date of birth cannot be in the future.";
         public static final String DOB_UNDER_AGE = "User must be at least %d years old.";
-        public static final String DOB_OVER_AGE = "Tuổi không được lớn hơn %d";
+        public static final String DOB_OVER_AGE = "Age cannot be greater than %d";
     }
     public static class FILE {
         public static final String AVATAR_REQUIRED = "Avatar file is required.";
@@ -352,6 +356,16 @@ public class Const {
         public static final String STUDENT_REMOVED = "Student removed from class successfully";
         public static final String STUDENTS_IMPORTED = "Students imported successfully";
         public static final String STUDENT_NOT_FOUND = "Student not found in class";
+        public static final String DUPLICATE_ID = "Duplicate user IDs found in request: %s";
+        public static final String STUDENT_LIMIT_EXCEEDED = "Cannot add more than %d students. Current: %d, Requested: %d";
+        public static final String USER_EXISTS = "User %d is already active in classes %s";
+        public static final String USER_ALREADY_ENROLLED = "Some students are already active in other classes: ";
+        public static final String USERS_ALREADY_ACTIVE_IN_CLASS = "Users %s are already active in the class";
+        public static final String ADD_STUDENT_SUCCESSFULLY = "Added %d student(s) to class '%s': %s";
+        public static final String REACTIVE_STUDENT_SUCCESSFULLY = "Re-activated %d student(s) in class '%s': %s";
+        public static final String REMOVE_STUDENT_SUCCESSFULLY = "Removed student '%s' from class '%s'";
+        public static final String IMPORT_STUDENT_SUCCESSFULLY = "Imported %d student(s) to class '%s' from Excel file";
+
     }
 
     public static class CLASS_TEACHER {
@@ -360,5 +374,13 @@ public class Const {
         public static final String LIST_RETRIEVED = "Teacher list retrieved successfully";
         public static final String PERFORMANCE_RETRIEVED = "Teacher performance report retrieved successfully";
         public static final String TEACHER_NOT_FOUND = "Teacher not found in class";
+        public static final String TEACHER_LIMIT_EXCEEDED= "Cannot add more than %d teacher with TEACHER role";
+        public static final String TEACHING_ASSISTANT_LIMIT_EXCEEDED= "Cannot add more than %d teacher with TEACHING ASSISTANT role";
+        public static final String TEACHER_EXISTED= "Class already has teacher";
+        public static final String ADD_TEACHER_SUCCESSFULLY = "Added %d teacher to class '%s': %s";
+        public static final String REACTIVE_TEACHER_SUCCESSFULLY = "Re-activated %d teacher in class '%s': %s";
+        public static final String ADD_TEACHING_ASSISTANT_SUCCESSFULLY = "Added %d teaching assistant(s) to class '%s': %s";
+        public static final String REACTIVE_TEACHING_ASSISTANT_SUCCESSFULLY = "Re-activated %d teaching assistant(s) in class '%s': %s";
+        public static final String REMOVE_TEACHER_SUCCESSFULLY = "Removed %s '%s' from class '%s'";
     }
 }

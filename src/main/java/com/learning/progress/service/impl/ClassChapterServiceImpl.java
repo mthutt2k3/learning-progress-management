@@ -200,7 +200,7 @@ public class ClassChapterServiceImpl implements ClassChapterService {
 
         if (actualNonDeletedCount != expectedNonDeletedCount) {
             throw new ApiException(
-                    String.format("Số lượng non-deleted chapters không khớp! Expected: %d, Actual: %d",
+                    String.format(Const.CHAPTER.CHAPTER_COUNT_MISMATCH,
                             expectedNonDeletedCount, actualNonDeletedCount),
                     HttpStatus.BAD_REQUEST.value()
             );
@@ -218,7 +218,8 @@ public class ClassChapterServiceImpl implements ClassChapterService {
         int nonDeletedSize = nonDeletedRequests.size();
         Set<Integer> expectedOrders = IntStream.rangeClosed(1, nonDeletedSize).boxed().collect(Collectors.toSet());
         if (orderNumbers.size() != nonDeletedSize || !orderNumbers.equals(expectedOrders)) {
-            throw new ApiException("Order numbers phải tuần tự từ 1 đến " + nonDeletedSize, HttpStatus.BAD_REQUEST.value());
+            throw new ApiException(String.format(Const.CHAPTER.ORDER_NUMBER_SEQUENCE_INVALID,
+                    nonDeletedSize), HttpStatus.BAD_REQUEST.value());
         }
 
         OffsetDateTime now = OffsetDateTime.now();
@@ -380,7 +381,7 @@ public class ClassChapterServiceImpl implements ClassChapterService {
                 file, "Import Data", ImportChapterInClassDTO.class);
 
         if (importList.isEmpty()) {
-            throw new ApiException("File không có dữ liệu để import", HttpStatus.BAD_REQUEST.value());
+            throw new ApiException(Const.FILE.EMPTY, HttpStatus.BAD_REQUEST.value());
         }
 
         List<ClassChapterDTO> result = new ArrayList<>();
@@ -536,7 +537,7 @@ public class ClassChapterServiceImpl implements ClassChapterService {
             result.setTotalRows(importList.size());
 
             if (importList.isEmpty()) {
-                throw new ApiException("File không có dữ liệu để import", HttpStatus.BAD_REQUEST.value());
+                throw new ApiException(Const.FILE.EMPTY, HttpStatus.BAD_REQUEST.value());
             }
         } catch (ApiException e) {
             result.setTotalRows(0);
