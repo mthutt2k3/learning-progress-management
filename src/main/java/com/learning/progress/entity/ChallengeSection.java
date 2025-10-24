@@ -45,5 +45,6 @@ public class ChallengeSection extends BaseEntity{
 
     @OneToMany(mappedBy = "section", fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
     @Where(clause = "deleted_at IS NULL")
+    @OrderBy("orderNumber ASC")
     private List<Question> questions = new ArrayList<>();
 }

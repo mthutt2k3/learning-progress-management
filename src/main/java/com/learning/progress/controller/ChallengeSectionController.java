@@ -25,7 +25,6 @@ public class ChallengeSectionController {
     @Autowired
     private ChallengeSectionService sectionService;
 
-
     @PostMapping("/{challengeId}")
     @PreAuthorize("hasRole('TEACHER')")
     @Operation(summary = "Save section", description = "Save section with questions for a specific challenge (ADMIN only)")
@@ -36,9 +35,9 @@ public class ChallengeSectionController {
         return new ResponseEntity<>(DataResponse.success(response, Const.RESULT_MESSAGE_CODE.CREATE_SUCCESSFUL), HttpStatus.CREATED);
     }
 
-    @PutMapping("/bulk/{challengeId}")
+    @PostMapping("/bulk/{challengeId}")
     @PreAuthorize("hasRole('TEACHER')")
-    @Operation(summary = "Sync and order sections",
+    @Operation(summary = "Delete or order sections",
             description = "Update/delete/reorder existing sections in one API call (TEACHER only)")
     public ResponseEntity<DataResponse<Void>> bulkSection(
             @Parameter(description = "Challenge ID") @PathVariable Long challengeId,
@@ -56,15 +55,6 @@ public class ChallengeSectionController {
         return new ResponseEntity<>(DataResponse.success(response, Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL), HttpStatus.OK);
     }
 
-    @DeleteMapping("/{id}")
-    @PreAuthorize("hasRole('TEACHER')")
-    @Operation(summary = "Delete section", description = "Delete a specific section (ADMIN or MANAGER)")
-    public ResponseEntity<DataResponse<Void>> deleteSection(
-            @PathVariable Long id) {
-        sectionService.deleteSection(id);
-        return new ResponseEntity<>(DataResponse.success(null, Const.RESULT_MESSAGE_CODE.DELETE_SUCCESSFUL), HttpStatus.OK);
-    }
-
     @GetMapping("/challenge/{challengeId}")
     @PreAuthorize("hasRole('TEACHER')")
     @Operation(summary = "List all sections for a challenge", description = "Retrieve a paginated list of sections for a specific challenge with optional filtering and sorting (ADMIN only)")
@@ -75,5 +65,16 @@ public class ChallengeSectionController {
             @RequestParam(required = false) String text) {
         DataResponse<List<SectionWithQuestionsDto>> response = sectionService.listSections(challengeId, page, size, text);
         return new ResponseEntity<>(response, HttpStatus.OK);
+    }
+
+    @PatchMapping("/questions/{questionId}/point")
+    @PreAuthorize("hasRole('TEACHER')")
+    @Operation(summary = "Update question point",
+            description = "Update the score (point) of a specific question inside a section (TEACHER only)")
+    public ResponseEntity<DataResponse<Void>> updateScoreQuestion(
+            @Parameter(description = "Question ID") @PathVariable Long questionId,
+            @RequestParam double score) {
+        sectionService.updateScoreQuestion(questionId, score);
+        return ResponseEntity.ok(DataResponse.success(null, Const.RESULT_MESSAGE_CODE.UPDATE_SUCCESSFUL));
     }
 }
