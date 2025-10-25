@@ -25,7 +25,7 @@ public class QuestionDto {
     @NotBlank(message = Const.QUESTION.TYPE_REQUIRED, groups = NotDeleted.class)
     private String questionType;
     @NotNull(message = Const.QUESTION.CONTENT_REQUIRED, groups = NotDeleted.class)
-    private QuestionContent content;
+    private DataContent content;
     private boolean toBeDeleted;
 
     public interface NotDeleted {}
