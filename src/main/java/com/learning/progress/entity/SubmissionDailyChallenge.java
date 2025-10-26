@@ -14,6 +14,8 @@ import org.hibernate.annotations.OnDeleteAction;
 import org.hibernate.type.SqlTypes;
 
 import java.time.OffsetDateTime;
+import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 
 @SuperBuilder
@@ -61,6 +63,6 @@ public class SubmissionDailyChallenge extends BaseEntity{
     @Column(name = "submission_status", nullable = false)
     private SubmissionStatus submissionStatus = SubmissionStatus.PENDING;
 
-
-
+    @OneToMany(mappedBy = "submissionDaily", fetch = FetchType.LAZY, cascade = CascadeType.ALL)
+    private List<GradingDailyChallenge> gradingDailyChallenges;
 }
