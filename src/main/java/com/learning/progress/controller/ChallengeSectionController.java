@@ -57,7 +57,7 @@ public class ChallengeSectionController {
     }
 
     @GetMapping("/challenge/{challengeId}")
-    @PreAuthorize("hasRole('TEACHER') or hasRole('TEACHING_ASSISTANT') or hasRole('STUDENT') or hasRole('TEST_TAKER') or hasRole('MANAGER')")
+    @PreAuthorize("hasRole('TEACHER') or hasRole('TEACHING_ASSISTANT') or hasRole('MANAGER')")
     @Operation(summary = "List all sections for a challenge", description = "Retrieve a paginated list of sections for a specific challenge with optional filtering and sorting")
     public ResponseEntity<DataResponse<List<SectionWithQuestionsDto>>> listSections(
             @PathVariable Long challengeId,
