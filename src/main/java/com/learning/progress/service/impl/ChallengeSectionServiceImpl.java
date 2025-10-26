@@ -14,6 +14,7 @@ import com.learning.progress.exception.ApiException;
 import com.learning.progress.mapper.ChallengeSectionMapper;
 import com.learning.progress.repository.ChallengeSectionRepository;
 import com.learning.progress.repository.DailyChallengeRepository;
+import com.learning.progress.repository.QuestionRepository;
 import com.learning.progress.service.ChallengeSectionService;
 import com.learning.progress.service.QuestionService;
 import com.learning.progress.util.AppValidator;
@@ -46,6 +47,7 @@ public class ChallengeSectionServiceImpl implements ChallengeSectionService {
     private final AppValidator appValidator;
     private final JwtUtil jwtUtil;
     private final Validator validator;
+    private final QuestionRepository questionRepository;
 
     public ChallengeSectionServiceImpl(
             ChallengeSectionRepository sectionRepository,
@@ -54,7 +56,7 @@ public class ChallengeSectionServiceImpl implements ChallengeSectionService {
             ChallengeSectionMapper challengeSectionMapper,
             AppValidator appValidator,
             JwtUtil jwtUtil,
-            Validator validator) {
+            Validator validator, QuestionRepository questionRepository) {
         this.sectionRepository = sectionRepository;
         this.challengeRepository = challengeRepository;
         this.questionService = questionService;
@@ -62,10 +64,16 @@ public class ChallengeSectionServiceImpl implements ChallengeSectionService {
         this.appValidator = appValidator;
         this.jwtUtil = jwtUtil;
         this.validator = validator;
+        this.questionRepository = questionRepository;
     }
 
     @Override
     public void updateScoreQuestion(Long questionId, double score) {
+        String traceId = TraceUtil.getTraceId();
+        log.info("[{}] Update score question: {}", traceId, questionId);
+        Question question = questionRepository.findByIdAndDeletedAtIsNull(questionId)
+                .orElseThrow(() -> new ApiException("Question not found", HttpStatus.NOT_FOUND.value()));
+        validateUserAccessToClass(question.getSection().getChallenge().getClassLesson().getClassChapter().getClazz().getId(), traceId);
         questionService.updateScoreQuestion(questionId, score);
     }
 
@@ -109,6 +117,9 @@ public class ChallengeSectionServiceImpl implements ChallengeSectionService {
         appValidator.validatePaginationParams(page, size);
         validateChallengeExists(challengeId, traceId);
 
+        DailyChallenge challenge = validateChallengeExists(challengeId, traceId);
+        validateUserAccessToClass(challenge.getClassLesson().getClassChapter().getClazz().getId(), traceId);
+
         Pageable pageable = PageRequest.of(page, size);
         Page<ChallengeSection> sectionPage = sectionRepository.findByChallengeIdAndTextAndDeletedAtIsNull(
                 challengeId, StringUtils.defaultString(text), pageable);
@@ -142,6 +153,7 @@ public class ChallengeSectionServiceImpl implements ChallengeSectionService {
 
         validateChallengeExists(challengeId, traceId);
         List<ChallengeSection> existingSections = loadExistingSections(challengeId, traceId);
+        validateUserAccessToClass(existingSections.get(0).getChallenge().getClassLesson().getClassChapter().getClazz().getId(), traceId);
 
         List<QuickBulkSectionRequest> deleteRequests = filterDeleteRequests(dtos);
         List<QuickBulkSectionRequest> nonDeletedRequests = filterNonDeletedRequests(dtos);

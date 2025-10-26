@@ -47,7 +47,7 @@ public class ChallengeSectionController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasRole('TEACHER')")
+    @PreAuthorize("hasRole('TEACHER') or hasRole('TEACHING_ASSISTANT') or hasRole('STUDENT') or hasRole('TEST_TAKER') or hasRole('MANAGER')")
     @Operation(summary = "Get section by ID", description = "Retrieve a specific section with its questions (ADMIN only)")
     public ResponseEntity<DataResponse<SectionWithQuestionsDto>> getSection(
             @PathVariable Long id) {
@@ -56,7 +56,7 @@ public class ChallengeSectionController {
     }
 
     @GetMapping("/challenge/{challengeId}")
-    @PreAuthorize("hasRole('TEACHER')")
+    @PreAuthorize("hasRole('TEACHER') or hasRole('TEACHING_ASSISTANT') or hasRole('STUDENT') or hasRole('TEST_TAKER') or hasRole('MANAGER')")
     @Operation(summary = "List all sections for a challenge", description = "Retrieve a paginated list of sections for a specific challenge with optional filtering and sorting (ADMIN only)")
     public ResponseEntity<DataResponse<List<SectionWithQuestionsDto>>> listSections(
             @PathVariable Long challengeId,
