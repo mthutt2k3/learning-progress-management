@@ -11,6 +11,7 @@ public class Const {
         public static final String regexPass = "^[A-Za-z0-9]{6,20}$";
         public static final String regexGender = "MALE|FEMALE|OTHER";
         public static final String regexDate = "yyyy-MM-dd";
+        public static final String regexValidateRearrange = "^\\s*(\\[\\[pos_[A-Za-z0-9]{1,10}]]\\s*)+$";
     }
 
     public static class QUESTION {
