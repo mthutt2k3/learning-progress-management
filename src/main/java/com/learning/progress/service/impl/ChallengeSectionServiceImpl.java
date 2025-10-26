@@ -3,10 +3,7 @@ package com.learning.progress.service.impl;
 import com.learning.progress.common.Const;
 import com.learning.progress.common.ResourceType;
 import com.learning.progress.dto.DataResponse;
-import com.learning.progress.dto.challenge.section.QuickBulkSectionRequest;
-import com.learning.progress.dto.challenge.section.SectionDto;
-import com.learning.progress.dto.challenge.section.QuestionDto;
-import com.learning.progress.dto.challenge.section.SectionWithQuestionsDto;
+import com.learning.progress.dto.challenge.section.*;
 import com.learning.progress.entity.ChallengeSection;
 import com.learning.progress.entity.DailyChallenge;
 import com.learning.progress.entity.Question;
@@ -142,6 +139,27 @@ public class ChallengeSectionServiceImpl implements ChallengeSectionService {
                 .size(size)
                 .totalElements(sectionPage.getTotalElements())
                 .totalPages(sectionPage.getTotalPages())
+                .build();
+    }
+
+    @Override
+    public DataResponse<List<StudentSectionWithQuestionsDto>> listSectionsWithoutAnswers(Long challengeId, int page, int size, String text) {
+        DataResponse<List<SectionWithQuestionsDto>> fullResponse = listSections(challengeId, page, size, text);
+
+        List<StudentSectionWithQuestionsDto> sectionWithQuestionsDtos = fullResponse.getData().stream()
+                .map(challengeSectionMapper::toStudentSectionWithQuestionsDto)
+                .collect(Collectors.toList());
+
+        return DataResponse.<List<StudentSectionWithQuestionsDto>>builder()
+                .traceId(TraceUtil.getTraceId())
+                .success(true)
+                .message(Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL)
+                .data(sectionWithQuestionsDtos)
+                .timestamp(LocalDateTime.now())
+                .page(page)
+                .size(size)
+                .totalElements(fullResponse.getTotalElements())
+                .totalPages(fullResponse.getTotalPages())
                 .build();
     }
 
