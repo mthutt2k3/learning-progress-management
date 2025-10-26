@@ -16,6 +16,7 @@ import com.learning.progress.repository.ClassLessonRepository;
 import com.learning.progress.repository.ClassRepository;
 import com.learning.progress.repository.DailyChallengeRepository;
 import com.learning.progress.service.DailyChallengeService;
+import com.learning.progress.service.SubmissionChallengeService;
 import com.learning.progress.util.AppValidator;
 import com.learning.progress.util.JwtUtil;
 import com.learning.progress.util.TraceUtil;
@@ -48,6 +49,9 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
 
     @Autowired
     private DailyChallengeRepository dailyChallengeRepository;
+
+    @Autowired
+    private SubmissionChallengeService submissionChallengeService;
 
     @Autowired
     private DailyChallengeMapper dailyChallengeMapper;
@@ -197,6 +201,7 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
     }
 
     @Override
+    @Transactional
     public DailyChallengeResponse updateChallengeStatus(Long id, ChallengeStatus challengeStatus) {
         String traceId = TraceUtil.getTraceId();
         log.info("[{}] Updating daily challenge with id: {}", traceId, id);
@@ -222,10 +227,13 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
         // Update fields
         challenge.setChallengeStatus(challengeStatus);
 
+        // If status is PUBLISHED, create temporary submissions asynchronously
+        submissionChallengeService.createTemporarySubmissionsAsync(challenge);
         // Save updates
         challenge = dailyChallengeRepository.save(challenge);
         log.info("[{}] Successfully updated daily challenge with id: {}", traceId, id);
 
         return dailyChallengeMapper.mapToDTO(challenge);
     }
+
 }

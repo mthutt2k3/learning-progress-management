@@ -54,7 +54,7 @@ public interface ChallengeSectionMapper {
     }
 
     default Object map(Map<String, Object> map) {
-        return JsonUtil.responseToObject(map, Object.class); // hoặc QuestionContent.class nếu có
+        return JsonUtil.responseToObject(map, Object.class); // hoặc DataContent.class nếu có
     }
     // Chuyển Object (thường là List hoặc Map) sang List<DataItem>
     default List<DataItem> mapToDataItemList(Object value) {

@@ -3,10 +3,7 @@ package com.learning.progress.entity;
 import com.learning.progress.common.ChallengeStatus;
 import com.learning.progress.common.ChallengeType;
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.*;
 import lombok.experimental.SuperBuilder;
 import org.hibernate.annotations.ColumnDefault;
 import org.hibernate.annotations.OnDelete;
@@ -62,6 +59,7 @@ public class DailyChallenge extends BaseEntity{
     @Column(name = "challenge_type", nullable = false)
     private ChallengeType challengeType;
 
+    @Builder.Default
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
     private ChallengeStatus challengeStatus = ChallengeStatus.DRAFT;

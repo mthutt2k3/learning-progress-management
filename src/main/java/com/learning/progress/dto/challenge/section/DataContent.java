@@ -11,6 +11,6 @@ import java.util.List;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-public class QuestionContent {
+public class DataContent {
     private List<DataItem> data; // Danh sách các lựa chọn hoặc câu trả lời
 }
