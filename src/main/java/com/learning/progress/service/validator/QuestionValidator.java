@@ -25,10 +25,7 @@ public class QuestionValidator {
     private static final Set<QuestionType> QUESTION_TYPES_WITH_POSITION_ORDER = Set.of(
             QuestionType.MULTIPLE_CHOICE,
             QuestionType.MULTIPLE_SELECT,
-            QuestionType.TRUE_OR_FALSE,
-            QuestionType.DROPDOWN,
-            QuestionType.DRAG_AND_DROP,
-            QuestionType.REARRANGE
+            QuestionType.TRUE_OR_FALSE
     );
 
     private static final Set<QuestionType> QUESTION_TYPES_WITH_POSITION_ID = Set.of(
@@ -110,6 +107,10 @@ public class QuestionValidator {
             validatePositionOrder(dataItems, questionType, traceId);
         }
 
+        if (QUESTION_TYPES_WITH_POSITION_ID.contains(questionType) && !dataItems.isEmpty()) {
+            validatePositionOrderByPosisionId(dto, dataItems, questionType, traceId);
+        }
+
         switch (questionType) {
             case MULTIPLE_CHOICE:
                 validateMultipleChoice(dataItems, traceId);
@@ -158,6 +159,58 @@ public class QuestionValidator {
             );
         }
     }
+
+    private void validatePositionOrderByPosisionId(QuestionDto dto, List<DataItem> dataItems, QuestionType questionType, String traceId) {
+        // 1️⃣ Lấy tất cả placeholder từ questionText
+        Set<String> placeholders = extractPlaceholders(dto.getQuestionText(), traceId);
+
+        if (placeholders.isEmpty()) {
+            log.error("[{}] No placeholders found in question text for {}", traceId, questionType);
+            throw new ApiException("No placeholders found in question text", HttpStatus.BAD_REQUEST.value());
+        }
+
+        // 2️⃣ Gom dataItems theo positionId (VD: "1", "2", "A", ...)
+        Map<String, List<DataItem>> groupedByPos = dataItems.stream()
+                .filter(item -> item.getPositionId() != null)
+                .collect(Collectors.groupingBy(DataItem::getPositionId));
+
+        // 3️⃣ Validate từng placeholder theo group riêng
+        for (String placeholder : placeholders) {
+            // Loại bỏ prefix "pos_" nếu có
+            String cleanPos = placeholder.startsWith("pos_") ? placeholder.substring(4) : placeholder;
+
+            List<DataItem> itemsForPos = groupedByPos.get(cleanPos);
+            if (itemsForPos == null || itemsForPos.isEmpty()) {
+                String msg = String.format("No data items found for placeholder %s", placeholder);
+                log.error("[{}] {}", traceId, msg);
+                throw new ApiException(msg, HttpStatus.BAD_REQUEST.value());
+            }
+
+            // 4️⃣ Lấy toàn bộ positionOrder cho pos đó
+            Set<Integer> orders = itemsForPos.stream()
+                    .map(DataItem::getPositionOrder)
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toSet());
+
+            int expectedSize = itemsForPos.size();
+            Set<Integer> expectedOrders = IntStream.rangeClosed(1, expectedSize)
+                    .boxed()
+                    .collect(Collectors.toSet());
+
+            // 5️⃣ So sánh — nếu không khớp thì báo lỗi chi tiết
+            if (orders.size() != expectedSize || !orders.equals(expectedOrders)) {
+                String msg = String.format(
+                        "Invalid position order for placeholder %s (expected 1-%d, found %s)",
+                        placeholder, expectedSize, orders
+                );
+                log.error("[{}] {}", traceId, msg);
+                throw new ApiException(msg, HttpStatus.BAD_REQUEST.value());
+            }
+        }
+
+        log.info("[{}] Position orders validated successfully for {}", traceId, questionType);
+    }
+
 
     private void validateMultipleChoice(List<DataItem> dataItems, String traceId) {
         long correctCount = dataItems.stream().filter(DataItem::isCorrect).count();
@@ -208,6 +261,8 @@ public class QuestionValidator {
             throw new ApiException("FILL_IN_THE_BLANK must have at least one placeholder", HttpStatus.BAD_REQUEST.value());
         }
 
+        validatePlaceHolder(traceId, dto, placeholders);
+
         Set<String> dataPositionIds = dataItems.stream()
                 .map(DataItem::getPositionId)
                 .filter(Objects::nonNull)
@@ -222,10 +277,19 @@ public class QuestionValidator {
             }
         }
 
-        long correctCount = dataItems.stream().filter(DataItem::isCorrect).count();
-        if (correctCount != placeholders.size()) {
-            log.error("[{}] FILL_IN_THE_BLANK must have exactly one correct answer per placeholder. Expected: {}, Found: {}", traceId, placeholders.size(), correctCount);
-            throw new ApiException("FILL_IN_THE_BLANK must have exactly one correct answer per placeholder", HttpStatus.BAD_REQUEST.value());
+        Map<String, List<DataItem>> groupedByPos = dataItems.stream()
+                .collect(Collectors.groupingBy(DataItem::getPositionId));
+
+        for (String placeholder : placeholders) {
+            String cleanPlaceholder = placeholder.substring(4);
+            List<DataItem> itemsForPos = groupedByPos.getOrDefault(cleanPlaceholder, Collections.emptyList());
+
+            long correctCount = itemsForPos.stream().filter(DataItem::isCorrect).count();
+            if (correctCount == 0) {
+                String msg = String.format("FILL_IN_THE_BLANK: Placeholder '%s' must have at least one correct answer", placeholder);
+                log.error("[{}] {}", traceId, msg);
+                throw new ApiException(msg, HttpStatus.BAD_REQUEST.value());
+            }
         }
     }
 
@@ -235,6 +299,8 @@ public class QuestionValidator {
             log.error("[{}] DROPDOWN must have at least one placeholder", traceId);
             throw new ApiException("DROPDOWN must have at least one placeholder", HttpStatus.BAD_REQUEST.value());
         }
+
+        validatePlaceHolder(traceId, dto, placeholders);
 
         Map<String, List<DataItem>> itemsByPositionId = dataItems.stream()
                 .filter(item -> item.getPositionId() != null)
@@ -261,6 +327,8 @@ public class QuestionValidator {
             log.error("[{}] DRAG_AND_DROP must have at least one placeholder", traceId);
             throw new ApiException("DRAG_AND_DROP must have at least one placeholder", HttpStatus.BAD_REQUEST.value());
         }
+
+        validatePlaceHolder(traceId, dto, placeholders);
 
         Map<String, List<DataItem>> itemsByPositionId = dataItems.stream()
                 .filter(item -> item.getPositionId() != null)
@@ -300,24 +368,45 @@ public class QuestionValidator {
             throw new ApiException("REARRANGE must have at least one placeholder", HttpStatus.BAD_REQUEST.value());
         }
 
-        long correctCount = dataItems.stream().filter(DataItem::isCorrect).count();
-        if (correctCount != placeholders.size()) {
-            log.error("[{}] REARRANGE must have exactly one correct answer per placeholder. Expected: {}, Found: {}", traceId, placeholders.size(), correctCount);
-            throw new ApiException("REARRANGE must have exactly one correct answer per placeholder", HttpStatus.BAD_REQUEST.value());
+        validatePlaceHolder(traceId, dto, placeholders);
+
+        boolean hasFalse = dataItems.stream().anyMatch(item -> !item.isCorrect());
+        if (hasFalse) {
+            log.error("[{}] REARRANGE data must not contain any false answers", traceId);
+            throw new ApiException("REARRANGE data must not contain any false answers", HttpStatus.BAD_REQUEST.value());
         }
 
-        Set<String> dataPositionIds = dataItems.stream()
-                .map(DataItem::getPositionId)
-                .filter(Objects::nonNull)
-                .collect(Collectors.toSet());
+        // ✅ Mỗi placeholder phải có đúng 1 item, và item đó phải là correct
+        Map<String, List<DataItem>> groupedByPos = dataItems.stream()
+                .collect(Collectors.groupingBy(DataItem::getPositionId));
 
         for (String placeholder : placeholders) {
             String cleanPlaceholder = placeholder.startsWith("pos_") ? placeholder.substring(4) : placeholder;
-            if (!dataPositionIds.contains(cleanPlaceholder)) {
-                String msg = String.format("REARRANGE: Missing positionId for placeholder: %s", placeholder);
+            List<DataItem> items = groupedByPos.getOrDefault(cleanPlaceholder, Collections.emptyList());
+
+            if (items.isEmpty()) {
+                String msg = String.format("REARRANGE: Missing data for placeholder: %s", placeholder);
                 log.error("[{}] {}", traceId, msg);
                 throw new ApiException(msg, HttpStatus.BAD_REQUEST.value());
             }
+
+            if (items.size() > 1) {
+                String msg = String.format("REARRANGE: Placeholder '%s' must have exactly one data item", placeholder);
+                log.error("[{}] {}", traceId, msg);
+                throw new ApiException(msg, HttpStatus.BAD_REQUEST.value());
+            }
+
+            DataItem item = items.get(0);
+            if (!item.isCorrect()) {
+                String msg = String.format("REARRANGE: Placeholder '%s' must have correct = true", placeholder);
+                log.error("[{}] {}", traceId, msg);
+                throw new ApiException(msg, HttpStatus.BAD_REQUEST.value());
+            }
+        }
+
+        if (dataItems.size() != placeholders.size()) {
+            log.error("[{}] REARRANGE dataItems count mismatch. Expected: {}, Found: {}", traceId, placeholders.size(), dataItems.size());
+            throw new ApiException("REARRANGE must have exactly one data item per placeholder", HttpStatus.BAD_REQUEST.value());
         }
     }
 
@@ -338,4 +427,58 @@ public class QuestionValidator {
         log.debug("[{}] Extracted placeholders: {}", traceId, placeholders);
         return placeholders;
     }
+
+    private static void validatePlaceHolder(String traceId, QuestionDto dto, Set<String> placeholders) {
+        String questionText = dto.getQuestionText();
+        if (questionText == null || questionText.isBlank()) {
+            String msg = "Question text cannot be null or blank when validating placeholders";
+            log.error("[{}] {}", traceId, msg);
+            throw new ApiException(msg, HttpStatus.BAD_REQUEST.value());
+        }
+
+        if (placeholders == null || placeholders.isEmpty()) {
+            String msg = "No placeholders found in question text";
+            log.error("[{}] {}", traceId, msg);
+            throw new ApiException(msg, HttpStatus.BAD_REQUEST.value());
+        }
+
+        Set<String> seen = new HashSet<>();
+
+        for (String placeholder : placeholders) {
+            // 1️⃣ Kiểm tra format
+            if (!placeholder.startsWith("pos_")) {
+                String msg = String.format("REARRANGE: Invalid placeholder format '%s'. Must start with 'pos_'", placeholder);
+                log.error("[{}] {}", traceId, msg);
+                throw new ApiException(msg, HttpStatus.BAD_REQUEST.value());
+            }
+
+            // 2️⃣ Check trùng trong danh sách placeholders
+            if (!seen.add(placeholder)) {
+                String msg = String.format("REARRANGE: Duplicate placeholder detected: '%s'", placeholder);
+                log.error("[{}] {}", traceId, msg);
+                throw new ApiException(msg, HttpStatus.BAD_REQUEST.value());
+            }
+
+            // 3️⃣ Check số lần xuất hiện trong questionText
+            int count = countOccurrences(questionText, "[[" + placeholder + "]]");
+            if (count > 1) {
+                String msg = String.format("REARRANGE: Placeholder '%s' appears %d times in question text (should appear once)", placeholder, count);
+                log.error("[{}] {}", traceId, msg);
+                throw new ApiException(msg, HttpStatus.BAD_REQUEST.value());
+            }
+        }
+
+        log.info("[{}] Placeholders validated successfully for dto.id={}: {}", traceId, dto.getId(), placeholders);
+    }
+
+    private static int countOccurrences(String text, String substring) {
+        int count = 0;
+        int index = 0;
+        while ((index = text.indexOf(substring, index)) != -1) {
+            count++;
+            index += substring.length();
+        }
+        return count;
+    }
+
 }
