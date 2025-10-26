@@ -102,11 +102,6 @@ public class QuestionValidator {
             }
         }
 
-        // Validate positionOrder for applicable question types
-        if (QUESTION_TYPES_WITH_POSITION_ORDER.contains(questionType) && !dataItems.isEmpty()) {
-            validatePositionOrder(dataItems, questionType, traceId);
-        }
-
         if (QUESTION_TYPES_WITH_POSITION_ID.contains(questionType) && !dataItems.isEmpty()) {
             validatePositionOrderByPosisionId(dto, dataItems, questionType, traceId);
         }
@@ -136,27 +131,12 @@ public class QuestionValidator {
             case REWRITE:
                 validateRewrite(dataItems, traceId);
                 break;
+            case WRITING:
+                break;
+
             default:
                 log.error("[{}] Invalid question type: {}", traceId, questionType);
                 throw new ApiException("Invalid question type: " + questionType, HttpStatus.BAD_REQUEST.value());
-        }
-    }
-
-    private void validatePositionOrder(List<DataItem> dataItems, QuestionType questionType, String traceId) {
-        Set<Integer> positionOrders = dataItems.stream()
-                .map(DataItem::getPositionOrder)
-                .filter(Objects::nonNull)
-                .collect(Collectors.toSet());
-
-        int expectedSize = dataItems.size();
-        Set<Integer> expectedOrders = IntStream.rangeClosed(1, expectedSize).boxed().collect(Collectors.toSet());
-
-        if (positionOrders.size() != expectedSize || !positionOrders.equals(expectedOrders)) {
-            log.error("[{}] Position orders must be sequential from 1 to {} for {}. Found: {}", traceId, expectedSize, questionType, positionOrders);
-            throw new ApiException(
-                    String.format("Position orders must be sequential from 1 to %d for %s. Found: %s", expectedSize, questionType, positionOrders),
-                    HttpStatus.BAD_REQUEST.value()
-            );
         }
     }
 
@@ -182,27 +162,6 @@ public class QuestionValidator {
             List<DataItem> itemsForPos = groupedByPos.get(cleanPos);
             if (itemsForPos == null || itemsForPos.isEmpty()) {
                 String msg = String.format("No data items found for placeholder %s", placeholder);
-                log.error("[{}] {}", traceId, msg);
-                throw new ApiException(msg, HttpStatus.BAD_REQUEST.value());
-            }
-
-            // 4️⃣ Lấy toàn bộ positionOrder cho pos đó
-            Set<Integer> orders = itemsForPos.stream()
-                    .map(DataItem::getPositionOrder)
-                    .filter(Objects::nonNull)
-                    .collect(Collectors.toSet());
-
-            int expectedSize = itemsForPos.size();
-            Set<Integer> expectedOrders = IntStream.rangeClosed(1, expectedSize)
-                    .boxed()
-                    .collect(Collectors.toSet());
-
-            // 5️⃣ So sánh — nếu không khớp thì báo lỗi chi tiết
-            if (orders.size() != expectedSize || !orders.equals(expectedOrders)) {
-                String msg = String.format(
-                        "Invalid position order for placeholder %s (expected 1-%d, found %s)",
-                        placeholder, expectedSize, orders
-                );
                 log.error("[{}] {}", traceId, msg);
                 throw new ApiException(msg, HttpStatus.BAD_REQUEST.value());
             }
