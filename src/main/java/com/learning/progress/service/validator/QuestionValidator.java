@@ -69,12 +69,6 @@ public class QuestionValidator {
             throw new ApiException("Invalid question type: " + dto.getQuestionType(), HttpStatus.BAD_REQUEST.value());
         }
 
-        // Validate content presence for types that require it
-        if (dto.getContent() != null && dto.getContent().getData() != null && !dto.getContent().getData().isEmpty()) {
-            log.error("[{}] {} questions should not have content data", traceId, questionType);
-            throw new ApiException(questionType + " questions should not have content data", HttpStatus.BAD_REQUEST.value());
-        }
-
         validateByQuestionType(dto, questionType);
     }
 
