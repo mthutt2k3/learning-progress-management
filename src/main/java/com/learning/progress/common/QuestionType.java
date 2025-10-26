@@ -8,5 +8,6 @@ public enum QuestionType {
     DROPDOWN,
     DRAG_AND_DROP,
     REARRANGE,
-    REWRITE
+    REWRITE,
+    WRITING
 }
