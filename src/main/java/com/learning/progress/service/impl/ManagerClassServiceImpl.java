@@ -203,7 +203,13 @@ public class ManagerClassServiceImpl implements ClassServiceStrategy {
             classChapter.setClazz(savedClass);
             classChapter.setClassChapterName(chapter.getChapterName());
             classChapter.setOrderNumber(chapter.getOrderNumber());
-            classChapters.add(classChapterRepository.save(classChapter));
+
+            ClassChapter saved = classChapterRepository.saveAndFlush(classChapter);
+            String chapterCode = DataUtil.generateClassChapterCode(saved.getId(), saved.getClazz().getId());
+            saved.setClassChapterCode(chapterCode);
+            saved = classChapterRepository.save(saved);
+
+            classChapters.add(saved);
 
             // Copy lessons
             List<Lesson> lessons = lessonRepository.findByChapterIdAndDeletedAtIsNullOrderByOrderNumberAsc(chapter.getId());
