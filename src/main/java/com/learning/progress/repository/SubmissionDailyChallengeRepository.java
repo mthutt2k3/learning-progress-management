@@ -4,6 +4,7 @@ import com.learning.progress.common.SubmissionStatus;
 import com.learning.progress.entity.SubmissionDailyChallenge;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.util.Collection;
 import java.util.List;
@@ -25,8 +26,21 @@ public interface SubmissionDailyChallengeRepository extends JpaRepository<Submis
      */
     Optional<SubmissionDailyChallenge> findByUserIdAndChallengeIdAndDeletedAtIsNull(Long userId, Long challengeId);
 
-    /**
-     * Find all SubmissionDailyChallenge with PENDING status and deletedAt is null.
-     */
-    List<SubmissionDailyChallenge> findBySubmissionStatusAndDeletedAtIsNull(SubmissionStatus submissionStatus);
+    @Query("""
+        SELECT sdc
+        FROM SubmissionDailyChallenge sdc
+        LEFT JOIN FETCH sdc.gradingDailyChallenges g
+        WHERE sdc.challenge.id IN :challengeIds
+          AND sdc.user.id = :userId
+          AND sdc.submittedAt = (
+              SELECT MAX(s.submittedAt)
+              FROM SubmissionDailyChallenge s
+              WHERE s.challenge.id = sdc.challenge.id
+                AND s.user.id = :userId
+          )
+    """)
+    List<SubmissionDailyChallenge> findLatestByChallengeIdInAndUserId(
+            @Param("challengeIds") Collection<Long> challengeIds,
+            @Param("userId") Long userId
+    );
 }

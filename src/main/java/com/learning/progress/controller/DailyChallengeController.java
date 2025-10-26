@@ -36,7 +36,7 @@ public class DailyChallengeController {
     }
 
     @GetMapping("/class/{classId}")
-    @PreAuthorize("hasAnyRole('TEACHER', 'TEACHING_ASSISTANT','STUDENT','TEST_TAKER')")
+    @PreAuthorize("hasAnyRole('TEACHER', 'TEACHING_ASSISTANT')")
     @Operation(summary = "List all daily challenges", description = "Retrieve a paginated list of daily challenges with optional filtering and sorting")
     public ResponseEntity<DataResponse<List<DailyChallengeListDTO>>> getAllChallenges(
             @PathVariable Long classId,

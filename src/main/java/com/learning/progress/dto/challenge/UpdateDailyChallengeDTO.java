@@ -22,18 +22,20 @@ public class UpdateDailyChallengeDTO {
     private ChallengeType challengeType;
 
     @Positive(message = "Duration must be positive")
-    private Integer durationMinutes;
+    private Integer durationMinutes = 90;
 
-    private Boolean hasAntiCheat;
+    private Boolean hasAntiCheat = true;
 
-    private Boolean shuffleAnswers;
+    private Boolean shuffleAnswers = true;
 
-    private Boolean translateOnScreen;
+    private Boolean translateOnScreen = false;
 
-    private Boolean aiFeedbackEnabled;
+    private Boolean aiFeedbackEnabled = false;
 
+    @NotNull(message = "Start date cannot be empty")
     private OffsetDateTime startDate;
 
+    @NotNull(message = "End date cannot be empty")
     private OffsetDateTime endDate;
 
 }
