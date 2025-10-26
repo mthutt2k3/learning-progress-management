@@ -75,6 +75,11 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
         // Map request to entity
         DailyChallenge challenge = dailyChallengeMapper.mapToEntity(request);
         challenge.setClassLesson(classLesson);
+        challenge.setChallengeStatus(ChallengeStatus.DRAFT);
+        challenge.setAiFeedbackEnabled(false);
+        challenge.setHasAntiCheat(false);
+        challenge.setTranslateOnScreen(false);
+        challenge.setShuffleAnswers(true);
 
         // Save challenge
         challenge = dailyChallengeRepository.save(challenge);
@@ -158,6 +163,8 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
                     return new ApiException(Const.CHALLENGE.NOT_FOUND, HttpStatus.NOT_FOUND.value());
                 });
 
+        appValidator.validateUserAccessToClass(challenge.getClassLesson().getClassChapter().getClazz().getId());
+
         // Update fields
         BeanUtils.copyProperties(dto, challenge);
 
@@ -180,6 +187,7 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
                     log.error("[{}] Daily challenge not found for id: {}", traceId, id);
                     return new ApiException(Const.CHALLENGE.NOT_FOUND, HttpStatus.NOT_FOUND.value());
                 });
+        appValidator.validateUserAccessToClass(challenge.getClassLesson().getClassChapter().getClazz().getId());
 
         // Soft delete
         challenge.setDeletedBy(jwtUtil.extractEmailPrefixFromCurrentRequest());
@@ -199,6 +207,8 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
                     log.error("[{}] Daily challenge not found for id: {}", traceId, id);
                     return new ApiException(Const.CHALLENGE.NOT_FOUND, HttpStatus.NOT_FOUND.value());
                 });
+
+        appValidator.validateUserAccessToClass(challenge.getClassLesson().getClassChapter().getClazz().getId());
 
         if (challenge.getChallengeStatus() == ChallengeStatus.PUBLISHED
                 && challengeStatus == ChallengeStatus.DRAFT) {

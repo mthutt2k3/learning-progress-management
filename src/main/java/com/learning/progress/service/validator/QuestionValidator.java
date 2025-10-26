@@ -105,6 +105,19 @@ public class QuestionValidator {
         String traceId = TraceUtil.getTraceId();
         List<DataItem> dataItems = dto.getContent() != null ? dto.getContent().getData() : Collections.emptyList();
 
+        Set<String> seenIds = new HashSet<>();
+        for (DataItem item : dataItems) {
+            if (item.getId() != null && !item.getId().isBlank()) {
+                if (!seenIds.add(item.getId())) {
+                    log.error("[{}] Duplicate data item id '{}' found in question {}", traceId, item.getId(), dto.getId());
+                    throw new ApiException(
+                            String.format("Duplicate data item id '%s' found in question %d", item.getId(), dto.getId()),
+                            HttpStatus.BAD_REQUEST.value()
+                    );
+                }
+            }
+        }
+
         // Validate positionOrder for applicable question types
         if (QUESTION_TYPES_WITH_POSITION_ORDER.contains(questionType) && !dataItems.isEmpty()) {
             validatePositionOrder(dataItems, questionType, traceId);
