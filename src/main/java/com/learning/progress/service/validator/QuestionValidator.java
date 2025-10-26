@@ -3,7 +3,7 @@ package com.learning.progress.service.validator;
 import com.learning.progress.common.Const;
 import com.learning.progress.common.QuestionType;
 import com.learning.progress.dto.challenge.section.DataItem;
-import com.learning.progress.dto.challenge.section.QuestionContent;
+import com.learning.progress.dto.challenge.section.DataContent;
 import com.learning.progress.dto.challenge.section.QuestionDto;
 import com.learning.progress.exception.ApiException;
 import com.learning.progress.util.TraceUtil;
@@ -38,11 +38,6 @@ public class QuestionValidator {
             QuestionType.REARRANGE
     );
 
-    private static final Set<QuestionType> QUESTION_TYPES_WITHOUT_CONTENT = Set.of(
-            QuestionType.PASSAGE,
-            QuestionType.IMPORT_FILE,
-            QuestionType.RECORDING
-    );
 
     public void validateQuestionDto(QuestionDto dto) {
         String traceId = TraceUtil.getTraceId();
@@ -75,9 +70,7 @@ public class QuestionValidator {
         }
 
         // Validate content presence for types that require it
-        if (!QUESTION_TYPES_WITHOUT_CONTENT.contains(questionType)) {
-            validateQuestionContent(dto.getContent(), traceId);
-        } else if (dto.getContent() != null && dto.getContent().getData() != null && !dto.getContent().getData().isEmpty()) {
+        if (dto.getContent() != null && dto.getContent().getData() != null && !dto.getContent().getData().isEmpty()) {
             log.error("[{}] {} questions should not have content data", traceId, questionType);
             throw new ApiException(questionType + " questions should not have content data", HttpStatus.BAD_REQUEST.value());
         }
@@ -94,7 +87,7 @@ public class QuestionValidator {
         }
     }
 
-    private void validateQuestionContent(QuestionContent content, String traceId) {
+    private void validateQuestionContent(DataContent content, String traceId) {
         if (content == null || content.getData() == null || content.getData().isEmpty()) {
             log.error("[{}] {}", traceId, Const.QUESTION.EMPTY_CONTENT);
             throw new ApiException(Const.QUESTION.EMPTY_CONTENT, HttpStatus.BAD_REQUEST.value());
@@ -105,17 +98,25 @@ public class QuestionValidator {
         String traceId = TraceUtil.getTraceId();
         List<DataItem> dataItems = dto.getContent() != null ? dto.getContent().getData() : Collections.emptyList();
 
+        Set<String> seenIds = new HashSet<>();
+        for (DataItem item : dataItems) {
+            if (item.getId() != null && !item.getId().isBlank()) {
+                if (!seenIds.add(item.getId())) {
+                    log.error("[{}] Duplicate data item id '{}' found in question {}", traceId, item.getId(), dto.getId());
+                    throw new ApiException(
+                            String.format("Duplicate data item id '%s' found in question %d", item.getId(), dto.getId()),
+                            HttpStatus.BAD_REQUEST.value()
+                    );
+                }
+            }
+        }
+
         // Validate positionOrder for applicable question types
         if (QUESTION_TYPES_WITH_POSITION_ORDER.contains(questionType) && !dataItems.isEmpty()) {
             validatePositionOrder(dataItems, questionType, traceId);
         }
 
         switch (questionType) {
-            case PASSAGE:
-            case IMPORT_FILE:
-            case RECORDING:
-                // No additional validation needed beyond questionText and score
-                break;
             case MULTIPLE_CHOICE:
                 validateMultipleChoice(dataItems, traceId);
                 break;
@@ -124,9 +125,6 @@ public class QuestionValidator {
                 break;
             case TRUE_OR_FALSE:
                 validateTrueOrFalse(dataItems, traceId);
-                break;
-            case OPEN_ENDED:
-                validateOpenEnded(dataItems, traceId);
                 break;
             case FILL_IN_THE_BLANK:
                 validateFillInTheBlank(dto, dataItems, traceId);
@@ -208,13 +206,6 @@ public class QuestionValidator {
         }
     }
 
-    private void validateOpenEnded(List<DataItem> dataItems, String traceId) {
-        long correctCount = dataItems.stream().filter(DataItem::isCorrect).count();
-        if (correctCount < 1) {
-            log.error("[{}] OPEN_ENDED must have at least one correct answer. Found: {}", traceId, correctCount);
-            throw new ApiException("OPEN_ENDED must have at least one correct answer", HttpStatus.BAD_REQUEST.value());
-        }
-    }
 
     private void validateFillInTheBlank(QuestionDto dto, List<DataItem> dataItems, String traceId) {
         Set<String> placeholders = extractPlaceholders(dto.getQuestionText(), traceId);

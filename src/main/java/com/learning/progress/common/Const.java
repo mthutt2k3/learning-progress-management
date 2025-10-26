@@ -385,4 +385,8 @@ public class Const {
         public static final String REACTIVE_TEACHING_ASSISTANT_SUCCESSFULLY = "Re-activated %d teaching assistant(s) in class '%s': %s";
         public static final String REMOVE_TEACHER_SUCCESSFULLY = "Removed %s '%s' from class '%s'";
     }
+
+    public static class SUBMISSION {
+        public static final String NOT_FOUND = "";
+    }
 }
