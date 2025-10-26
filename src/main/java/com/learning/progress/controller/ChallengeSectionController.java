@@ -4,6 +4,7 @@ import com.learning.progress.common.Const;
 import com.learning.progress.dto.DataResponse;
 import com.learning.progress.dto.challenge.section.QuickBulkSectionRequest;
 import com.learning.progress.dto.challenge.section.SectionWithQuestionsDto;
+import com.learning.progress.dto.challenge.section.StudentSectionWithQuestionsDto;
 import com.learning.progress.service.ChallengeSectionService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -27,7 +28,7 @@ public class ChallengeSectionController {
 
     @PostMapping("/{challengeId}")
     @PreAuthorize("hasRole('TEACHER')")
-    @Operation(summary = "Save section", description = "Save section with questions for a specific challenge (ADMIN only)")
+    @Operation(summary = "Save section", description = "Save section with questions for a specific challenge")
     public ResponseEntity<DataResponse<SectionWithQuestionsDto>> saveSection(
             @PathVariable Long challengeId,
             @RequestBody SectionWithQuestionsDto dto) {
@@ -48,7 +49,7 @@ public class ChallengeSectionController {
 
     @GetMapping("/{id}")
     @PreAuthorize("hasRole('TEACHER') or hasRole('TEACHING_ASSISTANT') or hasRole('STUDENT') or hasRole('TEST_TAKER') or hasRole('MANAGER')")
-    @Operation(summary = "Get section by ID", description = "Retrieve a specific section with its questions (ADMIN only)")
+    @Operation(summary = "Get section by ID", description = "Retrieve a specific section with its questions")
     public ResponseEntity<DataResponse<SectionWithQuestionsDto>> getSection(
             @PathVariable Long id) {
         SectionWithQuestionsDto response = sectionService.getSection(id);
@@ -57,13 +58,25 @@ public class ChallengeSectionController {
 
     @GetMapping("/challenge/{challengeId}")
     @PreAuthorize("hasRole('TEACHER') or hasRole('TEACHING_ASSISTANT') or hasRole('STUDENT') or hasRole('TEST_TAKER') or hasRole('MANAGER')")
-    @Operation(summary = "List all sections for a challenge", description = "Retrieve a paginated list of sections for a specific challenge with optional filtering and sorting (ADMIN only)")
+    @Operation(summary = "List all sections for a challenge", description = "Retrieve a paginated list of sections for a specific challenge with optional filtering and sorting")
     public ResponseEntity<DataResponse<List<SectionWithQuestionsDto>>> listSections(
             @PathVariable Long challengeId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(required = false) String text) {
         DataResponse<List<SectionWithQuestionsDto>> response = sectionService.listSections(challengeId, page, size, text);
+        return new ResponseEntity<>(response, HttpStatus.OK);
+    }
+    @GetMapping("/challenge/{challengeId}/public")
+    @PreAuthorize("hasRole('STUDENT') or hasRole('TEST_TAKER')")
+    @Operation(summary = "List sections for students/test takers",
+            description = "Retrieve a list of sections for a specific challenge (questions only, without answers)")
+    public ResponseEntity<DataResponse<List<StudentSectionWithQuestionsDto>>> listSectionsForStudents(
+            @PathVariable Long challengeId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) String text) {
+        DataResponse<List<StudentSectionWithQuestionsDto>> response = sectionService.listSectionsWithoutAnswers(challengeId, page, size, text);
         return new ResponseEntity<>(response, HttpStatus.OK);
     }
 
