@@ -1,82 +1,170 @@
 package com.learning.progress.mapper;
 
-import com.learning.progress.dto.challenge.section.DataItem;
-import com.learning.progress.dto.challenge.section.QuestionDto;
-import com.learning.progress.dto.challenge.section.SectionDto;
-import com.learning.progress.dto.challenge.section.SectionWithQuestionsDto;
+import com.learning.progress.common.QuestionType;
+import com.learning.progress.dto.challenge.section.*;
 import com.learning.progress.entity.ChallengeSection;
 import com.learning.progress.entity.DailyChallenge;
 import com.learning.progress.entity.Question;
 import com.learning.progress.util.JsonUtil;
-import org.mapstruct.Mapper;
-import org.mapstruct.Mapping;
-import org.mapstruct.ReportingPolicy;
+import org.mapstruct.*;
+import org.mapstruct.factory.Mappers;
 
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.IntStream;
 
-@Mapper(
-        componentModel = "spring",
-        unmappedTargetPolicy = ReportingPolicy.IGNORE
-)
+@Mapper(componentModel = "spring", unmappedTargetPolicy = ReportingPolicy.IGNORE)
 public interface ChallengeSectionMapper {
-    // DTO -> Entity
+
+    ChallengeSectionMapper INSTANCE = Mappers.getMapper(ChallengeSectionMapper.class);
+
+    /* =========================================================
+       =============== ENTITY ↔ DTO MAPPING =====================
+       ========================================================= */
 
     @Mapping(target = "challenge", source = "challenge")
     @Mapping(target = "id", source = "sectionDto.id")
     ChallengeSection toChallengeSectionEntity(SectionDto sectionDto, DailyChallenge challenge);
 
-    // Entity -> DTO
     SectionDto toSectionDto(ChallengeSection entity);
 
-    // List<Entity> -> List<DTO>
     List<SectionDto> toSectionDtoList(List<ChallengeSection> entities);
-
-    List<QuestionDto> toQuestionDtos(List<Question> savedQuestions);
 
     @Mapping(target = "content", source = "questionContentJson")
     QuestionDto toQuestionDto(Question question);
 
-    Question toQuestionDtos(QuestionDto dto);
+    Question toQuestionEntity(QuestionDto dto);
 
-    @Mapping(source = "section",target = "section")
-    @Mapping(source = "questions",target = "questions")
+    List<QuestionDto> toQuestionDtos(List<Question> questions);
+
+    /* =========================================================
+       =============== COMPOSITE MAPPING ========================
+       ========================================================= */
+
+    @Mapping(source = "section", target = "section")
+    @Mapping(source = "questions", target = "questions")
     SectionWithQuestionsDto toSectionWithQuestionsDto(ChallengeSection section, List<QuestionDto> questions);
 
-    @Mapping(target = "section", source = "section")
-    @Mapping(target = "questions", source = "section.questions")
+    @Mapping(source = "section", target = "section")
+    @Mapping(source = "section.questions", target = "questions")
     SectionWithQuestionsDto toSectionWithQuestionsDto(ChallengeSection section);
 
-    // Object <-> Map<String,Object> for question content
+    default List<SectionWithQuestionsDto> toSectionWithQuestionsDtoList(
+            List<ChallengeSection> sections,
+            List<List<QuestionDto>> questionsList
+    ) {
+        if (sections == null || questionsList == null || sections.size() != questionsList.size()) {
+            throw new IllegalArgumentException("Sections and questionsList size mismatch");
+        }
+
+        return IntStream.range(0, sections.size())
+                .mapToObj(i -> toSectionWithQuestionsDto(sections.get(i), questionsList.get(i)))
+                .toList();
+    }
+
+    /* =========================================================
+       =============== STUDENT DTO MAPPING ======================
+       ========================================================= */
+
+    @Mapping(source = "section", target = "section")
+    @Mapping(source = "questions", target = "questions", qualifiedByName = "toStudentQuestionDtoList")
+    StudentSectionWithQuestionsDto toStudentSectionWithQuestionsDto(SectionWithQuestionsDto sectionWithQuestionsDto);
+
+    @Named("toStudentQuestionDtoList")
+    default List<StudentSectionWithQuestionsDto.StudentQuestionDto> toStudentQuestionDtoList(List<QuestionDto> questionDtos) {
+        if (questionDtos == null) {
+            return Collections.emptyList();
+        }
+        return questionDtos.stream()
+                .map(this::toStudentQuestionDto)
+                .toList();
+    }
+
+    // QuestionDto → StudentQuestionDto
+    @Mapping(source = "id", target = "id")
+    @Mapping(source = "questionText", target = "questionText")
+    @Mapping(source = "orderNumber", target = "orderNumber")
+    @Mapping(source = "questionType", target = "questionType")
+    @Mapping(target = "content", expression = "java(mapContentByQuestionType(questionDto.getContent(), questionDto.getQuestionType()))")
+    StudentSectionWithQuestionsDto.StudentQuestionDto toStudentQuestionDto(QuestionDto questionDto);
+
+    // Custom mapping for content based on QuestionType
+    default StudentSectionWithQuestionsDto.StudentDataContent mapContentByQuestionType(DataContent content, String questionType) {
+        if (content == null || content.getData() == null) {
+            return new StudentSectionWithQuestionsDto.StudentDataContent();
+        }
+
+        // Parse QuestionType
+        QuestionType type;
+        try {
+            type = QuestionType.valueOf(questionType);
+        } catch (IllegalArgumentException e) {
+            return new StudentSectionWithQuestionsDto.StudentDataContent();
+        }
+
+        // Handle REWRITE: no content
+        if (type == QuestionType.REWRITE) {
+            return null;
+        }
+
+        // Map DataItems based on QuestionType
+        List<StudentSectionWithQuestionsDto.StudentDataItem> studentDataItems = content.getData().stream()
+                .map(item -> mapDataItemByQuestionType(item, type))
+                .toList();
+
+        StudentSectionWithQuestionsDto.StudentDataContent studentDataContent = new StudentSectionWithQuestionsDto.StudentDataContent();
+        studentDataContent.setData(studentDataItems);
+        return studentDataContent;
+    }
+
+    default StudentSectionWithQuestionsDto.StudentDataItem mapDataItemByQuestionType(DataItem item, QuestionType questionType) {
+        StudentSectionWithQuestionsDto.StudentDataItem studentItem = new StudentSectionWithQuestionsDto.StudentDataItem();
+        studentItem.setId(item.getId());
+        studentItem.setValue(item.getValue());
+
+        switch (questionType) {
+            case MULTIPLE_CHOICE:
+            case MULTIPLE_SELECT:
+            case TRUE_OR_FALSE:
+                // Không ánh xạ positionId, positionOrder
+                break;
+            case DROPDOWN:
+                // Chỉ ánh xạ positionId, bỏ positionOrder
+                studentItem.setPositionId(item.getPositionId());
+                break;
+            case FILL_IN_THE_BLANK:
+            case DRAG_AND_DROP:
+            case REARRANGE:
+                // Không ánh xạ positionId, positionOrder (isCorrect đã bị bỏ)
+                break;
+            default:
+                // Mặc định ánh xạ cả positionId và positionOrder
+                studentItem.setPositionId(item.getPositionId());
+                studentItem.setPositionOrder(item.getPositionOrder());
+        }
+
+        return studentItem;
+    }
+
+    /* =========================================================
+       =============== JSON ↔ OBJECT HELPERS ====================
+       ========================================================= */
+
     default Map<String, Object> map(Object content) {
         return JsonUtil.objectToMap(content);
     }
 
     default Object map(Map<String, Object> map) {
-        return JsonUtil.responseToObject(map, Object.class); // hoặc DataContent.class nếu có
+        return JsonUtil.responseToObject(map, Object.class);
     }
-    // Chuyển Object (thường là List hoặc Map) sang List<DataItem>
+
     default List<DataItem> mapToDataItemList(Object value) {
         if (value == null) return Collections.emptyList();
         return JsonUtil.responseToListObject(value, DataItem.class);
     }
 
-    // Ngược lại: List<DataItem> -> Object (Map hoặc JSON)
     default Object mapFromDataItemList(List<DataItem> list) {
-        return JsonUtil.responseToObject(list, Object.class);
+        return list == null ? null : JsonUtil.responseToObject(list, Object.class);
     }
-
-    default List<SectionWithQuestionsDto> toSectionWithQuestionsDtoList(List<ChallengeSection> sections,
-                                                                        List<List<QuestionDto>> questionsList) {
-        if (sections == null || questionsList == null || sections.size() != questionsList.size()) {
-            throw new IllegalArgumentException("Section and questionsList size mismatch");
-        }
-        List<SectionWithQuestionsDto> result = new java.util.ArrayList<>();
-        for (int i = 0; i < sections.size(); i++) {
-            result.add(toSectionWithQuestionsDto(sections.get(i), questionsList.get(i)));
-        }
-        return result;
-    }
-
 }
