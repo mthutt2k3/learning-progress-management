@@ -150,15 +150,19 @@ public class SubmissionQuestionValidator {
                     if (!placeholders.contains(item.getPositionId())) {
                         throw new ApiException("Position ID " + item.getPositionId() + " does not match any placeholder", HttpStatus.BAD_REQUEST.value());
                     }
-                    if (item.getPositionOrder() == null) {
-                        throw new ApiException("REARRANGE requires positionOrder for each answer", HttpStatus.BAD_REQUEST.value());
-                    }
                 }
                 break;
 
             case REWRITE:
                 if (submissionContent.size() != 1) {
                     throw new ApiException("REWRITE must have exactly one answer", HttpStatus.BAD_REQUEST.value());
+                }
+                validateDataItem(submissionContent.get(0), false);
+                break;
+
+            case WRITING:
+                if (submissionContent.size() != 0) {
+                    throw new ApiException("WRITING must not have answer", HttpStatus.BAD_REQUEST.value());
                 }
                 validateDataItem(submissionContent.get(0), false);
                 break;
