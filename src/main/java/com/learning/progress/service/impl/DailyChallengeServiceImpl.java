@@ -113,7 +113,6 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
                 .orElseThrow(() -> new ApiException(Const.CLASS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         boolean isTeacher = appValidator.hasRole(RoleName.TEACHER);
-
         // Fetch lessons + challenges
         Page<ClassLesson> lessonPage = classLessonRepository.findLessonsWithChallengesByClassId(
                 classId, (text == null || text.isBlank()) ? "" : text, isTeacher, pageable);
