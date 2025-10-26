@@ -141,7 +141,6 @@ public interface ChallengeSectionMapper {
             default:
                 // Mặc định ánh xạ cả positionId và positionOrder
                 studentItem.setPositionId(item.getPositionId());
-                studentItem.setPositionOrder(item.getPositionOrder());
         }
 
         return studentItem;
