@@ -161,10 +161,8 @@ public class SubmissionQuestionValidator {
                 break;
 
             case WRITING:
-                if (submissionContent.size() != 0) {
-                    throw new ApiException("WRITING must not have answer", HttpStatus.BAD_REQUEST.value());
-                }
-                validateDataItem(submissionContent.get(0), false);
+                break;
+            case SPEAKING:
                 break;
 
             default:
