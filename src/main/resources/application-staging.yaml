@@ -98,8 +98,10 @@ azure:
     chapter-in-class-template: chapter-in-class-template.xlsx
     lesson-in-class-template: lesson-in-class-template.xlsx
   openai:
-    endpoint: https://thutt-mfxp3swu-eastus2.cognitiveservices.azure.com
-    api-key: 2bnfHGVyEzihjux2rUgPeEtA3wWdpUWlpiUewpSe6SckUVKG2NyfJQQJ99BIACHYHv6XJ3w3AAAAACOGZhYY
+    endpoint: ${OPENAI_ENDPOINT}
+    api-key: ${OPENAI_API_KEY}
+    reading-passage:
+      words-per-paragraph: 100
 
 app:
   pagination:
