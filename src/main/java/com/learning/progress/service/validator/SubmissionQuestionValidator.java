@@ -63,14 +63,11 @@ public class SubmissionQuestionValidator {
             }
             AnswerContent dataContent = answer.getContent();
             if (dataContent == null) {
-                throw new ApiException("DataContent cannot be null", HttpStatus.NOT_FOUND.value());
+                break;
             }
 
             List<AnswerItem> submissionContent = dataContent.getData();
-            if(Boolean.FALSE.equals(saveAsDraft) && (submissionContent == null || submissionContent.isEmpty())){
-                throw new ApiException("Question content cannot be null or empty for non-draft submissions for ID: " + answer.getQuestionId(), HttpStatus.BAD_REQUEST.value());
-            }
-            if(Boolean.TRUE.equals(saveAsDraft) && (submissionContent == null || submissionContent.isEmpty())){
+            if((submissionContent == null || submissionContent.isEmpty())){
                 break;
             }
             List<DataItem> questionContent = questionMapper.toQuestionDto(question).getContent().getData();
@@ -98,7 +95,7 @@ public class SubmissionQuestionValidator {
                 if (submissionContent.size() != 1) {
                     throw new ApiException("Expected exactly one answer for " + questionType, HttpStatus.BAD_REQUEST.value());
                 }
-                validateDataItem(submissionContent.get(0), false);
+                validateDataItem(submissionContent.get(0), false, false, questionType);
                 break;
 
             case MULTIPLE_SELECT:
@@ -106,7 +103,7 @@ public class SubmissionQuestionValidator {
                     throw new ApiException("MULTIPLE_SELECT must have at least one answer", HttpStatus.BAD_REQUEST.value());
                 }
                 for (AnswerItem item : submissionContent) {
-                    validateDataItem(item, false);
+                    validateDataItem(item, false, false, questionType);
                 }
                 break;
             case FILL_IN_THE_BLANK:
@@ -115,7 +112,7 @@ public class SubmissionQuestionValidator {
                     throw new ApiException(questionType + " must have answers for all placeholders", HttpStatus.BAD_REQUEST.value());
                 }
                 for (AnswerItem item : submissionContent) {
-                    validateDataItem(item, true);
+                    validateDataItem(item, true, false, questionType);
                     if (!placeholders.contains(item.getPositionId())) {
                         throw new ApiException("Position ID " + item.getPositionId() + " does not match any placeholder", HttpStatus.BAD_REQUEST.value());
                     }
@@ -133,7 +130,7 @@ public class SubmissionQuestionValidator {
                     throw new ApiException(questionType + " must have answers for all placeholders", HttpStatus.BAD_REQUEST.value());
                 }
                 for (AnswerItem item : submissionContent) {
-                    validateDataItem(item, true);
+                    validateDataItem(item, true, false, questionType);
                     if (item.getPositionId() != null && !placeholders.contains(item.getPositionId())) {
                         throw new ApiException("Position ID " + item.getPositionId() + " does not match any placeholder", HttpStatus.BAD_REQUEST.value());
                     }
@@ -146,7 +143,7 @@ public class SubmissionQuestionValidator {
                     throw new ApiException("REARRANGE must have answers for all placeholders", HttpStatus.BAD_REQUEST.value());
                 }
                 for (AnswerItem item : submissionContent) {
-                    validateDataItem(item, true);
+                    validateDataItem(item, true, false, questionType);
                     if (!placeholders.contains(item.getPositionId())) {
                         throw new ApiException("Position ID " + item.getPositionId() + " does not match any placeholder", HttpStatus.BAD_REQUEST.value());
                     }
@@ -157,14 +154,14 @@ public class SubmissionQuestionValidator {
                 if (submissionContent.size() != 1) {
                     throw new ApiException("REWRITE must have exactly one answer", HttpStatus.BAD_REQUEST.value());
                 }
-                validateDataItem(submissionContent.get(0), false);
+                validateDataItem(submissionContent.get(0), false, true, questionType);
                 break;
 
             case WRITING:
                 if (submissionContent.size() != 0) {
                     throw new ApiException("WRITING must not have answer", HttpStatus.BAD_REQUEST.value());
                 }
-                validateDataItem(submissionContent.get(0), false);
+                validateDataItem(submissionContent.get(0), false, true, questionType);
                 break;
 
             default:
@@ -172,12 +169,15 @@ public class SubmissionQuestionValidator {
         }
     }
 
-    private void validateDataItem(AnswerItem item, boolean requiresPositionId) {
+    private void validateDataItem(AnswerItem item, boolean requiresPositionId, boolean requiresValue, QuestionType questionType) {
         if (item.getId() == null) {
-            throw new ApiException("Submission content must include id", HttpStatus.BAD_REQUEST.value());
+            throw new ApiException(questionType + " :Submission content must include id", HttpStatus.BAD_REQUEST.value());
+        }
+        if (requiresValue && item.getValue() == null) {
+            throw new ApiException(questionType + " :Submission content must include value", HttpStatus.BAD_REQUEST.value());
         }
         if (requiresPositionId && item.getPositionId() == null) {
-            throw new ApiException("Submission content must include positionId", HttpStatus.BAD_REQUEST.value());
+            throw new ApiException(questionType + " :Submission content must include positionId", HttpStatus.BAD_REQUEST.value());
         }
     }
 

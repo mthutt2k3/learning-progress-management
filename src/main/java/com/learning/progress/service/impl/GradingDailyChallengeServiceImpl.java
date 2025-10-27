@@ -63,26 +63,6 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
     @Transactional
     public void gradeSubmissionManually(Long challengeId, Long submissionId, ManualGradingRequest request) {
         String traceId = TraceUtil.getTraceId();
-        log.info("[{}] Manual grading for challengeId: {}, submissionId: {}", traceId, challengeId, submissionId);
-
-        // Validate challenge
-        DailyChallenge challenge = dailyChallengeRepository.findByIdAndDeletedAtIsNull(challengeId)
-                .orElseThrow(() -> {
-                    log.error("[{}] Challenge not found for challengeId: {}", traceId, challengeId);
-                    return new ApiException(Const.CHALLENGE.NOT_FOUND, HttpStatus.NOT_FOUND.value());
-                });
-
-        // Validate challenge type (only WR or SP allowed)
-        try {
-            ChallengeType challengeType = challenge.getChallengeType();
-            if (challengeType != ChallengeType.WR && challengeType != ChallengeType.SP) {
-                log.error("[{}] Manual grading not allowed for challenge type: {}", traceId, challengeType);
-                throw new ApiException("Manual grading is only allowed for WRITING or SPEAKING challenges", HttpStatus.BAD_REQUEST.value());
-            }
-        } catch (IllegalArgumentException e) {
-            log.error("[{}] Invalid challenge type: {}", traceId, challenge.getChallengeType());
-            throw new ApiException("Invalid challenge type", HttpStatus.BAD_REQUEST.value());
-        }
 
         // Validate submission
         SubmissionDailyChallenge submission = submissionDailyChallengeRepository
@@ -91,22 +71,20 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
                     log.error("[{}] Submission not found for submissionId: {}", traceId, submissionId);
                     return new ApiException(Const.SUBMISSION.NOT_FOUND, HttpStatus.NOT_FOUND.value());
                 });
-
-        // Ensure submission belongs to the challenge
-        if (!submission.getChallenge().getId().equals(challengeId)) {
-            log.error("[{}] Submission {} does not belong to challenge {}", traceId, submissionId, challengeId);
-            throw new ApiException("Submission does not belong to the specified challenge", HttpStatus.BAD_REQUEST.value());
+        if(submission.getSubmissionStatus() != SubmissionStatus.SUBMITTED) {
+            throw new ApiException("Manual grading is only allowed when not submitted yet", HttpStatus.BAD_REQUEST.value());
+        }
+        DailyChallenge challenge = submission.getChallenge();
+        // Validate challenge type (only WR or SP allowed)
+        ChallengeType challengeType = challenge.getChallengeType();
+        if (challengeType != ChallengeType.WR && challengeType != ChallengeType.SP) {
+            log.error("[{}] Manual grading not allowed for challenge type: {}", traceId, challengeType);
+            throw new ApiException("Manual grading is only allowed for WRITING or SPEAKING challenges", HttpStatus.BAD_REQUEST.value());
         }
 
         // Validate user access (teacher or teaching assistant)
         Long classId = challenge.getClassLesson().getClassChapter().getClazz().getId();
         appValidator.validateUserAccessToClass(classId);
-
-        String role = jwtUtil.extractRoleFromCurrentRequest();
-        if (!role.equals("TEACHER") && !role.equals("TEACHING_ASSISTANT")) {
-            log.error("[{}] Unauthorized grading attempt by user with role: {}", traceId, role);
-            throw new ApiException("Unauthorized: Only teachers or teaching assistants can grade submissions", HttpStatus.FORBIDDEN.value());
-        }
 
         // Get grader ID and name
         Long graderId = jwtUtil.extractUserIdFromCurrentRequest();
@@ -167,14 +145,12 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
         }
         gradingQuestionRepository.saveAll(gradingQuestions);
 
-        // Update submission status to SUBMITTED if not already
-        if (submission.getSubmissionStatus() != SubmissionStatus.SUBMITTED) {
-            submission.setSubmissionStatus(SubmissionStatus.SUBMITTED);
-            submission.setSubmittedAt(OffsetDateTime.now());
-            submissionDailyChallengeRepository.save(submission);
-        }
+        // Update submission status to GRADED
+        submission.setSubmissionStatus(SubmissionStatus.GRADED);
+        submission.setSubmittedAt(OffsetDateTime.now());
+        submissionDailyChallengeRepository.save(submission);
 
-        log.info("[{}] Successfully graded submission {} for challenge {}", traceId, submissionId, challengeId);
+        log.info("[{}] Successfully graded submission {}", traceId, submissionId);
     }
 
     @Override
@@ -191,6 +167,9 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
                     log.error("[{}] Submission not found for submissionId: {}", traceId, submissionId);
                     return new ApiException(Const.SUBMISSION.NOT_FOUND, HttpStatus.NOT_FOUND.value());
                 });
+        if(submission.getSubmissionStatus() != SubmissionStatus.SUBMITTED) {
+            throw new ApiException("Manual grading is only allowed when not submitted yet", HttpStatus.BAD_REQUEST.value());
+        }
         log.debug("[{}] Found submission: {}, status: {}", traceId, submission.getId(), submission.getSubmissionStatus());
 
         // Validate challenge
@@ -291,11 +270,9 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
         log.debug("[{}] Saved {} gradingQuestion records", traceId, gradingQuestions.size());
 
         // Update submission status
-        if (submission.getSubmissionStatus() != SubmissionStatus.SUBMITTED) {
-            submission.setSubmissionStatus(SubmissionStatus.SUBMITTED);
-            submissionDailyChallengeRepository.save(submission);
-            log.debug("[{}] Updated submission status to SUBMITTED", traceId);
-        }
+        submission.setSubmissionStatus(SubmissionStatus.GRADED);
+        submissionDailyChallengeRepository.save(submission);
+        log.debug("[{}] Updated submission status to GRADED", traceId);
 
         log.info("[{}] ✅ Auto-grading completed for submission {} (challengeId: {}, totalScore: {})",
                 traceId, submissionId, challengeId, totalScore);
