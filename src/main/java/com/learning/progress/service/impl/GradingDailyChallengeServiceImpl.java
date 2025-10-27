@@ -12,6 +12,7 @@ import com.learning.progress.dto.submission.AnswerItem;
 import com.learning.progress.entity.*;
 import com.learning.progress.exception.ApiException;
 import com.learning.progress.repository.*;
+import com.learning.progress.service.CacheService;
 import com.learning.progress.service.GradingDailyChallengeService;
 import com.learning.progress.util.AppValidator;
 import com.learning.progress.util.JsonUtil;
@@ -58,6 +59,8 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
 
     @Autowired
     private QuestionRepository questionRepository;
+    @Autowired
+    private CacheService cacheService;
 
     @Override
     @Transactional
@@ -149,7 +152,7 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
         submission.setSubmissionStatus(SubmissionStatus.GRADED);
         submission.setSubmittedAt(OffsetDateTime.now());
         submissionDailyChallengeRepository.save(submission);
-
+        cacheService.clearSubmissionsCacheForChallenge(challenge.getId(), traceId);
         log.info("[{}] Successfully graded submission {}", traceId, submissionId);
     }
 
@@ -273,6 +276,8 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
         submission.setSubmissionStatus(SubmissionStatus.GRADED);
         submissionDailyChallengeRepository.save(submission);
         log.debug("[{}] Updated submission status to GRADED", traceId);
+
+        cacheService.clearSubmissionsCacheForChallenge(challenge.getId(), traceId);
 
         log.info("[{}] ✅ Auto-grading completed for submission {} (challengeId: {}, totalScore: {})",
                 traceId, submissionId, challengeId, totalScore);

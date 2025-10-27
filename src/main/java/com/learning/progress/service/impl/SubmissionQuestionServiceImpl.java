@@ -1,5 +1,6 @@
 package com.learning.progress.service.impl;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.learning.progress.common.ChallengeType;
 import com.learning.progress.common.Const;
 import com.learning.progress.common.SubmissionStatus;
@@ -10,6 +11,7 @@ import com.learning.progress.dto.submission.SubmissionResultResponse;
 import com.learning.progress.entity.*;
 import com.learning.progress.exception.ApiException;
 import com.learning.progress.repository.*;
+import com.learning.progress.service.CacheService;
 import com.learning.progress.service.GradingDailyChallengeService;
 import com.learning.progress.service.SubmissionQuestionService;
 import com.learning.progress.service.validator.SubmissionQuestionValidator;
@@ -52,12 +54,24 @@ public class SubmissionQuestionServiceImpl implements SubmissionQuestionService 
     private QuestionRepository questionRepository;
     @Autowired
     private GradingDailyChallengeService gradingDailyChallengeService;
+    @Autowired
+    private CacheService cacheService;
 
     @Override
     @Transactional(readOnly = true)
     public SubmissionResultResponse getSubmissionResult(Long submissionChallengeId) {
         String traceId = TraceUtil.getTraceId();
+        Long userId = jwtUtil.extractUserIdFromCurrentRequest();
 
+        // Build cache key
+        String cacheKey = cacheService.buildSubmissionResultCacheKey(userId, submissionChallengeId);
+
+        SubmissionResultResponse cached = cacheService.getCachedObject(
+                cacheKey, new TypeReference<SubmissionResultResponse>() {}, traceId);
+        if (cached != null) {
+            log.debug("[{}] Cache HIT for submission result: {}", traceId, cacheKey);
+            return cached;
+        }
         // Validate submission
         SubmissionDailyChallenge submission = submissionDailyChallengeRepository.findByIdAndDeletedAtIsNull(submissionChallengeId)
                 .orElseThrow(() -> {
@@ -116,13 +130,17 @@ public class SubmissionQuestionServiceImpl implements SubmissionQuestionService 
         response.setQuestionResults(questionResults);
         log.info("[{}] Successfully retrieved submission result for challengeId: {}, submissionChallengeId: {}",
                 traceId, dailyChallengeId, submissionChallengeId);
+        if (submission.getSubmissionStatus() == SubmissionStatus.SUBMITTED ||
+                submission.getSubmissionStatus() == SubmissionStatus.GRADED) {
+            cacheService.cacheObject(cacheKey, response, 10, traceId); // 10 phút
+        }
         return response;
     }
 
     @Override
     @Transactional
     public void saveSubmission(Long submissionChallengeId, SaveSubmissionRequest request) {
-
+        String traceId = TraceUtil.getTraceId();
         // Check if submission exists
         SubmissionDailyChallenge submission = submissionDailyChallengeRepository.findByIdAndDeletedAtIsNull(submissionChallengeId)
                 .orElseThrow(() -> new ApiException(Const.SUBMISSION.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
@@ -189,6 +207,7 @@ public class SubmissionQuestionServiceImpl implements SubmissionQuestionService 
         }
         // If saveAsDraft = false, mark as submitted and trigger auto-grading for eligible challenge types
         if (!request.getSaveAsDraft()) {
+
             // Check if already submitted
             if (submission.getSubmissionStatus() == SubmissionStatus.SUBMITTED) {
                 throw new ApiException("Submission is already submitted", HttpStatus.BAD_REQUEST.value());
@@ -210,6 +229,12 @@ public class SubmissionQuestionServiceImpl implements SubmissionQuestionService 
             } catch (IllegalArgumentException e) {
                 // Skip auto-grading for invalid challenge types
             }
+            // XÓA CACHE KẾT QUẢ CỦA HỌC SINH
+            Long userId = jwtUtil.extractUserIdFromCurrentRequest();
+            String resultCacheKey = cacheService.buildSubmissionResultCacheKey(userId, submissionChallengeId);
+            cacheService.delete(resultCacheKey, traceId);
+            // XÓA CACHE DANH SÁCH SUBMISSION (nếu giáo viên đang xem)
+            cacheService.clearSubmissionsCacheForChallenge(dailyChallenge.getId(), traceId);
         }
 
     }

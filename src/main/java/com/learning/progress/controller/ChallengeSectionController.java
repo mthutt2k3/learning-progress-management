@@ -68,7 +68,7 @@ public class ChallengeSectionController {
         return new ResponseEntity<>(response, HttpStatus.OK);
     }
     @GetMapping("/challenge/{challengeId}/public")
-    @PreAuthorize("hasRole('STUDENT') or hasRole('TEST_TAKER')")
+    @PreAuthorize("hasAnyRole('TEACHER', 'TEACHING_ASSISTANT', 'STUDENT', 'TEST_TAKER')")
     @Operation(summary = "List sections for students/test takers",
             description = "Retrieve a list of sections for a specific challenge (questions only, without answers)")
     public ResponseEntity<DataResponse<List<StudentSectionWithQuestionsDto>>> listSectionsForStudents(

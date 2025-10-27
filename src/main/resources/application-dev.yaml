@@ -21,6 +21,18 @@ spring:
         order_inserts: false
         order_updates: false
         jdbc.time_zone: Asia/Ho_Chi_Minh
+  data:
+    redis:
+      host: 13.229.140.9
+      port: 6379
+      password: myStrongPass123
+      timeout: 2000 # Thời gian chờ kết nối (ms)
+      lettuce: # Sử dụng Lettuce làm client Redis
+        pool:
+          max-active: 8 # Số kết nối tối đa
+          max-idle: 8 # Số kết nối nhàn rỗi tối đa
+          min-idle: 0 # Số kết nối nhàn rỗi tối thiểu
+          max-wait: 2000 # Thời gian chờ tối đa để lấy kết nối (ms)
 
 
   liquibase:
