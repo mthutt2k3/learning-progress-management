@@ -84,6 +84,19 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
         challenge.setHasAntiCheat(false);
         challenge.setTranslateOnScreen(false);
         challenge.setShuffleAnswers(true);
+        challenge.setDurationMinutes(60);
+        OffsetDateTime now = OffsetDateTime.now();
+        OffsetDateTime startDate = now.plusDays(1)
+                .withHour(12)
+                .withMinute(0)
+                .withSecond(0)
+                .withNano(0);
+
+        OffsetDateTime endDate = startDate.plusDays(2);
+
+        challenge.setStartDate(startDate);
+        challenge.setEndDate(endDate);
+
 
         // Save challenge
         challenge = dailyChallengeRepository.save(challenge);
@@ -222,7 +235,9 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
                     HttpStatus.BAD_REQUEST.value()
             );
         }
-
+        if (challengeStatus == ChallengeStatus.PUBLISHED) {
+            validateDailyChallenge(challenge);
+        }
         // Update fields
         challenge.setChallengeStatus(challengeStatus);
 
@@ -234,5 +249,46 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
 
         return dailyChallengeMapper.mapToDTO(challenge);
     }
+
+    private void validateDailyChallenge(DailyChallenge challenge) {
+        if (challenge == null) {
+            throw new ApiException("Challenge cannot be null", HttpStatus.BAD_REQUEST.value());
+        }
+
+        if (challenge.getChallengeName() == null || challenge.getChallengeName().trim().isEmpty()) {
+            throw new ApiException("Challenge name cannot be null or empty", HttpStatus.BAD_REQUEST.value());
+        }
+
+        if (challenge.getChallengeType() == null) {
+            throw new ApiException("Challenge type cannot be null", HttpStatus.BAD_REQUEST.value());
+        }
+
+        if (challenge.getChallengeStatus() == null) {
+            throw new ApiException("Challenge status cannot be null", HttpStatus.BAD_REQUEST.value());
+        }
+
+        if (challenge.getStartDate() == null) {
+            throw new ApiException("Start date cannot be null", HttpStatus.BAD_REQUEST.value());
+        }
+
+        if (challenge.getEndDate() == null) {
+            throw new ApiException("End date cannot be null", HttpStatus.BAD_REQUEST.value());
+        }
+
+        if (challenge.getEndDate().isBefore(challenge.getStartDate())) {
+            throw new ApiException("End date must be after start date", HttpStatus.BAD_REQUEST.value());
+        }
+
+        if (challenge.getDurationMinutes() == null || challenge.getDurationMinutes() <= 0) {
+            throw new ApiException("Duration minutes must be greater than 0", HttpStatus.BAD_REQUEST.value());
+        }
+
+        // Validate danh sách sections
+        if (challenge.getSections() == null || challenge.getSections().isEmpty()) {
+            throw new ApiException("Daily challenge must have at least one section with questions to publish", HttpStatus.BAD_REQUEST.value());
+        }
+    }
+
+
 
 }
