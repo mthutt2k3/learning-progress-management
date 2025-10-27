@@ -25,6 +25,7 @@ public class StudentChallengeListDTO {
         private String challengeName;
         private ChallengeType challengeType;
         private ChallengeStatus challengeStatus;
+        private Long submissionChallengeId; // Từ SubmissionDailyChallenge.startedAt
         private OffsetDateTime startDate; // Từ SubmissionDailyChallenge.startedAt
         private OffsetDateTime endDate; // Từ SubmissionDailyChallenge.expiredAt
         private SubmissionStatus submissionStatus; // Từ SubmissionDailyChallenge
