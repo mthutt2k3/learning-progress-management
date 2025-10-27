@@ -183,35 +183,7 @@ public class QuestionServiceImpl implements QuestionService {
             );
         }
 
-        // Bước 8: Validate duplicate question text (case-insensitive)
-        Set<String> questionTextsLower = new HashSet<>();
-        for (QuestionDto dto : nonDeletedRequests) {
-            String text = dto.getQuestionText().trim().toLowerCase();
-            if (!questionTextsLower.add(text)) {
-                log.error("[{}] Duplicate question text: {}", traceId, dto.getQuestionText());
-                throw new ApiException(
-                        String.format("Duplicate question text: %s", dto.getQuestionText()),
-                        HttpStatus.BAD_REQUEST.value()
-                );
-            }
-        }
-
-        // Check duplicate with DB for new questions
-        for (QuestionDto dto : nonDeletedRequests) {
-            if (dto.getId() == null) {
-                String trimmedText = dto.getQuestionText().trim();
-                boolean exists = questionRepository.existsBySectionAndQuestionTextIgnoreCaseAndDeletedAtIsNull(section, trimmedText);
-                if (exists) {
-                    log.error("[{}] Question text already exists: {}", traceId, trimmedText);
-                    throw new ApiException(
-                            String.format("Question text '%s' already exists in this section", trimmedText),
-                            HttpStatus.BAD_REQUEST.value()
-                    );
-                }
-            }
-        }
-
-        // Bước 9: Process
+        // Bước 8: Process
         OffsetDateTime now = OffsetDateTime.now();
         List<QuestionDto> result = new ArrayList<>();
 
