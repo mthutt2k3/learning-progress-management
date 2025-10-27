@@ -240,6 +240,10 @@ public class ChallengeSectionServiceImpl implements ChallengeSectionService {
         } else {
             log.info("[{}] Updating section with ID: {}", traceId, sectionDto.getId());
             section = findSectionById(sectionDto.getId(), traceId);
+            section.setSectionTitle(sectionDto.getSectionTitle());
+            section.setSectionsUrl(sectionDto.getSectionsUrl());
+            section.setOrderNumber(sectionDto.getOrderNumber());
+            section.setResourceType(ResourceType.valueOf(sectionDto.getResourceType()));
             section.setSectionsContent(sectionDto.getSectionsContent());
         }
         return sectionRepository.save(section);
