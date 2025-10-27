@@ -3,8 +3,6 @@ package com.learning.progress.mapper;
 import com.learning.progress.dto.challenge.DailyChallengeListDTO;
 import com.learning.progress.dto.challenge.StudentChallengeListDTO;
 import com.learning.progress.dto.submission.SaveSubmissionRequest;
-import com.learning.progress.dto.submission.SubmissionResponse;
-import com.learning.progress.dto.submission.SubmissionResultDTO;
 import com.learning.progress.entity.ClassLesson;
 import com.learning.progress.entity.DailyChallenge;
 import com.learning.progress.entity.GradingDailyChallenge;
@@ -13,8 +11,6 @@ import org.mapstruct.*;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
 
 @Mapper(
         componentModel = "spring",
@@ -67,6 +63,7 @@ public abstract class SubmissionMapper {
             // Debug: kiểm tra submission tương ứng
             SubmissionDailyChallenge submission = challenge.getSubmissionDailyChallenges().get(0);
             if (submission != null) {
+                dto.setSubmissionChallengeId(submission.getId());
                 dto.setStartDate(submission.getStartedAt());
                 dto.setEndDate(submission.getExpiredAt());
                 dto.setSubmissionStatus(submission.getSubmissionStatus());
