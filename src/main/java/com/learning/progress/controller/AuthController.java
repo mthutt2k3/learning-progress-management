@@ -75,7 +75,7 @@ public class AuthController {
 
     @PostMapping("/reset-password-by-token")
     @Operation(summary = "Xác nhận và đặt lại mật khẩu", description = "Xác nhận token và cập nhật mật khẩu mới")
-    public ResponseEntity<?> resetPasswordByToken(@RequestBody ResetPasswordByTokenRequest request) {
+    public ResponseEntity<?> resetPasswordByToken(@Valid @RequestBody ResetPasswordByTokenRequest request) {
         String response = authService.resetPasswordByToken(request);
         return ResponseEntity.ok(DataResponse.success(response, Const.RESULT_MESSAGE_CODE.UPDATE_SUCCESSFUL));
     }

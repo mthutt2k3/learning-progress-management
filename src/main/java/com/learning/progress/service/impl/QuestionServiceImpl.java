@@ -1,6 +1,5 @@
 package com.learning.progress.service.impl;
 
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.learning.progress.common.Const;
 import com.learning.progress.common.QuestionType;
 import com.learning.progress.dto.challenge.section.QuestionDto;
@@ -10,7 +9,6 @@ import com.learning.progress.exception.ApiException;
 import com.learning.progress.mapper.QuestionMapper;
 import com.learning.progress.repository.ChallengeSectionRepository;
 import com.learning.progress.repository.QuestionRepository;
-import com.learning.progress.service.CacheService;
 import com.learning.progress.service.QuestionService;
 import com.learning.progress.service.validator.QuestionValidator;
 import com.learning.progress.util.JsonUtil;
@@ -19,12 +17,14 @@ import com.learning.progress.util.TraceUtil;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validator;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -52,24 +52,26 @@ public class QuestionServiceImpl implements QuestionService {
     @Autowired
     private Validator validator;
 
-    @Autowired
-    private CacheService cacheService;
-
     @Override
     @Transactional
     public List<QuestionDto> bulkQuestion(List<QuestionDto> dtos, Long sectionId) {
         String traceId = TraceUtil.getTraceId();
-        log.info("[{}] Processing bulk question for sectionId: {}", traceId, sectionId);
 
+        // Bước 1: Validate Section
         ChallengeSection section = sectionRepository.findByIdAndDeletedAtIsNull(sectionId)
-                .orElseThrow(() -> new ApiException(Const.SECTION.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> {
+                    log.error("[{}] Section not found: {}", traceId, sectionId);
+                    return new ApiException(Const.SECTION.NOT_FOUND, HttpStatus.NOT_FOUND.value());
+                });
 
+        // Bước 2: Load Existing Active Questions
         List<Question> existingActiveQuestions = questionRepository
                 .findBySectionIdAndDeletedAtIsNullOrderByOrderNumberAsc(sectionId);
         Set<Long> existingActiveIds = existingActiveQuestions.stream()
                 .map(Question::getId)
                 .collect(Collectors.toSet());
 
+        // Bước 3: Phân loại Requests
         List<QuestionDto> deleteRequests = dtos.stream()
                 .filter(QuestionDto::isToBeDeleted)
                 .collect(Collectors.toList());
@@ -77,117 +79,7 @@ public class QuestionServiceImpl implements QuestionService {
                 .filter(dto -> !dto.isToBeDeleted())
                 .collect(Collectors.toList());
 
-        validateBulkRequests(deleteRequests, nonDeletedRequests, existingActiveIds, section, traceId);
-
-        List<QuestionDto> result = processQuestions(deleteRequests, nonDeletedRequests, section, traceId);
-
-        cacheService.clearCacheForSection(sectionId, section.getChallenge().getId(), traceId);
-        deleteRequests.forEach(dto -> cacheService.clearCacheForQuestion(dto.getId(), sectionId,
-                section.getChallenge().getId(), traceId));
-        nonDeletedRequests.forEach(dto -> {
-            if (dto.getId() != null) {
-                cacheService.clearCacheForQuestion(dto.getId(), sectionId, section.getChallenge().getId(), traceId);
-            }
-        });
-
-        return result;
-    }
-
-    @Override
-    public QuestionDto getQuestion(Long id) {
-        String traceId = TraceUtil.getTraceId();
-        log.info("[{}] Getting question with ID: {}", traceId, id);
-
-        String cacheKey = cacheService.buildQuestionCacheKey(id);
-        QuestionDto cachedResult = cacheService.getCachedObject(
-                cacheKey, new TypeReference<QuestionDto>() {}, traceId);
-        if (cachedResult != null) {
-            return cachedResult;
-        }
-
-        Question question = questionRepository.findByIdAndDeletedAtIsNull(id)
-                .orElseThrow(() -> new ApiException(Const.QUESTION.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
-        QuestionDto result = questionMapper.toQuestionDto(question);
-
-        cacheService.cacheObject(cacheKey, result, CacheService.QUESTION_TTL_MINUTES, traceId);
-
-        return result;
-    }
-
-    @Override
-    @Transactional
-    public void deleteQuestions(List<Long> ids) {
-        String traceId = TraceUtil.getTraceId();
-        log.info("[{}] Deleting questions with IDs: {}", traceId, ids);
-
-        if (ids == null || ids.isEmpty()) {
-            log.error("[{}] Question IDs list is empty", traceId);
-            throw new ApiException(Const.QUESTION.IDS_REQUIRED, HttpStatus.BAD_REQUEST.value());
-        }
-
-        List<Question> questions = questionRepository.findAllByIdInAndDeletedAtIsNull(ids);
-        if (questions.isEmpty()) {
-            log.error("[{}] No active questions found for IDs: {}", traceId, ids);
-            throw new ApiException(Const.QUESTION.NOT_FOUND, HttpStatus.NOT_FOUND.value());
-        }
-
-        String deletedBy = jwtUtil.extractEmailPrefixFromCurrentRequest();
-        OffsetDateTime now = OffsetDateTime.now();
-
-        questions.forEach(q -> {
-            q.setDeletedBy(deletedBy);
-            q.setDeletedAt(now);
-            cacheService.clearCacheForQuestion(q.getId(), q.getSection().getId(),
-                    q.getSection().getChallenge().getId(), traceId);
-        });
-
-        questionRepository.saveAll(questions);
-        log.info("[{}] Successfully soft deleted {} questions", traceId, questions.size());
-    }
-
-    @Override
-    public List<QuestionDto> getQuestionsBySection(Long sectionId) {
-        String traceId = TraceUtil.getTraceId();
-        log.info("[{}] Getting questions for sectionId: {}", traceId, sectionId);
-
-        String cacheKey = cacheService.buildQuestionsBySectionCacheKey(sectionId);
-        List<QuestionDto> cachedResult = cacheService.getCachedObject(
-                cacheKey, new TypeReference<List<QuestionDto>>() {}, traceId);
-        if (cachedResult != null) {
-            return cachedResult;
-        }
-
-        sectionRepository.findByIdAndDeletedAtIsNull(sectionId)
-                .orElseThrow(() -> new ApiException(Const.SECTION.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
-
-        List<Question> questions = questionRepository.findBySectionIdAndDeletedAtIsNull(sectionId);
-        List<QuestionDto> result = questionMapper.toQuestionDtos(questions);
-
-        cacheService.cacheObject(cacheKey, result, CacheService.QUESTION_TTL_MINUTES, traceId);
-
-        return result;
-    }
-
-    @Override
-    @Transactional
-    public void updateScoreQuestion(Long questionId, double score) {
-        String traceId = TraceUtil.getTraceId();
-        log.info("[{}] Updating score for question ID: {}, new score: {}", traceId, questionId, score);
-
-        Question question = questionRepository.findByIdAndDeletedAtIsNull(questionId)
-                .orElseThrow(() -> new ApiException(Const.QUESTION.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
-
-        question.setScore(BigDecimal.valueOf(score));
-        questionRepository.save(question);
-
-        cacheService.clearCacheForQuestion(questionId, question.getSection().getId(),
-                question.getSection().getChallenge().getId(), traceId);
-
-        log.info("[{}] Updated score for question ID {} to {}", traceId, questionId, score);
-    }
-
-    private void validateBulkRequests(List<QuestionDto> deleteRequests, List<QuestionDto> nonDeletedRequests,
-                                      Set<Long> existingActiveIds, ChallengeSection section, String traceId) {
+        // Bước 4: Validate DELETE requests
         for (QuestionDto deleteDto : deleteRequests) {
             Set<ConstraintViolation<QuestionDto>> violations = validator.validate(deleteDto, QuestionDto.Deleted.class);
             if (!violations.isEmpty()) {
@@ -203,6 +95,7 @@ public class QuestionServiceImpl implements QuestionService {
             }
         }
 
+        // Bước 5: Validate EXISTING IDs - Strict Matching
         Set<Long> requestExistingIds = nonDeletedRequests.stream()
                 .filter(dto -> dto.getId() != null)
                 .map(QuestionDto::getId)
@@ -213,6 +106,7 @@ public class QuestionServiceImpl implements QuestionService {
                 .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
 
+        // Check 1: All request IDs must exist
         Set<Long> invalidRequestIds = new HashSet<>();
         invalidRequestIds.addAll(requestExistingIds.stream()
                 .filter(id -> !existingActiveIds.contains(id))
@@ -226,6 +120,7 @@ public class QuestionServiceImpl implements QuestionService {
             throw new ApiException("Invalid question IDs: " + invalidRequestIds, HttpStatus.BAD_REQUEST.value());
         }
 
+        // Check 2: All DB questions must be handled
         Set<Long> handledIds = new HashSet<>();
         handledIds.addAll(requestExistingIds);
         handledIds.addAll(requestDeleteIds);
@@ -242,7 +137,8 @@ public class QuestionServiceImpl implements QuestionService {
             );
         }
 
-        int expectedNonDeletedCount = existingActiveIds.size() - requestDeleteIds.size();
+        // Check 3: Count consistency
+        int expectedNonDeletedCount = existingActiveQuestions.size() - requestDeleteIds.size();
         int actualNonDeletedCount = nonDeletedRequests.stream()
                 .filter(dto -> dto.getId() != null)
                 .map(QuestionDto::getId)
@@ -259,6 +155,7 @@ public class QuestionServiceImpl implements QuestionService {
             );
         }
 
+        // Bước 6: Bean Validation Non-Deleted
         for (QuestionDto dto : nonDeletedRequests) {
             Set<ConstraintViolation<QuestionDto>> violations = validator.validate(dto, QuestionDto.NotDeleted.class);
             if (!violations.isEmpty()) {
@@ -269,6 +166,7 @@ public class QuestionServiceImpl implements QuestionService {
             questionValidator.validateQuestionDto(dto);
         }
 
+        // Bước 7: Validate Order Numbers (sequential from 1)
         Set<Integer> orderNumbers = nonDeletedRequests.stream()
                 .map(QuestionDto::getOrderNumber)
                 .filter(Objects::nonNull)
@@ -285,47 +183,24 @@ public class QuestionServiceImpl implements QuestionService {
             );
         }
 
-        Set<String> questionTextsLower = new HashSet<>();
-        for (QuestionDto dto : nonDeletedRequests) {
-            String text = dto.getQuestionText().trim().toLowerCase();
-            if (!questionTextsLower.add(text)) {
-                log.error("[{}] Duplicate question text: {}", traceId, dto.getQuestionText());
-                throw new ApiException(
-                        String.format("Duplicate question text: %s", dto.getQuestionText()),
-                        HttpStatus.BAD_REQUEST.value()
-                );
-            }
-        }
-
-        for (QuestionDto dto : nonDeletedRequests) {
-            if (dto.getId() == null) {
-                String trimmedText = dto.getQuestionText().trim();
-                boolean exists = questionRepository.existsBySectionAndQuestionTextIgnoreCaseAndDeletedAtIsNull(section, trimmedText);
-                if (exists) {
-                    log.error("[{}] Question text already exists: {}", traceId, trimmedText);
-                    throw new ApiException(
-                            String.format("Question text '%s' already exists in this section", trimmedText),
-                            HttpStatus.BAD_REQUEST.value()
-                    );
-                }
-            }
-        }
-    }
-
-    private List<QuestionDto> processQuestions(List<QuestionDto> deleteRequests, List<QuestionDto> nonDeletedRequests,
-                                               ChallengeSection section, String traceId) {
-        List<QuestionDto> result = new ArrayList<>();
+        // Bước 8: Process
         OffsetDateTime now = OffsetDateTime.now();
+        List<QuestionDto> result = new ArrayList<>();
 
-        for (Long deleteId : deleteRequests.stream().map(QuestionDto::getId).filter(Objects::nonNull).collect(Collectors.toList())) {
+        // Process DELETE
+        for (Long deleteId : requestDeleteIds) {
             Question question = questionRepository.findById(deleteId)
                     .filter(q -> q.getDeletedAt() == null)
-                    .orElseThrow(() -> new ApiException("Question not found: " + deleteId, HttpStatus.NOT_FOUND.value()));
+                    .orElseThrow(() -> {
+                        log.error("[{}] Question not found for deletion: {}", traceId, deleteId);
+                        return new ApiException("Question not found: " + deleteId, HttpStatus.NOT_FOUND.value());
+                    });
             question.setDeletedBy(jwtUtil.extractEmailPrefixFromCurrentRequest());
             question.setDeletedAt(now);
             questionRepository.save(question);
         }
 
+        // Process UPDATE existing
         List<QuestionDto> updateRequests = nonDeletedRequests.stream()
                 .filter(dto -> dto.getId() != null)
                 .collect(Collectors.toList());
@@ -333,7 +208,11 @@ public class QuestionServiceImpl implements QuestionService {
         for (QuestionDto dto : updateRequests) {
             Question question = questionRepository.findById(dto.getId())
                     .filter(q -> q.getDeletedAt() == null)
-                    .orElseThrow(() -> new ApiException("Question not found: " + dto.getId(), HttpStatus.NOT_FOUND.value()));
+                    .orElseThrow(() -> {
+                        log.error("[{}] Question not found: {}", traceId, dto.getId());
+                        return new ApiException("Question not found: " + dto.getId(), HttpStatus.NOT_FOUND.value());
+                    });
+
             question.setQuestionText(dto.getQuestionText());
             question.setScore(BigDecimal.valueOf(dto.getScore()));
             question.setQuestionType(QuestionType.valueOf(dto.getQuestionType()));
@@ -342,6 +221,7 @@ public class QuestionServiceImpl implements QuestionService {
             result.add(questionMapper.toQuestionDto(questionRepository.save(question)));
         }
 
+        // Process CREATE new
         List<QuestionDto> newRequests = nonDeletedRequests.stream()
                 .filter(dto -> dto.getId() == null)
                 .collect(Collectors.toList());
@@ -359,4 +239,80 @@ public class QuestionServiceImpl implements QuestionService {
 
         return result;
     }
+
+    @Override
+    public QuestionDto getQuestion(Long id) {
+        Question question = questionRepository.findByIdAndDeletedAtIsNull(id)
+                .orElseThrow(() -> new ApiException(Const.QUESTION.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+        return questionMapper.toQuestionDto(question);
+    }
+
+    @Override
+    @Transactional
+    public void deleteQuestions(List<Long> ids) {
+        String traceId = TraceUtil.getTraceId();
+        log.info("[{}] Deleting questions with IDs: {}", traceId, ids);
+
+        if (ids == null || ids.isEmpty()) {
+            log.error("[{}] Question IDs list is empty", traceId);
+            throw new ApiException(Const.QUESTION.IDS_REQUIRED, HttpStatus.BAD_REQUEST.value());
+        }
+
+        // Lấy danh sách các câu hỏi hợp lệ (chưa bị xóa)
+        List<Question> questions = questionRepository.findAllByIdInAndDeletedAtIsNull(ids);
+
+        if (questions.isEmpty()) {
+            log.error("[{}] No active questions found for IDs: {}", traceId, ids);
+            throw new ApiException(Const.QUESTION.NOT_FOUND, HttpStatus.NOT_FOUND.value());
+        }
+
+        // Cập nhật thông tin xóa mềm
+        String deletedBy = jwtUtil.extractEmailPrefixFromCurrentRequest();
+        OffsetDateTime now = OffsetDateTime.now();
+
+        questions.forEach(q -> {
+            q.setDeletedBy(deletedBy);
+            q.setDeletedAt(now);
+        });
+
+        questionRepository.saveAll(questions);
+
+        log.info("[{}] Successfully soft deleted {} questions", traceId, questions.size());
+    }
+
+
+    @Override
+    public List<QuestionDto> getQuestionsBySection(Long sectionId) {
+        // Kiểm tra sự tồn tại của section
+        sectionRepository.findByIdAndDeletedAtIsNull(sectionId)
+                .orElseThrow(() -> new ApiException(Const.SECTION.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+
+        // Lấy danh sách câu hỏi theo sectionId
+        List<Question> questions = questionRepository.findBySectionIdAndDeletedAtIsNull(sectionId);
+
+        // Ánh xạ sang QuestionDto
+        return questionMapper.toQuestionDtos(questions);
+    }
+
+    @Override
+    public void updateScoreQuestion(Long questionId, double score) {
+        String traceId = TraceUtil.getTraceId();
+        log.info("[{}] Updating score for question ID: {}, new score: {}", traceId, questionId, score);
+
+        // Fetch existing question
+        Question question = questionRepository.findByIdAndDeletedAtIsNull(questionId)
+                .orElseThrow(() -> {
+                    log.error("[{}] Question not found for id: {}", traceId, questionId);
+                    return new ApiException(Const.QUESTION.NOT_FOUND, HttpStatus.NOT_FOUND.value());
+                });
+
+        // Update score
+        question.setScore(BigDecimal.valueOf(score));
+        questionRepository.save(question);
+
+        // Optional: record to history if you’re tracking changes
+        log.info("[{}] Updated score for question ID {} to {}", traceId, questionId, score);
+
+    }
+
 }
