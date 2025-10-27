@@ -122,27 +122,6 @@ public interface ChallengeSectionMapper {
         StudentSectionWithQuestionsDto.StudentDataItem studentItem = new StudentSectionWithQuestionsDto.StudentDataItem();
         studentItem.setId(item.getId());
         studentItem.setValue(item.getValue());
-
-        switch (questionType) {
-            case MULTIPLE_CHOICE:
-            case MULTIPLE_SELECT:
-            case TRUE_OR_FALSE:
-                // Không ánh xạ positionId, positionOrder
-                break;
-            case DROPDOWN:
-                // Chỉ ánh xạ positionId, bỏ positionOrder
-                studentItem.setPositionId(item.getPositionId());
-                break;
-            case FILL_IN_THE_BLANK:
-            case DRAG_AND_DROP:
-            case REARRANGE:
-                // Không ánh xạ positionId, positionOrder (isCorrect đã bị bỏ)
-                break;
-            default:
-                // Mặc định ánh xạ cả positionId và positionOrder
-                studentItem.setPositionId(item.getPositionId());
-        }
-
         return studentItem;
     }
 

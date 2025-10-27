@@ -5,15 +5,15 @@ import com.learning.progress.common.Const;
 import com.learning.progress.common.SubmissionStatus;
 import com.learning.progress.dto.DataResponse;
 import com.learning.progress.dto.challenge.StudentChallengeListDTO;
+import com.learning.progress.dto.challenge.section.DataContent;
+import com.learning.progress.dto.submission.StudentSubmissionDTO;
 import com.learning.progress.entity.*;
 import com.learning.progress.exception.ApiException;
 import com.learning.progress.mapper.SubmissionMapper;
-import com.learning.progress.repository.ClassLessonRepository;
-import com.learning.progress.repository.ClassRepository;
-import com.learning.progress.repository.ClassStudentRepository;
-import com.learning.progress.repository.SubmissionDailyChallengeRepository;
+import com.learning.progress.repository.*;
 import com.learning.progress.service.SubmissionChallengeService;
 import com.learning.progress.util.AppValidator;
+import com.learning.progress.util.JsonUtil;
 import com.learning.progress.util.JwtUtil;
 import com.learning.progress.util.TraceUtil;
 import lombok.extern.slf4j.Slf4j;
@@ -31,6 +31,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -51,6 +52,14 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
     private SubmissionMapper submissionMapper;
     @Autowired
     private JwtUtil jwtUtil;
+    @Autowired
+    private SubmissionQuestionRepository submissionQuestionRepository;
+    @Autowired
+    private QuestionRepository questionRepository;
+    @Autowired
+    private DailyChallengeRepository dailyChallengeRepository;
+    @Autowired
+    private GradingDailyChallengeRepository gradingDailyChallengeRepository;
 
     @Override
     @Async("taskExecutor")
@@ -144,6 +153,103 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
                 .size(size)
                 .totalElements(lessonPage.getTotalElements())
                 .totalPages(lessonPage.getTotalPages())
+                .build();
+    }
+
+    /**
+     * @param challengeId
+     * @param page
+     * @param size
+     * @param text
+     * @param sortBy
+     * @param sortDir
+     * @return
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public DataResponse<List<StudentSubmissionDTO>> getSubmissionsByChallenge(Long challengeId, int page, int size, String text, String sortBy, String sortDir) {
+        String traceId = TraceUtil.getTraceId();
+        log.info("[{}] Listing submissions for challengeId: {}, page: {}, size: {}, text: {}, sortBy: {}, sortDir: {}",
+                traceId, challengeId, page, size, text, sortBy, sortDir);
+
+        // Validate pagination and sort parameters
+        appValidator.validatePaginationParams(page, size);
+        appValidator.validateSortParams(List.of("createdAt", "submissionStatus", "studentName", "totalScore"), sortBy, sortDir);
+        log.debug("[{}] Pagination and sort parameters validated", traceId);
+
+        // Validate challenge
+        DailyChallenge challenge = dailyChallengeRepository.findByIdAndDeletedAtIsNull(challengeId)
+                .orElseThrow(() -> {
+                    log.error("[{}] Challenge not found for challengeId: {}", traceId, challengeId);
+                    return new ApiException(Const.CHALLENGE.NOT_FOUND, HttpStatus.NOT_FOUND.value());
+                });
+
+        // Validate user access (teacher or teaching assistant)
+        Long classId = challenge.getClassLesson().getClassChapter().getClazz().getId();
+        appValidator.validateUserAccessToClass(classId);
+
+        // Restrict access to teachers or teaching assistants
+        String role = jwtUtil.extractRoleFromCurrentRequest();
+        if (!role.equals("TEACHER") && !role.equals("TEACHING_ASSISTANT")) {
+            log.error("[{}] Unauthorized access to submissions for challengeId: {} by user with role: {}", traceId, challengeId, role);
+            throw new ApiException("Unauthorized: Only teachers or teaching assistants can view submissions", HttpStatus.FORBIDDEN.value());
+        }
+
+        // Create Sort and Pageable objects
+        Sort sort = Sort.by(sortDir.equalsIgnoreCase("asc") ? Sort.Direction.ASC : Sort.Direction.DESC, sortBy);
+        Pageable pageable = PageRequest.of(page, size, sort);
+
+        // Fetch submissions with text filter
+        Page<SubmissionDailyChallenge> submissionPage = submissionDailyChallengeRepository
+                .findByChallengeIdAndDeletedAtIsNull(challengeId, text == null ? "" : text, pageable);
+
+        // Fetch finalized gradings for the submissions
+        List<Long> submissionIds = submissionPage.getContent().stream()
+                .map(SubmissionDailyChallenge::getId)
+                .collect(Collectors.toList());
+        List<GradingDailyChallenge> gradings = submissionIds.isEmpty()
+                ? new ArrayList<>()
+                : gradingDailyChallengeRepository.findBySubmissionDailyIdInAndIsFinalizedTrueAndDeletedAtIsNull(submissionIds);
+        Map<Long, Double> gradingScoreMap = gradings.stream()
+                .collect(Collectors.toMap(
+                        g -> g.getSubmissionDaily().getId(),
+                        GradingDailyChallenge::getTotalScore,
+                        (existing, replacement) -> existing // In case of duplicates, keep the first
+                ));
+
+        // Map to DTO
+        List<StudentSubmissionDTO> data = submissionPage.getContent().stream()
+                .map(submission -> {
+                    StudentSubmissionDTO dto = new StudentSubmissionDTO();
+                    dto.setSubmissionId(submission.getId());
+                    dto.setStudentId(submission.getUser().getId());
+                    dto.setStudentName(submission.getUser().getFullName() != null
+                            ? submission.getUser().getFullName()
+                            : submission.getUser().getEmail());
+                    dto.setSubmissionStatus(submission.getSubmissionStatus());
+                    dto.setSubmittedAt(submission.getSubmittedAt());
+                    dto.setExpiredAt(submission.getExpiredAt());
+                    dto.setAutoSubmitted(submission.getAutoSubmitted());
+                    dto.setPlagiarismScore(submission.getPlagiarismScore());
+                    // Set total score from grading or 0.0 if not graded
+                    dto.setTotalScore(gradingScoreMap.getOrDefault(submission.getId(), null));
+                    return dto;
+                })
+                .collect(Collectors.toList());
+
+        log.info("[{}] Retrieved {} submissions ({} total) for challengeId: {}",
+                traceId, data.size(), submissionPage.getTotalElements(), challengeId);
+
+        return DataResponse.<List<StudentSubmissionDTO>>builder()
+                .traceId(traceId)
+                .success(true)
+                .message(Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL)
+                .data(data)
+                .timestamp(LocalDateTime.now())
+                .page(page)
+                .size(size)
+                .totalElements(submissionPage.getTotalElements())
+                .totalPages(submissionPage.getTotalPages())
                 .build();
     }
 }

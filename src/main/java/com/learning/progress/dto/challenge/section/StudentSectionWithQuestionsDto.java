@@ -47,7 +47,5 @@ public class StudentSectionWithQuestionsDto {
     public static class StudentDataItem {
         private String id;
         private String value;
-        private String positionId;
-        private Integer positionOrder;
     }
 }
