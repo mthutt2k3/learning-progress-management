@@ -1,13 +1,16 @@
 package com.learning.progress.service.impl;
 
+import com.learning.progress.common.ChallengeType;
 import com.learning.progress.common.Const;
+import com.learning.progress.common.SubmissionStatus;
 import com.learning.progress.dto.challenge.section.DataContent;
+import com.learning.progress.dto.submission.AnswerContent;
 import com.learning.progress.dto.submission.SaveSubmissionRequest;
 import com.learning.progress.dto.submission.SubmissionResultResponse;
 import com.learning.progress.entity.*;
 import com.learning.progress.exception.ApiException;
-import com.learning.progress.mapper.SubmissionMapper;
 import com.learning.progress.repository.*;
+import com.learning.progress.service.GradingDailyChallengeService;
 import com.learning.progress.service.SubmissionQuestionService;
 import com.learning.progress.service.validator.SubmissionQuestionValidator;
 import com.learning.progress.util.AppValidator;
@@ -47,6 +50,8 @@ public class SubmissionQuestionServiceImpl implements SubmissionQuestionService 
 
     @Autowired
     private QuestionRepository questionRepository;
+    @Autowired
+    private GradingDailyChallengeService gradingDailyChallengeService;
 
     @Override
     @Transactional(readOnly = true)
@@ -98,8 +103,8 @@ public class SubmissionQuestionServiceImpl implements SubmissionQuestionService 
             // Convert submitted content to DataContent
             SubmissionQuestion submissionQuestion = submissionQuestionMap.get(question.getId());
             if (submissionQuestion != null) {
-                DataContent submittedContent = JsonUtil.responseToObject(
-                        submissionQuestion.getSubmissionContentJson(), DataContent.class);
+                AnswerContent submittedContent = JsonUtil.responseToObject(
+                        submissionQuestion.getSubmissionContentJson(), AnswerContent.class);
                 questionResult.setSubmittedContent(submittedContent);
             } else {
                 questionResult.setSubmittedContent(null); // No submission for this question
@@ -125,12 +130,11 @@ public class SubmissionQuestionServiceImpl implements SubmissionQuestionService 
         DailyChallenge dailyChallenge = submission.getChallenge();
         // Validate class access and student status
         Long classId = dailyChallenge.getClassLesson().getClassChapter().getClazz().getId();
-        Long userId = jwtUtil.extractUserIdFromCurrentRequest();
         appValidator.validateUserAccessToClass(classId);
 
         // Validate submission time
         OffsetDateTime now = OffsetDateTime.now();
-        if (now.isBefore(submission.getStartedAt()) || now.isAfter(submission.getExpiredAt())) {
+        if (submission.getStartedAt() != null && submission.getExpiredAt() != null && (now.isBefore(submission.getStartedAt()) || now.isAfter(submission.getExpiredAt()))) {
             throw new ApiException("Submission is not allowed outside the challenge time range", HttpStatus.BAD_REQUEST.value());
         }
 
@@ -183,6 +187,31 @@ public class SubmissionQuestionServiceImpl implements SubmissionQuestionService 
         if (!submissionQuestions.isEmpty()) {
             submissionQuestionRepository.saveAll(submissionQuestions);
         }
+        // If saveAsDraft = false, mark as submitted and trigger auto-grading for eligible challenge types
+        if (!request.getSaveAsDraft()) {
+            // Check if already submitted
+            if (submission.getSubmissionStatus() == SubmissionStatus.SUBMITTED) {
+                throw new ApiException("Submission is already submitted", HttpStatus.BAD_REQUEST.value());
+            }
+
+            // Update submission status and timestamps
+            submission.setSubmissionStatus(SubmissionStatus.SUBMITTED);
+            submission.setSubmittedAt(OffsetDateTime.now());
+            submission.setAutoSubmitted(false);
+            submissionDailyChallengeRepository.save(submission);
+
+            // Trigger auto-grading for GV, RE, LI challenge types
+            try {
+                ChallengeType challengeType = dailyChallenge.getChallengeType();
+                if (challengeType == ChallengeType.GV || challengeType == ChallengeType.RE || challengeType == ChallengeType.LI) {
+                    gradingDailyChallengeService
+                            .autoGradeSubmission(submissionChallengeId);
+                }
+            } catch (IllegalArgumentException e) {
+                // Skip auto-grading for invalid challenge types
+            }
+        }
+
     }
 
 }
