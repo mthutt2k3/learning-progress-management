@@ -5,6 +5,7 @@ import com.learning.progress.dto.DataResponse;
 import com.learning.progress.dto.ai.ExerciseGenerationRequest;
 import com.learning.progress.dto.challenge.section.SectionWithQuestionsDto;
 import com.learning.progress.service.OpenAiService;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -15,6 +16,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/openai")
+@Tag(name = "Open AI", description = "Generate question")
 public class OpenAiController {
 
     private final OpenAiService openAiService;
@@ -28,7 +30,7 @@ public class OpenAiController {
 //        return openAiService.getChatCompletion(message);
 //    }
 
-    @PostMapping("/generate-exercise")
+    @PostMapping("/generate-question")
     public ResponseEntity<DataResponse<List<SectionWithQuestionsDto>>> generateExercise(
             @Valid @RequestBody ExerciseGenerationRequest request) {
         return new ResponseEntity<>(

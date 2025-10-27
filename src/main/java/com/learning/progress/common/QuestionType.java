@@ -9,5 +9,6 @@ public enum QuestionType {
     DRAG_AND_DROP,
     REARRANGE,
     REWRITE,
-    WRITING
+    WRITING,
+    SPEAKING
 }

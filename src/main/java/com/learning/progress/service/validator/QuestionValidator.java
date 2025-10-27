@@ -133,6 +133,8 @@ public class QuestionValidator {
                 break;
             case WRITING:
                 break;
+            case SPEAKING:
+                break;
 
             default:
                 log.error("[{}] Invalid question type: {}", traceId, questionType);
