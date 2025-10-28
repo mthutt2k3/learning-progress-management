@@ -21,8 +21,22 @@ spring:
         order_inserts: false
         order_updates: false
         jdbc.time_zone: Asia/Ho_Chi_Minh
-
-
+  data:
+    redis:
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT}
+      password: ${REDIS_PASSWORD}
+      timeout: 2000 # Thời gian chờ kết nối (ms)
+      lettuce: # Sử dụng Lettuce làm client Redis
+        pool:
+          max-active: 8 # Số kết nối tối đa
+          max-idle: 8 # Số kết nối nhàn rỗi tối đa
+          min-idle: 0 # Số kết nối nhàn rỗi tối thiểu
+          max-wait: 2000 # Thời gian chờ tối đa để lấy kết nối (ms)
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 20MB
   liquibase:
     enabled: false
   jackson:
@@ -58,7 +72,7 @@ server:
       min-spare: 20
     max-connections: 500
     accept-count: 200
-    max-http-form-post-size: 10MB
+    max-http-form-post-size: 20MB
   servlet:
     context-path: /learning-progress-management
 
@@ -75,6 +89,7 @@ jwt:
 logging:
   level:
     ROOT: INFO
+    com.learning.progress: DEBUG
     com.apus.base: INFO
     org.hibernate.sql: WARN
     org.hibernate.type: WARN
@@ -97,6 +112,11 @@ azure:
     lesson-template: lesson-template.xlsx
     chapter-in-class-template: chapter-in-class-template.xlsx
     lesson-in-class-template: lesson-in-class-template.xlsx
+  openai:
+    endpoint: ${OPENAI_ENDPOINT}
+    api-key: ${OPENAI_API_KEY}
+    reading-passage:
+      words-per-paragraph: 100
 
 app:
   pagination:
@@ -107,3 +127,8 @@ app:
       cron: "0 0 0 * * *"         # chạy mỗi ngày lúc 0h00
       upcoming-end-days: 7        # số ngày trước endDate để chuyển sang UPCOMING_END
 
+env:
+  class:
+    max-teaching-assistant-in-class: 2
+    max-teacher-in-class: 1
+    max-student-in-class: 15
