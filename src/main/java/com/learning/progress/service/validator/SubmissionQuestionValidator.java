@@ -1,10 +1,10 @@
 package com.learning.progress.service.validator;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.learning.progress.common.Const;
 import com.learning.progress.common.QuestionType;
-import com.learning.progress.dto.challenge.section.DataContent;
 import com.learning.progress.dto.challenge.section.DataItem;
+import com.learning.progress.dto.submission.AnswerContent;
+import com.learning.progress.dto.submission.AnswerItem;
 import com.learning.progress.dto.submission.SaveSubmissionRequest;
 import com.learning.progress.entity.Question;
 import com.learning.progress.exception.ApiException;
@@ -61,16 +61,13 @@ public class SubmissionQuestionValidator {
             if (question == null) {
                 throw new ApiException("Question not found for ID: " + answer.getQuestionId(), HttpStatus.NOT_FOUND.value());
             }
-            DataContent dataContent = answer.getContent();
+            AnswerContent dataContent = answer.getContent();
             if (dataContent == null) {
-                throw new ApiException("DataContent cannot be null", HttpStatus.NOT_FOUND.value());
+                break;
             }
 
-            List<DataItem> submissionContent = dataContent.getData();
-            if(Boolean.FALSE.equals(saveAsDraft) && (submissionContent == null || submissionContent.isEmpty())){
-                throw new ApiException("Question content cannot be null or empty for non-draft submissions for ID: " + answer.getQuestionId(), HttpStatus.BAD_REQUEST.value());
-            }
-            if(Boolean.TRUE.equals(saveAsDraft) && (submissionContent == null || submissionContent.isEmpty())){
+            List<AnswerItem> submissionContent = dataContent.getData();
+            if((submissionContent == null || submissionContent.isEmpty())){
                 break;
             }
             List<DataItem> questionContent = questionMapper.toQuestionDto(question).getContent().getData();
@@ -79,10 +76,10 @@ public class SubmissionQuestionValidator {
     }
 
 
-    private void validateSubmissionContent(QuestionType questionType, List<DataItem> submissionContent,
+    private void validateSubmissionContent(QuestionType questionType, List<AnswerItem> submissionContent,
                                            List<DataItem> questionContent, String questionText) {
         Set<String> submittedIds = submissionContent.stream()
-                .map(DataItem::getId)
+                .map(AnswerItem::getId)
                 .collect(Collectors.toSet());
         Set<String> questionDataIds = questionContent.stream()
                 .map(DataItem::getId)
@@ -98,15 +95,15 @@ public class SubmissionQuestionValidator {
                 if (submissionContent.size() != 1) {
                     throw new ApiException("Expected exactly one answer for " + questionType, HttpStatus.BAD_REQUEST.value());
                 }
-                validateDataItem(submissionContent.get(0), false);
+                validateDataItem(submissionContent.get(0), false, false, questionType);
                 break;
 
             case MULTIPLE_SELECT:
                 if (submissionContent.isEmpty()) {
                     throw new ApiException("MULTIPLE_SELECT must have at least one answer", HttpStatus.BAD_REQUEST.value());
                 }
-                for (DataItem item : submissionContent) {
-                    validateDataItem(item, false);
+                for (AnswerItem item : submissionContent) {
+                    validateDataItem(item, false, false, questionType);
                 }
                 break;
             case FILL_IN_THE_BLANK:
@@ -114,8 +111,8 @@ public class SubmissionQuestionValidator {
                 if (submissionContent.size() != placeholders.size()) {
                     throw new ApiException(questionType + " must have answers for all placeholders", HttpStatus.BAD_REQUEST.value());
                 }
-                for (DataItem item : submissionContent) {
-                    validateDataItem(item, true);
+                for (AnswerItem item : submissionContent) {
+                    validateDataItem(item, true, false, questionType);
                     if (!placeholders.contains(item.getPositionId())) {
                         throw new ApiException("Position ID " + item.getPositionId() + " does not match any placeholder", HttpStatus.BAD_REQUEST.value());
                     }
@@ -126,14 +123,14 @@ public class SubmissionQuestionValidator {
                 placeholders = extractPlaceholders(questionText);
                 // Kiểm tra rằng tất cả placeholders đều có ít nhất một DataItem tương ứng
                 Set<String> submittedPositionIds = submissionContent.stream()
-                        .map(DataItem::getPositionId)
+                        .map(AnswerItem::getPositionId)
                         .filter(Objects::nonNull)
                         .collect(Collectors.toSet());
                 if (!submittedPositionIds.containsAll(placeholders)) {
                     throw new ApiException(questionType + " must have answers for all placeholders", HttpStatus.BAD_REQUEST.value());
                 }
-                for (DataItem item : submissionContent) {
-                    validateDataItem(item, true);
+                for (AnswerItem item : submissionContent) {
+                    validateDataItem(item, true, false, questionType);
                     if (item.getPositionId() != null && !placeholders.contains(item.getPositionId())) {
                         throw new ApiException("Position ID " + item.getPositionId() + " does not match any placeholder", HttpStatus.BAD_REQUEST.value());
                     }
@@ -145,8 +142,8 @@ public class SubmissionQuestionValidator {
                 if (submissionContent.size() != placeholders.size()) {
                     throw new ApiException("REARRANGE must have answers for all placeholders", HttpStatus.BAD_REQUEST.value());
                 }
-                for (DataItem item : submissionContent) {
-                    validateDataItem(item, true);
+                for (AnswerItem item : submissionContent) {
+                    validateDataItem(item, true, false, questionType);
                     if (!placeholders.contains(item.getPositionId())) {
                         throw new ApiException("Position ID " + item.getPositionId() + " does not match any placeholder", HttpStatus.BAD_REQUEST.value());
                     }
@@ -157,14 +154,12 @@ public class SubmissionQuestionValidator {
                 if (submissionContent.size() != 1) {
                     throw new ApiException("REWRITE must have exactly one answer", HttpStatus.BAD_REQUEST.value());
                 }
-                validateDataItem(submissionContent.get(0), false);
+                validateDataItem(submissionContent.get(0), false, true, questionType);
                 break;
 
             case WRITING:
-                if (submissionContent.size() != 0) {
-                    throw new ApiException("WRITING must not have answer", HttpStatus.BAD_REQUEST.value());
-                }
-                validateDataItem(submissionContent.get(0), false);
+                break;
+            case SPEAKING:
                 break;
 
             default:
@@ -172,12 +167,15 @@ public class SubmissionQuestionValidator {
         }
     }
 
-    private void validateDataItem(DataItem item, boolean requiresPositionId) {
-        if (item.getId() == null || item.getValue() == null) {
-            throw new ApiException("Submission content must include id and value", HttpStatus.BAD_REQUEST.value());
+    private void validateDataItem(AnswerItem item, boolean requiresPositionId, boolean requiresValue, QuestionType questionType) {
+        if (item.getId() == null) {
+            throw new ApiException(questionType + " :Submission content must include id", HttpStatus.BAD_REQUEST.value());
+        }
+        if (requiresValue && item.getValue() == null) {
+            throw new ApiException(questionType + " :Submission content must include value", HttpStatus.BAD_REQUEST.value());
         }
         if (requiresPositionId && item.getPositionId() == null) {
-            throw new ApiException("Submission content must include positionId", HttpStatus.BAD_REQUEST.value());
+            throw new ApiException(questionType + " :Submission content must include positionId", HttpStatus.BAD_REQUEST.value());
         }
     }
 

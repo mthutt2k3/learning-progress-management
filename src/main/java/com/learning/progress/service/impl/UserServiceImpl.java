@@ -562,6 +562,10 @@ public class UserServiceImpl implements UserService {
 
         String newEmail = request.getNewEmail();
 
+        if (targetUser.getStatus() == UserStatus.ACTIVE && newEmail.equalsIgnoreCase(targetUser.getEmail())) {
+            throw new ApiException("Email mới không được trùng với email hiện tại khi user đang ACTIVE", HttpStatus.BAD_REQUEST.value());
+        }
+
         targetUser.setEmail(newEmail);
 
         switch (targetUser.getStatus()) {

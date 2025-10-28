@@ -68,5 +68,9 @@ public class DailyChallenge extends BaseEntity{
 
     @OneToMany(mappedBy = "challenge", fetch = FetchType.LAZY, cascade = CascadeType.ALL)
     @Where(clause = "deleted_at IS NULL")
+    private List<ChallengeSection> sections;
+
+    @OneToMany(mappedBy = "challenge", fetch = FetchType.LAZY, cascade = CascadeType.ALL)
+    @Where(clause = "deleted_at IS NULL")
     private List<SubmissionDailyChallenge> submissionDailyChallenges;
 }

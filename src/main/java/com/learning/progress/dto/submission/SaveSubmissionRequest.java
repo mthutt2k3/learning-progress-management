@@ -1,11 +1,8 @@
 package com.learning.progress.dto.submission;
 
-import com.learning.progress.dto.challenge.section.DataContent;
-import com.learning.progress.dto.challenge.section.DataItem;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
-import java.util.ArrayList;
 import java.util.List;
 
 @Data
@@ -23,6 +20,7 @@ public class SaveSubmissionRequest {
         private Long questionId;
 
         @NotNull(message = "Submission content cannot be null")
-        private DataContent content;
+        private AnswerContent content;
     }
+
 }

@@ -97,6 +97,11 @@ azure:
     lesson-template: lesson-template.xlsx
     chapter-in-class-template: chapter-in-class-template.xlsx
     lesson-in-class-template: lesson-in-class-template.xlsx
+  openai:
+    endpoint: ${OPENAI_ENDPOINT}
+    api-key: ${OPENAI_API_KEY}
+    reading-passage:
+      words-per-paragraph: 100
 
 app:
   pagination:

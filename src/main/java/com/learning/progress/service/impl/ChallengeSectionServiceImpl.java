@@ -1,5 +1,6 @@
 package com.learning.progress.service.impl;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.learning.progress.common.Const;
 import com.learning.progress.common.ResourceType;
 import com.learning.progress.dto.DataResponse;
@@ -12,6 +13,7 @@ import com.learning.progress.mapper.ChallengeSectionMapper;
 import com.learning.progress.repository.ChallengeSectionRepository;
 import com.learning.progress.repository.DailyChallengeRepository;
 import com.learning.progress.repository.QuestionRepository;
+import com.learning.progress.service.CacheService;
 import com.learning.progress.service.ChallengeSectionService;
 import com.learning.progress.service.QuestionService;
 import com.learning.progress.util.AppValidator;
@@ -21,6 +23,7 @@ import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validator;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -37,32 +40,32 @@ import java.util.stream.Collectors;
 @Slf4j
 public class ChallengeSectionServiceImpl implements ChallengeSectionService {
 
-    private final ChallengeSectionRepository sectionRepository;
-    private final DailyChallengeRepository challengeRepository;
-    private final QuestionService questionService;
-    private final ChallengeSectionMapper challengeSectionMapper;
-    private final AppValidator appValidator;
-    private final JwtUtil jwtUtil;
-    private final Validator validator;
-    private final QuestionRepository questionRepository;
+    @Autowired
+    private ChallengeSectionRepository sectionRepository;
 
-    public ChallengeSectionServiceImpl(
-            ChallengeSectionRepository sectionRepository,
-            DailyChallengeRepository challengeRepository,
-            QuestionService questionService,
-            ChallengeSectionMapper challengeSectionMapper,
-            AppValidator appValidator,
-            JwtUtil jwtUtil,
-            Validator validator, QuestionRepository questionRepository) {
-        this.sectionRepository = sectionRepository;
-        this.challengeRepository = challengeRepository;
-        this.questionService = questionService;
-        this.challengeSectionMapper = challengeSectionMapper;
-        this.appValidator = appValidator;
-        this.jwtUtil = jwtUtil;
-        this.validator = validator;
-        this.questionRepository = questionRepository;
-    }
+    @Autowired
+    private DailyChallengeRepository challengeRepository;
+
+    @Autowired
+    private QuestionService questionService;
+
+    @Autowired
+    private ChallengeSectionMapper challengeSectionMapper;
+
+    @Autowired
+    private AppValidator appValidator;
+
+    @Autowired
+    private JwtUtil jwtUtil;
+
+    @Autowired
+    private Validator validator;
+
+    @Autowired
+    private QuestionRepository questionRepository;
+
+    @Autowired
+    private CacheService cacheService;
 
     @Override
     public void updateScoreQuestion(Long questionId, double score) {
@@ -72,6 +75,9 @@ public class ChallengeSectionServiceImpl implements ChallengeSectionService {
                 .orElseThrow(() -> new ApiException("Question not found", HttpStatus.NOT_FOUND.value()));
         validateUserAccessToClass(question.getSection().getChallenge().getClassLesson().getClassChapter().getClazz().getId(), traceId);
         questionService.updateScoreQuestion(questionId, score);
+
+        cacheService.clearCacheForQuestion(questionId, question.getSection().getId(),
+                question.getSection().getChallenge().getId(), traceId);
     }
 
     @Override
@@ -88,6 +94,8 @@ public class ChallengeSectionServiceImpl implements ChallengeSectionService {
         ChallengeSection section = saveOrUpdateSection(dto.getSection(), challenge, traceId);
         List<QuestionDto> questions = saveQuestions(dto.getQuestions(), section.getId(), traceId);
 
+        cacheService.clearCacheForSection(section.getId(), challengeId, traceId);
+
         log.info("[{}] Successfully saved section with ID: {} for challengeId: {}", traceId, section.getId(), challengeId);
         return challengeSectionMapper.toSectionWithQuestionsDto(section, questions);
     }
@@ -97,19 +105,36 @@ public class ChallengeSectionServiceImpl implements ChallengeSectionService {
         String traceId = TraceUtil.getTraceId();
         log.info("[{}] Retrieving section with ID: {}", traceId, id);
 
+        String cacheKey = cacheService.buildSectionCacheKey(id);
+        SectionWithQuestionsDto cachedResult = cacheService.getCachedObject(
+                cacheKey, new TypeReference<SectionWithQuestionsDto>() {}, traceId);
+        if (cachedResult != null) {
+            return cachedResult;
+        }
+
         ChallengeSection section = findSectionById(id, traceId);
         validateUserAccessToClass(section.getChallenge().getClassLesson().getClassChapter().getClazz().getId(), traceId);
 
         List<QuestionDto> questions = mapQuestionsToDto(section.getQuestions());
-        log.info("[{}] Successfully retrieved section with ID: {}", traceId, id);
+        SectionWithQuestionsDto result = challengeSectionMapper.toSectionWithQuestionsDto(section, questions);
 
-        return challengeSectionMapper.toSectionWithQuestionsDto(section, questions);
+        cacheService.cacheObject(cacheKey, result, CacheService.SECTION_TTL_MINUTES, traceId);
+
+        log.info("[{}] Successfully retrieved section with ID: {}", traceId, id);
+        return result;
     }
 
     @Override
     public DataResponse<List<SectionWithQuestionsDto>> listSections(Long challengeId, int page, int size, String text) {
         String traceId = TraceUtil.getTraceId();
         log.debug("[{}] Validating parameters for challengeId: {}, page: {}, size: {}", traceId, challengeId, page, size);
+
+        String cacheKey = cacheService.buildSectionsCacheKey(challengeId, page, size, text);
+        DataResponse<List<SectionWithQuestionsDto>> cachedResult = cacheService.getCachedObject(
+                cacheKey, new TypeReference<DataResponse<List<SectionWithQuestionsDto>>>() {}, traceId);
+        if (cachedResult != null) {
+            return cachedResult;
+        }
 
         appValidator.validatePaginationParams(page, size);
         validateChallengeExists(challengeId, traceId);
@@ -121,15 +146,9 @@ public class ChallengeSectionServiceImpl implements ChallengeSectionService {
         Page<ChallengeSection> sectionPage = sectionRepository.findByChallengeIdAndTextAndDeletedAtIsNull(
                 challengeId, StringUtils.defaultString(text), pageable);
 
-        log.debug("[{}] Retrieved {} sections for page {} in challengeId: {}",
-                traceId, sectionPage.getTotalElements(), page, challengeId);
-
         List<SectionWithQuestionsDto> sectionsWithQuestions = mapSectionsToDtoWithQuestions(sectionPage.getContent());
 
-        log.info("[{}] Successfully retrieved {} sections for challengeId: {}",
-                traceId, sectionsWithQuestions.size(), challengeId);
-
-        return DataResponse.<List<SectionWithQuestionsDto>>builder()
+        DataResponse<List<SectionWithQuestionsDto>> response = DataResponse.<List<SectionWithQuestionsDto>>builder()
                 .traceId(traceId)
                 .success(true)
                 .message(Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL)
@@ -140,18 +159,34 @@ public class ChallengeSectionServiceImpl implements ChallengeSectionService {
                 .totalElements(sectionPage.getTotalElements())
                 .totalPages(sectionPage.getTotalPages())
                 .build();
+
+        cacheService.cacheObject(cacheKey, response, CacheService.SECTIONS_LIST_TTL_MINUTES, traceId);
+
+        log.info("[{}] Successfully retrieved {} sections for challengeId: {}",
+                traceId, sectionsWithQuestions.size(), challengeId);
+        return response;
     }
 
     @Override
     public DataResponse<List<StudentSectionWithQuestionsDto>> listSectionsWithoutAnswers(Long challengeId, int page, int size, String text) {
+        String traceId = TraceUtil.getTraceId();
+        log.debug("[{}] Retrieving sections without answers for challengeId: {}", traceId, challengeId);
+
+        String cacheKey = cacheService.buildPublicSectionsCacheKey(challengeId, page, size, text);
+        DataResponse<List<StudentSectionWithQuestionsDto>> cachedResult = cacheService.getCachedObject(
+                cacheKey, new TypeReference<DataResponse<List<StudentSectionWithQuestionsDto>>>() {}, traceId);
+        if (cachedResult != null) {
+            return cachedResult;
+        }
+
         DataResponse<List<SectionWithQuestionsDto>> fullResponse = listSections(challengeId, page, size, text);
 
         List<StudentSectionWithQuestionsDto> sectionWithQuestionsDtos = fullResponse.getData().stream()
                 .map(challengeSectionMapper::toStudentSectionWithQuestionsDto)
                 .collect(Collectors.toList());
 
-        return DataResponse.<List<StudentSectionWithQuestionsDto>>builder()
-                .traceId(TraceUtil.getTraceId())
+        DataResponse<List<StudentSectionWithQuestionsDto>> response = DataResponse.<List<StudentSectionWithQuestionsDto>>builder()
+                .traceId(traceId)
                 .success(true)
                 .message(Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL)
                 .data(sectionWithQuestionsDtos)
@@ -161,6 +196,10 @@ public class ChallengeSectionServiceImpl implements ChallengeSectionService {
                 .totalElements(fullResponse.getTotalElements())
                 .totalPages(fullResponse.getTotalPages())
                 .build();
+
+        cacheService.cacheObject(cacheKey, response, CacheService.SECTIONS_LIST_TTL_MINUTES, traceId);
+
+        return response;
     }
 
     @Override
@@ -180,9 +219,15 @@ public class ChallengeSectionServiceImpl implements ChallengeSectionService {
         Map<Long, ChallengeSection> sectionMap = loadSectionMap(deleteRequests, nonDeletedRequests, traceId);
 
         processSections(deleteRequests, nonDeletedRequests, sectionMap, traceId);
+
+        cacheService.clearCacheForSection(null, challengeId, traceId);
+        deleteRequests.forEach(dto -> cacheService.clearCacheForSection(dto.getId(), challengeId, traceId));
+        nonDeletedRequests.forEach(dto -> cacheService.clearCacheForSection(dto.getId(), challengeId, traceId));
+
         log.info("[{}] Successfully processed bulk order for challengeId: {}", traceId, challengeId);
     }
 
+    // Các phương thức hỗ trợ giữ nguyên
     private ChallengeSection findSectionById(Long id, String traceId) {
         return sectionRepository.findByIdAndDeletedAtIsNull(id)
                 .orElseThrow(() -> {
@@ -240,6 +285,10 @@ public class ChallengeSectionServiceImpl implements ChallengeSectionService {
         } else {
             log.info("[{}] Updating section with ID: {}", traceId, sectionDto.getId());
             section = findSectionById(sectionDto.getId(), traceId);
+            section.setSectionTitle(sectionDto.getSectionTitle());
+            section.setSectionsUrl(sectionDto.getSectionsUrl());
+            section.setOrderNumber(sectionDto.getOrderNumber());
+            section.setResourceType(ResourceType.valueOf(sectionDto.getResourceType()));
             section.setSectionsContent(sectionDto.getSectionsContent());
         }
         return sectionRepository.save(section);
@@ -309,7 +358,6 @@ public class ChallengeSectionServiceImpl implements ChallengeSectionService {
                 .map(QuickBulkSectionRequest::getId)
                 .collect(Collectors.toSet());
 
-        // Check 1: All request IDs must exist
         Set<Long> invalidRequestIds = new HashSet<>();
         invalidRequestIds.addAll(requestExistingIds.stream()
                 .filter(id -> !existingSectionIds.contains(id))
@@ -323,7 +371,6 @@ public class ChallengeSectionServiceImpl implements ChallengeSectionService {
             throw new ApiException("Invalid section IDs: " + invalidRequestIds, HttpStatus.BAD_REQUEST.value());
         }
 
-        // Check 2: All existing sections must be handled
         Set<Long> handledIds = new HashSet<>(requestExistingIds);
         handledIds.addAll(requestDeleteIds);
 
@@ -336,7 +383,6 @@ public class ChallengeSectionServiceImpl implements ChallengeSectionService {
             throw new ApiException("Sections not handled: " + unhandledSectionIds, HttpStatus.BAD_REQUEST.value());
         }
 
-        // Check 3: Count consistency
         int expectedNonDeletedCount = existingSections.size() - deleteRequests.size();
         if (nonDeletedRequests.size() != expectedNonDeletedCount) {
             log.error("[{}] Non-deleted sections count mismatch! Expected: {}, Actual: {}",
@@ -397,7 +443,6 @@ public class ChallengeSectionServiceImpl implements ChallengeSectionService {
         OffsetDateTime now = OffsetDateTime.now();
         String deletedBy = jwtUtil.extractEmailPrefixFromCurrentRequest();
 
-        // Process deletions
         List<ChallengeSection> sectionsToDelete = new ArrayList<>();
         List<Long> questionIdsToDelete = new ArrayList<>();
 
@@ -422,7 +467,6 @@ public class ChallengeSectionServiceImpl implements ChallengeSectionService {
             log.debug("[{}] Deleted {} sections", traceId, sectionsToDelete.size());
         }
 
-        // Process updates
         List<ChallengeSection> sectionsToUpdate = nonDeletedRequests.stream()
                 .map(dto -> {
                     ChallengeSection section = sectionMap.get(dto.getId());
