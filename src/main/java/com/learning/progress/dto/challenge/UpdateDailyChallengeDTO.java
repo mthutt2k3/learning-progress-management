@@ -1,5 +1,7 @@
 package com.learning.progress.dto.challenge;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.learning.progress.common.ChallengeMethod;
 import com.learning.progress.common.ChallengeType;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -11,6 +13,7 @@ import java.time.OffsetDateTime;
 
 @Getter
 @Setter
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class UpdateDailyChallengeDTO {
 
     @NotBlank(message = "Challenge name is required")
@@ -21,16 +24,16 @@ public class UpdateDailyChallengeDTO {
     @NotNull(message = "Challenge type is required")
     private ChallengeType challengeType;
 
-    @Positive(message = "Duration must be positive")
-    private Integer durationMinutes = 90;
+    @NotNull(message = "Challenge method is required")
+    private ChallengeMethod challengeMethod;
+
+    private Integer durationMinutes = null;
 
     private Boolean hasAntiCheat = true;
 
-    private Boolean shuffleAnswers = true;
+    private Boolean shuffleQuestion = true;
 
     private Boolean translateOnScreen = false;
-
-    private Boolean aiFeedbackEnabled = false;
 
     @NotNull(message = "Start date cannot be empty")
     private OffsetDateTime startDate;

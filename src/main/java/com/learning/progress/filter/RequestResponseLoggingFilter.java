@@ -44,7 +44,7 @@ public class RequestResponseLoggingFilter extends OncePerRequestFilter {
 
         String traceId = snowflake.nextId();
         MDC.put(Const.LOGGING.TRACE_ID, traceId); // Lưu traceId vào MDC
-
+        request.setAttribute(Const.LOGGING.TRACE_ID, traceId);
         try {
             String clientIp = request.getHeader("X-Forwarded-For");
             if (clientIp == null) clientIp = request.getRemoteAddr();

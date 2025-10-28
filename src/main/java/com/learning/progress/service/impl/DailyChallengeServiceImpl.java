@@ -1,34 +1,19 @@
 package com.learning.progress.service.impl;
 
-import com.learning.progress.common.ChallengeStatus;
-import com.learning.progress.common.Const;
-import com.learning.progress.common.RoleName;
-import com.learning.progress.dto.challenge.CreateDailyChallengeRequest;
-import com.learning.progress.dto.challenge.DailyChallengeResponse;
-import com.learning.progress.dto.DataResponse;
-import com.learning.progress.dto.challenge.DailyChallengeListDTO;
-import com.learning.progress.dto.challenge.UpdateDailyChallengeDTO;
-import com.learning.progress.entity.ClassLesson;
-import com.learning.progress.entity.DailyChallenge;
+import com.learning.progress.common.*;
+import com.learning.progress.dto.*;
+import com.learning.progress.dto.challenge.*;
+import com.learning.progress.entity.*;
 import com.learning.progress.exception.ApiException;
 import com.learning.progress.mapper.DailyChallengeMapper;
-import com.learning.progress.repository.ClassLessonRepository;
-import com.learning.progress.repository.ClassRepository;
-import com.learning.progress.repository.DailyChallengeRepository;
-import com.learning.progress.service.DailyChallengeService;
-import com.learning.progress.service.SubmissionChallengeService;
-import com.learning.progress.util.AppValidator;
-import com.learning.progress.util.JwtUtil;
-import com.learning.progress.util.TraceUtil;
+import com.learning.progress.repository.*;
+import com.learning.progress.service.*;
+import com.learning.progress.util.*;
 import jakarta.validation.Valid;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
+import org.springframework.data.domain.*;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,106 +21,85 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.OffsetDateTime;
 import java.util.List;
 
+@Slf4j
 @Service
+@RequiredArgsConstructor
 public class DailyChallengeServiceImpl implements DailyChallengeService {
 
-    private static final Logger log = LoggerFactory.getLogger(DailyChallengeServiceImpl.class);
+    private final ClassRepository classRepository;
+    private final ClassLessonRepository classLessonRepository;
+    private final DailyChallengeRepository dailyChallengeRepository;
+    private final SubmissionChallengeService submissionChallengeService;
+    private final DailyChallengeMapper dailyChallengeMapper;
+    private final AppValidator appValidator;
+    private final JwtUtil jwtUtil;
 
-    @Autowired
-    private ClassRepository classRepository;
-
-    @Autowired
-    private ClassLessonRepository classLessonRepository;
-
-    @Autowired
-    private DailyChallengeRepository dailyChallengeRepository;
-
-    @Autowired
-    private SubmissionChallengeService submissionChallengeService;
-
-    @Autowired
-    private DailyChallengeMapper dailyChallengeMapper;
-
-    @Autowired
-    private AppValidator appValidator;
-
-    @Autowired
-    private JwtUtil jwtUtil;
-
+    /* --------------------------------------------------------
+     * CREATE
+     * -------------------------------------------------------- */
     @Override
     @Transactional
     public DailyChallengeResponse createChallenge(@Valid CreateDailyChallengeRequest request) {
         String traceId = TraceUtil.getTraceId();
-        log.info("[{}] Creating new daily challenge with classLessonId: {}", traceId, request.getClassLessonId());
+        log.info("[{}] Creating daily challenge - classLessonId: {}", traceId, request.getClassLessonId());
 
-        // Validate ClassLesson
         ClassLesson classLesson = classLessonRepository.findByIdAndDeletedAtIsNull(request.getClassLessonId())
-                .orElseThrow(() -> {
-                    log.error("[{}] ClassLesson not found for id: {}", traceId, request.getClassLessonId());
-                    return new ApiException(Const.CLASS_LESSON.NOT_FOUND, HttpStatus.NOT_FOUND.value());
-                });
-        Long classId = classLesson.getClassChapter().getClazz().getId();
-        appValidator.validateUserAccessToClass(classId);
-        // Map request to entity
+                .orElseThrow(() -> notFound(traceId, Const.CLASS_LESSON.NOT_FOUND, request.getClassLessonId()));
+
+        appValidator.validateUserAccessToClass(classLesson.getClassChapter().getClazz().getId());
+
         DailyChallenge challenge = dailyChallengeMapper.mapToEntity(request);
         challenge.setClassLesson(classLesson);
         challenge.setChallengeStatus(ChallengeStatus.DRAFT);
-        challenge.setAiFeedbackEnabled(false);
+        challenge.setChallengeMethod(ChallengeMethod.NORMAL);
         challenge.setHasAntiCheat(false);
-        challenge.setTranslateOnScreen(false);
-        challenge.setShuffleAnswers(true);
-        challenge.setDurationMinutes(60);
-        OffsetDateTime now = OffsetDateTime.now();
-        OffsetDateTime startDate = now.plusDays(1)
-                .withHour(12)
-                .withMinute(0)
-                .withSecond(0)
-                .withNano(0);
+        challenge.setTranslateOnScreen(true);
+        challenge.setShuffleQuestion(true);
+        challenge.setDurationMinutes(null);
 
-        OffsetDateTime endDate = startDate.plusDays(2);
-
+        OffsetDateTime startDate = OffsetDateTime.now()
+                .plusDays(1).withHour(12).withMinute(0).withSecond(0).withNano(0);
         challenge.setStartDate(startDate);
-        challenge.setEndDate(endDate);
+        challenge.setEndDate(startDate.plusDays(2));
 
-
-        // Save challenge
-        challenge = dailyChallengeRepository.save(challenge);
-        log.info("[{}] Successfully created daily challenge with id: {}", traceId, challenge.getId());
+        dailyChallengeRepository.save(challenge);
+        log.info("[{}] Created daily challenge id: {}", traceId, challenge.getId());
 
         return dailyChallengeMapper.mapToDTO(challenge);
     }
 
+    /* --------------------------------------------------------
+     * READ - LIST & DETAIL
+     * -------------------------------------------------------- */
     @Override
-    public DataResponse<List<DailyChallengeListDTO>> getAllChallenges(Long classId, int page, int size, String text, String sortBy, String sortDir) {
-        String traceId = TraceUtil.getTraceId();
-        log.info("[{}] Listing daily challenges with page: {}, size: {}, text: {}, sortBy: {}, sortDir: {}", traceId, page, size, text, sortBy, sortDir);
+    public DataResponse<List<DailyChallengeListDTO>> getAllChallenges(
+            Long classId, int page, int size, String text, String sortBy, String sortDir) {
 
-        // Validate pagination and sort parameters
+        String traceId = TraceUtil.getTraceId();
+        log.info("[{}] Listing daily challenges: classId={}, page={}, size={}, sortBy={}, sortDir={}",
+                traceId, classId, page, size, sortBy, sortDir);
+
         appValidator.validatePaginationParams(page, size);
         appValidator.validateSortParams(List.of("createdAt", "challengeName", "classLessonId"), sortBy, sortDir);
-        log.debug("[{}] Pagination and sort parameters validated", traceId);
         appValidator.validateUserAccessToClass(classId);
 
-        // Create Sort and Pageable objects
-        Sort sort = Sort.by(sortDir.equalsIgnoreCase("asc") ? Sort.Direction.ASC : Sort.Direction.DESC, sortBy);
-        Pageable pageable = PageRequest.of(page, size, sort);
-
-        // Validate class
         classRepository.findById(classId)
                 .filter(c -> c.getDeletedAt() == null)
                 .orElseThrow(() -> new ApiException(Const.CLASS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
+        Pageable pageable = PageRequest.of(page, size,
+                Sort.by(sortDir.equalsIgnoreCase("asc") ? Sort.Direction.ASC : Sort.Direction.DESC, sortBy));
+
         boolean isTeacher = appValidator.hasRole(RoleName.TEACHER);
-        // Fetch lessons + challenges
-        Page<ClassLesson> lessonPage = classLessonRepository.findLessonsWithChallengesByClassId(
+        Page<ClassLesson> lessonPage = dailyChallengeRepository.findLessonsWithChallengesByClassId(
                 classId, (text == null || text.isBlank()) ? "" : text, isTeacher, pageable);
 
-        List<DailyChallengeListDTO> data = lessonPage.getContent()
-                .stream()
+        List<DailyChallengeListDTO> data = lessonPage.getContent().stream()
                 .map(dailyChallengeMapper::toLessonWithChallengesDTO)
                 .toList();
 
         log.info("[{}] Retrieved {} lessons ({} total)", traceId, data.size(), lessonPage.getTotalElements());
+
         return DataResponse.<List<DailyChallengeListDTO>>builder()
                 .traceId(traceId)
                 .success(true)
@@ -152,143 +116,158 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
     @Override
     public DailyChallengeResponse getChallengeById(Long id) {
         String traceId = TraceUtil.getTraceId();
-        log.info("[{}] Retrieving daily challenge with id: {}", traceId, id);
+        log.info("[{}] Getting challenge id: {}", traceId, id);
 
         DailyChallenge challenge = dailyChallengeRepository.findByIdAndDeletedAtIsNull(id)
-                .orElseThrow(() -> {
-                    log.error("[{}] Daily challenge not found for id: {}", traceId, id);
-                    return new ApiException(Const.CHALLENGE.NOT_FOUND, HttpStatus.NOT_FOUND.value());
-                });
+                .orElseThrow(() -> notFound(traceId, Const.CHALLENGE.NOT_FOUND, id));
 
-        Long classId = challenge.getClassLesson().getClassChapter().getClazz().getId();
-        appValidator.validateUserAccessToClass(classId);
-        log.info("[{}] Successfully retrieved daily challenge with id: {}", traceId, id);
+        appValidator.validateUserAccessToClass(challenge.getClassLesson().getClassChapter().getClazz().getId());
         return dailyChallengeMapper.mapToDTO(challenge);
     }
 
+    /* --------------------------------------------------------
+     * UPDATE
+     * -------------------------------------------------------- */
     @Override
     @Transactional
     public DailyChallengeResponse updateChallenge(Long id, @Valid UpdateDailyChallengeDTO dto) {
         String traceId = TraceUtil.getTraceId();
-        log.info("[{}] Updating daily challenge with id: {}", traceId, id);
+        log.info("[{}] Updating challenge id: {}", traceId, id);
 
-        // Fetch challenge
         DailyChallenge challenge = dailyChallengeRepository.findByIdAndDeletedAtIsNull(id)
-                .orElseThrow(() -> {
-                    log.error("[{}] Daily challenge not found for id: {}", traceId, id);
-                    return new ApiException(Const.CHALLENGE.NOT_FOUND, HttpStatus.NOT_FOUND.value());
-                });
+                .orElseThrow(() -> notFound(traceId, Const.CHALLENGE.NOT_FOUND, id));
 
         appValidator.validateUserAccessToClass(challenge.getClassLesson().getClassChapter().getClazz().getId());
+        validateUpdateDailyChallenge(dto);
 
-        // Update fields
         BeanUtils.copyProperties(dto, challenge);
+        dailyChallengeRepository.save(challenge);
 
-        // Save updates
-        challenge = dailyChallengeRepository.save(challenge);
-        log.info("[{}] Successfully updated daily challenge with id: {}", traceId, id);
-
+        log.info("[{}] Updated challenge id: {}", traceId, id);
         return dailyChallengeMapper.mapToDTO(challenge);
     }
 
+    /* --------------------------------------------------------
+     * DELETE
+     * -------------------------------------------------------- */
     @Override
     @Transactional
     public void deleteChallenge(Long id) {
         String traceId = TraceUtil.getTraceId();
-        log.info("[{}] Deleting daily challenge with id: {}", traceId, id);
+        log.info("[{}] Deleting challenge id: {}", traceId, id);
 
-        // Fetch challenge
         DailyChallenge challenge = dailyChallengeRepository.findByIdAndDeletedAtIsNull(id)
-                .orElseThrow(() -> {
-                    log.error("[{}] Daily challenge not found for id: {}", traceId, id);
-                    return new ApiException(Const.CHALLENGE.NOT_FOUND, HttpStatus.NOT_FOUND.value());
-                });
-        appValidator.validateUserAccessToClass(challenge.getClassLesson().getClassChapter().getClazz().getId());
+                .orElseThrow(() -> notFound(traceId, Const.CHALLENGE.NOT_FOUND, id));
 
-        // Soft delete
+        appValidator.validateUserAccessToClass(challenge.getClassLesson().getClassChapter().getClazz().getId());
         challenge.setDeletedBy(jwtUtil.extractEmailPrefixFromCurrentRequest());
         challenge.setDeletedAt(OffsetDateTime.now());
+
         dailyChallengeRepository.save(challenge);
-        log.info("[{}] Successfully deleted daily challenge with id: {}", traceId, id);
+        log.info("[{}] Deleted challenge id: {}", traceId, id);
     }
 
+    /* --------------------------------------------------------
+     * STATUS UPDATE
+     * -------------------------------------------------------- */
     @Override
     @Transactional
-    public DailyChallengeResponse updateChallengeStatus(Long id, ChallengeStatus challengeStatus) {
+    public DailyChallengeResponse updateChallengeStatus(Long id, ChallengeStatus newStatus) {
         String traceId = TraceUtil.getTraceId();
-        log.info("[{}] Updating daily challenge with id: {}", traceId, id);
+        log.info("[{}] Changing challenge status: id={}, newStatus={}", traceId, id, newStatus);
 
-        // Fetch challenge
         DailyChallenge challenge = dailyChallengeRepository.findByIdAndDeletedAtIsNull(id)
-                .orElseThrow(() -> {
-                    log.error("[{}] Daily challenge not found for id: {}", traceId, id);
-                    return new ApiException(Const.CHALLENGE.NOT_FOUND, HttpStatus.NOT_FOUND.value());
-                });
+                .orElseThrow(() -> notFound(traceId, Const.CHALLENGE.NOT_FOUND, id));
 
         appValidator.validateUserAccessToClass(challenge.getClassLesson().getClassChapter().getClazz().getId());
 
-        if (challenge.getChallengeStatus() == ChallengeStatus.PUBLISHED
-                && challengeStatus == ChallengeStatus.DRAFT) {
-            log.error("[{}] Cannot change challenge status from PUBLISHED to DRAFT for id: {}", traceId, id);
-            throw new ApiException(
-                    "Cannot change status from PUBLISHED to DRAFT once the challenge is published",
-                    HttpStatus.BAD_REQUEST.value()
-            );
+        if (challenge.getChallengeStatus() == ChallengeStatus.PUBLISHED && newStatus == ChallengeStatus.DRAFT) {
+            throw badRequest("Cannot revert challenge from PUBLISHED to DRAFT");
         }
-        if (challengeStatus == ChallengeStatus.PUBLISHED) {
-            validateDailyChallenge(challenge);
-        }
-        // Update fields
-        challenge.setChallengeStatus(challengeStatus);
 
-        // If status is PUBLISHED, create temporary submissions asynchronously
+        if (newStatus == ChallengeStatus.PUBLISHED) {
+            validatePublishable(challenge);
+        }
+
+        challenge.setChallengeStatus(newStatus);
         submissionChallengeService.createTemporarySubmissionsAsync(challenge);
-        // Save updates
-        challenge = dailyChallengeRepository.save(challenge);
-        log.info("[{}] Successfully updated daily challenge with id: {}", traceId, id);
+        dailyChallengeRepository.save(challenge);
 
+        log.info("[{}] Updated challenge status to {}", traceId, newStatus);
         return dailyChallengeMapper.mapToDTO(challenge);
     }
 
-    private void validateDailyChallenge(DailyChallenge challenge) {
-        if (challenge == null) {
-            throw new ApiException("Challenge cannot be null", HttpStatus.BAD_REQUEST.value());
-        }
+    /* --------------------------------------------------------
+     * VALIDATION HELPERS
+     * -------------------------------------------------------- */
+    private void validateUpdateDailyChallenge(UpdateDailyChallengeDTO challenge) {
+        if (challenge == null) throw badRequest("Challenge cannot be null");
+        validateBasicFields(challenge);
 
-        if (challenge.getChallengeName() == null || challenge.getChallengeName().trim().isEmpty()) {
-            throw new ApiException("Challenge name cannot be null or empty", HttpStatus.BAD_REQUEST.value());
-        }
-
-        if (challenge.getChallengeType() == null) {
-            throw new ApiException("Challenge type cannot be null", HttpStatus.BAD_REQUEST.value());
-        }
-
-        if (challenge.getChallengeStatus() == null) {
-            throw new ApiException("Challenge status cannot be null", HttpStatus.BAD_REQUEST.value());
-        }
-
-        if (challenge.getStartDate() == null) {
-            throw new ApiException("Start date cannot be null", HttpStatus.BAD_REQUEST.value());
-        }
-
-        if (challenge.getEndDate() == null) {
-            throw new ApiException("End date cannot be null", HttpStatus.BAD_REQUEST.value());
-        }
-
-        if (challenge.getEndDate().isBefore(challenge.getStartDate())) {
-            throw new ApiException("End date must be after start date", HttpStatus.BAD_REQUEST.value());
-        }
-
-        if (challenge.getDurationMinutes() == null || challenge.getDurationMinutes() <= 0) {
-            throw new ApiException("Duration minutes must be greater than 0", HttpStatus.BAD_REQUEST.value());
-        }
-
-        // Validate danh sách sections
-        if (challenge.getSections() == null || challenge.getSections().isEmpty()) {
-            throw new ApiException("Daily challenge must have at least one section with questions to publish", HttpStatus.BAD_REQUEST.value());
+        if (challenge.getChallengeMethod() == ChallengeMethod.TEST) {
+            validateTestMethodCommon(
+                    challenge.getHasAntiCheat(),
+                    challenge.getTranslateOnScreen(),
+                    "Update"
+            );
         }
     }
 
+    private void validateBasicFields(UpdateDailyChallengeDTO c) {
+        if (isBlank(c.getChallengeName())) throw badRequest("Challenge name cannot be null or empty");
+        if (c.getChallengeType() == null) throw badRequest("Challenge type cannot be null");
+        if (c.getStartDate() == null) throw badRequest("Start date cannot be null");
+        if (c.getEndDate() == null) throw badRequest("End date cannot be null");
+        if (c.getEndDate().isBefore(c.getStartDate()))
+            throw badRequest("End date must be after start date");
+    }
+
+    // --- VALIDATE PUBLISH ---
+    private void validatePublishable(DailyChallenge c) {
+        if (c == null) throw badRequest("Challenge cannot be null");
+        if (isBlank(c.getChallengeName())) throw badRequest("Challenge name cannot be null or empty");
+        if (c.getChallengeType() == null) throw badRequest("Challenge type cannot be null");
+        if (c.getStartDate() == null || c.getEndDate() == null)
+            throw badRequest("Challenge must have valid start and end date");
+        if (c.getEndDate().isBefore(c.getStartDate()))
+            throw badRequest("End date must be after start date");
+        if (c.getDurationMinutes() == null || c.getDurationMinutes() <= 0)
+            throw badRequest("Duration minutes must be greater than 0");
+        if (c.getSections() == null || c.getSections().isEmpty())
+            throw badRequest("Challenge must have at least one section to publish");
+
+        // Validate TEST method
+        if (c.getChallengeMethod() == ChallengeMethod.TEST) {
+            validateTestMethodCommon(
+                    c.getHasAntiCheat(),
+                    c.getTranslateOnScreen(),
+                    "Publish"
+            );
+        }
+    }
+
+    // --- COMMON TEST VALIDATION ---
+    private void validateTestMethodCommon(Boolean hasAntiCheat, Boolean translateOnScreen, String context) {
+        if (Boolean.FALSE.equals(hasAntiCheat))
+            throw badRequest(context + " - Test method cannot disable anti-cheat");
+        if (Boolean.TRUE.equals(translateOnScreen))
+            throw badRequest(context + " - Test method cannot enable translate on screen");
+    }
 
 
+    /* --------------------------------------------------------
+     * COMMON HELPERS
+     * -------------------------------------------------------- */
+    private boolean isBlank(String s) {
+        return s == null || s.trim().isEmpty();
+    }
+
+    private ApiException badRequest(String msg) {
+        return new ApiException(msg, HttpStatus.BAD_REQUEST.value());
+    }
+
+    private ApiException notFound(String traceId, String msg, Object id) {
+        log.error("[{}] Not found: {} (id={})", traceId, msg, id);
+        return new ApiException(msg, HttpStatus.NOT_FOUND.value());
+    }
 }

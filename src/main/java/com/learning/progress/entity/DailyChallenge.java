@@ -1,5 +1,6 @@
 package com.learning.progress.entity;
 
+import com.learning.progress.common.ChallengeMethod;
 import com.learning.progress.common.ChallengeStatus;
 import com.learning.progress.common.ChallengeType;
 import jakarta.persistence.*;
@@ -40,16 +41,12 @@ public class DailyChallenge extends BaseEntity{
     private Boolean hasAntiCheat;
 
     @ColumnDefault("false")
-    @Column(name = "shuffle_answers")
-    private Boolean shuffleAnswers;
+    @Column(name = "shuffle_question")
+    private Boolean shuffleQuestion;
 
     @ColumnDefault("false")
     @Column(name = "translate_on_screen")
     private Boolean translateOnScreen;
-
-    @ColumnDefault("false")
-    @Column(name = "ai_feedback_enabled")
-    private Boolean aiFeedbackEnabled;
 
     @Column(name = "start_date")
     private OffsetDateTime startDate;
@@ -60,6 +57,11 @@ public class DailyChallenge extends BaseEntity{
     @Enumerated(EnumType.STRING)
     @Column(name = "challenge_type", nullable = false)
     private ChallengeType challengeType;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "method", nullable = false)
+    @Builder.Default
+    private ChallengeMethod challengeMethod = ChallengeMethod.NORMAL;
 
     @Builder.Default
     @Enumerated(EnumType.STRING)

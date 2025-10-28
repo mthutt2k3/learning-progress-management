@@ -36,6 +36,20 @@ public class ChallengeSectionController {
         return new ResponseEntity<>(DataResponse.success(response, Const.RESULT_MESSAGE_CODE.CREATE_SUCCESSFUL), HttpStatus.CREATED);
     }
 
+    @PostMapping("/bulk-save/{challengeId}")
+    @PreAuthorize("hasRole('TEACHER')")
+    @Operation(summary = "Save multiple sections",
+            description = "Save multiple sections with questions in one request (TEACHER only)")
+    public ResponseEntity<DataResponse<List<SectionWithQuestionsDto>>> saveSectionList(
+            @Parameter(description = "Challenge ID") @PathVariable Long challengeId,
+            @Valid @RequestBody List<SectionWithQuestionsDto> dtos) {
+
+        List<SectionWithQuestionsDto> response = sectionService.saveSectionList(challengeId, dtos);
+        return new ResponseEntity<>(
+                DataResponse.success(response, Const.RESULT_MESSAGE_CODE.CREATE_SUCCESSFUL),
+                HttpStatus.CREATED
+        );
+    }
     @PostMapping("/bulk/{challengeId}")
     @PreAuthorize("hasRole('TEACHER')")
     @Operation(summary = "Delete or order sections",
@@ -68,7 +82,7 @@ public class ChallengeSectionController {
         return new ResponseEntity<>(response, HttpStatus.OK);
     }
     @GetMapping("/challenge/{challengeId}/public")
-    @PreAuthorize("hasRole('STUDENT') or hasRole('TEST_TAKER')")
+    @PreAuthorize("hasAnyRole('TEACHER', 'TEACHING_ASSISTANT', 'STUDENT', 'TEST_TAKER')")
     @Operation(summary = "List sections for students/test takers",
             description = "Retrieve a list of sections for a specific challenge (questions only, without answers)")
     public ResponseEntity<DataResponse<List<StudentSectionWithQuestionsDto>>> listSectionsForStudents(

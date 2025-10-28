@@ -1,5 +1,6 @@
 package com.learning.progress.dto.challenge;
 
+import com.learning.progress.common.ChallengeMethod;
 import com.learning.progress.common.ChallengeStatus;
 import com.learning.progress.common.ChallengeType;
 import lombok.Getter;
@@ -21,15 +22,15 @@ public class DailyChallengeResponse {
 
     private ChallengeStatus challengeStatus;
 
+    private ChallengeMethod challengeMethod;
+
     private Integer durationMinutes;
 
     private Boolean hasAntiCheat;
 
-    private Boolean shuffleAnswers;
+    private Boolean shuffleQuestion;
 
     private Boolean translateOnScreen;
-
-    private Boolean aiFeedbackEnabled;
 
     private OffsetDateTime startDate;
 
