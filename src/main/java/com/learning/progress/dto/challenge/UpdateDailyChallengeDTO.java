@@ -1,5 +1,6 @@
 package com.learning.progress.dto.challenge;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.learning.progress.common.ChallengeMethod;
 import com.learning.progress.common.ChallengeType;
 import jakarta.validation.constraints.NotBlank;
@@ -12,6 +13,7 @@ import java.time.OffsetDateTime;
 
 @Getter
 @Setter
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class UpdateDailyChallengeDTO {
 
     @NotBlank(message = "Challenge name is required")

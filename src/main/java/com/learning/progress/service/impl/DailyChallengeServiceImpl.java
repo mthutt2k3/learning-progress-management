@@ -208,7 +208,6 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
             validateTestMethodCommon(
                     challenge.getHasAntiCheat(),
                     challenge.getTranslateOnScreen(),
-                    challenge.getShuffleQuestion(),
                     "Update"
             );
         }
@@ -242,20 +241,17 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
             validateTestMethodCommon(
                     c.getHasAntiCheat(),
                     c.getTranslateOnScreen(),
-                    c.getShuffleQuestion(),
                     "Publish"
             );
         }
     }
 
     // --- COMMON TEST VALIDATION ---
-    private void validateTestMethodCommon(Boolean hasAntiCheat, Boolean translateOnScreen, Boolean shuffleQuestion, String context) {
-        if (Boolean.TRUE.equals(hasAntiCheat))
-            throw badRequest(context + " - Test method cannot have anti-cheat enabled");
+    private void validateTestMethodCommon(Boolean hasAntiCheat, Boolean translateOnScreen, String context) {
+        if (Boolean.FALSE.equals(hasAntiCheat))
+            throw badRequest(context + " - Test method cannot disable anti-cheat");
         if (Boolean.TRUE.equals(translateOnScreen))
             throw badRequest(context + " - Test method cannot enable translate on screen");
-        if (Boolean.TRUE.equals(shuffleQuestion))
-            throw badRequest(context + " - Test method cannot enable shuffle question");
     }
 
 
