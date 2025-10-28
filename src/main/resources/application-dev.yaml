@@ -33,8 +33,10 @@ spring:
           max-idle: 8 # Số kết nối nhàn rỗi tối đa
           min-idle: 0 # Số kết nối nhàn rỗi tối thiểu
           max-wait: 2000 # Thời gian chờ tối đa để lấy kết nối (ms)
-
-
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 20MB
   liquibase:
     enabled: false
   jackson:
@@ -70,7 +72,7 @@ server:
       min-spare: 20
     max-connections: 500
     accept-count: 200
-    max-http-form-post-size: 10MB
+    max-http-form-post-size: 20MB
   servlet:
     context-path: /learning-progress-management
 
