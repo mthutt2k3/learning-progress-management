@@ -32,4 +32,7 @@ public interface QuestionRepository extends JpaRepository<Question, Long> {
             "JOIN q.section s " +
             "JOIN s.challenge c " +
             "WHERE c.id = :challengeId AND q.deletedAt IS NULL")
-    List<Question> findByChallengeIdAndDeletedAtIsNull(@Param("challengeId") Long challengeId);}
+    List<Question> findByChallengeIdAndDeletedAtIsNull(@Param("challengeId") Long challengeId);
+
+    List<Question> findByIdInAndDeletedAtIsNull(List<Long> questionIds);
+}

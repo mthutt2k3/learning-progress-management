@@ -18,6 +18,6 @@ public class SubmissionResultResponse {
     public static class QuestionResult {
         private Long questionId;
         private DataContent questionContent; // Question content with correct answers
-        private DataContent submittedContent; // Student's submitted answers
+        private AnswerContent submittedContent; // Student's submitted answers
     }
 }
