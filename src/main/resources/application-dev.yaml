@@ -23,9 +23,9 @@ spring:
         jdbc.time_zone: Asia/Ho_Chi_Minh
   data:
     redis:
-      host: 13.229.140.9
-      port: 6379
-      password: myStrongPass123
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT}
+      password: ${REDIS_PASSWORD}
       timeout: 2000 # Thời gian chờ kết nối (ms)
       lettuce: # Sử dụng Lettuce làm client Redis
         pool:
