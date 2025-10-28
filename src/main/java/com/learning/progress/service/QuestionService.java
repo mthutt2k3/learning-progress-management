@@ -5,6 +5,7 @@ import com.learning.progress.dto.challenge.section.QuestionDto;
 import com.learning.progress.entity.Question;
 
 import java.util.List;
+import java.util.Map;
 
 public interface QuestionService {
     List<QuestionDto> bulkQuestion(List<QuestionDto> dtos, Long sectionId);
@@ -13,5 +14,5 @@ public interface QuestionService {
     List<QuestionDto> getQuestionsBySection(Long sectionId);
 
     void updateScoreQuestion(Long questionId, double score);
-
+    Map<Long, List<QuestionDto>> bulkInsertQuestionsForSections(Map<Long, List<QuestionDto>> sectionQuestionsMap);
 }

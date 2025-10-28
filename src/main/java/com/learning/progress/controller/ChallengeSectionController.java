@@ -36,6 +36,20 @@ public class ChallengeSectionController {
         return new ResponseEntity<>(DataResponse.success(response, Const.RESULT_MESSAGE_CODE.CREATE_SUCCESSFUL), HttpStatus.CREATED);
     }
 
+    @PostMapping("/bulk-save/{challengeId}")
+    @PreAuthorize("hasRole('TEACHER')")
+    @Operation(summary = "Save multiple sections",
+            description = "Save multiple sections with questions in one request (TEACHER only)")
+    public ResponseEntity<DataResponse<List<SectionWithQuestionsDto>>> saveSectionList(
+            @Parameter(description = "Challenge ID") @PathVariable Long challengeId,
+            @Valid @RequestBody List<SectionWithQuestionsDto> dtos) {
+
+        List<SectionWithQuestionsDto> response = sectionService.saveSectionList(challengeId, dtos);
+        return new ResponseEntity<>(
+                DataResponse.success(response, Const.RESULT_MESSAGE_CODE.CREATE_SUCCESSFUL),
+                HttpStatus.CREATED
+        );
+    }
     @PostMapping("/bulk/{challengeId}")
     @PreAuthorize("hasRole('TEACHER')")
     @Operation(summary = "Delete or order sections",

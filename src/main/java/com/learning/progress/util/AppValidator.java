@@ -41,13 +41,12 @@ public class AppValidator {
      * @param dtos              List of DTOs containing order numbers
      * @param orderNumberMapper Function to extract order number from DTO
      * @param expectedCount     Expected number of order numbers (must match size of unique order numbers)
-     * @param traceId           Trace ID for logging
      * @param entityName        Name of the entity for error messaging (e.g., "Section", "Question")
      * @param <T>               Type of DTO
      * @throws ApiException if order numbers are not sequential or do not match expected count
      */
     public static <T> void validateSequentialOrderNumbers(List<T> dtos, Function<T, Integer> orderNumberMapper,
-                                                          int expectedCount, String traceId, String entityName) {
+                                                          int expectedCount, String entityName) {
         Set<Integer> orderNumbers = dtos.stream()
                 .map(orderNumberMapper)
                 .filter(Objects::nonNull)
@@ -57,7 +56,7 @@ public class AppValidator {
                 .collect(Collectors.toSet());
 
         if (orderNumbers.size() != expectedCount || !orderNumbers.equals(expectedOrders)) {
-            log.error("[{}] {} order numbers must be sequential from 1 to {}. Found: {}", traceId, entityName, expectedCount, orderNumbers);
+            log.error("{} order numbers must be sequential from 1 to {}. Found: {}", entityName, expectedCount, orderNumbers);
             throw new ApiException(
                     String.format("%s order numbers must be sequential from 1 to %d. Found: %s", entityName, expectedCount, orderNumbers),
                     HttpStatus.BAD_REQUEST.value()
