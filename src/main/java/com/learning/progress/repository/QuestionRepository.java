@@ -9,6 +9,7 @@ import org.springframework.data.repository.query.Param;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 public interface QuestionRepository extends JpaRepository<Question, Long> {
 
@@ -32,4 +33,9 @@ public interface QuestionRepository extends JpaRepository<Question, Long> {
             "JOIN q.section s " +
             "JOIN s.challenge c " +
             "WHERE c.id = :challengeId AND q.deletedAt IS NULL")
-    List<Question> findByChallengeIdAndDeletedAtIsNull(@Param("challengeId") Long challengeId);}
+    List<Question> findByChallengeIdAndDeletedAtIsNull(@Param("challengeId") Long challengeId);
+
+    List<Question> findByIdInAndDeletedAtIsNull(List<Long> questionIds);
+
+    List<Question> findBySectionIdInAndDeletedAtIsNull(Set<Long> sectionIds);
+}

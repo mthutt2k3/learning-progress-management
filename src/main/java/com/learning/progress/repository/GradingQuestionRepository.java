@@ -5,6 +5,9 @@ import com.learning.progress.entity.SubmissionQuestion;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
+import java.util.Optional;
+
 @Repository
 public interface GradingQuestionRepository  extends JpaRepository<GradingQuestion, Long> {
+    Optional<GradingQuestion> findBySubmissionQuestionIdAndDeletedAtIsNull(Long submissionQuestionId);
 }

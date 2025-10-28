@@ -1,8 +1,6 @@
 package com.learning.progress.dto;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
-import com.learning.progress.common.Const;
-import com.learning.progress.util.TraceUtil;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -38,23 +36,101 @@ public class DataResponse<T> {
     private Long totalElements;
     private Integer totalPages;
 
+    // =====================================================================
+    // STATIC SUCCESS / ERROR
+    // =====================================================================
+
     public static <T> DataResponse<T> success(T data, String message) {
         return DataResponse.<T>builder()
-                .traceId(TraceUtil.getTraceId()) // Lấy traceId từ MDC
                 .success(true)
                 .message(message)
                 .data(data)
-                .timestamp(LocalDateTime.now())
-                .build();
+                .build()
+                .withCurrentTraceId()
+                .withCurrentTimestamp();
     }
 
     public static <T> DataResponse<T> error(String error, Integer status) {
         return DataResponse.<T>builder()
-                .traceId(TraceUtil.getTraceId()) // Lấy traceId từ MDC
                 .success(false)
                 .error(error)
                 .status(status)
-                .timestamp(LocalDateTime.now())
-                .build();
+                .build()
+                .withCurrentTraceId()
+                .withCurrentTimestamp();
+    }
+
+    // =====================================================================
+    // CHAINABLE SETTERS (để dùng .page(page).size(size)...)
+    // =====================================================================
+
+    public DataResponse<T> page(Integer page) {
+        this.page = page;
+        return this;
+    }
+
+    public DataResponse<T> size(Integer size) {
+        this.size = size;
+        return this;
+    }
+
+    public DataResponse<T> totalElements(int totalElements) {
+        this.totalElements = Long.valueOf(totalElements);
+        return this;
+    }
+    public DataResponse<T> totalElements(Long totalElements) {
+        this.totalElements = totalElements;
+        return this;
+    }
+
+    public DataResponse<T> totalPages(Integer totalPages) {
+        this.totalPages = totalPages;
+        return this;
+    }
+
+    public DataResponse<T> status(Integer status) {
+        this.status = status;
+        return this;
+    }
+
+    public DataResponse<T> path(String path) {
+        this.path = path;
+        return this;
+    }
+
+    public DataResponse<T> requestId(String requestId) {
+        this.requestId = requestId;
+        return this;
+    }
+
+    // =====================================================================
+    // HELPER: TỰ ĐỘNG GÁN traceId + timestamp
+    // =====================================================================
+
+    public DataResponse<T> withCurrentTraceId() {
+        String current = MDC.get("traceId");
+        if (current != null) this.traceId = current;
+        return this;
+    }
+
+    public DataResponse<T> withCurrentTimestamp() {
+        this.timestamp = LocalDateTime.now();
+        return this;
+    }
+
+
+    // =====================================================================
+    // BUILDER: TỰ ĐỘNG GÁN KHI BUILD
+    // =====================================================================
+
+    public static class DataResponseBuilder<T> {
+        public DataResponse<T> build() {
+            DataResponse<T> response = new DataResponse<>(
+                    traceId, success, message, data, error,
+                    startDate, endDate, status, timestamp, path, requestId,
+                    page, size, totalElements, totalPages
+            );
+            return response.withCurrentTraceId().withCurrentTimestamp();
+        }
     }
 }

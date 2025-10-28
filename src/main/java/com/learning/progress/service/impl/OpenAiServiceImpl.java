@@ -272,20 +272,19 @@ public class OpenAiServiceImpl implements OpenAiService {
 
         // User description
         if (userDescription != null && !userDescription.isBlank()) {
-            prompt.append("═══════════════════════════════════════════════════════\n");
             prompt.append("🔥 USER REQUIREMENTS (ABSOLUTE PRIORITY) 🔥\n");
-            prompt.append("═══════════════════════════════════════════════════════\n");
             prompt.append(userDescription).append("\n");
-            prompt.append("═══════════════════════════════════════════════════════\n\n");
         }
 
         // Context
         prompt.append("CONTEXT (Reference Only):\n");
         prompt.append("Lesson Content:\n");
-        prompt.append("═══════════════════════════════════════════════════════\n");
         prompt.append(classLessonContent).append("\n");
-        prompt.append("═══════════════════════════════════════════════════════\n");
         prompt.append(contextInfo).append("\n");
+
+        prompt.append("You can broaden the question slightly beyond the exact lesson sentences,\n");
+        prompt.append("as long as it stays strictly within the same theme, grammar pattern, or vocabulary topic.\n");
+        prompt.append("Avoid repeating sentences from the lesson word-for-word.\n\n");
 
         // Task
         prompt.append("TASK:\n");
@@ -298,6 +297,13 @@ public class OpenAiServiceImpl implements OpenAiService {
 
         // Question type rules
         appendQuestionTypeRules(prompt, questionType);
+
+        // ✅ Thêm yêu cầu không trùng câu hỏi
+        prompt.append("\n🚫 DUPLICATION RULES:\n");
+        prompt.append("- The generated question must be UNIQUE and not identical or too similar\n");
+        prompt.append("  to any existing question from this lesson or previous ones.\n");
+        prompt.append("- Do NOT reuse the same sentence structure, wording, or main idea.\n");
+        prompt.append("- Encourage creativity while keeping correctness and topic relevance.\n");
 
         // Requirements
         prompt.append("\n🔥 ABSOLUTE REQUIREMENTS:\n");
@@ -334,11 +340,8 @@ public class OpenAiServiceImpl implements OpenAiService {
 
         // User description
         if (userDescription != null && !userDescription.isBlank()) {
-            prompt.append("═══════════════════════════════════════════════════════\n");
             prompt.append("🔥 USER REQUIREMENTS (ABSOLUTE PRIORITY) 🔥\n");
-            prompt.append("═══════════════════════════════════════════════════════\n");
             prompt.append(userDescription).append("\n");
-            prompt.append("═══════════════════════════════════════════════════════\n\n");
         }
 
         // DC Type instructions
@@ -348,16 +351,16 @@ public class OpenAiServiceImpl implements OpenAiService {
         // Context
         prompt.append("\nCONTEXT (Reference Only):\n");
         prompt.append("Lesson Content:\n");
-        prompt.append("═══════════════════════════════════════════════════════\n");
         prompt.append(classLessonContent).append("\n");
-        prompt.append("═══════════════════════════════════════════════════════\n");
         prompt.append(contextInfo).append("\n");
 
         // Section content (CRITICAL for RE/LI)
         prompt.append("\n📖 SECTION CONTENT (Base ALL questions on this):\n");
-        prompt.append("═══════════════════════════════════════════════════════\n");
         prompt.append(section.getSectionsContent()).append("\n");
-        prompt.append("═══════════════════════════════════════════════════════\n\n");
+
+        prompt.append("You can broaden the question slightly beyond the exact lesson sentences,\n");
+        prompt.append("as long as it stays strictly within the same theme, grammar pattern, or vocabulary topic.\n");
+        prompt.append("Avoid repeating sentences from the lesson word-for-word.\n\n");
 
         // Task
         prompt.append("TASK:\n");
@@ -369,6 +372,13 @@ public class OpenAiServiceImpl implements OpenAiService {
 
         // Question type rules
         appendQuestionTypeRules(prompt, questionType);
+
+        // ✅ Thêm yêu cầu không trùng câu hỏi
+        prompt.append("\n🚫 DUPLICATION RULES:\n");
+        prompt.append("- The generated question must be UNIQUE and not identical or too similar\n");
+        prompt.append("  to any existing question from this lesson or previous ones.\n");
+        prompt.append("- Do NOT reuse the same sentence structure, wording, or main idea.\n");
+        prompt.append("- Encourage creativity while keeping correctness and topic relevance.\n");
 
         // Requirements
         prompt.append("\n🔥 ABSOLUTE REQUIREMENTS:\n");
@@ -488,70 +498,123 @@ public class OpenAiServiceImpl implements OpenAiService {
     }
 
     private void appendQuestionTypeRules(StringBuilder prompt, String questionType) {
-        prompt.append("SPECIFIC RULES FOR ").append(questionType).append(":\n");
+        prompt.append("SPECIFIC RULES FOR ").append(questionType).append(":\n\n");
 
         switch (questionType) {
+
             case "MULTIPLE_CHOICE":
-                prompt.append("- 4 options per question\n");
-                prompt.append("- Exactly 1 option with isCorrect=true\n");
-                prompt.append("- positionId=null for all options\n");
+                prompt.append("- 4 options per question.\n");
+                prompt.append("- Exactly 1 option with isCorrect=true.\n");
+                prompt.append("- positionId=null for all options.\n");
                 prompt.append("Example:\n");
-                prompt.append("{\n");
-                prompt.append("  \"questionText\": \"She _____ to school every day.\",\n");
-                prompt.append("  \"orderNumber\": 1,\n");
-                prompt.append("  \"score\": 1.0,\n");
-                prompt.append("  \"questionType\": \"MULTIPLE_CHOICE\",\n");
-                prompt.append("  \"content\": {\n");
-                prompt.append("    \"data\": [\n");
-                prompt.append("      {\"id\": \"opt1\", \"value\": \"go\", \"isCorrect\": false, \"positionId\": null},\n");
-                prompt.append("      {\"id\": \"opt2\", \"value\": \"goes\", \"isCorrect\": true, \"positionId\": null},\n");
-                prompt.append("      {\"id\": \"opt3\", \"value\": \"going\", \"isCorrect\": false, \"positionId\": null},\n");
-                prompt.append("      {\"id\": \"opt4\", \"value\": \"went\", \"isCorrect\": false, \"positionId\": null}\n");
-                prompt.append("    ]\n");
-                prompt.append("  }\n");
-                prompt.append("}\n");
+                prompt.append("{\n")
+                        .append("  \"questionText\": \"She _____ to school every day.\",\n")
+                        .append("  \"orderNumber\": 1,\n")
+                        .append("  \"score\": 1.0,\n")
+                        .append("  \"questionType\": \"MULTIPLE_CHOICE\",\n")
+                        .append("  \"content\": {\n")
+                        .append("    \"data\": [\n")
+                        .append("      {\"id\": \"opt1\", \"value\": \"go\", \"isCorrect\": false, \"positionId\": null},\n")
+                        .append("      {\"id\": \"opt2\", \"value\": \"goes\", \"isCorrect\": true, \"positionId\": null},\n")
+                        .append("      {\"id\": \"opt3\", \"value\": \"going\", \"isCorrect\": false, \"positionId\": null},\n")
+                        .append("      {\"id\": \"opt4\", \"value\": \"went\", \"isCorrect\": false, \"positionId\": null}\n")
+                        .append("    ]\n")
+                        .append("  }\n")
+                        .append("}\n");
                 break;
 
             case "TRUE_OR_FALSE":
-                prompt.append("- 2 options (True/False), 1 with isCorrect=true\n");
-                prompt.append("- positionId=null\n");
+                prompt.append("- 2 options: \"True\" and \"False\".\n");
+                prompt.append("- Exactly 1 option with isCorrect=true.\n");
+                prompt.append("- positionId=null.\n");
                 break;
 
             case "FILL_IN_THE_BLANK":
                 prompt.append("⚠️ CRITICAL FORMAT:\n");
-                prompt.append("- Use [[pos_xxxxx]] in questionText (e.g., [[pos_a7k3m2]])\n");
-                prompt.append("- Generate random 6-char IDs using lowercase a-z and 0-9\n");
-                prompt.append("- positionId in data must match the xxxxx part\n");
-                prompt.append("- Each ID must be UNIQUE\n");
+                prompt.append("- questionText MUST contain [[pos_xxxxxx]] placeholders (e.g., [[pos_a7k3m2]]).\n");
+                prompt.append("- xxxxxx is a random 6-character ID using lowercase a-z and 0-9.\n");
+                prompt.append("- Each positionId in data must match its corresponding xxxxxx.\n");
+                prompt.append("- Each ID must be UNIQUE.\n");
+                prompt.append("- Each blank has 1 correct answer and do not have distractors.\n");
                 break;
 
             case "DROPDOWN":
                 prompt.append("⚠️ CRITICAL FORMAT:\n");
-                prompt.append("- Use [[pos_xxxxx]] in questionText\n");
-                prompt.append("- 3-4 options, 1 with isCorrect=true\n");
-                prompt.append("- All options share same positionId\n");
+                prompt.append("- questionText MUST contain [[pos_xxxxxx]] placeholders.\n");
+                prompt.append("- xxxxxx is a random 6-character ID using lowercase a-z and 0-9.\n");
+                prompt.append("- Each dropdown has 3–4 options, exactly 1 with isCorrect=true.\n");
+                prompt.append("- All options for one dropdown share the same positionId.\n");
                 break;
 
             case "MULTIPLE_SELECT":
-                prompt.append("- 4-6 options, 2-3 with isCorrect=true\n");
-                prompt.append("- positionId=null\n");
+                prompt.append("- 4–6 options.\n");
+                prompt.append("- 2–3 options with isCorrect=true.\n");
+                prompt.append("- positionId=null.\n");
                 break;
 
             case "DRAG_AND_DROP":
-                prompt.append("⚠️ CRITICAL:\n");
-                prompt.append("- Use [[pos_xxxxx]] for drop zones\n");
-                prompt.append("- Items with positionId = correct placement\n");
+                prompt.append("⚠️ CRITICAL FORMAT:\n");
+                prompt.append("- questionText MUST contain [[pos_xxxxxx]] placeholders for drop zones.\n");
+                prompt.append("- xxxxxx is a random 6-character ID using lowercase a-z and 0-9.\n");
+                prompt.append("- Each item in data must have positionId corresponding to its correct drop zone.\n");
                 break;
 
             case "REARRANGE":
-                prompt.append("- positionId = correct order: \"1\", \"2\", \"3\"\n");
-                prompt.append("- All items isCorrect=true\n");
+                prompt.append("⚠️ CRITICAL FORMAT:\n");
+                prompt.append("- questionText MUST contain [[pos_xxxxxx]] placeholders for each reorder item.\n");
+                prompt.append("- Example: \"[[pos_ab12cd]] [[pos_ef34gh]] [[pos_ij56kl]]\" and do not contain any other text in question\n");
+                prompt.append("- Each placeholder represents one movable item.\n");
+                prompt.append("- xxxxxx is a random 6-character ID using lowercase letters and digits.\n");
+                prompt.append("- Each item in data must have positionId matching its placeholder.\n");
+                prompt.append("- All items must have isCorrect=true (no false answers).\n");
+                prompt.append("- Learners will rearrange items according to the placeholder order.\n");
+                prompt.append("Example:\n");
+                prompt.append("{\n")
+                        .append("  \"questionText\": \"[[pos_a1b2c3]] [[pos_d4e5f6]] [[pos_g7h8i9]]\",\n")
+                        .append("  \"orderNumber\": 1,\n")
+                        .append("  \"score\": 1.0,\n")
+                        .append("  \"questionType\": \"REARRANGE\",\n")
+                        .append("  \"content\": {\n")
+                        .append("    \"data\": [\n")
+                        .append("      {\"id\": \"item1\", \"value\": \"She\", \"isCorrect\": true, \"positionId\": \"a1b2c3\"},\n")
+                        .append("      {\"id\": \"item2\", \"value\": \"is\", \"isCorrect\": true, \"positionId\": \"d4e5f6\"},\n")
+                        .append("      {\"id\": \"item3\", \"value\": \"running\", \"isCorrect\": true, \"positionId\": \"g7h8i9\"}\n")
+                        .append("    ]\n")
+                        .append("  }\n")
+                        .append("}\n");
+                break;
+
+            case "REWRITE":
+                prompt.append("- Open-ended question that asks learner to rewrite a sentence.\n");
+                prompt.append("- Must have ONLY 1 correct answer (isCorrect=true).\n");
+                prompt.append("- positionId=null for answer.\n");
+                prompt.append("- Answer must be grammatically correct and preserve original meaning.\n");
+                prompt.append("Example:\n");
+                prompt.append("{\n")
+                        .append("  \"questionText\": \"He is too tired to work.\",\n")
+                        .append("  \"orderNumber\": 1,\n")
+                        .append("  \"score\": 1.0,\n")
+                        .append("  \"questionType\": \"REWRITE\",\n")
+                        .append("  \"content\": {\n")
+                        .append("    \"data\": [\n")
+                        .append("      {\"id\": \"ans1\", \"value\": \"He is so tired that he can't work.\", \"isCorrect\": true, \"positionId\": null}\n")
+                        .append("    ]\n")
+                        .append("  }\n")
+                        .append("}\n");
                 break;
 
             default:
-                prompt.append("Follow standard format\n");
+                prompt.append("Follow the standard format for question structure.\n");
         }
+
+        // ✅ Thêm phần nhấn mạnh cuối cùng để AI không quên
+        prompt.append("\nGLOBAL RULES:\n");
+        prompt.append("- Use only lowercase letters and numbers for generated IDs.\n");
+        prompt.append("- Ensure JSON is valid and formatted properly.\n");
+        prompt.append("- For FILL_IN_THE_BLANK, DROPDOWN, DRAG_AND_DROP, REARRANGE → questionText MUST include [[pos_xxxxxx]].\n");
+        prompt.append("- positionId must match xxxxxx exactly.\n");
     }
+
 
     private String callOpenAI(String prompt) {
         String url = UriComponentsBuilder
@@ -610,80 +673,6 @@ public class OpenAiServiceImpl implements OpenAiService {
 
         throw new RuntimeException("No response from OpenAI");
     }
-
-//    private SectionWithQuestionsDto parseResponse(String jsonResponse, String questionType) {
-//        try {
-//            log.info("Parsing JSON response for type: {}", questionType);
-//            log.debug("Raw JSON: {}", jsonResponse);
-//
-//            JsonNode rootNode = objectMapper.readTree(jsonResponse);
-//
-//            // Parse section with null-safe checks
-//            JsonNode sectionNode = rootNode.get("section");
-//            if (sectionNode == null) {
-//                log.error("Missing 'section' field in response");
-//                throw new RuntimeException("Invalid response: missing 'section' field");
-//            }
-//
-//            SectionDto section = new SectionDto();
-//
-//            // sectionTitle - REQUIRED
-//            JsonNode titleNode = sectionNode.get("sectionTitle");
-//            if (titleNode == null || titleNode.isNull()) {
-//                log.warn("Missing sectionTitle, using default");
-////                section.setSectionTitle(getQuestionTypeTitle(questionType));
-//            } else {
-//                section.setSectionTitle(titleNode.asText());
-//            }
-//
-//            section.setSectionsContent(null);
-//
-//            // orderNumber
-//            JsonNode orderNode = sectionNode.get("orderNumber");
-//            section.setOrderNumber(orderNode != null ? orderNode.asInt() : 1);
-//
-//            // resourceType
-//            JsonNode resourceTypeNode = sectionNode.get("resourceType");
-//            section.setResourceType(resourceTypeNode != null ? resourceTypeNode.asText() : "NONE");
-//
-//            // Parse questions
-//            List<QuestionDto> questions = new ArrayList<>();
-//            JsonNode questionsNode = rootNode.get("questions");
-//
-//            if (questionsNode == null || !questionsNode.isArray()) {
-//                log.error("Missing or invalid 'questions' field");
-//                throw new RuntimeException("Invalid response: missing or invalid 'questions' array");
-//            }
-//
-//            int questionIndex = 0;
-//            for (JsonNode questionNode : questionsNode) {
-//                questionIndex++;
-//                try {
-//                    QuestionDto question = parseQuestion(questionNode, questionIndex, questionType);
-//                    questions.add(question);
-//                } catch (Exception e) {
-//                    log.error("Error parsing question {}: {}", questionIndex, e.getMessage());
-//                    throw new RuntimeException("Failed to parse question " + questionIndex + ": " + e.getMessage(), e);
-//                }
-//            }
-//
-//            if (questions.isEmpty()) {
-//                throw new RuntimeException("No questions were parsed from response");
-//            }
-//
-//            log.info("Successfully parsed {} questions", questions.size());
-//
-//            // Ensure unique position IDs
-//            ensureUniquePositionIds(questions);
-//
-//            return new SectionWithQuestionsDto(section, questions);
-//
-//        } catch (Exception e) {
-//            log.error("Error parsing response: {}", e.getMessage(), e);
-//            log.error("Problematic JSON: {}", jsonResponse);
-//            throw new RuntimeException("Failed to parse AI response: " + e.getMessage(), e);
-//        }
-//    }
 
     private QuestionDto parseQuestion(JsonNode questionNode, int index, String expectedType) {
         QuestionDto question = new QuestionDto();
@@ -929,11 +918,8 @@ public class OpenAiServiceImpl implements OpenAiService {
 
         // User description (if provided)
         if (description != null && !description.isBlank()) {
-            prompt.append("═══════════════════════════════════════════════════════\n");
             prompt.append("🔥 USER REQUIREMENTS (ABSOLUTE PRIORITY) 🔥\n");
-            prompt.append("═══════════════════════════════════════════════════════\n");
             prompt.append(description).append("\n");
-            prompt.append("═══════════════════════════════════════════════════════\n\n");
         }
 
         prompt.append("CONTEXT:\n");
@@ -1006,9 +992,7 @@ public class OpenAiServiceImpl implements OpenAiService {
         }
 
         prompt.append("FILE CONTENT:\n");
-        prompt.append("═══════════════════════════════════════\n");
         prompt.append(fileContent).append("\n");
-        prompt.append("═══════════════════════════════════════\n\n");
 
         prompt.append("CRITICAL JSON FORMAT:\n");
         prompt.append("{\n");

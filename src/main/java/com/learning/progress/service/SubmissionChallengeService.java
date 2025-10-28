@@ -13,4 +13,6 @@ public interface SubmissionChallengeService {
     DataResponse<List<StudentChallengeListDTO>> getAllChallengesForStudent(Long classId, int page, int size, String text, String sortBy, String sortDir);
 
     DataResponse<List<StudentSubmissionDTO>> getSubmissionsByChallenge(Long challengeId, int page, int size, String text, String sortBy, String sortDir);
+
+    void autoSubmitExpiredSubmissions();
 }
