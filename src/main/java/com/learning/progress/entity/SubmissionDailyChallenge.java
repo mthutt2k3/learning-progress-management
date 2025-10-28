@@ -59,6 +59,10 @@ public class SubmissionDailyChallenge extends BaseEntity{
     @Column(name = "expired_at")
     private OffsetDateTime expiredAt;
 
+    @ColumnDefault("false")
+    @Column(name = "is_late", nullable = false)
+    private Boolean isLate = false;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "submission_status", nullable = false)
     private SubmissionStatus submissionStatus = SubmissionStatus.PENDING;

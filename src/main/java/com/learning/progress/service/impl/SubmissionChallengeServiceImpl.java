@@ -110,7 +110,7 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
                 .filter(c -> c.getDeletedAt() == null)
                 .orElseThrow(() -> new ApiException(Const.CLASS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
-        Page<ClassLesson> lessonPage = classLessonRepository.findLessonsWithChallengesByClassId(
+        Page<ClassLesson> lessonPage = dailyChallengeRepository.findLessonsWithChallengesByClassId(
                 classId, (text == null || text.isBlank()) ? "" : text, false, pageable);
 
         List<StudentChallengeListDTO> data = lessonPage.getContent().stream()

@@ -1,5 +1,6 @@
 package com.learning.progress.dto.challenge;
 
+import com.learning.progress.common.ChallengeMethod;
 import com.learning.progress.common.ChallengeType;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -21,16 +22,16 @@ public class UpdateDailyChallengeDTO {
     @NotNull(message = "Challenge type is required")
     private ChallengeType challengeType;
 
-    @Positive(message = "Duration must be positive")
-    private Integer durationMinutes = 90;
+    @NotNull(message = "Challenge method is required")
+    private ChallengeMethod challengeMethod;
+
+    private Integer durationMinutes = null;
 
     private Boolean hasAntiCheat = true;
 
-    private Boolean shuffleAnswers = true;
+    private Boolean shuffleQuestion = true;
 
     private Boolean translateOnScreen = false;
-
-    private Boolean aiFeedbackEnabled = false;
 
     @NotNull(message = "Start date cannot be empty")
     private OffsetDateTime startDate;

@@ -1,5 +1,6 @@
 package com.learning.progress.repository;
 
+import com.learning.progress.entity.ClassLesson;
 import com.learning.progress.entity.DailyChallenge;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -15,11 +16,31 @@ public interface DailyChallengeRepository extends JpaRepository<DailyChallenge, 
 
     Optional<DailyChallenge> findByIdAndDeletedAtIsNull(Long id);
 
-    @Query("SELECT dc FROM DailyChallenge dc " +
-            "JOIN dc.classLesson cl " +
-            "JOIN cl.classChapter cc " +
-            "JOIN cc.clazz c " +
-            "WHERE c.id = :classId AND dc.deletedAt IS NULL " +
-            "AND (:text IS NULL OR LOWER(dc.challengeName) LIKE LOWER(CONCAT('%', :text, '%')) " +
-            "OR LOWER(dc.description) LIKE LOWER(CONCAT('%', :text, '%')))")
-    Page<DailyChallenge> findByClassIdAndTextAndDeletedAtIsNull(@Param("classId") Long classId, @Param("text") String text, Pageable pageable);}
+
+    @Query("""
+        SELECT DISTINCT cl
+        FROM ClassLesson cl
+        JOIN cl.classChapter cc
+        JOIN cc.clazz c
+        LEFT JOIN FETCH cl.dailyChallenges dc
+        WHERE c.id = :classId
+          AND cl.deletedAt IS NULL
+          AND (
+                :text IS NULL OR :text = '' OR
+                LOWER(dc.challengeName) LIKE LOWER(CONCAT('%', :text, '%')) OR
+                LOWER(dc.description) LIKE LOWER(CONCAT('%', :text, '%'))
+          )
+          AND (
+                :isTeacher = TRUE
+                OR dc.challengeStatus = 'PUBLISHED'
+          )
+        ORDER BY cl.orderNumber ASC
+    """)
+    Page<ClassLesson> findLessonsWithChallengesByClassId(
+            @Param("classId") Long classId,
+            @Param("text") String text,
+            @Param("isTeacher") boolean isTeacher,
+            Pageable pageable
+    );
+
+}

@@ -1,5 +1,6 @@
 package com.learning.progress.dto.challenge;
 
+import com.learning.progress.common.ChallengeMethod;
 import com.learning.progress.common.ChallengeStatus;
 import com.learning.progress.common.ChallengeType;
 import lombok.Getter;
@@ -27,6 +28,8 @@ public class DailyChallengeListDTO {
         private ChallengeType challengeType;
 
         private ChallengeStatus challengeStatus;
+
+        private ChallengeMethod challengeMethod;
 
         private OffsetDateTime startDate;
 
