@@ -37,7 +37,7 @@ public interface LevelRepository extends JpaRepository<Level, Long> {
     LEFT JOIN l.prerequisite p
     WHERE (:text IS NULL OR LOWER(l.levelName) LIKE LOWER(CONCAT('%', :text, '%')))
     AND l.deletedAt IS NULL
-    order by l.orderNumber asc 
+    ORDER BY l.orderNumber ASC
 """)
     Page<LevelDetailsResponse> findAllWithFilters(@Param("text") String text, Pageable pageable);
 
