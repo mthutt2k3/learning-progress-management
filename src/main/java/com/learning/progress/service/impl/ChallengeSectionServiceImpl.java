@@ -1,6 +1,7 @@
 package com.learning.progress.service.impl;
 
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.learning.progress.cache.CacheService;
 import com.learning.progress.common.Const;
 import com.learning.progress.common.ResourceType;
 import com.learning.progress.dto.DataResponse;
@@ -13,12 +14,10 @@ import com.learning.progress.mapper.ChallengeSectionMapper;
 import com.learning.progress.repository.ChallengeSectionRepository;
 import com.learning.progress.repository.DailyChallengeRepository;
 import com.learning.progress.repository.QuestionRepository;
-import com.learning.progress.service.CacheService;
 import com.learning.progress.service.ChallengeSectionService;
 import com.learning.progress.service.QuestionService;
 import com.learning.progress.util.AppValidator;
 import com.learning.progress.util.JwtUtil;
-import com.learning.progress.util.TraceUtil;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validator;
 import lombok.extern.slf4j.Slf4j;
@@ -31,7 +30,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -40,215 +38,226 @@ import java.util.stream.Collectors;
 @Slf4j
 public class ChallengeSectionServiceImpl implements ChallengeSectionService {
 
-    @Autowired
-    private ChallengeSectionRepository sectionRepository;
+    @Autowired private ChallengeSectionRepository sectionRepository;
+    @Autowired private DailyChallengeRepository challengeRepository;
+    @Autowired private QuestionService questionService;
+    @Autowired private ChallengeSectionMapper challengeSectionMapper;
+    @Autowired private AppValidator appValidator;
+    @Autowired private JwtUtil jwtUtil;
+    @Autowired private Validator validator;
+    @Autowired private QuestionRepository questionRepository;
+    @Autowired private CacheService cacheService;
 
-    @Autowired
-    private DailyChallengeRepository challengeRepository;
-
-    @Autowired
-    private QuestionService questionService;
-
-    @Autowired
-    private ChallengeSectionMapper challengeSectionMapper;
-
-    @Autowired
-    private AppValidator appValidator;
-
-    @Autowired
-    private JwtUtil jwtUtil;
-
-    @Autowired
-    private Validator validator;
-
-    @Autowired
-    private QuestionRepository questionRepository;
-
-    @Autowired
-    private CacheService cacheService;
+    // =====================================================================
+    // UPDATE SCORE
+    // =====================================================================
 
     @Override
     public void updateScoreQuestion(Long questionId, double score) {
-        String traceId = TraceUtil.getTraceId();
-        log.info("[{}] Update score question: {}", traceId, questionId);
+        log.info("Update score question: {}", questionId);
+
         Question question = questionRepository.findByIdAndDeletedAtIsNull(questionId)
                 .orElseThrow(() -> new ApiException("Question not found", HttpStatus.NOT_FOUND.value()));
-        validateUserAccessToClass(question.getSection().getChallenge().getClassLesson().getClassChapter().getClazz().getId(), traceId);
+
+        validateUserAccessToClass(question.getSection().getChallenge().getClassLesson().getClassChapter().getClazz().getId());
         questionService.updateScoreQuestion(questionId, score);
 
-        cacheService.clearCacheForQuestion(questionId, question.getSection().getId(),
-                question.getSection().getChallenge().getId(), traceId);
+        Long sectionId = question.getSection().getId();
+        Long challengeId = question.getSection().getChallenge().getId();
+
+        cacheService.clearCacheForQuestion(questionId, sectionId, challengeId);
+        cacheService.clearCacheForSection(sectionId, challengeId);
+
+        log.info("Successfully updated score for questionId: {}", questionId);
     }
+
+    // =====================================================================
+    // SAVE SECTION
+    // =====================================================================
 
     @Override
     @Transactional
     public SectionWithQuestionsDto saveSection(Long challengeId, SectionWithQuestionsDto dto) {
-        String traceId = TraceUtil.getTraceId();
-        log.info("[{}] Saving section for challengeId: {}", traceId, challengeId);
+        log.info("Saving section for challengeId: {}", challengeId);
 
-        validateSectionDto(dto, traceId);
-        DailyChallenge challenge = validateChallengeExists(challengeId, traceId);
-        validateUserAccessToClass(challenge.getClassLesson().getClassChapter().getClazz().getId(), traceId);
+        validateSectionDto(dto);
+        DailyChallenge challenge = validateChallengeExists(challengeId);
+        validateUserAccessToClass(challenge.getClassLesson().getClassChapter().getClazz().getId());
         appValidator.validateEnumValue(ResourceType.class, dto.getSection().getResourceType());
 
-        ChallengeSection section = saveOrUpdateSection(dto.getSection(), challenge, traceId);
-        List<QuestionDto> questions = saveQuestions(dto.getQuestions(), section.getId(), traceId);
+        ChallengeSection section = saveOrUpdateSection(dto.getSection(), challenge);
+        List<QuestionDto> questions = saveQuestions(dto.getQuestions(), section.getId());
 
-        cacheService.clearCacheForSection(section.getId(), challengeId, traceId);
+        cacheService.clearCacheForSection(section.getId(), challengeId);
 
-        log.info("[{}] Successfully saved section with ID: {} for challengeId: {}", traceId, section.getId(), challengeId);
+        log.info("Successfully saved section with ID: {} for challengeId: {}", section.getId(), challengeId);
         return challengeSectionMapper.toSectionWithQuestionsDto(section, questions);
     }
 
+    // =====================================================================
+    // GET SECTION (CACHE DATA)
+    // =====================================================================
+
     @Override
     public SectionWithQuestionsDto getSection(Long id) {
-        String traceId = TraceUtil.getTraceId();
-        log.info("[{}] Retrieving section with ID: {}", traceId, id);
+        log.info("Retrieving section with ID: {}", id);
 
         String cacheKey = cacheService.buildSectionCacheKey(id);
-        SectionWithQuestionsDto cachedResult = cacheService.getCachedObject(
-                cacheKey, new TypeReference<SectionWithQuestionsDto>() {}, traceId);
-        if (cachedResult != null) {
-            return cachedResult;
+        SectionWithQuestionsDto cached = cacheService.getCachedObject(cacheKey, new TypeReference<>() {});
+
+        if (cached != null) {
+            log.debug("Cache HIT for section: {}", id);
+            return cached;
         }
 
-        ChallengeSection section = findSectionById(id, traceId);
-        validateUserAccessToClass(section.getChallenge().getClassLesson().getClassChapter().getClazz().getId(), traceId);
+        ChallengeSection section = findSectionById(id);
+        validateUserAccessToClass(section.getChallenge().getClassLesson().getClassChapter().getClazz().getId());
 
         List<QuestionDto> questions = mapQuestionsToDto(section.getQuestions());
         SectionWithQuestionsDto result = challengeSectionMapper.toSectionWithQuestionsDto(section, questions);
 
-        cacheService.cacheObject(cacheKey, result, CacheService.SECTION_TTL_MINUTES, traceId);
+        cacheService.cacheObject(cacheKey, result, CacheService.SECTION_TTL_MINUTES);
+        log.debug("Cache MISS & stored section: {}", id);
 
-        log.info("[{}] Successfully retrieved section with ID: {}", traceId, id);
+        log.info("Successfully retrieved section with ID: {}", id);
         return result;
     }
 
+    // =====================================================================
+    // LIST SECTIONS (CACHE DATA)
+    // =====================================================================
+
     @Override
     public DataResponse<List<SectionWithQuestionsDto>> listSections(Long challengeId, int page, int size, String text) {
-        String traceId = TraceUtil.getTraceId();
-        log.debug("[{}] Validating parameters for challengeId: {}, page: {}, size: {}", traceId, challengeId, page, size);
+        log.debug("Listing sections for challengeId: {}, page: {}, size: {}, text: '{}'", challengeId, page, size, text);
 
         String cacheKey = cacheService.buildSectionsCacheKey(challengeId, page, size, text);
-        DataResponse<List<SectionWithQuestionsDto>> cachedResult = cacheService.getCachedObject(
-                cacheKey, new TypeReference<DataResponse<List<SectionWithQuestionsDto>>>() {}, traceId);
-        if (cachedResult != null) {
-            return cachedResult;
+        List<SectionWithQuestionsDto> cachedData = cacheService.getCachedObject(cacheKey, new TypeReference<>() {});
+
+        if (cachedData != null) {
+            log.debug("Cache HIT for sections list: challengeId={}, page={}", challengeId, page);
+            return DataResponse.success(cachedData, Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL)
+                    .page(page)
+                    .size(size)
+                    .totalElements(cachedData.size())
+                    .totalPages((cachedData.size() + size - 1) / size);
         }
 
         appValidator.validatePaginationParams(page, size);
-        validateChallengeExists(challengeId, traceId);
-
-        DailyChallenge challenge = validateChallengeExists(challengeId, traceId);
-        validateUserAccessToClass(challenge.getClassLesson().getClassChapter().getClazz().getId(), traceId);
+        DailyChallenge challenge = validateChallengeExists(challengeId);
+        validateUserAccessToClass(challenge.getClassLesson().getClassChapter().getClazz().getId());
 
         Pageable pageable = PageRequest.of(page, size);
         Page<ChallengeSection> sectionPage = sectionRepository.findByChallengeIdAndTextAndDeletedAtIsNull(
                 challengeId, StringUtils.defaultString(text), pageable);
 
-        List<SectionWithQuestionsDto> sectionsWithQuestions = mapSectionsToDtoWithQuestions(sectionPage.getContent());
+        List<SectionWithQuestionsDto> data = mapSectionsToDtoWithQuestions(sectionPage.getContent());
 
-        DataResponse<List<SectionWithQuestionsDto>> response = DataResponse.<List<SectionWithQuestionsDto>>builder()
-                .traceId(traceId)
-                .success(true)
-                .message(Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL)
-                .data(sectionsWithQuestions)
-                .timestamp(LocalDateTime.now())
+        cacheService.cacheObject(cacheKey, data, CacheService.SECTIONS_LIST_TTL_MINUTES);
+        log.debug("Cache stored for sections list: challengeId={}, page={}", challengeId, page);
+
+        log.info("Successfully retrieved {} sections for challengeId: {}", data.size(), challengeId);
+        return DataResponse.success(data, Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL)
                 .page(page)
                 .size(size)
                 .totalElements(sectionPage.getTotalElements())
-                .totalPages(sectionPage.getTotalPages())
-                .build();
-
-        cacheService.cacheObject(cacheKey, response, CacheService.SECTIONS_LIST_TTL_MINUTES, traceId);
-
-        log.info("[{}] Successfully retrieved {} sections for challengeId: {}",
-                traceId, sectionsWithQuestions.size(), challengeId);
-        return response;
+                .totalPages(sectionPage.getTotalPages());
     }
+
+    // =====================================================================
+    // LIST PUBLIC SECTIONS (CACHE DATA)
+    // =====================================================================
 
     @Override
     public DataResponse<List<StudentSectionWithQuestionsDto>> listSectionsWithoutAnswers(Long challengeId, int page, int size, String text) {
-        String traceId = TraceUtil.getTraceId();
-        log.debug("[{}] Retrieving sections without answers for challengeId: {}", traceId, challengeId);
+        log.debug("Retrieving public sections for challengeId: {}", challengeId);
 
         String cacheKey = cacheService.buildPublicSectionsCacheKey(challengeId, page, size, text);
-        DataResponse<List<StudentSectionWithQuestionsDto>> cachedResult = cacheService.getCachedObject(
-                cacheKey, new TypeReference<DataResponse<List<StudentSectionWithQuestionsDto>>>() {}, traceId);
-        if (cachedResult != null) {
-            return cachedResult;
+        List<StudentSectionWithQuestionsDto> cachedData = cacheService.getCachedObject(cacheKey, new TypeReference<>() {});
+
+        if (cachedData != null) {
+            log.debug("Cache HIT for public sections: challengeId={}, page={}", challengeId, page);
+            return DataResponse.success(cachedData, Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL)
+                    .page(page)
+                    .size(size)
+                    .totalElements(cachedData.size())
+                    .totalPages((cachedData.size() + size - 1) / size);
         }
 
-        DataResponse<List<SectionWithQuestionsDto>> fullResponse = listSections(challengeId, page, size, text);
-
-        List<StudentSectionWithQuestionsDto> sectionWithQuestionsDtos = fullResponse.getData().stream()
+        DataResponse<List<SectionWithQuestionsDto>> full = listSections(challengeId, page, size, text);
+        List<StudentSectionWithQuestionsDto> data = full.getData().stream()
                 .map(challengeSectionMapper::toStudentSectionWithQuestionsDto)
-                .collect(Collectors.toList());
+                .toList();
 
-        DataResponse<List<StudentSectionWithQuestionsDto>> response = DataResponse.<List<StudentSectionWithQuestionsDto>>builder()
-                .traceId(traceId)
-                .success(true)
-                .message(Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL)
-                .data(sectionWithQuestionsDtos)
-                .timestamp(LocalDateTime.now())
+        cacheService.cacheObject(cacheKey, data, CacheService.SECTIONS_LIST_TTL_MINUTES);
+        log.debug("Cache stored for public sections: challengeId={}, page={}", challengeId, page);
+
+        return DataResponse.success(data, Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL)
                 .page(page)
                 .size(size)
-                .totalElements(fullResponse.getTotalElements())
-                .totalPages(fullResponse.getTotalPages())
-                .build();
-
-        cacheService.cacheObject(cacheKey, response, CacheService.SECTIONS_LIST_TTL_MINUTES, traceId);
-
-        return response;
+                .totalElements(full.getTotalElements())
+                .totalPages(full.getTotalPages());
     }
+
+    // =====================================================================
+    // BULK ORDER
+    // =====================================================================
 
     @Override
     @Transactional
     public void bulkOrderSection(Long challengeId, List<QuickBulkSectionRequest> dtos) {
-        String traceId = TraceUtil.getTraceId();
-        log.info("[{}] Processing bulk order for {} sections in challengeId: {}", traceId, dtos.size(), challengeId);
+        log.info("Processing bulk order for {} sections in challengeId: {}", dtos.size(), challengeId);
 
-        validateChallengeExists(challengeId, traceId);
-        List<ChallengeSection> existingSections = loadExistingSections(challengeId, traceId);
-        validateUserAccessToClass(existingSections.get(0).getChallenge().getClassLesson().getClassChapter().getClazz().getId(), traceId);
+        List<ChallengeSection> existingSections = loadExistingSections(challengeId);
+        if (existingSections.isEmpty()) {
+            log.warn("No sections to process for challengeId: {}", challengeId);
+            return;
+        }
+
+        validateUserAccessToClass(existingSections.get(0).getChallenge().getClassLesson().getClassChapter().getClazz().getId());
 
         List<QuickBulkSectionRequest> deleteRequests = filterDeleteRequests(dtos);
         List<QuickBulkSectionRequest> nonDeletedRequests = filterNonDeletedRequests(dtos);
 
-        validateBulkRequests(existingSections, deleteRequests, nonDeletedRequests, traceId);
-        Map<Long, ChallengeSection> sectionMap = loadSectionMap(deleteRequests, nonDeletedRequests, traceId);
+        validateBulkRequests(existingSections, deleteRequests, nonDeletedRequests);
+        Map<Long, ChallengeSection> sectionMap = loadSectionMap(deleteRequests, nonDeletedRequests);
 
-        processSections(deleteRequests, nonDeletedRequests, sectionMap, traceId);
+        processSections(deleteRequests, nonDeletedRequests, sectionMap);
 
-        cacheService.clearCacheForSection(null, challengeId, traceId);
-        deleteRequests.forEach(dto -> cacheService.clearCacheForSection(dto.getId(), challengeId, traceId));
-        nonDeletedRequests.forEach(dto -> cacheService.clearCacheForSection(dto.getId(), challengeId, traceId));
+        // XÓA TOÀN BỘ CACHE
+        cacheService.clearCacheForSection(null, challengeId);
+        deleteRequests.forEach(dto -> cacheService.clearCacheForSection(dto.getId(), challengeId));
+        nonDeletedRequests.forEach(dto -> cacheService.clearCacheForSection(dto.getId(), challengeId));
 
-        log.info("[{}] Successfully processed bulk order for challengeId: {}", traceId, challengeId);
+        log.info("Successfully processed bulk order: {} deleted, {} reordered for challengeId: {}",
+                deleteRequests.size(), nonDeletedRequests.size(), challengeId);
     }
 
-    // Các phương thức hỗ trợ giữ nguyên
-    private ChallengeSection findSectionById(Long id, String traceId) {
+    // ===================================================================
+    // PRIVATE METHODS
+    // ===================================================================
+
+    private ChallengeSection findSectionById(Long id) {
         return sectionRepository.findByIdAndDeletedAtIsNull(id)
                 .orElseThrow(() -> {
-                    log.error("[{}] Section not found with ID: {}", traceId, id);
+                    log.error("Section not found with ID: {}", id);
                     return new ApiException(Const.SECTION.NOT_FOUND, HttpStatus.NOT_FOUND.value());
                 });
     }
 
-    private DailyChallenge validateChallengeExists(Long challengeId, String traceId) {
+    private DailyChallenge validateChallengeExists(Long challengeId) {
         return challengeRepository.findByIdAndDeletedAtIsNull(challengeId)
                 .orElseThrow(() -> {
-                    log.error("[{}] Challenge not found for challengeId: {}", traceId, challengeId);
+                    log.error("Challenge not found for challengeId: {}", challengeId);
                     return new ApiException(Const.CHALLENGE.NOT_FOUND, HttpStatus.NOT_FOUND.value());
                 });
     }
 
-    private void validateUserAccessToClass(Long classId, String traceId) {
+    private void validateUserAccessToClass(Long classId) {
         try {
             appValidator.validateUserAccessToClass(classId);
         } catch (ApiException e) {
-            log.error("[{}] User access validation failed for classId: {}", traceId, classId);
+            log.error("User access validation failed for classId: {}", classId);
             throw e;
         }
     }
@@ -263,221 +272,181 @@ public class ChallengeSectionServiceImpl implements ChallengeSectionService {
         List<List<QuestionDto>> questionsList = sections.stream()
                 .map(section -> mapQuestionsToDto(section.getQuestions()))
                 .toList();
+
         return challengeSectionMapper.toSectionWithQuestionsDtoList(sections, questionsList);
     }
 
-    private void validateSectionDto(SectionWithQuestionsDto dto, String traceId) {
+    private void validateSectionDto(SectionWithQuestionsDto dto) {
         if (dto.getQuestions() == null || dto.getQuestions().isEmpty()) {
-            log.error("[{}] At least one question is required to create a section", traceId);
+            log.error("At least one question is required to create a section");
             throw new ApiException(Const.SECTION.QUESTIONS_REQUIRED, HttpStatus.BAD_REQUEST.value());
         }
         if (dto.getSection() == null) {
-            log.error("[{}] Section data is required", traceId);
+            log.error("Section data is required");
             throw new ApiException(Const.SECTION.SECTION_REQUIRED, HttpStatus.BAD_REQUEST.value());
         }
     }
 
-    private ChallengeSection saveOrUpdateSection(SectionDto sectionDto, DailyChallenge challenge, String traceId) {
+    private ChallengeSection saveOrUpdateSection(SectionDto dto, DailyChallenge challenge) {
         ChallengeSection section;
-        if (sectionDto.getId() == null) {
-            log.info("[{}] Creating new section for challengeId: {}", traceId, challenge.getId());
-            section = challengeSectionMapper.toChallengeSectionEntity(sectionDto, challenge);
+        if (dto.getId() == null) {
+            log.info("Creating new section for challengeId: {}", challenge.getId());
+            section = challengeSectionMapper.toChallengeSectionEntity(dto, challenge);
         } else {
-            log.info("[{}] Updating section with ID: {}", traceId, sectionDto.getId());
-            section = findSectionById(sectionDto.getId(), traceId);
-            section.setSectionTitle(sectionDto.getSectionTitle());
-            section.setSectionsUrl(sectionDto.getSectionsUrl());
-            section.setOrderNumber(sectionDto.getOrderNumber());
-            section.setResourceType(ResourceType.valueOf(sectionDto.getResourceType()));
-            section.setSectionsContent(sectionDto.getSectionsContent());
+            log.info("Updating section with ID: {}", dto.getId());
+            section = findSectionById(dto.getId());
+            section.setSectionTitle(dto.getSectionTitle());
+            section.setSectionsUrl(dto.getSectionsUrl());
+            section.setOrderNumber(dto.getOrderNumber());
+            section.setResourceType(ResourceType.valueOf(dto.getResourceType()));
+            section.setSectionsContent(dto.getSectionsContent());
         }
         return sectionRepository.save(section);
     }
 
-    private List<QuestionDto> saveQuestions(List<QuestionDto> questions, Long sectionId, String traceId) {
-        log.debug("[{}] Saving {} questions for sectionId: {}", traceId, questions.size(), sectionId);
+    private List<QuestionDto> saveQuestions(List<QuestionDto> questions, Long sectionId) {
+        log.debug("Saving {} questions for sectionId: {}", questions.size(), sectionId);
         return questionService.bulkQuestion(questions, sectionId);
     }
 
-    private List<ChallengeSection> loadExistingSections(Long challengeId, String traceId) {
+    private List<ChallengeSection> loadExistingSections(Long challengeId) {
         List<ChallengeSection> sections = sectionRepository.findByChallengeIdAndDeletedAtIsNullOrderByOrderNumberAsc(challengeId);
-        log.debug("[{}] Loaded {} active sections for challengeId: {}", traceId, sections.size(), challengeId);
+        log.debug("Loaded {} active sections for challengeId: {}", sections.size(), challengeId);
         return sections;
     }
 
     private List<QuickBulkSectionRequest> filterDeleteRequests(List<QuickBulkSectionRequest> dtos) {
-        return dtos.stream()
-                .filter(QuickBulkSectionRequest::isToBeDeleted)
-                .collect(Collectors.toList());
+        return dtos.stream().filter(QuickBulkSectionRequest::isToBeDeleted).toList();
     }
 
     private List<QuickBulkSectionRequest> filterNonDeletedRequests(List<QuickBulkSectionRequest> dtos) {
-        return dtos.stream()
-                .filter(dto -> !dto.isToBeDeleted())
-                .collect(Collectors.toList());
+        return dtos.stream().filter(dto -> !dto.isToBeDeleted()).toList();
     }
 
-    private void validateBulkRequests(List<ChallengeSection> existingSections,
-                                      List<QuickBulkSectionRequest> deleteRequests,
-                                      List<QuickBulkSectionRequest> nonDeletedRequests,
-                                      String traceId) {
-        validateDeleteRequests(deleteRequests, existingSections, traceId);
-        validateSectionIds(existingSections, deleteRequests, nonDeletedRequests, traceId);
-        validateOrderNumbers(nonDeletedRequests, existingSections.size() - deleteRequests.size(), traceId);
+    private void validateBulkRequests(List<ChallengeSection> existing,
+                                      List<QuickBulkSectionRequest> deleteReqs,
+                                      List<QuickBulkSectionRequest> nonDeleteReqs) {
+        validateDeleteRequests(deleteReqs, existing);
+        validateSectionIds(existing, deleteReqs, nonDeleteReqs);
+        validateOrderNumbers(nonDeleteReqs, existing.size() - deleteReqs.size());
     }
 
-    private void validateDeleteRequests(List<QuickBulkSectionRequest> deleteRequests,
-                                        List<ChallengeSection> existingSections,
-                                        String traceId) {
-        Set<Long> existingSectionIds = existingSections.stream()
-                .map(ChallengeSection::getId)
-                .collect(Collectors.toSet());
-
-        for (QuickBulkSectionRequest deleteDto : deleteRequests) {
-            validateBean(deleteDto, QuickBulkSectionRequest.Deleted.class, traceId);
-            if (!existingSectionIds.contains(deleteDto.getId())) {
-                log.error("[{}] Invalid section ID for deletion: {}", traceId, deleteDto.getId());
-                throw new ApiException("Section ID to delete does not exist: " + deleteDto.getId(), HttpStatus.BAD_REQUEST.value());
+    private void validateDeleteRequests(List<QuickBulkSectionRequest> deleteReqs, List<ChallengeSection> existing) {
+        Set<Long> existingIds = existing.stream().map(ChallengeSection::getId).collect(Collectors.toSet());
+        for (QuickBulkSectionRequest dto : deleteReqs) {
+            validateBean(dto, QuickBulkSectionRequest.Deleted.class);
+            if (!existingIds.contains(dto.getId())) {
+                log.error("Invalid section ID for deletion: {}", dto.getId());
+                throw new ApiException("Section ID to delete does not exist: " + dto.getId(), HttpStatus.BAD_REQUEST.value());
             }
         }
     }
 
-    private void validateSectionIds(List<ChallengeSection> existingSections,
-                                    List<QuickBulkSectionRequest> deleteRequests,
-                                    List<QuickBulkSectionRequest> nonDeletedRequests,
-                                    String traceId) {
-        Set<Long> existingSectionIds = existingSections.stream()
-                .map(ChallengeSection::getId)
-                .collect(Collectors.toSet());
+    private void validateSectionIds(List<ChallengeSection> existing,
+                                    List<QuickBulkSectionRequest> deleteReqs,
+                                    List<QuickBulkSectionRequest> nonDeleteReqs) {
+        Set<Long> existingIds = existing.stream().map(ChallengeSection::getId).collect(Collectors.toSet());
+        Set<Long> reqExisting = nonDeleteReqs.stream().map(QuickBulkSectionRequest::getId).collect(Collectors.toSet());
+        Set<Long> reqDelete = deleteReqs.stream().map(QuickBulkSectionRequest::getId).collect(Collectors.toSet());
 
-        Set<Long> requestExistingIds = nonDeletedRequests.stream()
-                .map(QuickBulkSectionRequest::getId)
-                .collect(Collectors.toSet());
+        Set<Long> invalid = new HashSet<>();
+        invalid.addAll(reqExisting.stream().filter(id -> !existingIds.contains(id)).toList());
+        invalid.addAll(reqDelete.stream().filter(id -> !existingIds.contains(id)).toList());
 
-        Set<Long> requestDeleteIds = deleteRequests.stream()
-                .map(QuickBulkSectionRequest::getId)
-                .collect(Collectors.toSet());
-
-        Set<Long> invalidRequestIds = new HashSet<>();
-        invalidRequestIds.addAll(requestExistingIds.stream()
-                .filter(id -> !existingSectionIds.contains(id))
-                .collect(Collectors.toSet()));
-        invalidRequestIds.addAll(requestDeleteIds.stream()
-                .filter(id -> !existingSectionIds.contains(id))
-                .collect(Collectors.toSet()));
-
-        if (!invalidRequestIds.isEmpty()) {
-            log.error("[{}] Invalid section IDs: {}", traceId, invalidRequestIds);
-            throw new ApiException("Invalid section IDs: " + invalidRequestIds, HttpStatus.BAD_REQUEST.value());
+        if (!invalid.isEmpty()) {
+            log.error("Invalid section IDs: {}", invalid);
+            throw new ApiException("Invalid section IDs: " + invalid, HttpStatus.BAD_REQUEST.value());
         }
 
-        Set<Long> handledIds = new HashSet<>(requestExistingIds);
-        handledIds.addAll(requestDeleteIds);
+        Set<Long> handled = new HashSet<>(reqExisting);
+        handled.addAll(reqDelete);
+        Set<Long> unhandled = existingIds.stream().filter(id -> !handled.contains(id)).collect(Collectors.toSet());
 
-        Set<Long> unhandledSectionIds = existingSectionIds.stream()
-                .filter(id -> !handledIds.contains(id))
-                .collect(Collectors.toSet());
-
-        if (!unhandledSectionIds.isEmpty()) {
-            log.error("[{}] Unhandled sections: {}", traceId, unhandledSectionIds);
-            throw new ApiException("Sections not handled: " + unhandledSectionIds, HttpStatus.BAD_REQUEST.value());
+        if (!unhandled.isEmpty()) {
+            log.error("Sections not handled: {}", unhandled);
+            throw new ApiException("Sections not handled: " + unhandled, HttpStatus.BAD_REQUEST.value());
         }
 
-        int expectedNonDeletedCount = existingSections.size() - deleteRequests.size();
-        if (nonDeletedRequests.size() != expectedNonDeletedCount) {
-            log.error("[{}] Non-deleted sections count mismatch! Expected: {}, Actual: {}",
-                    traceId, expectedNonDeletedCount, nonDeletedRequests.size());
+        int expected = existing.size() - deleteReqs.size();
+        if (nonDeleteReqs.size() != expected) {
+            log.error("Non-deleted count mismatch! Expected: {}, Actual: {}", expected, nonDeleteReqs.size());
             throw new ApiException(
-                    String.format("Non-deleted sections count mismatch! Expected: %d, Actual: %d",
-                            expectedNonDeletedCount, nonDeletedRequests.size()),
+                    String.format("Non-deleted sections count mismatch! Expected: %d, Actual: %d", expected, nonDeleteReqs.size()),
                     HttpStatus.BAD_REQUEST.value());
         }
     }
 
-    private void validateOrderNumbers(List<QuickBulkSectionRequest> nonDeletedRequests,
-                                      int expectedCount,
-                                      String traceId) {
-        for (QuickBulkSectionRequest dto : nonDeletedRequests) {
-            validateBean(dto, QuickBulkSectionRequest.NotDeleted.class, traceId);
-        }
-        AppValidator.validateSequentialOrderNumbers(nonDeletedRequests, QuickBulkSectionRequest::getOrderNumber,
-                expectedCount, traceId, "Section");
+    private void validateOrderNumbers(List<QuickBulkSectionRequest> nonDeleted, int expectedCount) {
+        nonDeleted.forEach(dto -> validateBean(dto, QuickBulkSectionRequest.NotDeleted.class));
+        AppValidator.validateSequentialOrderNumbers(nonDeleted, QuickBulkSectionRequest::getOrderNumber,
+                expectedCount, "Section");
     }
 
-    private void validateBean(QuickBulkSectionRequest dto, Class<?> group, String traceId) {
+    private void validateBean(QuickBulkSectionRequest dto, Class<?> group) {
         Set<ConstraintViolation<QuickBulkSectionRequest>> violations = validator.validate(dto, group);
         if (!violations.isEmpty()) {
-            String errorMsg = violations.stream()
-                    .map(ConstraintViolation::getMessage)
-                    .collect(Collectors.joining(", "));
-            log.error("[{}] Validation error: {}", traceId, errorMsg);
-            throw new ApiException(errorMsg, HttpStatus.BAD_REQUEST.value());
+            String msg = violations.stream().map(ConstraintViolation::getMessage).collect(Collectors.joining(", "));
+            log.error("Validation error: {}", msg);
+            throw new ApiException(msg, HttpStatus.BAD_REQUEST.value());
         }
     }
 
-    private Map<Long, ChallengeSection> loadSectionMap(List<QuickBulkSectionRequest> deleteRequests,
-                                                       List<QuickBulkSectionRequest> nonDeletedRequests,
-                                                       String traceId) {
-        Set<Long> allSectionIds = new HashSet<>();
-        allSectionIds.addAll(deleteRequests.stream().map(QuickBulkSectionRequest::getId).collect(Collectors.toSet()));
-        allSectionIds.addAll(nonDeletedRequests.stream().map(QuickBulkSectionRequest::getId).collect(Collectors.toSet()));
+    private Map<Long, ChallengeSection> loadSectionMap(List<QuickBulkSectionRequest> deleteReqs,
+                                                       List<QuickBulkSectionRequest> nonDeleteReqs) {
+        Set<Long> ids = new HashSet<>();
+        ids.addAll(deleteReqs.stream().map(QuickBulkSectionRequest::getId).toList());
+        ids.addAll(nonDeleteReqs.stream().map(QuickBulkSectionRequest::getId).toList());
 
-        Map<Long, ChallengeSection> sectionMap = sectionRepository.findByIdInAndDeletedAtIsNull(allSectionIds)
-                .stream()
-                .collect(Collectors.toMap(ChallengeSection::getId, section -> section));
+        Map<Long, ChallengeSection> map = sectionRepository.findByIdInAndDeletedAtIsNull(ids)
+                .stream().collect(Collectors.toMap(ChallengeSection::getId, s -> s));
 
-        if (sectionMap.size() != allSectionIds.size()) {
-            Set<Long> missingIds = new HashSet<>(allSectionIds);
-            missingIds.removeAll(sectionMap.keySet());
-            log.error("[{}] Sections not found: {}", traceId, missingIds);
-            throw new ApiException("Sections not found: " + missingIds, HttpStatus.NOT_FOUND.value());
+        if (map.size() != ids.size()) {
+            Set<Long> missing = new HashSet<>(ids);
+            missing.removeAll(map.keySet());
+            log.error("Sections not found: {}", missing);
+            throw new ApiException("Sections not found: " + missing, HttpStatus.NOT_FOUND.value());
         }
-
-        return sectionMap;
+        return map;
     }
 
-    private void processSections(List<QuickBulkSectionRequest> deleteRequests,
-                                 List<QuickBulkSectionRequest> nonDeletedRequests,
-                                 Map<Long, ChallengeSection> sectionMap,
-                                 String traceId) {
+    private void processSections(List<QuickBulkSectionRequest> deleteReqs,
+                                 List<QuickBulkSectionRequest> nonDeleteReqs,
+                                 Map<Long, ChallengeSection> sectionMap) {
         OffsetDateTime now = OffsetDateTime.now();
         String deletedBy = jwtUtil.extractEmailPrefixFromCurrentRequest();
 
-        List<ChallengeSection> sectionsToDelete = new ArrayList<>();
+        List<ChallengeSection> toDelete = new ArrayList<>();
         List<Long> questionIdsToDelete = new ArrayList<>();
 
-        for (QuickBulkSectionRequest deleteDto : deleteRequests) {
-            ChallengeSection section = sectionMap.get(deleteDto.getId());
+        for (QuickBulkSectionRequest dto : deleteReqs) {
+            ChallengeSection section = sectionMap.get(dto.getId());
             questionIdsToDelete.addAll(section.getQuestions().stream()
-                    .map(Question::getId)
-                    .filter(Objects::nonNull)
-                    .collect(Collectors.toList()));
+                    .map(Question::getId).filter(Objects::nonNull).toList());
             section.setDeletedBy(deletedBy);
             section.setDeletedAt(now);
-            sectionsToDelete.add(section);
+            toDelete.add(section);
         }
 
         if (!questionIdsToDelete.isEmpty()) {
             questionService.deleteQuestions(questionIdsToDelete);
-            log.debug("[{}] Deleted {} questions", traceId, questionIdsToDelete.size());
+            log.debug("Deleted {} questions", questionIdsToDelete.size());
         }
 
-        if (!sectionsToDelete.isEmpty()) {
-            sectionRepository.saveAll(sectionsToDelete);
-            log.debug("[{}] Deleted {} sections", traceId, sectionsToDelete.size());
+        if (!toDelete.isEmpty()) {
+            sectionRepository.saveAll(toDelete);
+            log.debug("Deleted {} sections", toDelete.size());
         }
 
-        List<ChallengeSection> sectionsToUpdate = nonDeletedRequests.stream()
+        List<ChallengeSection> toUpdate = nonDeleteReqs.stream()
                 .map(dto -> {
-                    ChallengeSection section = sectionMap.get(dto.getId());
-                    section.setOrderNumber(dto.getOrderNumber());
-                    return section;
-                })
-                .collect(Collectors.toList());
+                    ChallengeSection s = sectionMap.get(dto.getId());
+                    s.setOrderNumber(dto.getOrderNumber());
+                    return s;
+                }).toList();
 
-        if (!sectionsToUpdate.isEmpty()) {
-            sectionRepository.saveAll(sectionsToUpdate);
-            log.debug("[{}] Updated {} sections", traceId, sectionsToUpdate.size());
+        if (!toUpdate.isEmpty()) {
+            sectionRepository.saveAll(toUpdate);
+            log.debug("Updated {} sections", toUpdate.size());
         }
     }
 }

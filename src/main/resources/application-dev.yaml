@@ -87,6 +87,7 @@ jwt:
 logging:
   level:
     ROOT: INFO
+    com.learning.progress: DEBUG
     com.apus.base: INFO
     org.hibernate.sql: WARN
     org.hibernate.type: WARN
