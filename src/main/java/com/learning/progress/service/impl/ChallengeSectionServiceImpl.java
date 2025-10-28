@@ -33,6 +33,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.OffsetDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 @Service
 @Slf4j
@@ -92,6 +93,70 @@ public class ChallengeSectionServiceImpl implements ChallengeSectionService {
 
         log.info("Successfully saved section with ID: {} for challengeId: {}", section.getId(), challengeId);
         return challengeSectionMapper.toSectionWithQuestionsDto(section, questions);
+    }
+
+    /**
+     * Bulk save multiple sections with their questions in one transaction.
+     * Optimized for performance: no DB query in loops, batch operations.
+     */
+    @Override
+    @Transactional
+    public List<SectionWithQuestionsDto> saveSectionList(Long challengeId, List<SectionWithQuestionsDto> dtos) {
+        log.info("Bulk INSERT {} sections for challengeId: {}", dtos.size(), challengeId);
+
+        DailyChallenge challenge = validateChallengeExists(challengeId);
+        validateUserAccessToClass(challenge.getClassLesson().getClassChapter().getClazz().getId());
+
+        // === 1. Prepare sections ===
+        List<ChallengeSection> sectionsToSave = new ArrayList<>();
+        Map<Integer, List<QuestionDto>> indexToQuestions = new HashMap<>();
+
+        for (int i = 0; i < dtos.size(); i++) {
+            SectionWithQuestionsDto dto = dtos.get(i);
+            validateSectionDto(dto);
+            appValidator.validateEnumValue(ResourceType.class, dto.getSection().getResourceType());
+
+            ChallengeSection section = challengeSectionMapper.toChallengeSectionEntity(dto.getSection(), challenge);
+            section.setOrderNumber(dto.getSection().getOrderNumber() != null ? dto.getSection().getOrderNumber() : i + 1);
+            sectionsToSave.add(section);
+            indexToQuestions.put(i, dto.getQuestions() != null ? new ArrayList<>(dto.getQuestions()) : new ArrayList<>());
+        }
+
+        // === 2. Batch insert sections ===
+        List<ChallengeSection> savedSections = sectionRepository.saveAll(sectionsToSave);
+
+        // === 3. Build map: sectionId → questions ===
+        Map<Long, List<QuestionDto>> sectionQuestionsMap = IntStream.range(0, savedSections.size())
+                .boxed()
+                .collect(Collectors.toMap(
+                        i -> savedSections.get(i).getId(),
+                        i -> indexToQuestions.get(i)
+                ));
+
+        // === 4. Bulk insert questions ===
+        Map<Long, List<QuestionDto>> savedQuestionsMap = questionService.bulkInsertQuestionsForSections(sectionQuestionsMap);
+
+        // === 5. Build result ===
+        List<SectionWithQuestionsDto> results = new ArrayList<>();
+        for (ChallengeSection section : savedSections) {
+            List<QuestionDto> questions = savedQuestionsMap.get(section.getId());
+            results.add(challengeSectionMapper.toSectionWithQuestionsDto(section, questions));
+        }
+
+        // === 6. Clear cache ===
+        cacheService.clearCacheForSection(null, challengeId);
+
+        log.info("Bulk inserted {} sections with questions", results.size());
+        return results;
+    }
+
+    // Helper: tìm DTO gốc từ entity đã save
+    private SectionWithQuestionsDto findOriginalDto(Map<SectionWithQuestionsDto, ChallengeSection> map, ChallengeSection entity) {
+        return map.entrySet().stream()
+                .filter(e -> e.getValue() == entity)
+                .map(Map.Entry::getKey)
+                .findFirst()
+                .orElse(null);
     }
 
     // =====================================================================

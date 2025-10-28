@@ -28,6 +28,7 @@ import java.time.OffsetDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
 @Service
 @Slf4j
@@ -183,6 +184,98 @@ public class QuestionServiceImpl implements QuestionService {
         cacheService.clearCacheForQuestion(questionId, sectionId, challengeId);
 
         log.info("Updated score for question ID {} to {}", questionId, score);
+    }
+
+    @Override
+    @Transactional
+    public Map<Long, List<QuestionDto>> bulkInsertQuestionsForSections(Map<Long, List<QuestionDto>> sectionQuestionsMap) {
+        if (sectionQuestionsMap == null || sectionQuestionsMap.isEmpty()) {
+            return Map.of();
+        }
+
+        log.info("Bulk INSERT questions for {} sections", sectionQuestionsMap.size());
+
+        // === 1. Batch load sections (1 query) - only to validate & get challengeId ===
+        Set<Long> sectionIds = sectionQuestionsMap.keySet();
+        Collection<ChallengeSection> sections = sectionRepository.findByIdInAndDeletedAtIsNull(sectionIds);
+        Map<Long, ChallengeSection> sectionMap = sections.stream()
+                .collect(Collectors.toMap(ChallengeSection::getId, s -> s));
+
+        if (sectionMap.size() != sectionIds.size()) {
+            Set<Long> missing = new HashSet<>(sectionIds);
+            missing.removeAll(sectionMap.keySet());
+            throw new ApiException("Sections not found: " + missing, HttpStatus.NOT_FOUND.value());
+        }
+
+        Long challengeId = sectionMap.values().iterator().next().getChallenge().getId();
+
+        // === 2. Prepare ALL questions for batch insert (in-memory) ===
+        List<Question> questionsToSave = new ArrayList<>();
+        Map<Long, List<QuestionDto>> result = new HashMap<>();
+
+        for (Map.Entry<Long, List<QuestionDto>> entry : sectionQuestionsMap.entrySet()) {
+            Long sectionId = entry.getKey();
+            List<QuestionDto> dtos = entry.getValue();
+            ChallengeSection section = sectionMap.get(sectionId);
+
+            List<QuestionDto> savedDtos = new ArrayList<>(dtos.size());
+
+            for (int i = 0; i < dtos.size(); i++) {
+                QuestionDto dto = dtos.get(i);
+
+                // Validate: id must be null
+                if (dto.getId() != null) {
+                    throw new ApiException("Question ID must be null for insert in section " + sectionId, HttpStatus.BAD_REQUEST.value());
+                }
+
+                // Bean validation
+                Set<ConstraintViolation<QuestionDto>> violations = validator.validate(dto, QuestionDto.NotDeleted.class);
+                if (!violations.isEmpty()) {
+                    String msg = violations.stream().map(ConstraintViolation::getMessage).collect(Collectors.joining(", "));
+                    throw new ApiException("Validation failed: " + msg, HttpStatus.BAD_REQUEST.value());
+                }
+
+                // Business validation
+                questionValidator.validateQuestionDto(dto);
+
+                // Auto order number
+                Integer order = 1;
+
+                // Build entity
+                Question q = new Question();
+                q.setSection(section);
+                q.setQuestionText(dto.getQuestionText());
+                q.setScore(BigDecimal.valueOf(dto.getScore()));
+                q.setQuestionType(QuestionType.valueOf(dto.getQuestionType()));
+                q.setOrderNumber(order);
+                q.setQuestionContentJson(JsonUtil.objectToMap(dto.getContent()));
+
+                questionsToSave.add(q);
+                savedDtos.add(dto); // will update ID later
+            }
+
+            result.put(sectionId, savedDtos);
+        }
+
+        // === 3. Batch INSERT all questions (1 DB call) ===
+        List<Question> savedQuestions = questionRepository.saveAll(questionsToSave);
+
+        // === 4. Map generated IDs back to DTOs ===
+        int idx = 0;
+        for (Map.Entry<Long, List<QuestionDto>> e : result.entrySet()) {
+            List<QuestionDto> dtos = e.getValue();
+            for (QuestionDto dto : dtos) {
+                if (idx < savedQuestions.size()) {
+                    dto.setId(savedQuestions.get(idx++).getId());
+                }
+            }
+        }
+
+        // === 5. Clear cache once ===
+        cacheService.clearCacheForSection(null, challengeId);
+
+        log.info("Bulk inserted {} questions across {} sections", savedQuestions.size(), result.size());
+        return result;
     }
 
     // =====================================================================
