@@ -480,6 +480,115 @@ public class OpenAiServiceImpl implements OpenAiService {
         }
     }
 
+    /**
+     * ✨ NEW: Determine student level from challenge and user description
+     */
+    private String determineStudentLevel(DailyChallenge challenge, String userDescription) {
+        // Default level from database
+        String systemLevel = challenge.getClassLesson() != null
+                && challenge.getClassLesson().getClassChapter() != null
+                && challenge.getClassLesson().getClassChapter().getClazz() != null
+                && challenge.getClassLesson().getClassChapter().getClazz().getSyllabus() != null
+                && challenge.getClassLesson().getClassChapter().getClazz().getSyllabus().getLevel() != null
+                ? challenge.getClassLesson().getClassChapter().getClazz().getSyllabus().getLevel().getLevelName()
+                : "Intermediate";
+
+        // Check if user specified level in description
+        if (userDescription != null && !userDescription.isBlank()) {
+            String descLower = userDescription.toLowerCase();
+
+            // Priority: User's explicit level specification
+            if (descLower.contains("beginner") || descLower.contains("basic") || descLower.contains("elementary")) {
+                return "Beginner";
+            } else if (descLower.contains("pre-intermediate") || descLower.contains("pre intermediate")) {
+                return "Pre-Intermediate";
+            } else if (descLower.contains("intermediate") && !descLower.contains("pre") && !descLower.contains("upper")) {
+                return "Intermediate";
+            } else if (descLower.contains("upper-intermediate") || descLower.contains("upper intermediate")) {
+                return "Upper-Intermediate";
+            } else if (descLower.contains("advanced") || descLower.contains("proficient")) {
+                return "Advanced";
+            }
+        }
+
+        // Use system level if no user override
+        return systemLevel;
+    }
+
+    /**
+     * ✨ NEW: Get level-specific instructions for AI
+     */
+    private String getLevelInstructions(String level) {
+        switch (level.toLowerCase()) {
+            case "beginner":
+            case "elementary":
+            case "basic":
+                return """
+                📊 STUDENT LEVEL: BEGINNER (A1-A2)
+                - Use simple, common vocabulary (500-1000 most frequent words)
+                - Use present simple, present continuous, simple past tenses primarily
+                - Short sentences (8-12 words average)
+                - Clear, straightforward grammar structures
+                - Avoid idioms, phrasal verbs, or complex expressions
+                - Focus on everyday topics: family, food, daily routines, hobbies
+                """;
+
+            case "pre-intermediate":
+                return """
+                📊 STUDENT LEVEL: PRE-INTERMEDIATE (A2-B1)
+                - Expand vocabulary to 1500-2000 words
+                - Introduce past continuous, present perfect, future forms
+                - Medium-length sentences (10-15 words average)
+                - Basic conjunctions and linking words (because, although, when)
+                - Simple phrasal verbs and common expressions
+                - Topics: travel, shopping, health, work, education
+                """;
+
+            case "intermediate":
+                return """
+                📊 STUDENT LEVEL: INTERMEDIATE (B1-B2)
+                - Vocabulary range of 2500-3500 words
+                - All major tenses including conditionals, passive voice
+                - Varied sentence structures (12-18 words average)
+                - Common idioms and phrasal verbs
+                - More abstract topics: environment, technology, culture, opinions
+                - Require inference and deeper comprehension
+                """;
+
+            case "upper-intermediate":
+            case "upper intermediate":
+                return """
+                📊 STUDENT LEVEL: UPPER-INTERMEDIATE (B2-C1)
+                - Rich vocabulary (4000-5000 words) including less common terms
+                - All advanced grammar: mixed conditionals, subjunctive, reported speech
+                - Complex sentence structures with multiple clauses
+                - Idiomatic expressions, colloquialisms, nuanced meanings
+                - Abstract and specialized topics: philosophy, science, business, social issues
+                - Require critical thinking and analysis
+                """;
+
+            case "advanced":
+            case "proficient":
+                return """
+                📊 STUDENT LEVEL: ADVANCED (C1-C2)
+                - Extensive vocabulary (6000+ words) including specialized terminology
+                - Sophisticated grammar with subtle distinctions
+                - Complex, varied sentence structures
+                - Advanced idioms, metaphors, literary devices
+                - Challenging topics requiring deep analysis and evaluation
+                - Native-like comprehension and expression expected
+                """;
+
+            default:
+                return """
+                📊 STUDENT LEVEL: INTERMEDIATE (B1-B2) - DEFAULT
+                - Balanced vocabulary and grammar complexity
+                - Clear but not overly simplified language
+                - Topics suitable for general English learners
+                """;
+        }
+    }
+
     private String buildBatchGVQuestionPrompt(
             DailyChallenge challenge,
             String questionType,
@@ -493,45 +602,64 @@ public class OpenAiServiceImpl implements OpenAiService {
                 ? challenge.getClassLesson().getClassLessonContent()
                 : "No lesson content available";
 
+        String studentLevel = determineStudentLevel(challenge, userDescription);
+        String levelInstructions = getLevelInstructions(studentLevel);
+
         prompt.append("You are an expert English teacher creating grammar/vocabulary exercises.\n\n");
 
+        // ✨ Level instructions first
+        prompt.append(levelInstructions).append("\n");
+
+        // 🔥 User requirements with highest priority
         if (userDescription != null && !userDescription.isBlank()) {
-            prompt.append("🔥 USER REQUIREMENTS (ABSOLUTE PRIORITY) 🔥\n");
+            prompt.append("🔥 USER REQUIREMENTS (HIGHEST PRIORITY) 🔥\n");
             prompt.append(userDescription).append("\n");
+            prompt.append("⚠️ CRITICAL: Follow user requirements exactly, but filter out:\n");
+            prompt.append("- Content completely unrelated to the lesson theme\n");
+            prompt.append("- Sensitive, inappropriate, or offensive content\n");
+            prompt.append("- Requests that violate educational standards\n");
+            prompt.append("If user requirements are reasonable and related, prioritize them over level defaults.\n\n");
         }
 
-        prompt.append("CONTEXT (Reference Only):\n");
+        prompt.append("📚 CONTEXT (Reference Only):\n");
         prompt.append("Lesson Content:\n");
         prompt.append(classLessonContent).append("\n");
-        prompt.append(contextInfo).append("\n");
+        prompt.append(contextInfo).append("\n\n");
 
-        prompt.append("You can broaden the question slightly beyond the exact lesson sentences,\n");
-        prompt.append("as long as it stays strictly within the same theme, grammar pattern, or vocabulary topic.\n");
-        prompt.append("Avoid repeating sentences from the lesson word-for-word.\n\n");
+        prompt.append("🎯 CONTENT DIVERSITY REQUIREMENTS:\n");
+        prompt.append("- Create VARIED and DIVERSE questions within the lesson theme\n");
+        prompt.append("- Each question should explore DIFFERENT aspects, vocabulary, or grammar points\n");
+        prompt.append("- Use different sentence structures, contexts, and situations\n");
+        prompt.append("- Avoid repetitive patterns or similar examples\n");
+        prompt.append("- Be creative while staying relevant to the lesson topic\n");
+        prompt.append("- Questions can expand beyond exact lesson sentences, but must stay within the same theme/grammar/vocabulary domain\n\n");
 
-        prompt.append("TASK:\n");
+        prompt.append("📝 TASK:\n");
         prompt.append("Generate EXACTLY ").append(numberOfQuestions).append(" DIFFERENT questions of type: ").append(questionType).append("\n");
-        prompt.append("These are Grammar/Vocabulary questions (NONE resource type)\n");
-        prompt.append("All questions MUST be based on the lesson content provided above.\n");
-        prompt.append("Each question MUST be UNIQUE and different from each other.\n\n");
+        prompt.append("Question type: Grammar/Vocabulary (NONE resource type)\n");
+        prompt.append("All questions MUST be based on the lesson content but with diverse variations.\n");
+        prompt.append("Each question MUST be UNIQUE and explore different aspects.\n\n");
 
         appendJSONFormat(prompt, questionType);
         appendQuestionTypeRules(prompt, questionType);
 
-        prompt.append("\n🚫 DUPLICATION RULES:\n");
-        prompt.append("- Each generated question must be UNIQUE and not identical or too similar to others\n");
-        prompt.append("- Do NOT reuse the same sentence structure, wording, or main idea\n");
-        prompt.append("- Make sure all ").append(numberOfQuestions).append(" questions are distinctly different\n");
-        prompt.append("- Encourage creativity while keeping correctness and topic relevance.\n");
+        prompt.append("\n🚫 DUPLICATION PREVENTION:\n");
+        prompt.append("- Each question must be COMPLETELY DIFFERENT from others\n");
+        prompt.append("- Vary vocabulary, grammar structures, contexts, and sentence patterns\n");
+        prompt.append("- Do NOT reuse similar ideas, wordings, or examples\n");
+        prompt.append("- Ensure all ").append(numberOfQuestions).append(" questions are distinctly unique\n");
+        prompt.append("- Maximize creativity and diversity while maintaining topic relevance\n\n");
 
-        prompt.append("\n🔥 ABSOLUTE REQUIREMENTS:\n");
+        prompt.append("🔥 ABSOLUTE REQUIREMENTS:\n");
         prompt.append("1. Return ONLY valid JSON - no markdown, no explanations\n");
         prompt.append("2. Generate EXACTLY ").append(numberOfQuestions).append(" DIFFERENT questions\n");
         prompt.append("3. Question type: ").append(questionType).append("\n");
-        prompt.append("4. For FILL_IN_THE_BLANK: MUST use [[pos_xxxxx]] format with random 6-char IDs\n");
-        prompt.append("5. All required fields must be present\n");
-        prompt.append("6. Questions MUST be relevant to the lesson content provided\n");
-        prompt.append("7. Each question must be UNIQUE - no duplicates or very similar questions\n");
+        prompt.append("4. For FILL_IN_THE_BLANK: Use natural format like \"I ...(be) a student.\" and [[pos_xxxxx]] placeholders\n");
+        prompt.append("5. All required fields must be present and accurate\n");
+        prompt.append("6. Questions MUST be relevant to lesson content but DIVERSE\n");
+        prompt.append("7. Respect the student level: ").append(studentLevel).append("\n");
+        prompt.append("8. Prioritize user requirements if provided, unless inappropriate\n");
+        prompt.append("9. Each question explores a DIFFERENT aspect within the topic\n");
 
         return prompt.toString();
     }
@@ -551,51 +679,71 @@ public class OpenAiServiceImpl implements OpenAiService {
                 ? challenge.getClassLesson().getClassLessonContent()
                 : "No lesson content available";
 
+        String studentLevel = determineStudentLevel(challenge, userDescription);
+        String levelInstructions = getLevelInstructions(studentLevel);
+
         prompt.append("You are an expert English teacher creating comprehension exercises.\n\n");
 
+        // ✨ Level instructions first
+        prompt.append(levelInstructions).append("\n");
+
+        // 🔥 User requirements with highest priority
         if (userDescription != null && !userDescription.isBlank()) {
-            prompt.append("🔥 USER REQUIREMENTS (ABSOLUTE PRIORITY) 🔥\n");
+            prompt.append("🔥 USER REQUIREMENTS (HIGHEST PRIORITY) 🔥\n");
             prompt.append(userDescription).append("\n");
+            prompt.append("⚠️ CRITICAL: Follow user requirements exactly, but filter out:\n");
+            prompt.append("- Content completely unrelated to the section content\n");
+            prompt.append("- Sensitive, inappropriate, or offensive content\n");
+            prompt.append("- Requests that violate educational standards\n");
+            prompt.append("If user requirements are reasonable and related, prioritize them over level defaults.\n\n");
         }
 
-        prompt.append("CHALLENGE TYPE: ").append(dailyChallengeType).append("\n");
+        prompt.append("📚 CHALLENGE TYPE: ").append(dailyChallengeType).append("\n");
         appendDCTypeInstructions(prompt, dailyChallengeType);
 
-        prompt.append("\nCONTEXT (Reference Only):\n");
+        prompt.append("\n📖 CONTEXT (Reference Only):\n");
         prompt.append("Lesson Content:\n");
         prompt.append(classLessonContent).append("\n");
-        prompt.append(contextInfo).append("\n");
+        prompt.append(contextInfo).append("\n\n");
 
-        prompt.append("\n📖 SECTION CONTENT (Base ALL questions on this):\n");
-        prompt.append(section.getSectionsContent()).append("\n");
+        prompt.append("📄 SECTION CONTENT (Base ALL questions on this):\n");
+        prompt.append(section.getSectionsContent()).append("\n\n");
 
-        prompt.append("You can broaden the question slightly beyond the exact lesson sentences,\n");
-        prompt.append("as long as it stays strictly within the same theme, grammar pattern, or vocabulary topic.\n");
-        prompt.append("Avoid repeating sentences from the lesson word-for-word.\n\n");
+        prompt.append("🎯 CONTENT DIVERSITY REQUIREMENTS:\n");
+        prompt.append("- Create VARIED and DIVERSE questions from the section content\n");
+        prompt.append("- Each question should focus on DIFFERENT parts or aspects of the content\n");
+        prompt.append("- Test different comprehension skills: detail, main idea, inference, vocabulary\n");
+        prompt.append("- Use different sentence structures and question formats\n");
+        prompt.append("- Avoid asking similar questions about the same information\n");
+        prompt.append("- Cover different paragraphs or sections of the content\n");
+        prompt.append("- Questions can expand interpretation but must be answerable from the content\n\n");
 
-        prompt.append("TASK:\n");
+        prompt.append("📝 TASK:\n");
         prompt.append("Generate EXACTLY ").append(numberOfQuestions).append(" DIFFERENT questions of type: ").append(questionType).append("\n");
-        prompt.append("All questions MUST be based on the section content above, with reference to the lesson content for additional context.\n");
-        prompt.append("Each question MUST be UNIQUE and different from each other.\n\n");
+        prompt.append("All questions MUST be based on the section content above.\n");
+        prompt.append("Each question MUST be UNIQUE and test different aspects.\n\n");
 
         appendJSONFormat(prompt, questionType);
         appendQuestionTypeRules(prompt, questionType);
 
-        prompt.append("\n🚫 DUPLICATION RULES:\n");
-        prompt.append("- Each generated question must be UNIQUE and not identical or too similar to others\n");
-        prompt.append("- Do NOT reuse the same sentence structure, wording, or main idea\n");
-        prompt.append("- Make sure all ").append(numberOfQuestions).append(" questions are distinctly different\n");
-        prompt.append("- Encourage creativity while keeping correctness and topic relevance.\n");
+        prompt.append("\n🚫 DUPLICATION PREVENTION:\n");
+        prompt.append("- Each question must test DIFFERENT information or aspects\n");
+        prompt.append("- Vary the focus: some on details, some on main ideas, some on inference\n");
+        prompt.append("- Do NOT ask multiple questions about the same sentence or idea\n");
+        prompt.append("- Ensure all ").append(numberOfQuestions).append(" questions are distinctly unique\n");
+        prompt.append("- Maximize diversity while ensuring all are answerable from content\n\n");
 
-        prompt.append("\n🔥 ABSOLUTE REQUIREMENTS:\n");
+        prompt.append("🔥 ABSOLUTE REQUIREMENTS:\n");
         prompt.append("1. Return ONLY valid JSON - no markdown, no explanations\n");
         prompt.append("2. Generate EXACTLY ").append(numberOfQuestions).append(" DIFFERENT questions\n");
         prompt.append("3. ALL questions MUST be answerable ONLY by reading the section content\n");
         prompt.append("4. Question type: ").append(questionType).append("\n");
-        prompt.append("5. For FILL_IN_THE_BLANK: MUST use [[pos_xxxxx]] format with random 6-char IDs\n");
-        prompt.append("6. All required fields must be present\n");
-        prompt.append("7. Use lesson content as additional context to ensure relevance\n");
-        prompt.append("8. Each question must be UNIQUE - no duplicates or very similar questions\n");
+        prompt.append("5. For FILL_IN_THE_BLANK: Use natural format like \"I ...(be) a student.\" and [[pos_xxxxx]] placeholders\n");
+        prompt.append("6. All required fields must be present and accurate\n");
+        prompt.append("7. Respect the student level: ").append(studentLevel).append("\n");
+        prompt.append("8. Prioritize user requirements if provided, unless inappropriate\n");
+        prompt.append("9. Each question tests a DIFFERENT aspect of the content\n");
+        prompt.append("10. Use lesson content as additional context for relevance\n");
 
         return prompt.toString();
     }
@@ -626,7 +774,7 @@ public class OpenAiServiceImpl implements OpenAiService {
     }
 
     private void appendJSONFormat(StringBuilder prompt, String questionType) {
-        prompt.append("JSON FORMAT:\n");
+        prompt.append("📋 JSON FORMAT:\n");
         prompt.append("{\n");
         prompt.append("  \"questions\": [\n");
         prompt.append("    {\n");
@@ -703,14 +851,16 @@ public class OpenAiServiceImpl implements OpenAiService {
     }
 
     private void appendQuestionTypeRules(StringBuilder prompt, String questionType) {
-        prompt.append("SPECIFIC RULES FOR ").append(questionType).append(":\n\n");
+        prompt.append("📚 SPECIFIC RULES FOR ").append(questionType).append(":\n\n");
 
         switch (questionType) {
 
             case "MULTIPLE_CHOICE":
-                prompt.append("- 4 options per question.\n");
-                prompt.append("- Exactly 1 option with isCorrect=true.\n");
-                prompt.append("- positionId=null for all options.\n");
+                prompt.append("- 4 options per question\n");
+                prompt.append("- Exactly 1 option with isCorrect=true\n");
+                prompt.append("- positionId=null for all options\n");
+                prompt.append("- Make distractors plausible but clearly wrong\n");
+                prompt.append("- Vary difficulty across questions\n");
                 prompt.append("Example:\n");
                 prompt.append("{\n")
                         .append("  \"questionText\": \"She _____ to school every day.\",\n")
@@ -729,51 +879,71 @@ public class OpenAiServiceImpl implements OpenAiService {
                 break;
 
             case "TRUE_OR_FALSE":
-                prompt.append("- 2 options: \"True\" and \"False\".\n");
-                prompt.append("- Exactly 1 option with isCorrect=true.\n");
-                prompt.append("- positionId=null.\n");
+                prompt.append("- 2 options: \"True\" and \"False\"\n");
+                prompt.append("- Exactly 1 option with isCorrect=true\n");
+                prompt.append("- positionId=null\n");
+                prompt.append("- Statement should be clear and unambiguous\n");
                 break;
 
             case "FILL_IN_THE_BLANK":
-                prompt.append("⚠️ CRITICAL FORMAT:\n");
-                prompt.append("- questionText MUST contain [[pos_xxxxxx]] placeholders (e.g., [[pos_a7k3m2]]).\n");
-                prompt.append("- xxxxxx is a random 6-character ID using lowercase a-z and 0-9.\n");
-                prompt.append("- Each positionId in data must match its corresponding xxxxxx.\n");
-                prompt.append("- Each ID must be UNIQUE.\n");
-                prompt.append("- Each blank has 1 correct answer and do not have distractors.\n");
+                prompt.append("⚠️ CRITICAL FORMAT - NATURAL ENGLISH STYLE:\n");
+                prompt.append("- Use NATURAL fill-in-the-blank format like standard English textbooks\n");
+                prompt.append("- Format: \"I ...(verb) a student.\" or \"She ...(be) happy.\"\n");
+                prompt.append("- The hint in parentheses (like 'be', 'verb', 'adjective') guides the student\n");
+                prompt.append("- Then use [[pos_xxxxxx]] placeholder: \"I [[pos_a7k3m2]](be) a student.\"\n");
+                prompt.append("- xxxxxx is a random 6-character ID using lowercase a-z and 0-9\n");
+                prompt.append("- Each positionId in data must match its corresponding xxxxxx\n");
+                prompt.append("- Each blank has 1 correct answer (no distractors)\n");
+                prompt.append("- The hint helps students know what type of word to fill\n\n");
+                prompt.append("Example 1:\n");
+                prompt.append("  questionText: \"I [[pos_a7k3m2]](be) a student.\"\n");
+                prompt.append("  data: [{\"value\": \"am\", \"isCorrect\": true, \"positionId\": \"a7k3m2\"}]\n\n");
+                prompt.append("Example 2:\n");
+                prompt.append("  questionText: \"She [[pos_b8n4p1]](go) to school every day.\"\n");
+                prompt.append("  data: [{\"value\": \"goes\", \"isCorrect\": true, \"positionId\": \"b8n4p1\"}]\n\n");
+                prompt.append("Example 3 (multiple blanks):\n");
+                prompt.append("  questionText: \"I [[pos_x1y2z3]](be) [[pos_a4b5c6]](study) English.\"\n");
+                prompt.append("  data: [\n");
+                prompt.append("    {\"value\": \"am\", \"isCorrect\": true, \"positionId\": \"x1y2z3\"},\n");
+                prompt.append("    {\"value\": \"studying\", \"isCorrect\": true, \"positionId\": \"a4b5c6\"}\n");
+                prompt.append("  ]\n");
                 break;
 
             case "DROPDOWN":
                 prompt.append("⚠️ CRITICAL FORMAT:\n");
-                prompt.append("- questionText MUST contain [[pos_xxxxxx]] placeholders.\n");
-                prompt.append("- xxxxxx is a random 6-character ID using lowercase a-z and 0-9.\n");
-                prompt.append("- Each dropdown has 3–4 options, exactly 1 with isCorrect=true.\n");
-                prompt.append("- All options for one dropdown share the same positionId.\n");
+                prompt.append("- questionText MUST contain [[pos_xxxxxx]] placeholders\n");
+                prompt.append("- xxxxxx is a random 6-character ID using lowercase a-z and 0-9\n");
+                prompt.append("- Each dropdown has 3–4 options, exactly 1 with isCorrect=true\n");
+                prompt.append("- All options for one dropdown share the same positionId\n");
+                prompt.append("- Options should be grammatically similar but contextually different\n");
                 break;
 
             case "MULTIPLE_SELECT":
-                prompt.append("- 4–6 options.\n");
-                prompt.append("- 2–3 options with isCorrect=true.\n");
-                prompt.append("- positionId=null.\n");
+                prompt.append("- 4–6 options total\n");
+                prompt.append("- 2–3 options with isCorrect=true\n");
+                prompt.append("- positionId=null\n");
+                prompt.append("- Clearly indicate \"Select all correct answers\"\n");
                 break;
 
             case "DRAG_AND_DROP":
                 prompt.append("⚠️ CRITICAL FORMAT:\n");
-                prompt.append("- questionText MUST contain [[pos_xxxxxx]] placeholders for drop zones.\n");
-                prompt.append("- xxxxxx is a random 6-character ID using lowercase a-z and 0-9.\n");
-                prompt.append("- Each item in data must have positionId corresponding to its correct drop zone.\n");
-                prompt.append("- There can be multiple draggable items, and each must correspond to one drop zone.\n");
+                prompt.append("- questionText MUST contain [[pos_xxxxxx]] placeholders for drop zones\n");
+                prompt.append("- xxxxxx is a random 6-character ID using lowercase a-z and 0-9\n");
+                prompt.append("- Each item in data must have positionId corresponding to its correct drop zone\n");
+                prompt.append("- Each draggable item corresponds to exactly one drop zone\n");
+                prompt.append("- Items should be logically related to their zones\n");
                 break;
 
             case "REARRANGE":
                 prompt.append("⚠️ CRITICAL FORMAT:\n");
-                prompt.append("- questionText MUST contain [[pos_xxxxxx]] placeholders for each reorder item.\n");
-                prompt.append("- Example: \"[[pos_ab12cd]] [[pos_ef34gh]] [[pos_ij56kl]]\" and do not contain any other text in question\n");
-                prompt.append("- Each placeholder represents one movable item.\n");
-                prompt.append("- xxxxxx is a random 6-character ID using lowercase letters and digits.\n");
-                prompt.append("- Each item in data must have positionId matching its placeholder.\n");
-                prompt.append("- All items must have isCorrect=true (no false answers).\n");
-                prompt.append("- Learners will rearrange items according to the placeholder order.\n");
+                prompt.append("- questionText MUST contain [[pos_xxxxxx]] placeholders for each item\n");
+                prompt.append("- Example: \"[[pos_ab12cd]] [[pos_ef34gh]] [[pos_ij56kl]]\"\n");
+                prompt.append("- NO other text in questionText except placeholders\n");
+                prompt.append("- Each placeholder represents one movable word/phrase\n");
+                prompt.append("- xxxxxx is random 6-char ID (lowercase letters + digits)\n");
+                prompt.append("- Each item must have positionId matching its placeholder\n");
+                prompt.append("- All items have isCorrect=true (no false answers)\n");
+                prompt.append("- Create logical sentences when arranged correctly\n");
                 prompt.append("Example:\n");
                 prompt.append("{\n")
                         .append("  \"questionText\": \"[[pos_a1b2c3]] [[pos_d4e5f6]] [[pos_g7h8i9]]\",\n")
@@ -791,13 +961,14 @@ public class OpenAiServiceImpl implements OpenAiService {
                 break;
 
             case "REWRITE":
-                prompt.append("- Open-ended question that asks learner to rewrite a sentence.\n");
-                prompt.append("- Must have ONLY 1 correct answer (isCorrect=true).\n");
-                prompt.append("- positionId=null for answer.\n");
-                prompt.append("- Answer must be grammatically correct and preserve original meaning.\n");
+                prompt.append("- Open-ended rewriting exercise\n");
+                prompt.append("- Must have ONLY 1 correct answer (isCorrect=true)\n");
+                prompt.append("- positionId=null\n");
+                prompt.append("- Answer must be grammatically correct and preserve meaning\n");
+                prompt.append("- Specify what to change (e.g., 'Rewrite using passive voice')\n");
                 prompt.append("Example:\n");
                 prompt.append("{\n")
-                        .append("  \"questionText\": \"He is too tired to work.\",\n")
+                        .append("  \"questionText\": \"Rewrite using 'so...that': He is too tired to work.\",\n")
                         .append("  \"orderNumber\": 1,\n")
                         .append("  \"score\": 1.0,\n")
                         .append("  \"questionType\": \"REWRITE\",\n")
@@ -810,14 +981,16 @@ public class OpenAiServiceImpl implements OpenAiService {
                 break;
 
             default:
-                prompt.append("Follow the standard format for question structure.\n");
+                prompt.append("Follow standard question format with all required fields.\n");
         }
 
-        prompt.append("\nGLOBAL RULES:\n");
-        prompt.append("- Use only lowercase letters and numbers for generated IDs.\n");
-        prompt.append("- Ensure JSON is valid and formatted properly.\n");
-        prompt.append("- For FILL_IN_THE_BLANK, DROPDOWN, DRAG_AND_DROP, REARRANGE → questionText MUST include [[pos_xxxxxx]].\n");
-        prompt.append("- positionId must match xxxxxx exactly.\n");
+        prompt.append("\n✅ GLOBAL VALIDATION RULES:\n");
+        prompt.append("- Use ONLY lowercase letters (a-z) and numbers (0-9) for position IDs\n");
+        prompt.append("- Ensure JSON is valid and properly formatted\n");
+        prompt.append("- For FILL_IN_THE_BLANK: Use natural format with hints like \"...(be)\" or \"...(verb)\"\n");
+        prompt.append("- For position-based types: questionText MUST include [[pos_xxxxxx]] placeholders\n");
+        prompt.append("- positionId must match xxxxxx exactly\n");
+        prompt.append("- Each ID must be UNIQUE across all positions\n");
     }
 
     private String callOpenAI(String prompt) {
@@ -1093,11 +1266,15 @@ public class OpenAiServiceImpl implements OpenAiService {
 
         StringBuilder prompt = new StringBuilder();
 
+        String levelInstructions = getLevelInstructions(level);
+
         prompt.append("You are an expert English teacher creating reading passages.\n\n");
+
+        prompt.append(levelInstructions).append("\n");
 
         if (description != null && !description.isBlank()) {
             prompt.append("🔥 USER REQUIREMENTS (ABSOLUTE PRIORITY) 🔥\n");
-            prompt.append(description).append("\n");
+            prompt.append(description).append("\n\n");
         }
 
         prompt.append("CONTEXT:\n");
@@ -1110,9 +1287,10 @@ public class OpenAiServiceImpl implements OpenAiService {
 
         prompt.append("REQUIREMENTS:\n");
         prompt.append("- Create engaging educational content appropriate for ").append(level).append(" level\n");
-        prompt.append("- Use suitable vocabulary and grammar\n");
+        prompt.append("- Use suitable vocabulary and grammar for this level\n");
         prompt.append("- Each paragraph has clear main idea\n");
-        prompt.append("- Logical flow between paragraphs\n\n");
+        prompt.append("- Logical flow between paragraphs\n");
+        prompt.append("- Content should be interesting and educational\n\n");
 
         prompt.append("JSON FORMAT:\n");
         prompt.append("{\n");
@@ -1168,7 +1346,7 @@ public class OpenAiServiceImpl implements OpenAiService {
         }
 
         prompt.append("FILE CONTENT:\n");
-        prompt.append(fileContent).append("\n");
+        prompt.append(fileContent).append("\n\n");
 
         prompt.append("CRITICAL JSON FORMAT:\n");
         prompt.append("{\n");
@@ -1219,12 +1397,13 @@ public class OpenAiServiceImpl implements OpenAiService {
         prompt.append("3. FILL_IN_THE_BLANK:\n");
         prompt.append("   - Question has blanks (___, ....., [blank], etc.)\n");
         prompt.append("   - Answer(s) provided separately\n");
-        prompt.append("   - CRITICAL: Replace blanks with [[pos_xxxxx]] format\n");
+        prompt.append("   - CRITICAL: Convert to natural format: \"I [[pos_xxxxx]](be) a student.\"\n");
         prompt.append("   - Generate random 6-char lowercase IDs for each blank\n");
         prompt.append("   - positionId in data must match the xxxxx part\n");
-        prompt.append("   Example input: \"I _____ to school.\" Answer: go\n");
-        prompt.append("   Example output: questionText: \"I [[pos_a7k3m2]] to school.\"\n");
-        prompt.append("                   data: [{\"value\": \"go\", \"isCorrect\": true, \"positionId\": \"a7k3m2\"}]\n\n");
+        prompt.append("   - Include hint in parentheses (be, verb, adjective, etc.)\n");
+        prompt.append("   Example input: \"I _____ a student.\" Answer: am (verb 'be')\n");
+        prompt.append("   Example output: questionText: \"I [[pos_a7k3m2]](be) a student.\"\n");
+        prompt.append("                   data: [{\"value\": \"am\", \"isCorrect\": true, \"positionId\": \"a7k3m2\"}]\n\n");
 
         prompt.append("4. DROPDOWN:\n");
         prompt.append("   - Similar to FILL_IN_THE_BLANK but with multiple options per blank\n");
@@ -1246,7 +1425,7 @@ public class OpenAiServiceImpl implements OpenAiService {
         prompt.append("2. EXTRACT all questions from the file - don't skip any\n");
         prompt.append("3. PRESERVE the original question text and answers\n");
         prompt.append("4. IDENTIFY correct answers from markers like: ✓, *, (correct), Answer:, etc.\n");
-        prompt.append("5. For FILL_IN_THE_BLANK: Use [[pos_xxxxx]] format with random IDs\n");
+        prompt.append("5. For FILL_IN_THE_BLANK: Use natural format with hints like \"...(be)\"\n");
         prompt.append("6. Each position ID must be UNIQUE across all questions\n");
         prompt.append("7. Group by question type into sections\n");
         prompt.append("8. Maintain question order within each type\n\n");
