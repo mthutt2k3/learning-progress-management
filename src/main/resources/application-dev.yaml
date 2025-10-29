@@ -135,6 +135,9 @@ azure:
     api-key: ${OPENAI_API_KEY}
     reading-passage:
       words-per-paragraph: 100
+    batch-size: 10
+    thread-pool-size: 10
+    max-question: 100
 
 app:
   pagination:

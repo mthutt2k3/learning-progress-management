@@ -10,6 +10,8 @@ import com.learning.progress.exception.ApiException;
 import com.learning.progress.repository.DailyChallengeRepository;
 import com.learning.progress.service.OpenAiService;
 import com.learning.progress.util.FileContentExtractor;
+import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
@@ -20,8 +22,10 @@ import org.springframework.web.util.UriComponentsBuilder;
 
 import java.io.IOException;
 import java.util.*;
+import java.util.concurrent.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 @Service
 @Slf4j
@@ -29,6 +33,15 @@ public class OpenAiServiceImpl implements OpenAiService {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final DailyChallengeRepository dailyChallengeRepository;
+
+    private ExecutorService executorService;
+
+    @Value("${azure.openai.batch-size}")
+    private int batchSize;
+    @Value("${azure.openai.thread-pool-size}")
+    private int threadPoolSize;
+    @Value("${azure.openai.max-question}")
+    private int maxQuestion;
 
     @Value("${azure.openai.endpoint}")
     private String endpoint;
@@ -46,89 +59,185 @@ public class OpenAiServiceImpl implements OpenAiService {
         this.dailyChallengeRepository = dailyChallengeRepository;
     }
 
+    @PostConstruct
+    public void init() {
+        this.executorService = Executors.newFixedThreadPool(threadPoolSize);
+        log.info("Initialized thread pool with size: {}", threadPoolSize);
+    }
+
+    @PreDestroy
+    public void cleanup() {
+        executorService.shutdown();
+        try {
+            if (!executorService.awaitTermination(60, TimeUnit.SECONDS)) {
+                executorService.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            executorService.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
+    }
+
     /**
-     * API 1: Generate GV (Grammar/Vocabulary) questions
-     * Each question in a separate section (resourceType = NONE)
+     * API 1: Generate GV questions - OPTIMIZED WITH PROPER GROUPING
      */
     @Override
     public List<SectionWithQuestionsDto> generateGVQuestions(GenerateGVQuestionsRequest request) {
-        log.info("Starting GV question generation for challengeId: {}", request.getChallengeId());
 
-        // 1. Validate challenge
+        int totalQuestions = request.getQuestionTypeConfigs().stream()
+                .mapToInt(GenerateGVQuestionsRequest.QuestionTypeConfig::getNumberOfQuestions)
+                .sum();
+
+        if (totalQuestions > maxQuestion) {
+            log.error("Total questions exceeds limit: {} > 50", totalQuestions);
+            throw new ApiException("Total number of questions cannot exceed " + maxQuestion + ". Requested: " + totalQuestions,
+                    HttpStatus.BAD_REQUEST.value());
+        }
+
+        log.info("Total questions to generate: {}", totalQuestions);
+
+        log.info("Starting OPTIMIZED GV question generation for challengeId: {}", request.getChallengeId());
+
         DailyChallenge challenge = dailyChallengeRepository.findByIdAndDeletedAtIsNull(request.getChallengeId())
                 .orElseThrow(() -> {
                     log.error("DailyChallenge not found: {}", request.getChallengeId());
                     return new ApiException(Const.CHALLENGE.NOT_FOUND, HttpStatus.NOT_FOUND.value());
                 });
 
-        // 2. Build context
-
-
-        // 3. Generate sections - 1 question per section
-        List<SectionWithQuestionsDto> results = new ArrayList<>();
+        // Prepare all tasks
+        List<QuestionGenerationTask> allTasks = new ArrayList<>();
         int sectionOrder = 1;
 
         for (GenerateGVQuestionsRequest.QuestionTypeConfig config : request.getQuestionTypeConfigs()) {
             String questionType = config.getQuestionType();
             int numberOfQuestions = config.getNumberOfQuestions();
-
             String contextInfo = buildEnhancedContextInfo(questionType);
-            log.info("Generating {} {} questions", numberOfQuestions, questionType);
 
-            // Generate N questions, each in its own section
+            log.info("Preparing {} {} questions", numberOfQuestions, questionType);
+
             for (int i = 0; i < numberOfQuestions; i++) {
-                try {
-                    // Create section for this single question
-                    SectionDto section = new SectionDto();
-                    section.setId(null);
-                    section.setSectionTitle(null);
-                    section.setSectionsContent(null);
-                    section.setOrderNumber(sectionOrder++);
-                    section.setResourceType("NONE");
-
-                    // Generate 1 question for this section
-                    List<QuestionDto> questions = generateGVQuestionForSection(
-                            challenge,
-                            questionType,
-                            request.getDescription(),
-                            contextInfo
-                    );
-
-                    SectionWithQuestionsDto result = new SectionWithQuestionsDto(section, questions);
-                    results.add(result);
-
-                } catch (Exception e) {
-                    log.error("Failed to generate {} question {}: {}", questionType, i + 1, e.getMessage(), e);
-                    throw new RuntimeException("Failed to generate question: " + e.getMessage(), e);
-                }
+                allTasks.add(new QuestionGenerationTask(
+                        challenge,
+                        questionType,
+                        request.getDescription(),
+                        contextInfo,
+                        sectionOrder++
+                ));
             }
         }
 
+        // ✅ FIX: Group by question type FIRST, then batch
+        Map<String, List<QuestionGenerationTask>> tasksByType = allTasks.stream()
+                .collect(Collectors.groupingBy(task -> task.questionType));
+
+        log.info("Grouped tasks into {} question types", tasksByType.size());
+
+        // Generate questions for each type in parallel
+        List<CompletableFuture<List<QuestionWithOrderDto>>> futures = new ArrayList<>();
+
+        for (Map.Entry<String, List<QuestionGenerationTask>> entry : tasksByType.entrySet()) {
+            String questionType = entry.getKey();
+            List<QuestionGenerationTask> tasksForType = entry.getValue();
+
+            log.info("Processing {} tasks for question type: {}", tasksForType.size(), questionType);
+
+            // Split into batches within this question type
+            List<List<QuestionGenerationTask>> batches = splitIntoBatches(tasksForType, batchSize);
+
+            for (List<QuestionGenerationTask> batch : batches) {
+                CompletableFuture<List<QuestionWithOrderDto>> future = CompletableFuture.supplyAsync(
+                        () -> generateBatchOfGVQuestions(batch),
+                        executorService
+                );
+                futures.add(future);
+            }
+        }
+
+        // Wait for all
+        CompletableFuture<Void> allOf = CompletableFuture.allOf(
+                futures.toArray(new CompletableFuture[0])
+        );
+
+        try {
+            allOf.get(5, TimeUnit.MINUTES);
+        } catch (Exception e) {
+            log.error("Error waiting for parallel batch completion: {}", e.getMessage(), e);
+            throw new RuntimeException("Failed to generate questions in parallel: " + e.getMessage(), e);
+        }
+
+        // Collect all questions
+        List<QuestionWithOrderDto> allGeneratedQuestions = futures.stream()
+                .map(future -> {
+                    try {
+                        return future.get();
+                    } catch (Exception e) {
+                        log.error("Error getting batch result: {}", e.getMessage());
+                        return Collections.<QuestionWithOrderDto>emptyList();
+                    }
+                })
+                .flatMap(List::stream)
+                .collect(Collectors.toList());
+
+        // Sort by original section order
+        allGeneratedQuestions.sort(Comparator.comparingInt(q -> q.originalSectionOrder));
+
+        // Create sections
+        List<SectionWithQuestionsDto> results = new ArrayList<>();
+        for (int i = 0; i < allGeneratedQuestions.size(); i++) {
+            QuestionWithOrderDto qWithOrder = allGeneratedQuestions.get(i);
+            QuestionDto question = qWithOrder.question;
+
+            question.setId(null);
+            question.setOrderNumber(1);
+
+            SectionDto section = new SectionDto();
+            section.setId(null);
+            section.setSectionTitle(null);
+            section.setSectionsContent(null);
+            section.setOrderNumber(i + 1);
+            section.setResourceType("NONE");
+
+            results.add(new SectionWithQuestionsDto(section, Collections.singletonList(question)));
+        }
+
+        // Ensure unique position IDs
+        List<QuestionDto> allQuestions = results.stream()
+                .flatMap(s -> s.getQuestions().stream())
+                .collect(Collectors.toList());
+        ensureUniquePositionIds(allQuestions);
+
         log.info("Successfully generated {} sections with {} total questions",
-                results.size(), results.size()); // Each section has 1 question
+                results.size(), results.size());
 
         return results;
     }
 
-
     @Override
     public List<SectionWithQuestionsDto> generateContentBasedQuestions(GenerateContentBasedQuestionsRequest request) {
-        log.info("Starting content-based question generation for challengeId: {}", request.getChallengeId());
+        log.info("Starting OPTIMIZED content-based question generation for challengeId: {}", request.getChallengeId());
 
-        // 1. Validate challenge
+        int totalQuestions = request.getSections().stream()
+                .flatMap(section -> section.getQuestionTypeConfigs().stream())
+                .mapToInt(GenerateContentBasedQuestionsRequest.QuestionTypeConfig::getNumberOfQuestions)
+                .sum();
+
+        if (totalQuestions > maxQuestion) {
+            log.error("Total questions across all sections exceeds limit: {}", totalQuestions);
+            throw new ApiException("Total number of questions across all sections cannot exceed " + maxQuestion + ". Requested: " + totalQuestions,
+                    HttpStatus.BAD_REQUEST.value());
+        }
+
+        log.info("Total questions to generate across all sections: {}", totalQuestions);
+
         DailyChallenge challenge = dailyChallengeRepository.findByIdAndDeletedAtIsNull(request.getChallengeId())
                 .orElseThrow(() -> {
                     log.error("DailyChallenge not found: {}", request.getChallengeId());
                     return new ApiException(Const.CHALLENGE.NOT_FOUND, HttpStatus.NOT_FOUND.value());
                 });
 
-        // 2. Get DC Type
         String dailyChallengeType = challenge.getChallengeType().toString();
         log.info("Daily Challenge Type: {}", dailyChallengeType);
 
-        // 3. Build context
-
-        // 4. Generate questions for each section
         List<SectionWithQuestionsDto> results = new ArrayList<>();
 
         for (GenerateContentBasedQuestionsRequest.SectionWithConfig sectionConfig : request.getSections()) {
@@ -138,13 +247,12 @@ public class OpenAiServiceImpl implements OpenAiService {
                     section.getSectionTitle(), section.getResourceType());
 
             try {
-                // Validate section has content
                 if (section.getSectionsContent() == null || section.getSectionsContent().isBlank()) {
-                    throw new IllegalArgumentException("Section content is required for content-based questions");
+                    throw new IllegalArgumentException("Section content is required");
                 }
 
-                // Generate all questions for this section
-                List<QuestionDto> allQuestions = new ArrayList<>();
+                // Prepare tasks
+                List<ContentBasedQuestionTask> sectionTasks = new ArrayList<>();
                 int questionOrder = 1;
 
                 for (GenerateContentBasedQuestionsRequest.QuestionTypeConfig config : sectionConfig.getQuestionTypeConfigs()) {
@@ -152,131 +260,246 @@ public class OpenAiServiceImpl implements OpenAiService {
                     int numberOfQuestions = config.getNumberOfQuestions();
                     String contextInfo = buildEnhancedContextInfo(questionType);
 
-                    log.info("Generating {} {} questions for section", numberOfQuestions, questionType);
+                    log.info("Preparing {} {} questions", numberOfQuestions, questionType);
 
-                    List<QuestionDto> questions = generateContentBasedQuestionsForSection(
-                            challenge,
-                            section,
-                            questionType,
-                            numberOfQuestions,
-                            request.getDescription(),
-                            contextInfo,
-                            dailyChallengeType,
-                            questionOrder
-                    );
-
-                    allQuestions.addAll(questions);
-                    questionOrder += questions.size();
+                    for (int i = 0; i < numberOfQuestions; i++) {
+                        sectionTasks.add(new ContentBasedQuestionTask(
+                                challenge,
+                                section,
+                                questionType,
+                                request.getDescription(),
+                                contextInfo,
+                                dailyChallengeType,
+                                questionOrder++
+                        ));
+                    }
                 }
 
-                // Create result with all questions in this section
+                // ✅ FIX: Group by question type FIRST
+                Map<String, List<ContentBasedQuestionTask>> tasksByType = sectionTasks.stream()
+                        .collect(Collectors.groupingBy(task -> task.questionType));
+
+                List<CompletableFuture<List<QuestionWithOrderDto>>> futures = new ArrayList<>();
+
+                for (Map.Entry<String, List<ContentBasedQuestionTask>> entry : tasksByType.entrySet()) {
+                    List<ContentBasedQuestionTask> tasksForType = entry.getValue();
+                    List<List<ContentBasedQuestionTask>> batches = splitIntoBatches(tasksForType, batchSize);
+
+                    for (List<ContentBasedQuestionTask> batch : batches) {
+                        CompletableFuture<List<QuestionWithOrderDto>> future = CompletableFuture.supplyAsync(
+                                () -> generateBatchOfContentBasedQuestions(batch),
+                                executorService
+                        );
+                        futures.add(future);
+                    }
+                }
+
+                CompletableFuture<Void> allOf = CompletableFuture.allOf(
+                        futures.toArray(new CompletableFuture[0])
+                );
+
+                allOf.get(5, TimeUnit.MINUTES);
+
+                List<QuestionWithOrderDto> allGeneratedQuestions = futures.stream()
+                        .map(future -> {
+                            try {
+                                return future.get();
+                            } catch (Exception e) {
+                                log.error("Error getting batch result: {}", e.getMessage());
+                                return Collections.<QuestionWithOrderDto>emptyList();
+                            }
+                        })
+                        .flatMap(List::stream)
+                        .collect(Collectors.toList());
+
+                // Sort by original order
+                allGeneratedQuestions.sort(Comparator.comparingInt(q -> q.originalSectionOrder));
+
+                List<QuestionDto> allQuestions = new ArrayList<>();
+                for (int i = 0; i < allGeneratedQuestions.size(); i++) {
+                    QuestionDto question = allGeneratedQuestions.get(i).question;
+                    question.setId(null);
+                    question.setOrderNumber(i + 1);
+                    allQuestions.add(question);
+                }
+
+                ensureUniquePositionIds(allQuestions);
+
                 SectionWithQuestionsDto result = new SectionWithQuestionsDto(section, allQuestions);
                 results.add(result);
 
-                log.info("Generated {} questions for section: {}", allQuestions.size(), section.getSectionTitle());
+                log.info("Generated {} questions for section", allQuestions.size());
 
             } catch (Exception e) {
-                log.error("Failed to generate questions for section {}: {}",
-                        section.getSectionTitle(), e.getMessage(), e);
-                throw new RuntimeException("Failed to generate questions for section "
-                        + section.getSectionTitle() + ": " + e.getMessage(), e);
+                log.error("Failed to generate questions for section: {}", e.getMessage(), e);
+                throw new RuntimeException("Failed to generate questions: " + e.getMessage(), e);
             }
         }
 
-        log.info("Successfully generated {} sections with total {} questions",
+        log.info("Successfully generated {} sections with {} total questions",
                 results.size(), results.stream().mapToInt(s -> s.getQuestions().size()).sum());
 
         return results;
     }
 
     /**
-     * Generate 1 GV question (for API 1)
+     * Generate batch of GV questions - ALL SAME TYPE
      */
-    private List<QuestionDto> generateGVQuestionForSection(
-            DailyChallenge challenge,
-            String questionType,
-            String userDescription,
-            String contextInfo) {
+    private List<QuestionWithOrderDto> generateBatchOfGVQuestions(List<QuestionGenerationTask> batch) {
+        try {
+            // All tasks in batch have SAME question type (because we grouped first)
+            QuestionGenerationTask firstTask = batch.get(0);
+            log.info("Generating batch of {} {} questions", batch.size(), firstTask.questionType);
 
-        String prompt = buildGVQuestionPrompt(challenge, questionType, userDescription, contextInfo);
-        String aiResponse = callOpenAI(prompt);
-        List<QuestionDto> questions = parseQuestionsFromResponse(aiResponse);
+            String prompt = buildBatchGVQuestionPrompt(
+                    firstTask.challenge,
+                    firstTask.questionType,
+                    firstTask.userDescription,
+                    firstTask.contextInfo,
+                    batch.size()
+            );
 
-        // Ensure we only return 1 question
-        if (questions.size() > 1) {
-            questions = questions.subList(0, 1);
+            String aiResponse = callOpenAI(prompt);
+            List<QuestionDto> questions = parseQuestionsFromResponse(aiResponse);
+
+            if (questions.size() > batch.size()) {
+                questions = questions.subList(0, batch.size());
+            }
+
+            // Wrap with original order
+            List<QuestionWithOrderDto> result = new ArrayList<>();
+            for (int i = 0; i < questions.size() && i < batch.size(); i++) {
+                result.add(new QuestionWithOrderDto(questions.get(i), batch.get(i).sectionOrder));
+            }
+
+            log.info("Successfully generated batch of {} questions", result.size());
+            return result;
+
+        } catch (Exception e) {
+            log.error("Failed to generate batch: {}", e.getMessage(), e);
+            return Collections.emptyList();
         }
-
-        // Set IDs to null
-        for (QuestionDto question : questions) {
-            question.setId(null);
-            question.setOrderNumber(1); // Always 1 since it's the only question in section
-        }
-
-        return questions;
     }
 
     /**
-     * Generate multiple content-based questions (for API 2)
+     * Generate batch of content-based questions - ALL SAME TYPE
      */
-    private List<QuestionDto> generateContentBasedQuestionsForSection(
+    private List<QuestionWithOrderDto> generateBatchOfContentBasedQuestions(List<ContentBasedQuestionTask> batch) {
+        try {
+            ContentBasedQuestionTask firstTask = batch.get(0);
+            log.info("Generating batch of {} {} questions", batch.size(), firstTask.questionType);
+
+            String prompt = buildBatchContentBasedQuestionPrompt(
+                    firstTask.challenge,
+                    firstTask.section,
+                    firstTask.questionType,
+                    batch.size(),
+                    firstTask.userDescription,
+                    firstTask.contextInfo,
+                    firstTask.dailyChallengeType
+            );
+
+            String aiResponse = callOpenAI(prompt);
+            List<QuestionDto> questions = parseQuestionsFromResponse(aiResponse);
+
+            if (questions.size() > batch.size()) {
+                questions = questions.subList(0, batch.size());
+            }
+
+            List<QuestionWithOrderDto> result = new ArrayList<>();
+            for (int i = 0; i < questions.size() && i < batch.size(); i++) {
+                result.add(new QuestionWithOrderDto(questions.get(i), batch.get(i).orderNumber));
+            }
+
+            log.info("Successfully generated batch of {} questions", result.size());
+            return result;
+
+        } catch (Exception e) {
+            log.error("Failed to generate batch: {}", e.getMessage(), e);
+            return Collections.emptyList();
+        }
+    }
+
+    private <T> List<List<T>> splitIntoBatches(List<T> list, int batchSize) {
+        List<List<T>> batches = new ArrayList<>();
+        for (int i = 0; i < list.size(); i += batchSize) {
+            int end = Math.min(i + batchSize, list.size());
+            batches.add(new ArrayList<>(list.subList(i, end)));
+        }
+        return batches;
+    }
+
+    // Helper classes
+    private static class QuestionGenerationTask {
+        DailyChallenge challenge;
+        String questionType;
+        String userDescription;
+        String contextInfo;
+        int sectionOrder;
+
+        QuestionGenerationTask(DailyChallenge challenge, String questionType,
+                               String userDescription, String contextInfo, int sectionOrder) {
+            this.challenge = challenge;
+            this.questionType = questionType;
+            this.userDescription = userDescription;
+            this.contextInfo = contextInfo;
+            this.sectionOrder = sectionOrder;
+        }
+    }
+
+    private static class ContentBasedQuestionTask {
+        DailyChallenge challenge;
+        SectionDto section;
+        String questionType;
+        String userDescription;
+        String contextInfo;
+        String dailyChallengeType;
+        int orderNumber;
+
+        ContentBasedQuestionTask(DailyChallenge challenge, SectionDto section,
+                                 String questionType, String userDescription,
+                                 String contextInfo, String dailyChallengeType, int orderNumber) {
+            this.challenge = challenge;
+            this.section = section;
+            this.questionType = questionType;
+            this.userDescription = userDescription;
+            this.contextInfo = contextInfo;
+            this.dailyChallengeType = dailyChallengeType;
+            this.orderNumber = orderNumber;
+        }
+    }
+
+    // Wrapper to maintain order
+    private static class QuestionWithOrderDto {
+        QuestionDto question;
+        int originalSectionOrder;
+
+        QuestionWithOrderDto(QuestionDto question, int originalSectionOrder) {
+            this.question = question;
+            this.originalSectionOrder = originalSectionOrder;
+        }
+    }
+
+    private String buildBatchGVQuestionPrompt(
             DailyChallenge challenge,
-            SectionDto section,
             String questionType,
-            int numberOfQuestions,
             String userDescription,
             String contextInfo,
-            String dailyChallengeType,
-            int startingOrderNumber) {
-
-        String prompt = buildContentBasedQuestionPrompt(
-                challenge,
-                section,
-                questionType,
-                numberOfQuestions,
-                userDescription,
-                contextInfo,
-                dailyChallengeType
-        );
-
-        String aiResponse = callOpenAI(prompt);
-        List<QuestionDto> questions = parseQuestionsFromResponse(aiResponse);
-
-        // Set IDs and order numbers
-        int order = startingOrderNumber;
-        for (QuestionDto question : questions) {
-            question.setId(null);
-            question.setOrderNumber(order++);
-        }
-
-        return questions;
-    }
-
-    /**
-     * Build prompt for GV questions (API 1)
-     */
-    private String buildGVQuestionPrompt(
-            DailyChallenge challenge,
-            String questionType,
-            String userDescription,
-            String contextInfo) {
+            int numberOfQuestions) {
 
         StringBuilder prompt = new StringBuilder();
 
-        // Lấy nội dung class_lesson
         String classLessonContent = challenge.getClassLesson() != null
                 ? challenge.getClassLesson().getClassLessonContent()
                 : "No lesson content available";
 
         prompt.append("You are an expert English teacher creating grammar/vocabulary exercises.\n\n");
 
-        // User description
         if (userDescription != null && !userDescription.isBlank()) {
             prompt.append("🔥 USER REQUIREMENTS (ABSOLUTE PRIORITY) 🔥\n");
             prompt.append(userDescription).append("\n");
         }
 
-        // Context
         prompt.append("CONTEXT (Reference Only):\n");
         prompt.append("Lesson Content:\n");
         prompt.append(classLessonContent).append("\n");
@@ -286,41 +509,34 @@ public class OpenAiServiceImpl implements OpenAiService {
         prompt.append("as long as it stays strictly within the same theme, grammar pattern, or vocabulary topic.\n");
         prompt.append("Avoid repeating sentences from the lesson word-for-word.\n\n");
 
-        // Task
         prompt.append("TASK:\n");
-        prompt.append("Generate EXACTLY 1 question of type: ").append(questionType).append("\n");
-        prompt.append("This is a Grammar/Vocabulary question (NONE resource type)\n");
-        prompt.append("All questions MUST be based on the lesson content provided above.\n\n");
+        prompt.append("Generate EXACTLY ").append(numberOfQuestions).append(" DIFFERENT questions of type: ").append(questionType).append("\n");
+        prompt.append("These are Grammar/Vocabulary questions (NONE resource type)\n");
+        prompt.append("All questions MUST be based on the lesson content provided above.\n");
+        prompt.append("Each question MUST be UNIQUE and different from each other.\n\n");
 
-        // Format
         appendJSONFormat(prompt, questionType);
-
-        // Question type rules
         appendQuestionTypeRules(prompt, questionType);
 
-        // ✅ Thêm yêu cầu không trùng câu hỏi
         prompt.append("\n🚫 DUPLICATION RULES:\n");
-        prompt.append("- The generated question must be UNIQUE and not identical or too similar\n");
-        prompt.append("  to any existing question from this lesson or previous ones.\n");
-        prompt.append("- Do NOT reuse the same sentence structure, wording, or main idea.\n");
+        prompt.append("- Each generated question must be UNIQUE and not identical or too similar to others\n");
+        prompt.append("- Do NOT reuse the same sentence structure, wording, or main idea\n");
+        prompt.append("- Make sure all ").append(numberOfQuestions).append(" questions are distinctly different\n");
         prompt.append("- Encourage creativity while keeping correctness and topic relevance.\n");
 
-        // Requirements
         prompt.append("\n🔥 ABSOLUTE REQUIREMENTS:\n");
         prompt.append("1. Return ONLY valid JSON - no markdown, no explanations\n");
-        prompt.append("2. Generate EXACTLY 1 question\n");
+        prompt.append("2. Generate EXACTLY ").append(numberOfQuestions).append(" DIFFERENT questions\n");
         prompt.append("3. Question type: ").append(questionType).append("\n");
         prompt.append("4. For FILL_IN_THE_BLANK: MUST use [[pos_xxxxx]] format with random 6-char IDs\n");
         prompt.append("5. All required fields must be present\n");
         prompt.append("6. Questions MUST be relevant to the lesson content provided\n");
+        prompt.append("7. Each question must be UNIQUE - no duplicates or very similar questions\n");
 
         return prompt.toString();
     }
 
-    /**
-     * Build prompt for content-based questions (API 2)
-     */
-    private String buildContentBasedQuestionPrompt(
+    private String buildBatchContentBasedQuestionPrompt(
             DailyChallenge challenge,
             SectionDto section,
             String questionType,
@@ -331,30 +547,25 @@ public class OpenAiServiceImpl implements OpenAiService {
 
         StringBuilder prompt = new StringBuilder();
 
-        // Lấy nội dung class_lesson
         String classLessonContent = challenge.getClassLesson() != null
                 ? challenge.getClassLesson().getClassLessonContent()
                 : "No lesson content available";
 
         prompt.append("You are an expert English teacher creating comprehension exercises.\n\n");
 
-        // User description
         if (userDescription != null && !userDescription.isBlank()) {
             prompt.append("🔥 USER REQUIREMENTS (ABSOLUTE PRIORITY) 🔥\n");
             prompt.append(userDescription).append("\n");
         }
 
-        // DC Type instructions
         prompt.append("CHALLENGE TYPE: ").append(dailyChallengeType).append("\n");
         appendDCTypeInstructions(prompt, dailyChallengeType);
 
-        // Context
         prompt.append("\nCONTEXT (Reference Only):\n");
         prompt.append("Lesson Content:\n");
         prompt.append(classLessonContent).append("\n");
         prompt.append(contextInfo).append("\n");
 
-        // Section content (CRITICAL for RE/LI)
         prompt.append("\n📖 SECTION CONTENT (Base ALL questions on this):\n");
         prompt.append(section.getSectionsContent()).append("\n");
 
@@ -362,43 +573,38 @@ public class OpenAiServiceImpl implements OpenAiService {
         prompt.append("as long as it stays strictly within the same theme, grammar pattern, or vocabulary topic.\n");
         prompt.append("Avoid repeating sentences from the lesson word-for-word.\n\n");
 
-        // Task
         prompt.append("TASK:\n");
-        prompt.append("Generate EXACTLY ").append(numberOfQuestions).append(" questions of type: ").append(questionType).append("\n");
-        prompt.append("All questions MUST be based on the section content above, with reference to the lesson content for additional context.\n\n");
+        prompt.append("Generate EXACTLY ").append(numberOfQuestions).append(" DIFFERENT questions of type: ").append(questionType).append("\n");
+        prompt.append("All questions MUST be based on the section content above, with reference to the lesson content for additional context.\n");
+        prompt.append("Each question MUST be UNIQUE and different from each other.\n\n");
 
-        // Format
         appendJSONFormat(prompt, questionType);
-
-        // Question type rules
         appendQuestionTypeRules(prompt, questionType);
 
-        // ✅ Thêm yêu cầu không trùng câu hỏi
         prompt.append("\n🚫 DUPLICATION RULES:\n");
-        prompt.append("- The generated question must be UNIQUE and not identical or too similar\n");
-        prompt.append("  to any existing question from this lesson or previous ones.\n");
-        prompt.append("- Do NOT reuse the same sentence structure, wording, or main idea.\n");
+        prompt.append("- Each generated question must be UNIQUE and not identical or too similar to others\n");
+        prompt.append("- Do NOT reuse the same sentence structure, wording, or main idea\n");
+        prompt.append("- Make sure all ").append(numberOfQuestions).append(" questions are distinctly different\n");
         prompt.append("- Encourage creativity while keeping correctness and topic relevance.\n");
 
-        // Requirements
         prompt.append("\n🔥 ABSOLUTE REQUIREMENTS:\n");
         prompt.append("1. Return ONLY valid JSON - no markdown, no explanations\n");
-        prompt.append("2. Generate EXACTLY ").append(numberOfQuestions).append(" questions\n");
+        prompt.append("2. Generate EXACTLY ").append(numberOfQuestions).append(" DIFFERENT questions\n");
         prompt.append("3. ALL questions MUST be answerable ONLY by reading the section content\n");
         prompt.append("4. Question type: ").append(questionType).append("\n");
         prompt.append("5. For FILL_IN_THE_BLANK: MUST use [[pos_xxxxx]] format with random 6-char IDs\n");
         prompt.append("6. All required fields must be present\n");
         prompt.append("7. Use lesson content as additional context to ensure relevance\n");
+        prompt.append("8. Each question must be UNIQUE - no duplicates or very similar questions\n");
 
         return prompt.toString();
     }
 
-    /**
-     * Append DC Type instructions
-     */
+    // ========== KEEP ALL EXISTING HELPER METHODS ==========
+
     private void appendDCTypeInstructions(StringBuilder prompt, String dcType) {
         switch (dcType) {
-            case "RE": // Reading
+            case "RE":
                 prompt.append("📖 READING COMPREHENSION:\n");
                 prompt.append("- Base ALL questions on the section content (reading passage)\n");
                 prompt.append("- Test comprehension, inference, vocabulary in context\n");
@@ -406,7 +612,7 @@ public class OpenAiServiceImpl implements OpenAiService {
                 prompt.append("- Ensure questions can ONLY be answered by reading the passage\n");
                 break;
 
-            case "LI": // Listening
+            case "LI":
                 prompt.append("🎧 LISTENING COMPREHENSION:\n");
                 prompt.append("- Base ALL questions on the section content (transcript)\n");
                 prompt.append("- Test listening comprehension and understanding\n");
@@ -471,7 +677,6 @@ public class OpenAiServiceImpl implements OpenAiService {
                 throw new RuntimeException("No questions were successfully parsed");
             }
 
-            // Ensure unique position IDs
             ensureUniquePositionIds(questions);
 
             return questions;
@@ -557,6 +762,7 @@ public class OpenAiServiceImpl implements OpenAiService {
                 prompt.append("- questionText MUST contain [[pos_xxxxxx]] placeholders for drop zones.\n");
                 prompt.append("- xxxxxx is a random 6-character ID using lowercase a-z and 0-9.\n");
                 prompt.append("- Each item in data must have positionId corresponding to its correct drop zone.\n");
+                prompt.append("- There can be multiple draggable items, and each must correspond to one drop zone.\n");
                 break;
 
             case "REARRANGE":
@@ -607,14 +813,12 @@ public class OpenAiServiceImpl implements OpenAiService {
                 prompt.append("Follow the standard format for question structure.\n");
         }
 
-        // ✅ Thêm phần nhấn mạnh cuối cùng để AI không quên
         prompt.append("\nGLOBAL RULES:\n");
         prompt.append("- Use only lowercase letters and numbers for generated IDs.\n");
         prompt.append("- Ensure JSON is valid and formatted properly.\n");
         prompt.append("- For FILL_IN_THE_BLANK, DROPDOWN, DRAG_AND_DROP, REARRANGE → questionText MUST include [[pos_xxxxxx]].\n");
         prompt.append("- positionId must match xxxxxx exactly.\n");
     }
-
 
     private String callOpenAI(String prompt) {
         String url = UriComponentsBuilder
@@ -649,7 +853,6 @@ public class OpenAiServiceImpl implements OpenAiService {
                     Map<String, Object> message = (Map<String, Object>) choices.get(0).get("message");
                     String content = (String) message.get("content");
 
-                    // Clean markdown
                     content = content.trim();
                     if (content.startsWith("```json")) {
                         content = content.substring(7);
@@ -677,26 +880,21 @@ public class OpenAiServiceImpl implements OpenAiService {
     private QuestionDto parseQuestion(JsonNode questionNode, int index, String expectedType) {
         QuestionDto question = new QuestionDto();
 
-        // questionText - REQUIRED
         JsonNode textNode = questionNode.get("questionText");
         if (textNode == null || textNode.isNull()) {
             throw new RuntimeException("Missing questionText for question " + index);
         }
         question.setQuestionText(textNode.asText());
 
-        // orderNumber
         JsonNode orderNode = questionNode.get("orderNumber");
         question.setOrderNumber(orderNode != null ? orderNode.asInt() : index);
 
-        // score
         JsonNode scoreNode = questionNode.get("score");
         question.setScore(scoreNode != null ? scoreNode.asDouble() : 1.0);
 
-        // questionType
         JsonNode typeNode = questionNode.get("questionType");
         question.setQuestionType(typeNode != null ? typeNode.asText() : expectedType);
 
-        // Parse content
         JsonNode contentNode = questionNode.get("content");
         if (contentNode == null || contentNode.isNull()) {
             throw new RuntimeException("Missing content for question " + index);
@@ -734,28 +932,24 @@ public class OpenAiServiceImpl implements OpenAiService {
     private DataItem parseDataItem(JsonNode itemNode) {
         DataItem dataItem = new DataItem();
 
-        // id - REQUIRED
         JsonNode idNode = itemNode.get("id");
         if (idNode == null || idNode.isNull()) {
             throw new RuntimeException("Missing 'id' in data item");
         }
         dataItem.setId(idNode.asText());
 
-        // value - REQUIRED
         JsonNode valueNode = itemNode.get("value");
         if (valueNode == null || valueNode.isNull()) {
             throw new RuntimeException("Missing 'value' in data item");
         }
         dataItem.setValue(valueNode.asText());
 
-        // isCorrect - REQUIRED
         JsonNode correctNode = itemNode.get("isCorrect");
         if (correctNode == null || correctNode.isNull()) {
             throw new RuntimeException("Missing 'isCorrect' in data item");
         }
         dataItem.setCorrect(correctNode.asBoolean());
 
-        // positionId - OPTIONAL
         JsonNode posNode = itemNode.get("positionId");
         if (posNode != null && !posNode.isNull()) {
             dataItem.setPositionId(posNode.asText());
@@ -786,7 +980,6 @@ public class OpenAiServiceImpl implements OpenAiService {
                 }
             }
 
-            // Apply replacements
             for (Map.Entry<String, String> entry : replacements.entrySet()) {
                 questionText = questionText.replace(
                         "[[pos_" + entry.getKey() + "]]",
@@ -795,7 +988,6 @@ public class OpenAiServiceImpl implements OpenAiService {
             }
             question.setQuestionText(questionText);
 
-            // Update data items
             if (question.getContent() != null && question.getContent().getData() != null) {
                 for (DataItem item : question.getContent().getData()) {
                     String posId = item.getPositionId();
@@ -830,11 +1022,9 @@ public class OpenAiServiceImpl implements OpenAiService {
 
         log.info("Starting to parse questions from file: {}", file.getOriginalFilename());
 
-        // 1. Validate file
         FileContentExtractor.validateFileNotEmpty(file);
         FileContentExtractor.validateFileSize(file);
 
-        // 2. Extract content from file
         String fileContent = FileContentExtractor.extractContent(file);
 
         if (fileContent.isEmpty()) {
@@ -843,16 +1033,10 @@ public class OpenAiServiceImpl implements OpenAiService {
 
         log.info("Extracted {} characters from file", fileContent.length());
 
-        // 3. Build parsing prompt
         String prompt = buildParsingPrompt(fileContent, description);
-
-        // 4. Call OpenAI to parse and structure
         String aiResponse = callOpenAI(prompt);
-
-        // 5. Parse response into sections
         List<SectionWithQuestionsDto> sections = parseMultipleSectionsResponse(aiResponse);
 
-        // 6. Set all IDs to null (not saved to DB)
         for (SectionWithQuestionsDto section : sections) {
             section.getSection().setId(null);
             for (QuestionDto question : section.getQuestions()) {
@@ -871,21 +1055,18 @@ public class OpenAiServiceImpl implements OpenAiService {
         log.info("Generating reading passage for challengeId: {} with {} paragraphs",
                 request.getChallengeId(), request.getNumberOfParagraphs());
 
-        // Validate challenge
         DailyChallenge challenge = dailyChallengeRepository.findByIdAndDeletedAtIsNull(request.getChallengeId())
                 .orElseThrow(() -> {
                     log.error("DailyChallenge not found: {}", request.getChallengeId());
                     return new ApiException(Const.CHALLENGE.NOT_FOUND, HttpStatus.NOT_FOUND.value());
                 });
 
-        // Get fixed words per paragraph from config
         int wordsPerParagraph = wordsPerParagraphDefault;
         String level = challenge.getClassLesson().getClassChapter().getClazz()
                 .getSyllabus().getLevel().getLevelName();
 
         log.info("Generating passage with {} words per paragraph", wordsPerParagraph);
 
-        // Build context and prompt
         String prompt = buildReadingPassagePrompt(
                 request.getNumberOfParagraphs(),
                 wordsPerParagraph,
@@ -894,7 +1075,6 @@ public class OpenAiServiceImpl implements OpenAiService {
                 level
         );
 
-        // Call AI and parse
         String aiResponse = callOpenAI(prompt);
         GenerateReadingPassageResponse response = parseReadingPassageResponse(aiResponse, level);
 
@@ -904,7 +1084,6 @@ public class OpenAiServiceImpl implements OpenAiService {
         return response;
     }
 
-    // 4. THÊM buildReadingPassagePrompt
     private String buildReadingPassagePrompt(
             int numberOfParagraphs,
             int wordsPerParagraph,
@@ -916,7 +1095,6 @@ public class OpenAiServiceImpl implements OpenAiService {
 
         prompt.append("You are an expert English teacher creating reading passages.\n\n");
 
-        // User description (if provided)
         if (description != null && !description.isBlank()) {
             prompt.append("🔥 USER REQUIREMENTS (ABSOLUTE PRIORITY) 🔥\n");
             prompt.append(description).append("\n");
@@ -948,10 +1126,8 @@ public class OpenAiServiceImpl implements OpenAiService {
         return prompt.toString();
     }
 
-    // 5. THÊM parseReadingPassageResponse
     private GenerateReadingPassageResponse parseReadingPassageResponse(String jsonResponse, String level) {
         try {
-            // Clean markdown
             String clean = jsonResponse.trim()
                     .replaceFirst("^```json\\s*", "")
                     .replaceFirst("^```\\s*", "")
@@ -1080,9 +1256,6 @@ public class OpenAiServiceImpl implements OpenAiService {
         return prompt.toString();
     }
 
-    /**
-     * Parse response containing multiple sections
-     */
     private List<SectionWithQuestionsDto> parseMultipleSectionsResponse(String jsonResponse) {
         try {
             log.info("Parsing multiple sections from response");
@@ -1102,7 +1275,6 @@ public class OpenAiServiceImpl implements OpenAiService {
             for (JsonNode sectionNode : sectionsNode) {
                 sectionIndex++;
                 try {
-                    // Parse section info
                     JsonNode sectionInfoNode = sectionNode.get("section");
                     if (sectionInfoNode == null) {
                         log.error("Missing 'section' field in section {}", sectionIndex);
@@ -1122,7 +1294,6 @@ public class OpenAiServiceImpl implements OpenAiService {
                     JsonNode resourceTypeNode = sectionInfoNode.get("resourceType");
                     section.setResourceType(resourceTypeNode != null ? resourceTypeNode.asText() : "NONE");
 
-                    // Parse questions
                     JsonNode questionsNode = sectionNode.get("questions");
                     if (questionsNode == null || !questionsNode.isArray()) {
                         log.warn("No questions found in section {}", sectionIndex);
@@ -1140,12 +1311,10 @@ public class OpenAiServiceImpl implements OpenAiService {
                         } catch (Exception e) {
                             log.error("Error parsing question {} in section {}: {}",
                                     questionIndex, sectionIndex, e.getMessage());
-                            // Continue with other questions
                         }
                     }
 
                     if (!questions.isEmpty()) {
-                        // Ensure unique position IDs within this section
                         ensureUniquePositionIds(questions);
 
                         SectionWithQuestionsDto sectionWithQuestions = new SectionWithQuestionsDto(section, questions);
@@ -1155,7 +1324,6 @@ public class OpenAiServiceImpl implements OpenAiService {
 
                 } catch (Exception e) {
                     log.error("Error parsing section {}: {}", sectionIndex, e.getMessage());
-                    // Continue with other sections
                 }
             }
 
@@ -1177,22 +1345,15 @@ public class OpenAiServiceImpl implements OpenAiService {
         log.info("Generating distractors for question");
 
         try {
-            // Count existing answers (correct + distractors)
-            int existingCount = 1; // correct answer
+            int existingCount = 1;
             if (request.getExistingDistractors() != null) {
                 existingCount += request.getExistingDistractors().size();
             }
 
-            // Determine how many distractors to generate
             int distractorsToGenerate = existingCount < 4 ? (4 - existingCount) : 1;
 
-            // Build prompt
             String prompt = buildDistractorsPrompt(request, distractorsToGenerate);
-
-            // Call OpenAI
             String aiResponse = callOpenAI(prompt);
-
-            // Parse response
             List<String> distractors = parseDistractorsResponse(aiResponse);
 
             return new GenerateDistractorsResponse(distractors);
@@ -1231,7 +1392,6 @@ public class OpenAiServiceImpl implements OpenAiService {
 
     private List<String> parseDistractorsResponse(String jsonResponse) {
         try {
-            // Clean response if needed
             String cleaned = jsonResponse.trim();
             if (cleaned.startsWith("```json")) {
                 cleaned = cleaned.substring(7);
@@ -1241,7 +1401,6 @@ public class OpenAiServiceImpl implements OpenAiService {
             }
             cleaned = cleaned.trim();
 
-            // Parse JSON array
             JsonNode rootNode = objectMapper.readTree(cleaned);
 
             List<String> distractors = new ArrayList<>();
@@ -1257,5 +1416,33 @@ public class OpenAiServiceImpl implements OpenAiService {
             log.error("Error parsing distractors response: {}", e.getMessage());
             throw new RuntimeException("Failed to parse distractors: " + e.getMessage(), e);
         }
+    }
+
+    @Override
+    public List<SectionWithQuestionsDto> parseQuestionsFromText(
+            String textContent,
+            String description) {
+
+        log.info("Starting to parse questions from text input (length: {})", textContent.length());
+
+        if (textContent == null || textContent.trim().isEmpty()) {
+            throw new RuntimeException("Text content cannot be empty");
+        }
+
+        String prompt = buildParsingPrompt(textContent, description);
+        String aiResponse = callOpenAI(prompt);
+        List<SectionWithQuestionsDto> sections = parseMultipleSectionsResponse(aiResponse);
+
+        for (SectionWithQuestionsDto section : sections) {
+            section.getSection().setId(null);
+            for (QuestionDto question : section.getQuestions()) {
+                question.setId(null);
+            }
+        }
+
+        log.info("Successfully parsed {} sections with total {} questions from text",
+                sections.size(), sections.stream().mapToInt(s -> s.getQuestions().size()).sum());
+
+        return sections;
     }
 }
