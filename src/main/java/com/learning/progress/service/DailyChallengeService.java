@@ -2,10 +2,7 @@ package com.learning.progress.service;
 
 import com.learning.progress.common.ChallengeStatus;
 import com.learning.progress.dto.DataResponse;
-import com.learning.progress.dto.challenge.CreateDailyChallengeRequest;
-import com.learning.progress.dto.challenge.DailyChallengeResponse;
-import com.learning.progress.dto.challenge.DailyChallengeListDTO;
-import com.learning.progress.dto.challenge.UpdateDailyChallengeDTO;
+import com.learning.progress.dto.challenge.*;
 import jakarta.validation.Valid;
 
 import java.util.List;
@@ -23,4 +20,6 @@ public interface DailyChallengeService {
     void deleteChallenge(Long id);
 
     DailyChallengeResponse updateChallengeStatus(Long id, ChallengeStatus challengeStatus);
+
+    DailyChallengeHierarchyDTO getChallengeHierarchy(Long challengeId);
 }

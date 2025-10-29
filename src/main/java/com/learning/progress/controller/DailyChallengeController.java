@@ -2,11 +2,8 @@ package com.learning.progress.controller;
 
 import com.learning.progress.common.ChallengeStatus;
 import com.learning.progress.common.Const;
-import com.learning.progress.dto.challenge.CreateDailyChallengeRequest;
-import com.learning.progress.dto.challenge.DailyChallengeResponse;
+import com.learning.progress.dto.challenge.*;
 import com.learning.progress.dto.DataResponse;
-import com.learning.progress.dto.challenge.DailyChallengeListDTO;
-import com.learning.progress.dto.challenge.UpdateDailyChallengeDTO;
 import com.learning.progress.service.DailyChallengeService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -81,5 +78,14 @@ public class DailyChallengeController {
     public ResponseEntity<DataResponse<Void>> deleteChallenge(@PathVariable Long id) {
         dailyChallengeService.deleteChallenge(id);
         return new ResponseEntity<>(DataResponse.success(null, Const.RESULT_MESSAGE_CODE.DELETE_SUCCESSFUL), HttpStatus.OK);
+    }
+
+    @GetMapping("/{dailyChallengeId}/hierarchy")
+    @PreAuthorize("hasAnyRole('TEACHER', 'TEACHING_ASSISTANT')")
+    @Operation(summary = "Get challenge hierarchy information",
+            description = "Get level, class, syllabus, chapter, lesson information for a daily challenge")
+    public ResponseEntity<DataResponse<DailyChallengeHierarchyDTO>> getChallengeHierarchy(@PathVariable Long dailyChallengeId) {
+        DailyChallengeHierarchyDTO response = dailyChallengeService.getChallengeHierarchy(dailyChallengeId);
+        return new ResponseEntity<>(DataResponse.success(response, Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL), HttpStatus.OK);
     }
 }
