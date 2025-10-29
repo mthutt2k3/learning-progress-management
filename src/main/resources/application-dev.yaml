@@ -140,6 +140,8 @@ azure:
     max-question: 100
 
 app:
+  challenge:
+    max-questions-per-challenge: 100
   pagination:
     max-size: 100
   scheduler:

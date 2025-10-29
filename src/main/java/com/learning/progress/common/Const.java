@@ -168,6 +168,7 @@ public class Const {
     }
 
     public static class RESULT_MESSAGE_CODE {
+        public static final String SUCCESSFUL = "Successful";
         public static final String CREATE_SUCCESSFUL = "Created successful";
         public static final String UPDATE_SUCCESSFUL = "Updated successful";
         public static final String DELETE_SUCCESSFUL = "Deleted successful";
