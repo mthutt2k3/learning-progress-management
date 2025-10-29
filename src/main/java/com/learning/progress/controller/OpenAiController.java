@@ -111,4 +111,21 @@ public class OpenAiController {
                 HttpStatus.OK
         );
     }
+
+    @PostMapping("/parse-questions-from-text")
+    @Operation(summary = "Parse questions from text input",
+            description = "Parse existing questions and answers from text input and structure them into sections")
+    public ResponseEntity<DataResponse<List<SectionWithQuestionsDto>>> parseQuestionsFromText(
+            @Valid @RequestBody ParseQuestionsFromTextRequest request) {
+
+        List<SectionWithQuestionsDto> result = openAiService.parseQuestionsFromText(
+                request.getTextContent(),
+                request.getDescription()
+        );
+
+        return new ResponseEntity<>(
+                DataResponse.success(result, Const.RESULT_MESSAGE_CODE.CREATE_SUCCESSFUL),
+                HttpStatus.OK
+        );
+    }
 }
