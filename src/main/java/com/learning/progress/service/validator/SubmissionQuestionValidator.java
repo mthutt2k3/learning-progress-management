@@ -11,6 +11,7 @@ import com.learning.progress.exception.ApiException;
 import com.learning.progress.mapper.QuestionMapper;
 import com.learning.progress.repository.QuestionRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 
@@ -20,6 +21,7 @@ import java.util.stream.Collectors;
 
 @Component
 @RequiredArgsConstructor
+@Slf4j
 public class SubmissionQuestionValidator {
 
     private final QuestionRepository questionRepository;
@@ -45,11 +47,23 @@ public class SubmissionQuestionValidator {
         List<Long> requiredQuestionIds = requiredQuestions.stream()
                 .map(Question::getId)
                 .collect(Collectors.toList());
+        // Compute missing question IDs
+        List<Long> missingIds = requiredQuestionIds.stream()
+                .filter(id -> !submittedQuestionIds.contains(id))
+                .collect(Collectors.toList());
+        // Log missing IDs
+        if (!missingIds.isEmpty()) {
+            log.warn("Missing question IDs for submission (challengeId={}): {}", challengeId, missingIds);
+        }
 
         // Check if all required questions are answered (only for non-draft submissions)
-        if (!saveAsDraft && !submittedQuestionIds.containsAll(requiredQuestionIds)) {
-            throw new ApiException("All required questions must be answered for non-draft submissions", HttpStatus.BAD_REQUEST.value());
+        if (!saveAsDraft && !missingIds.isEmpty()) {
+            throw new ApiException(
+                    "All required questions must be answered for non-draft submissions. Missing: " + missingIds,
+                    HttpStatus.BAD_REQUEST.value()
+            );
         }
+
 
         // Create map for quick lookup
         Map<Long, Question> questionMap = requiredQuestions.stream()
@@ -70,8 +84,8 @@ public class SubmissionQuestionValidator {
             if((submissionContent == null || submissionContent.isEmpty())){
                 break;
             }
-            List<DataItem> questionContent = questionMapper.toQuestionDto(question).getContent().getData();
-            validateSubmissionContent(question.getQuestionType(), submissionContent, questionContent, question.getQuestionText());
+//            List<DataItem> questionContent = questionMapper.toQuestionDto(question).getContent().getData();
+//            validateSubmissionContent(question.getQuestionType(), submissionContent, questionContent, question.getQuestionText());
         }
     }
 

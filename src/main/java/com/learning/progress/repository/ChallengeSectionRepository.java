@@ -37,5 +37,13 @@ public interface ChallengeSectionRepository extends JpaRepository<ChallengeSecti
 
     List<ChallengeSection> findByChallengeIdAndDeletedAtIsNullOrderByOrderNumberAsc(Long challengeId);
 
+    @Query("SELECT s FROM ChallengeSection s " +
+            "JOIN FETCH s.questions q " +
+            "WHERE s.challenge.id = :challengeId " +
+            "AND s.deletedAt IS NULL " +
+            "AND q.deletedAt IS NULL")
+    List<ChallengeSection> findByChallengeIdWithQuestions(@Param("challengeId") Long challengeId);
+
     Collection<ChallengeSection> findByIdInAndDeletedAtIsNull(Set<Long> allSectionIds);
+
 }

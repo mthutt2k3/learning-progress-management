@@ -62,7 +62,25 @@ spring:
     mode: HTML
     encoding: UTF-8
     cache: false
-
+  quartz:
+    job-store-type: jdbc  # Lưu job vào DB (MySQL/PostgreSQL)
+    jdbc:
+      initialize-schema: embedded  # Auto tạo table Quartz (qrtz_*)
+    properties:
+      org:
+        quartz:
+          scheduler:
+            instanceName: DailyChallengeScheduler
+            instanceId: AUTO
+          threadPool:
+            threadCount: 10  # Số thread chạy job
+          jobStore:
+            class: org.quartz.impl.jdbcjobstore.JobStoreTX
+            driverDelegateClass: org.quartz.impl.jdbcjobstore.StdJDBCDelegate
+            tablePrefix: QRTZ_
+            isClustered: true  # Hỗ trợ cluster
+            clusterCheckinInterval: 20000
+    overwrite-existing-jobs: true  # Overwrite job nếu trùng
 server:
   port: 8080
   shutdown: graceful

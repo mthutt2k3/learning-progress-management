@@ -32,7 +32,7 @@ public class SubmissionDailyChallenge extends BaseEntity{
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @ManyToOne
     @OnDelete(action = OnDeleteAction.CASCADE)
     @JoinColumn(name = "challenge_id", nullable = false)
     private DailyChallenge challenge;

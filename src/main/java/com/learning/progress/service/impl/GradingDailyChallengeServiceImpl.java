@@ -32,16 +32,28 @@ import java.util.stream.Collectors;
 @Slf4j
 public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeService {
 
-    @Autowired private SubmissionDailyChallengeRepository submissionDailyChallengeRepository;
-    @Autowired private GradingDailyChallengeRepository gradingDailyChallengeRepository;
-    @Autowired private SubmissionQuestionRepository submissionQuestionRepository;
-    @Autowired private GradingQuestionRepository gradingQuestionRepository;
-    @Autowired private AppValidator appValidator;
-    @Autowired private JwtUtil jwtUtil;
-    @Autowired private DailyChallengeRepository dailyChallengeRepository;
-    @Autowired private UserRepository userRepository;
-    @Autowired private QuestionRepository questionRepository;
-    @Autowired private CacheService cacheService;
+    @Autowired
+    private SubmissionDailyChallengeRepository submissionDailyChallengeRepository;
+    @Autowired
+    private GradingDailyChallengeRepository gradingDailyChallengeRepository;
+    @Autowired
+    private SubmissionQuestionRepository submissionQuestionRepository;
+    @Autowired
+    private GradingQuestionRepository gradingQuestionRepository;
+    @Autowired
+    private AppValidator appValidator;
+    @Autowired
+    private JwtUtil jwtUtil;
+    @Autowired
+    private DailyChallengeRepository dailyChallengeRepository;
+    @Autowired
+    private UserRepository userRepository;
+    @Autowired
+    private QuestionRepository questionRepository;
+    @Autowired
+    private CacheService cacheService;
+    @Autowired
+    private ChallengeSectionRepository challengeSectionRepository;
 
     @Override
     @Transactional
@@ -130,8 +142,6 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
     }
 
     @Override
-    @Transactional
-    @Async("taskExecutor")
     public void autoGradeSubmission(Long submissionId) {
         log.info("Starting auto-grading for submissionId: {}", submissionId);
 
@@ -155,61 +165,151 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
             throw new ApiException("Auto-grading is only allowed for GV, RE, or LI challenges", HttpStatus.BAD_REQUEST.value());
         }
 
-        gradingDailyChallengeRepository.findBySubmissionDailyIdAndIsFinalizedTrueAndDeletedAtIsNull(submissionId)
-                .ifPresent(g -> {
-                    log.error("Submission {} is already finalized", submissionId);
-                    throw new ApiException("Submission is already finalized and cannot be re-graded", HttpStatus.BAD_REQUEST.value());
-                });
+        // === LẤY TẤT CẢ SECTION VÀ QUESTION TRONG CHALLENGE ===
+        List<ChallengeSection> sections = challengeSectionRepository
+                .findByChallengeIdWithQuestions(challengeId);
 
+        if (sections.isEmpty()) {
+            log.warn("No sections found for challengeId: {}", challengeId);
+            // Vẫn tiếp tục để xử lý submission (có thể có lỗi dữ liệu)
+        }
+
+        // Lấy tất cả question IDs trong challenge
+        Set<Long> allQuestionIds = sections.stream()
+                .flatMap(section -> section.getQuestions().stream())
+                .map(Question::getId)
+                .collect(Collectors.toSet());
+
+        // Lấy tất cả SubmissionQuestion của học sinh
         List<SubmissionQuestion> submissionQuestions = submissionQuestionRepository
                 .findBySubmissionDailyIdAndDeletedAtIsNull(submissionId);
-        log.debug("Found {} submission questions", submissionQuestions.size());
 
-        List<Long> questionIds = submissionQuestions.stream()
-                .map(sq -> sq.getQuestion().getId())
-                .toList();
+        Map<Long, SubmissionQuestion> submissionQuestionMap = submissionQuestions.stream()
+                .collect(Collectors.toMap(sq -> sq.getQuestion().getId(), sq -> sq));
 
-        List<Question> questions = questionIds.isEmpty() ? List.of() :
-                questionRepository.findByIdInAndDeletedAtIsNull(questionIds);
+        // Lấy thông tin Question (có score, type, content)
+        List<Question> questions = allQuestionIds.isEmpty() ? List.of() :
+                questionRepository.findByIdInAndDeletedAtIsNull(new ArrayList<>(allQuestionIds));
+
         Map<Long, Question> questionMap = questions.stream()
                 .collect(Collectors.toMap(Question::getId, q -> q));
 
+        // === KẾT QUẢ CHUNG ===
         double totalScore = 0.0;
+        double maxPossibleScore = 0.0;
         List<GradingQuestion> gradingQuestions = new ArrayList<>();
 
-        for (SubmissionQuestion sq : submissionQuestions) {
-            Question question = questionMap.get(sq.getQuestion().getId());
-            if (question == null) {
-                log.warn("Question not found for submissionQuestionId: {}", sq.getId());
+        // === LOG THEO SECTION ===
+        log.info("=== AUTO-GRADING BY SECTION ===");
+
+        for (ChallengeSection section : sections) {
+            List<Question> sectionQuestions = section.getQuestions();
+            if (sectionQuestions.isEmpty()) {
+                log.info("Section '{}' [ID: {}] - No questions", section.getSectionTitle(), section.getId());
                 continue;
             }
 
-            DataContent questionContent = JsonUtil.responseToObject(question.getQuestionContentJson(), DataContent.class);
-            AnswerContent submittedContent = JsonUtil.responseToObject(sq.getSubmissionContentJson(), AnswerContent.class);
+            double sectionMaxScore = 0.0;
+            double sectionAchievedScore = 0.0;
+            int totalInSection = sectionQuestions.size();
+            int skippedInSection = 0;
+            int emptyInSection = 0;
 
-            if (questionContent == null || questionContent.getData() == null ||
-                    submittedContent == null || submittedContent.getData() == null) {
-                log.warn("Invalid JSON content for submissionQuestionId: {}", sq.getId());
-                continue;
+//            log.info("--- Section: '{}' | Questions: {} ---",
+//                    section.getId(), totalInSection);
+
+            for (Question question : sectionQuestions) {
+                Long qId = question.getId();
+                double qMaxScore = question.getScore().doubleValue();
+                sectionMaxScore += qMaxScore;
+                maxPossibleScore += qMaxScore;
+
+                SubmissionQuestion sq = submissionQuestionMap.get(qId);
+                GradingQuestion gq = gradingQuestionRepository.findBySubmissionQuestionIdAndDeletedAtIsNull(
+                                sq.getId()
+                        )
+                        .orElseGet(() -> {
+                            GradingQuestion newGq = new GradingQuestion();
+                            newGq.setSubmissionQuestion(sq);
+                            return newGq;
+                        });
+                double questionScore = 0.0;
+
+                if (sq == null) {
+                    // KHÔNG LÀM
+                    skippedInSection++;
+                    log.info("   [SKIPPED] qId={} | type={} | score={} → 0.00",
+                            qId, question.getQuestionType(), qMaxScore);
+                } else {
+                    AnswerContent submittedContent = null;
+                    try {
+                        submittedContent = JsonUtil.responseToObject(sq.getSubmissionContentJson(), AnswerContent.class);
+                    } catch (Exception e) {
+                        log.warn("Failed to parse submission content for sqId: {}", sq.getId());
+                    }
+
+                    if (submittedContent == null || submittedContent.getData() == null || submittedContent.getData().isEmpty()) {
+                        // NỘP NHƯNG RỖNG
+                        emptyInSection++;
+                        gq.setSubmissionQuestion(sq);
+                        gq.setScore(0.0);
+                        log.info("   [EMPTY] sectionId {} | sqId={} | qId={} | type={} | score={} → 0.00",
+                                section.getId(), sq.getId(), qId, question.getQuestionType(), qMaxScore);
+                    } else {
+                        // CÓ NỘP HỢP LỆ
+                        DataContent questionContent = JsonUtil.responseToObject(question.getQuestionContentJson(), DataContent.class);
+                        if (questionContent == null || questionContent.getData() == null) {
+                            log.warn("Invalid question content for qId: {}", qId);
+                            gq.setSubmissionQuestion(sq);
+                            gq.setScore(0.0);
+                        } else {
+                            GradingResult result = getAnswerScoreFractionDetailed(
+                                    sq.getId(),
+                                    question.getQuestionType(),
+                                    questionContent,
+                                    submittedContent
+                            );
+
+                            questionScore = result.fraction() * qMaxScore;
+                            sectionAchievedScore += questionScore;
+                            totalScore += questionScore;
+
+                            gq.setSubmissionQuestion(sq);
+                            gq.setScore(questionScore);
+
+                            log.info("   [GRADED] sectionId {} | sqId={} | qId={} | type={} | expect={} | actual={} | correct={} | score={} → {}",
+                                    section.getId(), sq.getId(), qId, question.getQuestionType(),
+                                    result.expected(), result.actual(), result.isCorrect(),
+                                    qMaxScore, questionScore);
+                        }
+                    }
+                }
+
+                gq.setGradingDaily(null); // gán sau
+                gradingQuestions.add(gq);
             }
 
-            double scoreFraction = getAnswerScoreFraction(questionContent, submittedContent, question.getQuestionType());
-            double questionScore = scoreFraction * question.getScore().doubleValue();
-            totalScore += questionScore;
+            // === LOG TỔNG KẾT SECTION ===
+//            int answeredInSection = totalInSection - skippedInSection - emptyInSection;
+//            double sectionPercentage = sectionMaxScore == 0 ? 0.0 : (sectionAchievedScore / sectionMaxScore) * 100.0;
 
-            GradingQuestion gq = gradingQuestionRepository
-                    .findBySubmissionQuestionIdAndDeletedAtIsNull(sq.getId())
-                    .orElse(new GradingQuestion());
-            gq.setSubmissionQuestion(sq);
-            gq.setScore(questionScore);
-            gradingQuestions.add(gq);
+//            log.info(">>> Section Summary: '{}' | Answered: {}/{} | Skipped: {} | Empty: {} | " +
+//                            "Max: {} | Achieved: {:.2f} | Percentage: {:.1f}%",
+//                    section.getId(), answeredInSection, totalInSection,
+//                    skippedInSection, emptyInSection,
+//                    sectionMaxScore, sectionAchievedScore, sectionPercentage);
         }
 
+        // === TÍNH % TỔNG ===
+        double scorePercentage = maxPossibleScore == 0 ? 0.0 : (totalScore / maxPossibleScore) * 100.0;
+
+        // === LƯU GRADING ===
         GradingDailyChallenge grading = gradingDailyChallengeRepository
                 .findBySubmissionDailyIdAndDeletedAtIsNull(submissionId)
                 .orElse(new GradingDailyChallenge());
         grading.setSubmissionDaily(submission);
         grading.setTotalScore(totalScore);
+        grading.setScorePercentage(scorePercentage);
         grading.setIsFinalized(true);
         gradingDailyChallengeRepository.save(grading);
 
@@ -221,11 +321,33 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
 
         cacheService.clearSubmissionsCacheForChallenge(challenge.getId());
 
-        log.info("Auto-grading completed for submission {} (challengeId: {}, totalScore: {})",
-                submissionId, challengeId, totalScore);
+        // === LOG TỔNG KẾT ===
+        int totalQuestions = sections.stream().mapToInt(s -> s.getQuestions().size()).sum();
+        long totalSkipped = gradingQuestions.stream()
+                .filter(gq -> gq.getSubmissionQuestion() == null).count();
+        long totalEmpty = gradingQuestions.stream()
+                .filter(gq -> gq.getSubmissionQuestion() != null &&
+                        (gq.getSubmissionQuestion().getSubmissionContentJson() == null ||
+                                gq.getSubmissionQuestion().getSubmissionContentJson().isEmpty()))
+                .count();
+
+        log.info("=== AUTO-GRADING COMPLETED ===");
+        log.info("Submission {} (Challenge ID: {}) | Total Questions: {} | " +
+                        "Answered: {} | Skipped: {} | Empty: {} | " +
+                        "Max Score: {} | Achieved: {} | Overall: {}%",
+                submissionId, challengeId,
+                totalQuestions,
+                totalQuestions - totalSkipped - totalEmpty,
+                totalSkipped, totalEmpty,
+                maxPossibleScore, totalScore, scorePercentage);
     }
 
-    private double getAnswerScoreFraction(DataContent questionContent, AnswerContent submittedContent, QuestionType questionType) {
+    private GradingResult getAnswerScoreFractionDetailed(
+            Long submissionQuestionId,
+            QuestionType questionType,
+            DataContent questionContent,
+            AnswerContent submittedContent) {
+
         try {
             switch (questionType) {
                 case MULTIPLE_CHOICE, TRUE_OR_FALSE, MULTIPLE_SELECT -> {
@@ -239,12 +361,17 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
                             .collect(Collectors.toSet());
 
                     boolean match = correctIds.equals(submittedIds);
-                    log.debug("Checking {} → correctIds={}, submittedIds={}, match={}",
-                            questionType, correctIds, submittedIds, match);
-                    return match ? 1.0 : 0.0;
+                    double fraction = match ? 1.0 : 0.0;
+
+                    return new GradingResult(
+                            fraction,
+                            correctIds.toString(),
+                            submittedIds.toString(),
+                            match
+                    );
                 }
 
-                case FILL_IN_THE_BLANK, DROPDOWN, DRAG_AND_DROP, REARRANGE -> {
+                case DROPDOWN, DRAG_AND_DROP, REARRANGE -> {
                     Map<String, String> correctMap = questionContent.getData().stream()
                             .filter(DataItem::isCorrect)
                             .collect(Collectors.toMap(DataItem::getPositionId, DataItem::getId, (e, r) -> e));
@@ -253,18 +380,52 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
                             .collect(Collectors.toMap(AnswerItem::getPositionId, AnswerItem::getId, (e, r) -> e));
 
                     long total = correctMap.size();
-                    if (total == 0) return 0.0;
-
                     long correct = correctMap.entrySet().stream()
                             .filter(e -> Objects.equals(submittedMap.get(e.getKey()), e.getValue()))
                             .count();
 
-                    double fraction = (double) correct / total;
-                    log.debug("Checking {} → correct={}, submitted={}, correctMatches={}, fraction={}",
-                            questionType, correctMap, submittedMap, correct, fraction);
-                    return fraction;
-                }
+                    double fraction = total == 0 ? 0.0 : (double) correct / total;
 
+                    return new GradingResult(
+                            fraction,
+                            correctMap.toString(),
+                            submittedMap.toString(),
+                            fraction == 1.0
+                    );
+                }
+                case FILL_IN_THE_BLANK -> {
+                    Map<String, String> correctMap = questionContent.getData().stream()
+                            .filter(DataItem::isCorrect)
+                            .collect(Collectors.toMap(
+                                    DataItem::getPositionId,
+                                    di -> normalizeText(di.getValue()),
+                                    (e, r) -> e
+                            ));
+
+                    // Map người dùng nộp: positionId -> normalizedValue
+                    Map<String, String> submittedMap = submittedContent.getData().stream()
+                            .collect(Collectors.toMap(
+                                    AnswerItem::getPositionId,
+                                    ai -> normalizeText(ai.getValue()),
+                                    (e, r) -> e
+                            ));
+
+                    long total = correctMap.size();
+                    long correct = correctMap.entrySet().stream()
+                            .filter(e -> Objects.equals(submittedMap.get(e.getKey()), e.getValue()))
+                            .count();
+
+                    double fraction = total == 0 ? 0.0 : (double) correct / total;
+                    boolean fullCorrect = fraction == 1.0;
+
+                    return new GradingResult(
+                            fraction,
+                            correctMap.toString(),
+                            submittedMap.toString(),
+                            fullCorrect
+                    );
+
+                }
                 case REWRITE -> {
                     Set<String> correctValues = questionContent.getData().stream()
                             .filter(DataItem::isCorrect)
@@ -275,19 +436,25 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
                             .map(ai -> normalizeText(ai.getValue()))
                             .collect(Collectors.toSet());
 
-                    boolean match = submittedValues.stream().anyMatch(correctValues::contains);
-                    log.debug("Checking REWRITE → correct={}, submitted={}, match={}", correctValues, submittedValues, match);
-                    return match ? 1.0 : 0.0;
+                    boolean match = !submittedValues.isEmpty() && submittedValues.stream().anyMatch(correctValues::contains);
+                    double fraction = match ? 1.0 : 0.0;
+
+                    return new GradingResult(
+                            fraction,
+                            correctValues.toString(),
+                            submittedValues.toString(),
+                            match
+                    );
                 }
 
                 default -> {
-                    log.warn("Unsupported question type for auto-grading: {}", questionType);
-                    return 0.0;
+                    log.warn("Unsupported question type for auto-grading: {} (sqId: {})", questionType, submissionQuestionId);
+                    return new GradingResult(0.0, "UNSUPPORTED", "N/A", false);
                 }
             }
         } catch (Exception e) {
-            log.warn("Error during auto-grading for type {}: {}", questionType, e.getMessage());
-            return 0.0;
+            log.warn("Error during auto-grading for sqId: {}, type: {}, error: {}", submissionQuestionId, questionType, e.getMessage());
+            return new GradingResult(0.0, "ERROR", e.getMessage(), false);
         }
     }
 
@@ -296,4 +463,12 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
                 .map(t -> t.replaceAll("[^a-zA-Z0-9\\s]", "").toLowerCase().trim())
                 .orElse("");
     }
+}
+
+record GradingResult(
+        double fraction,
+        String expected,
+        String actual,
+        boolean isCorrect
+) {
 }
