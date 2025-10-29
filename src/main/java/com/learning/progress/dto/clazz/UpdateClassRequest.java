@@ -1,5 +1,6 @@
 package com.learning.progress.dto.clazz;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.learning.progress.common.Const;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -16,6 +17,7 @@ import java.time.OffsetDateTime;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class UpdateClassRequest {
     @NotBlank(message = "Tên lớp không được để trống")
     @Size(max = 50, message = "Tên lớp không được vượt quá 50 ký tự")

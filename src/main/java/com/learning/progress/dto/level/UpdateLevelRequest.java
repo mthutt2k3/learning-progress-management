@@ -1,5 +1,6 @@
 package com.learning.progress.dto.level;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.learning.progress.common.Const;
 import jakarta.validation.constraints.*;
 import lombok.AllArgsConstructor;
@@ -11,6 +12,7 @@ import lombok.NoArgsConstructor;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class UpdateLevelRequest {
     @NotBlank(message = Const.LEVEL.LEVEL_NAME_REQUIRED)
     private String levelName;

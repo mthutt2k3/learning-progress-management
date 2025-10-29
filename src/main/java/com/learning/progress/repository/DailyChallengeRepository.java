@@ -43,4 +43,5 @@ public interface DailyChallengeRepository extends JpaRepository<DailyChallenge, 
             Pageable pageable
     );
 
+    boolean existsByClassLessonAndChallengeNameAndDeletedAtIsNull(ClassLesson classLesson, String challengeName);
 }

@@ -55,23 +55,6 @@ public class ClassStudentController {
         ClassStudentResponse response = classStudentService.getStudentProfile(classId, userId);
         return ResponseEntity.ok(DataResponse.success(response, Const.CLASS_STUDENT.PROFILE_RETRIEVED));
     }
-
-//    @PreAuthorize("hasAnyRole('MANAGER', 'TEACHER')")
-//    @GetMapping("/{classId}/student/{userId}/performance")
-//    @Operation(summary = "View Student Performance Report", description = "Retrieve performance report for a student in a class")
-//    public ResponseEntity<?> viewStudentPerformanceReport(@PathVariable Long classId, @PathVariable Long userId) {
-//        StudentPerformanceReport response = classStudentService.getStudentPerformanceReport(classId, userId);
-//        return ResponseEntity.ok(DataResponse.success(response, Const.CLASS_STUDENT.PERFORMANCE_RETRIEVED));
-//    }
-//
-//    @PreAuthorize("hasAnyRole('MANAGER', 'TEACHER')")
-//    @GetMapping("/{classId}/student/{userId}/progress")
-//    @Operation(summary = "View Student Progress Overview", description = "Retrieve learning progress overview for a student in a class")
-//    public ResponseEntity<?> viewStudentProgressOverview(@PathVariable Long classId, @PathVariable Long userId) {
-//        StudentProgressOverview response = classStudentService.getStudentProgressOverview(classId, userId);
-//        return ResponseEntity.ok(DataResponse.success(response, Const.CLASS_STUDENT.PROGRESS_RETRIEVED));
-//    }
-
     @PreAuthorize("hasRole('MANAGER')")
     @PostMapping("/{classId}/add-student")
     @Operation(summary = "Add Student to Class", description = "Add a student to a specific class")

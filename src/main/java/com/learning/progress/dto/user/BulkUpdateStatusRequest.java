@@ -1,5 +1,6 @@
 package com.learning.progress.dto.user;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.learning.progress.common.Const;
 import com.learning.progress.common.UserStatus;
 import jakarta.validation.constraints.NotEmpty;
@@ -15,6 +16,7 @@ import java.util.List;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class BulkUpdateStatusRequest {
 
     @NotEmpty(message = Const.USER.DELETED)
