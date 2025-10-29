@@ -39,5 +39,13 @@ public interface QuestionRepository extends JpaRepository<Question, Long> {
 
     List<Question> findBySectionIdInAndDeletedAtIsNull(Set<Long> sectionIds);
 
-    long countByChallengeIdAndDeletedAtIsNull(Long challengeId);
+    @Query("""
+    SELECT COUNT(q)
+    FROM Question q
+    JOIN ChallengeSection s ON q.section.id = s.id
+    WHERE s.challenge.id = :challengeId
+      AND q.deletedAt IS NULL
+      AND s.deletedAt IS NULL
+""")
+    long countByChallengeIdAndDeletedAtIsNull(@Param("challengeId") Long challengeId);
 }
