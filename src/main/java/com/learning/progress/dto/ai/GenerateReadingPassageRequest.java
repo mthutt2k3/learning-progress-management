@@ -1,11 +1,13 @@
 package com.learning.progress.dto.ai;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
 @Data
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class GenerateReadingPassageRequest {
 
     @NotNull(message = "Challenge ID is required")

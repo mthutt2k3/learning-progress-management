@@ -1,6 +1,7 @@
 package com.learning.progress.dto.user;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.learning.progress.common.Const;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
@@ -15,6 +16,7 @@ import java.util.Date;
 @SuperBuilder
 @NoArgsConstructor
 @AllArgsConstructor
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class UpdateUserRequest {
 
     @NotBlank(message = Const.NAME.ROLE_NAME_REQUIRED)

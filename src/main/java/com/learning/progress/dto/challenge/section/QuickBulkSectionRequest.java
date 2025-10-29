@@ -1,11 +1,13 @@
 package com.learning.progress.dto.challenge.section;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.learning.progress.common.Const;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
 @Data
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class QuickBulkSectionRequest {
     @NotNull(message = Const.SECTION.ID_REQUIRED)
     private Long id;

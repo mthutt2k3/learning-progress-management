@@ -22,7 +22,7 @@ import java.util.List;
 @Entity
 @Table(name = "challenge_sections")
 public class ChallengeSection extends BaseEntity{
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @ManyToOne
     @OnDelete(action = OnDeleteAction.CASCADE)
     @JoinColumn(name = "challenge_id", nullable = false)
     private DailyChallenge challenge;
@@ -43,7 +43,7 @@ public class ChallengeSection extends BaseEntity{
     @Column(name = "sections_type", nullable = false)
     private ResourceType resourceType = ResourceType.NONE;
 
-    @OneToMany(mappedBy = "section", fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
+    @OneToMany(mappedBy = "section", cascade = CascadeType.ALL, orphanRemoval = true)
     @Where(clause = "deleted_at IS NULL")
     @OrderBy("orderNumber ASC")
     private List<Question> questions = new ArrayList<>();

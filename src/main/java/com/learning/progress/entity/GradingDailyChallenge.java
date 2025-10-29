@@ -33,6 +33,9 @@ public class GradingDailyChallenge extends BaseEntity{
     @Column(name = "total_score")
     private Double totalScore;
 
+    @Column(name = "score_percentage ")
+    private Double scorePercentage;
+
     @Column(name = "overall_feedback")
     private String overallFeedback;
 
