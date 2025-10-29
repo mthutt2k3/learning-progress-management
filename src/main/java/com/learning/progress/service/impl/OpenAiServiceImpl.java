@@ -10,6 +10,7 @@ import com.learning.progress.exception.ApiException;
 import com.learning.progress.repository.DailyChallengeRepository;
 import com.learning.progress.service.OpenAiService;
 import com.learning.progress.util.FileContentExtractor;
+import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -33,10 +34,14 @@ public class OpenAiServiceImpl implements OpenAiService {
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final DailyChallengeRepository dailyChallengeRepository;
 
-    // Thread pool for parallel API calls
-    private final ExecutorService executorService;
-    private static final int BATCH_SIZE = 10; // Number of questions per API call
-    private static final int THREAD_POOL_SIZE = 10; // Number of parallel threads
+    private ExecutorService executorService;
+
+    @Value("${azure.openai.batch-size}")
+    private int batchSize;
+    @Value("${azure.openai.thread-pool-size}")
+    private int threadPoolSize;
+    @Value("${azure.openai.max-question}")
+    private int maxQuestion;
 
     @Value("${azure.openai.endpoint}")
     private String endpoint;
@@ -52,7 +57,12 @@ public class OpenAiServiceImpl implements OpenAiService {
 
     public OpenAiServiceImpl(DailyChallengeRepository dailyChallengeRepository) {
         this.dailyChallengeRepository = dailyChallengeRepository;
-        this.executorService = Executors.newFixedThreadPool(THREAD_POOL_SIZE);
+    }
+
+    @PostConstruct
+    public void init() {
+        this.executorService = Executors.newFixedThreadPool(threadPoolSize);
+        log.info("Initialized thread pool with size: {}", threadPoolSize);
     }
 
     @PreDestroy
@@ -69,20 +79,32 @@ public class OpenAiServiceImpl implements OpenAiService {
     }
 
     /**
-     * API 1: Generate GV (Grammar/Vocabulary) questions - OPTIMIZED WITH BATCHING
+     * API 1: Generate GV questions - OPTIMIZED WITH PROPER GROUPING
      */
     @Override
     public List<SectionWithQuestionsDto> generateGVQuestions(GenerateGVQuestionsRequest request) {
+
+        int totalQuestions = request.getQuestionTypeConfigs().stream()
+                .mapToInt(GenerateGVQuestionsRequest.QuestionTypeConfig::getNumberOfQuestions)
+                .sum();
+
+        if (totalQuestions > maxQuestion) {
+            log.error("Total questions exceeds limit: {} > 50", totalQuestions);
+            throw new ApiException("Total number of questions cannot exceed " + maxQuestion + ". Requested: " + totalQuestions,
+                    HttpStatus.BAD_REQUEST.value());
+        }
+
+        log.info("Total questions to generate: {}", totalQuestions);
+
         log.info("Starting OPTIMIZED GV question generation for challengeId: {}", request.getChallengeId());
 
-        // 1. Validate challenge
         DailyChallenge challenge = dailyChallengeRepository.findByIdAndDeletedAtIsNull(request.getChallengeId())
                 .orElseThrow(() -> {
                     log.error("DailyChallenge not found: {}", request.getChallengeId());
                     return new ApiException(Const.CHALLENGE.NOT_FOUND, HttpStatus.NOT_FOUND.value());
                 });
 
-        // 2. Prepare all question generation tasks
+        // Prepare all tasks
         List<QuestionGenerationTask> allTasks = new ArrayList<>();
         int sectionOrder = 1;
 
@@ -91,7 +113,7 @@ public class OpenAiServiceImpl implements OpenAiService {
             int numberOfQuestions = config.getNumberOfQuestions();
             String contextInfo = buildEnhancedContextInfo(questionType);
 
-            log.info("Preparing {} {} questions for parallel generation", numberOfQuestions, questionType);
+            log.info("Preparing {} {} questions", numberOfQuestions, questionType);
 
             for (int i = 0; i < numberOfQuestions; i++) {
                 allTasks.add(new QuestionGenerationTask(
@@ -104,10 +126,87 @@ public class OpenAiServiceImpl implements OpenAiService {
             }
         }
 
-        // 3. Generate questions in parallel batches
-        List<SectionWithQuestionsDto> results = generateQuestionsInParallelBatches(allTasks, true);
+        // ✅ FIX: Group by question type FIRST, then batch
+        Map<String, List<QuestionGenerationTask>> tasksByType = allTasks.stream()
+                .collect(Collectors.groupingBy(task -> task.questionType));
 
-        log.info("Successfully generated {} sections with {} total questions using PARALLEL BATCHING",
+        log.info("Grouped tasks into {} question types", tasksByType.size());
+
+        // Generate questions for each type in parallel
+        List<CompletableFuture<List<QuestionWithOrderDto>>> futures = new ArrayList<>();
+
+        for (Map.Entry<String, List<QuestionGenerationTask>> entry : tasksByType.entrySet()) {
+            String questionType = entry.getKey();
+            List<QuestionGenerationTask> tasksForType = entry.getValue();
+
+            log.info("Processing {} tasks for question type: {}", tasksForType.size(), questionType);
+
+            // Split into batches within this question type
+            List<List<QuestionGenerationTask>> batches = splitIntoBatches(tasksForType, batchSize);
+
+            for (List<QuestionGenerationTask> batch : batches) {
+                CompletableFuture<List<QuestionWithOrderDto>> future = CompletableFuture.supplyAsync(
+                        () -> generateBatchOfGVQuestions(batch),
+                        executorService
+                );
+                futures.add(future);
+            }
+        }
+
+        // Wait for all
+        CompletableFuture<Void> allOf = CompletableFuture.allOf(
+                futures.toArray(new CompletableFuture[0])
+        );
+
+        try {
+            allOf.get(5, TimeUnit.MINUTES);
+        } catch (Exception e) {
+            log.error("Error waiting for parallel batch completion: {}", e.getMessage(), e);
+            throw new RuntimeException("Failed to generate questions in parallel: " + e.getMessage(), e);
+        }
+
+        // Collect all questions
+        List<QuestionWithOrderDto> allGeneratedQuestions = futures.stream()
+                .map(future -> {
+                    try {
+                        return future.get();
+                    } catch (Exception e) {
+                        log.error("Error getting batch result: {}", e.getMessage());
+                        return Collections.<QuestionWithOrderDto>emptyList();
+                    }
+                })
+                .flatMap(List::stream)
+                .collect(Collectors.toList());
+
+        // Sort by original section order
+        allGeneratedQuestions.sort(Comparator.comparingInt(q -> q.originalSectionOrder));
+
+        // Create sections
+        List<SectionWithQuestionsDto> results = new ArrayList<>();
+        for (int i = 0; i < allGeneratedQuestions.size(); i++) {
+            QuestionWithOrderDto qWithOrder = allGeneratedQuestions.get(i);
+            QuestionDto question = qWithOrder.question;
+
+            question.setId(null);
+            question.setOrderNumber(1);
+
+            SectionDto section = new SectionDto();
+            section.setId(null);
+            section.setSectionTitle(null);
+            section.setSectionsContent(null);
+            section.setOrderNumber(i + 1);
+            section.setResourceType("NONE");
+
+            results.add(new SectionWithQuestionsDto(section, Collections.singletonList(question)));
+        }
+
+        // Ensure unique position IDs
+        List<QuestionDto> allQuestions = results.stream()
+                .flatMap(s -> s.getQuestions().stream())
+                .collect(Collectors.toList());
+        ensureUniquePositionIds(allQuestions);
+
+        log.info("Successfully generated {} sections with {} total questions",
                 results.size(), results.size());
 
         return results;
@@ -117,7 +216,19 @@ public class OpenAiServiceImpl implements OpenAiService {
     public List<SectionWithQuestionsDto> generateContentBasedQuestions(GenerateContentBasedQuestionsRequest request) {
         log.info("Starting OPTIMIZED content-based question generation for challengeId: {}", request.getChallengeId());
 
-        // 1. Validate challenge
+        int totalQuestions = request.getSections().stream()
+                .flatMap(section -> section.getQuestionTypeConfigs().stream())
+                .mapToInt(GenerateContentBasedQuestionsRequest.QuestionTypeConfig::getNumberOfQuestions)
+                .sum();
+
+        if (totalQuestions > maxQuestion) {
+            log.error("Total questions across all sections exceeds limit: {}", totalQuestions);
+            throw new ApiException("Total number of questions across all sections cannot exceed " + maxQuestion + ". Requested: " + totalQuestions,
+                    HttpStatus.BAD_REQUEST.value());
+        }
+
+        log.info("Total questions to generate across all sections: {}", totalQuestions);
+
         DailyChallenge challenge = dailyChallengeRepository.findByIdAndDeletedAtIsNull(request.getChallengeId())
                 .orElseThrow(() -> {
                     log.error("DailyChallenge not found: {}", request.getChallengeId());
@@ -127,7 +238,6 @@ public class OpenAiServiceImpl implements OpenAiService {
         String dailyChallengeType = challenge.getChallengeType().toString();
         log.info("Daily Challenge Type: {}", dailyChallengeType);
 
-        // 2. Generate questions for each section
         List<SectionWithQuestionsDto> results = new ArrayList<>();
 
         for (GenerateContentBasedQuestionsRequest.SectionWithConfig sectionConfig : request.getSections()) {
@@ -137,12 +247,11 @@ public class OpenAiServiceImpl implements OpenAiService {
                     section.getSectionTitle(), section.getResourceType());
 
             try {
-                // Validate section has content
                 if (section.getSectionsContent() == null || section.getSectionsContent().isBlank()) {
-                    throw new IllegalArgumentException("Section content is required for content-based questions");
+                    throw new IllegalArgumentException("Section content is required");
                 }
 
-                // Prepare all question generation tasks for this section
+                // Prepare tasks
                 List<ContentBasedQuestionTask> sectionTasks = new ArrayList<>();
                 int questionOrder = 1;
 
@@ -151,9 +260,8 @@ public class OpenAiServiceImpl implements OpenAiService {
                     int numberOfQuestions = config.getNumberOfQuestions();
                     String contextInfo = buildEnhancedContextInfo(questionType);
 
-                    log.info("Preparing {} {} questions for section", numberOfQuestions, questionType);
+                    log.info("Preparing {} {} questions", numberOfQuestions, questionType);
 
-                    // Create tasks for batch processing
                     for (int i = 0; i < numberOfQuestions; i++) {
                         sectionTasks.add(new ContentBasedQuestionTask(
                                 challenge,
@@ -167,164 +275,82 @@ public class OpenAiServiceImpl implements OpenAiService {
                     }
                 }
 
-                // Generate all questions for this section in parallel batches
-                List<QuestionDto> allQuestions = generateContentBasedQuestionsInParallelBatches(sectionTasks);
+                // ✅ FIX: Group by question type FIRST
+                Map<String, List<ContentBasedQuestionTask>> tasksByType = sectionTasks.stream()
+                        .collect(Collectors.groupingBy(task -> task.questionType));
 
-                // Create result with all questions in this section
+                List<CompletableFuture<List<QuestionWithOrderDto>>> futures = new ArrayList<>();
+
+                for (Map.Entry<String, List<ContentBasedQuestionTask>> entry : tasksByType.entrySet()) {
+                    List<ContentBasedQuestionTask> tasksForType = entry.getValue();
+                    List<List<ContentBasedQuestionTask>> batches = splitIntoBatches(tasksForType, batchSize);
+
+                    for (List<ContentBasedQuestionTask> batch : batches) {
+                        CompletableFuture<List<QuestionWithOrderDto>> future = CompletableFuture.supplyAsync(
+                                () -> generateBatchOfContentBasedQuestions(batch),
+                                executorService
+                        );
+                        futures.add(future);
+                    }
+                }
+
+                CompletableFuture<Void> allOf = CompletableFuture.allOf(
+                        futures.toArray(new CompletableFuture[0])
+                );
+
+                allOf.get(5, TimeUnit.MINUTES);
+
+                List<QuestionWithOrderDto> allGeneratedQuestions = futures.stream()
+                        .map(future -> {
+                            try {
+                                return future.get();
+                            } catch (Exception e) {
+                                log.error("Error getting batch result: {}", e.getMessage());
+                                return Collections.<QuestionWithOrderDto>emptyList();
+                            }
+                        })
+                        .flatMap(List::stream)
+                        .collect(Collectors.toList());
+
+                // Sort by original order
+                allGeneratedQuestions.sort(Comparator.comparingInt(q -> q.originalSectionOrder));
+
+                List<QuestionDto> allQuestions = new ArrayList<>();
+                for (int i = 0; i < allGeneratedQuestions.size(); i++) {
+                    QuestionDto question = allGeneratedQuestions.get(i).question;
+                    question.setId(null);
+                    question.setOrderNumber(i + 1);
+                    allQuestions.add(question);
+                }
+
+                ensureUniquePositionIds(allQuestions);
+
                 SectionWithQuestionsDto result = new SectionWithQuestionsDto(section, allQuestions);
                 results.add(result);
 
-                log.info("Generated {} questions for section: {}", allQuestions.size(), section.getSectionTitle());
+                log.info("Generated {} questions for section", allQuestions.size());
 
             } catch (Exception e) {
-                log.error("Failed to generate questions for section {}: {}",
-                        section.getSectionTitle(), e.getMessage(), e);
-                throw new RuntimeException("Failed to generate questions for section "
-                        + section.getSectionTitle() + ": " + e.getMessage(), e);
+                log.error("Failed to generate questions for section: {}", e.getMessage(), e);
+                throw new RuntimeException("Failed to generate questions: " + e.getMessage(), e);
             }
         }
 
-        log.info("Successfully generated {} sections with total {} questions using PARALLEL BATCHING",
+        log.info("Successfully generated {} sections with {} total questions",
                 results.size(), results.stream().mapToInt(s -> s.getQuestions().size()).sum());
 
         return results;
     }
 
     /**
-     * Generate questions in parallel batches - CORE OPTIMIZATION
+     * Generate batch of GV questions - ALL SAME TYPE
      */
-    private List<SectionWithQuestionsDto> generateQuestionsInParallelBatches(
-            List<QuestionGenerationTask> allTasks,
-            boolean oneQuestionPerSection) {
-
-        // Split into batches of BATCH_SIZE
-        List<List<QuestionGenerationTask>> batches = splitIntoBatches(allTasks, BATCH_SIZE);
-        log.info("Split {} tasks into {} batches (batch size: {})", allTasks.size(), batches.size(), BATCH_SIZE);
-
-        // Process batches in parallel using CompletableFuture
-        List<CompletableFuture<List<QuestionDto>>> futures = batches.stream()
-                .map(batch -> CompletableFuture.supplyAsync(
-                        () -> generateBatchOfGVQuestions(batch),
-                        executorService
-                ))
-                .collect(Collectors.toList());
-
-        // Wait for all batches to complete
-        CompletableFuture<Void> allOf = CompletableFuture.allOf(
-                futures.toArray(new CompletableFuture[0])
-        );
-
+    private List<QuestionWithOrderDto> generateBatchOfGVQuestions(List<QuestionGenerationTask> batch) {
         try {
-            allOf.get(5, TimeUnit.MINUTES); // Timeout after 5 minutes
-        } catch (Exception e) {
-            log.error("Error waiting for parallel batch completion: {}", e.getMessage(), e);
-            throw new RuntimeException("Failed to generate questions in parallel: " + e.getMessage(), e);
-        }
-
-        // Collect all generated questions
-        List<QuestionDto> allGeneratedQuestions = futures.stream()
-                .map(future -> {
-                    try {
-                        return future.get();
-                    } catch (Exception e) {
-                        log.error("Error getting batch result: {}", e.getMessage());
-                        return Collections.<QuestionDto>emptyList();
-                    }
-                })
-                .flatMap(List::stream)
-                .collect(Collectors.toList());
-
-        // Create sections from questions
-        List<SectionWithQuestionsDto> results = new ArrayList<>();
-        for (int i = 0; i < allGeneratedQuestions.size(); i++) {
-            QuestionDto question = allGeneratedQuestions.get(i);
-            question.setId(null);
-            question.setOrderNumber(1); // Always 1 for single question per section
-
-            SectionDto section = new SectionDto();
-            section.setId(null);
-            section.setSectionTitle(null);
-            section.setSectionsContent(null);
-            section.setOrderNumber(i + 1);
-            section.setResourceType("NONE");
-
-            results.add(new SectionWithQuestionsDto(section, Collections.singletonList(question)));
-        }
-
-        // Ensure unique position IDs across all questions
-        List<QuestionDto> allQuestions = results.stream()
-                .flatMap(s -> s.getQuestions().stream())
-                .collect(Collectors.toList());
-        ensureUniquePositionIds(allQuestions);
-
-        return results;
-    }
-
-    /**
-     * Generate content-based questions in parallel batches
-     */
-    private List<QuestionDto> generateContentBasedQuestionsInParallelBatches(
-            List<ContentBasedQuestionTask> allTasks) {
-
-        // Split into batches
-        List<List<ContentBasedQuestionTask>> batches = splitIntoBatches(allTasks, BATCH_SIZE);
-        log.info("Split {} content-based tasks into {} batches", allTasks.size(), batches.size());
-
-        // Process batches in parallel
-        List<CompletableFuture<List<QuestionDto>>> futures = batches.stream()
-                .map(batch -> CompletableFuture.supplyAsync(
-                        () -> generateBatchOfContentBasedQuestions(batch),
-                        executorService
-                ))
-                .collect(Collectors.toList());
-
-        // Wait for all batches to complete
-        CompletableFuture<Void> allOf = CompletableFuture.allOf(
-                futures.toArray(new CompletableFuture[0])
-        );
-
-        try {
-            allOf.get(5, TimeUnit.MINUTES);
-        } catch (Exception e) {
-            log.error("Error waiting for parallel batch completion: {}", e.getMessage(), e);
-            throw new RuntimeException("Failed to generate content-based questions in parallel: " + e.getMessage(), e);
-        }
-
-        // Collect all generated questions and maintain order
-        List<QuestionDto> allGeneratedQuestions = futures.stream()
-                .map(future -> {
-                    try {
-                        return future.get();
-                    } catch (Exception e) {
-                        log.error("Error getting batch result: {}", e.getMessage());
-                        return Collections.<QuestionDto>emptyList();
-                    }
-                })
-                .flatMap(List::stream)
-                .collect(Collectors.toList());
-
-        // Set IDs to null and fix order numbers
-        for (int i = 0; i < allGeneratedQuestions.size(); i++) {
-            QuestionDto question = allGeneratedQuestions.get(i);
-            question.setId(null);
-            question.setOrderNumber(i + 1);
-        }
-
-        // Ensure unique position IDs
-        ensureUniquePositionIds(allGeneratedQuestions);
-
-        return allGeneratedQuestions;
-    }
-
-    /**
-     * Generate a batch of GV questions in one API call
-     */
-    private List<QuestionDto> generateBatchOfGVQuestions(List<QuestionGenerationTask> batch) {
-        try {
-            log.info("Generating batch of {} GV questions", batch.size());
-
-            // All tasks in batch should have same question type
+            // All tasks in batch have SAME question type (because we grouped first)
             QuestionGenerationTask firstTask = batch.get(0);
+            log.info("Generating batch of {} {} questions", batch.size(), firstTask.questionType);
+
             String prompt = buildBatchGVQuestionPrompt(
                     firstTask.challenge,
                     firstTask.questionType,
@@ -336,29 +362,33 @@ public class OpenAiServiceImpl implements OpenAiService {
             String aiResponse = callOpenAI(prompt);
             List<QuestionDto> questions = parseQuestionsFromResponse(aiResponse);
 
-            // Ensure we return exactly the requested number
             if (questions.size() > batch.size()) {
                 questions = questions.subList(0, batch.size());
             }
 
-            log.info("Successfully generated batch of {} questions", questions.size());
-            return questions;
+            // Wrap with original order
+            List<QuestionWithOrderDto> result = new ArrayList<>();
+            for (int i = 0; i < questions.size() && i < batch.size(); i++) {
+                result.add(new QuestionWithOrderDto(questions.get(i), batch.get(i).sectionOrder));
+            }
+
+            log.info("Successfully generated batch of {} questions", result.size());
+            return result;
 
         } catch (Exception e) {
             log.error("Failed to generate batch: {}", e.getMessage(), e);
-            // Return empty list instead of throwing to not break entire process
             return Collections.emptyList();
         }
     }
 
     /**
-     * Generate a batch of content-based questions in one API call
+     * Generate batch of content-based questions - ALL SAME TYPE
      */
-    private List<QuestionDto> generateBatchOfContentBasedQuestions(List<ContentBasedQuestionTask> batch) {
+    private List<QuestionWithOrderDto> generateBatchOfContentBasedQuestions(List<ContentBasedQuestionTask> batch) {
         try {
-            log.info("Generating batch of {} content-based questions", batch.size());
-
             ContentBasedQuestionTask firstTask = batch.get(0);
+            log.info("Generating batch of {} {} questions", batch.size(), firstTask.questionType);
+
             String prompt = buildBatchContentBasedQuestionPrompt(
                     firstTask.challenge,
                     firstTask.section,
@@ -372,23 +402,24 @@ public class OpenAiServiceImpl implements OpenAiService {
             String aiResponse = callOpenAI(prompt);
             List<QuestionDto> questions = parseQuestionsFromResponse(aiResponse);
 
-            // Ensure we return exactly the requested number
             if (questions.size() > batch.size()) {
                 questions = questions.subList(0, batch.size());
             }
 
-            log.info("Successfully generated batch of {} content-based questions", questions.size());
-            return questions;
+            List<QuestionWithOrderDto> result = new ArrayList<>();
+            for (int i = 0; i < questions.size() && i < batch.size(); i++) {
+                result.add(new QuestionWithOrderDto(questions.get(i), batch.get(i).orderNumber));
+            }
+
+            log.info("Successfully generated batch of {} questions", result.size());
+            return result;
 
         } catch (Exception e) {
-            log.error("Failed to generate content-based batch: {}", e.getMessage(), e);
+            log.error("Failed to generate batch: {}", e.getMessage(), e);
             return Collections.emptyList();
         }
     }
 
-    /**
-     * Split list into batches
-     */
     private <T> List<List<T>> splitIntoBatches(List<T> list, int batchSize) {
         List<List<T>> batches = new ArrayList<>();
         for (int i = 0; i < list.size(); i += batchSize) {
@@ -398,9 +429,57 @@ public class OpenAiServiceImpl implements OpenAiService {
         return batches;
     }
 
-    /**
-     * Build prompt for BATCH GV questions
-     */
+    // Helper classes
+    private static class QuestionGenerationTask {
+        DailyChallenge challenge;
+        String questionType;
+        String userDescription;
+        String contextInfo;
+        int sectionOrder;
+
+        QuestionGenerationTask(DailyChallenge challenge, String questionType,
+                               String userDescription, String contextInfo, int sectionOrder) {
+            this.challenge = challenge;
+            this.questionType = questionType;
+            this.userDescription = userDescription;
+            this.contextInfo = contextInfo;
+            this.sectionOrder = sectionOrder;
+        }
+    }
+
+    private static class ContentBasedQuestionTask {
+        DailyChallenge challenge;
+        SectionDto section;
+        String questionType;
+        String userDescription;
+        String contextInfo;
+        String dailyChallengeType;
+        int orderNumber;
+
+        ContentBasedQuestionTask(DailyChallenge challenge, SectionDto section,
+                                 String questionType, String userDescription,
+                                 String contextInfo, String dailyChallengeType, int orderNumber) {
+            this.challenge = challenge;
+            this.section = section;
+            this.questionType = questionType;
+            this.userDescription = userDescription;
+            this.contextInfo = contextInfo;
+            this.dailyChallengeType = dailyChallengeType;
+            this.orderNumber = orderNumber;
+        }
+    }
+
+    // Wrapper to maintain order
+    private static class QuestionWithOrderDto {
+        QuestionDto question;
+        int originalSectionOrder;
+
+        QuestionWithOrderDto(QuestionDto question, int originalSectionOrder) {
+            this.question = question;
+            this.originalSectionOrder = originalSectionOrder;
+        }
+    }
+
     private String buildBatchGVQuestionPrompt(
             DailyChallenge challenge,
             String questionType,
@@ -430,7 +509,6 @@ public class OpenAiServiceImpl implements OpenAiService {
         prompt.append("as long as it stays strictly within the same theme, grammar pattern, or vocabulary topic.\n");
         prompt.append("Avoid repeating sentences from the lesson word-for-word.\n\n");
 
-        // IMPORTANT: Request multiple questions
         prompt.append("TASK:\n");
         prompt.append("Generate EXACTLY ").append(numberOfQuestions).append(" DIFFERENT questions of type: ").append(questionType).append("\n");
         prompt.append("These are Grammar/Vocabulary questions (NONE resource type)\n");
@@ -458,9 +536,6 @@ public class OpenAiServiceImpl implements OpenAiService {
         return prompt.toString();
     }
 
-    /**
-     * Build prompt for BATCH content-based questions
-     */
     private String buildBatchContentBasedQuestionPrompt(
             DailyChallenge challenge,
             SectionDto section,
@@ -525,47 +600,7 @@ public class OpenAiServiceImpl implements OpenAiService {
         return prompt.toString();
     }
 
-    // Helper classes for task management
-    private static class QuestionGenerationTask {
-        DailyChallenge challenge;
-        String questionType;
-        String userDescription;
-        String contextInfo;
-        int sectionOrder;
-
-        QuestionGenerationTask(DailyChallenge challenge, String questionType,
-                               String userDescription, String contextInfo, int sectionOrder) {
-            this.challenge = challenge;
-            this.questionType = questionType;
-            this.userDescription = userDescription;
-            this.contextInfo = contextInfo;
-            this.sectionOrder = sectionOrder;
-        }
-    }
-
-    private static class ContentBasedQuestionTask {
-        DailyChallenge challenge;
-        SectionDto section;
-        String questionType;
-        String userDescription;
-        String contextInfo;
-        String dailyChallengeType;
-        int orderNumber;
-
-        ContentBasedQuestionTask(DailyChallenge challenge, SectionDto section,
-                                 String questionType, String userDescription,
-                                 String contextInfo, String dailyChallengeType, int orderNumber) {
-            this.challenge = challenge;
-            this.section = section;
-            this.questionType = questionType;
-            this.userDescription = userDescription;
-            this.contextInfo = contextInfo;
-            this.dailyChallengeType = dailyChallengeType;
-            this.orderNumber = orderNumber;
-        }
-    }
-
-    // ========== KEEP ALL EXISTING HELPER METHODS BELOW ==========
+    // ========== KEEP ALL EXISTING HELPER METHODS ==========
 
     private void appendDCTypeInstructions(StringBuilder prompt, String dcType) {
         switch (dcType) {
@@ -642,7 +677,6 @@ public class OpenAiServiceImpl implements OpenAiService {
                 throw new RuntimeException("No questions were successfully parsed");
             }
 
-            // Ensure unique position IDs
             ensureUniquePositionIds(questions);
 
             return questions;
@@ -728,6 +762,7 @@ public class OpenAiServiceImpl implements OpenAiService {
                 prompt.append("- questionText MUST contain [[pos_xxxxxx]] placeholders for drop zones.\n");
                 prompt.append("- xxxxxx is a random 6-character ID using lowercase a-z and 0-9.\n");
                 prompt.append("- Each item in data must have positionId corresponding to its correct drop zone.\n");
+                prompt.append("- There can be multiple draggable items, and each must correspond to one drop zone.\n");
                 break;
 
             case "REARRANGE":
@@ -785,7 +820,6 @@ public class OpenAiServiceImpl implements OpenAiService {
         prompt.append("- positionId must match xxxxxx exactly.\n");
     }
 
-
     private String callOpenAI(String prompt) {
         String url = UriComponentsBuilder
                 .fromHttpUrl(endpoint + "/openai/deployments/gpt-4o-mini/chat/completions")
@@ -819,7 +853,6 @@ public class OpenAiServiceImpl implements OpenAiService {
                     Map<String, Object> message = (Map<String, Object>) choices.get(0).get("message");
                     String content = (String) message.get("content");
 
-                    // Clean markdown
                     content = content.trim();
                     if (content.startsWith("```json")) {
                         content = content.substring(7);
