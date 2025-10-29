@@ -20,6 +20,7 @@ import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validator;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -43,6 +44,8 @@ public class QuestionServiceImpl implements QuestionService {
     @Autowired private Validator validator;
     @Autowired private CacheService cacheService;
 
+    @Value("${app.challenge.max-questions-per-challenge:100}")
+    private int maxQuestionsPerChallenge;
     // =====================================================================
     // READ: CÓ CACHE (chỉ cache DATA)
     // =====================================================================
@@ -104,6 +107,19 @@ public class QuestionServiceImpl implements QuestionService {
 
         ChallengeSection section = sectionRepository.findByIdAndDeletedAtIsNull(sectionId)
                 .orElseThrow(() -> new ApiException(Const.SECTION.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+        Long challengeId = section.getChallenge().getId();
+
+        // === VALIDATE: Max 100 questions per challenge (chỉ khi có thêm mới) ===
+        List<QuestionDto> newQuestions = dtos.stream()
+                .filter(dto -> !dto.isToBeDeleted() && dto.getId() == null)
+                .toList();
+
+        if (!newQuestions.isEmpty()) {
+            // Tạo map tạm: chỉ 1 section
+            Map<Long, List<QuestionDto>> tempMap = Map.of(sectionId, newQuestions);
+            validateMaxQuestionsPerChallenge(challengeId, tempMap);
+        }
+
 
         List<Question> existingActiveQuestions = questionRepository
                 .findBySectionIdAndDeletedAtIsNullOrderByOrderNumberAsc(sectionId);
@@ -118,7 +134,6 @@ public class QuestionServiceImpl implements QuestionService {
 
         List<QuestionDto> result = processQuestions(deleteRequests, nonDeletedRequests, section);
 
-        Long challengeId = section.getChallenge().getId();
         cacheService.clearCacheForSection(sectionId, challengeId);
 
         deleteRequests.stream()
@@ -209,7 +224,8 @@ public class QuestionServiceImpl implements QuestionService {
         }
 
         Long challengeId = sectionMap.values().iterator().next().getChallenge().getId();
-
+        // VALIDATE: Max 100 questions per challenge
+        validateMaxQuestionsPerChallenge(challengeId, sectionQuestionsMap);
         // === 2. Prepare ALL questions for batch insert (in-memory) ===
         List<Question> questionsToSave = new ArrayList<>();
         Map<Long, List<QuestionDto>> result = new HashMap<>();
@@ -282,6 +298,39 @@ public class QuestionServiceImpl implements QuestionService {
     // =====================================================================
     // PRIVATE: VALIDATION & PROCESS
     // =====================================================================
+    /**
+     * Validate that after adding new questions, total active questions in challenge ≤ 100
+     */
+    private void validateMaxQuestionsPerChallenge(
+            Long challengeId,
+            Map<Long, List<QuestionDto>> sectionQuestionsMap) {
+
+        // Count current active questions
+        long currentCount = questionRepository.countByChallengeIdAndDeletedAtIsNull(challengeId);
+
+        // Count new questions to be added
+        long newCount = sectionQuestionsMap.values().stream()
+                .flatMap(List::stream)
+                .filter(dto -> dto.getId() == null) // only new inserts
+                .count();
+
+        long totalAfter = currentCount + newCount;
+
+        if (totalAfter > maxQuestionsPerChallenge) {
+            log.error(
+                    "Challenge {} would have {} questions after insert, max allowed: {}",
+                    challengeId, totalAfter, maxQuestionsPerChallenge
+            );
+
+            throw new ApiException(
+                    String.format(
+                            "Challenge cannot have more than %d questions. Current: %d, Adding: %d, Total: %d",
+                            maxQuestionsPerChallenge, currentCount, newCount, totalAfter
+                    ),
+                    HttpStatus.BAD_REQUEST.value()
+            );
+        }
+    }
 
     private void validateBulkRequests(List<QuestionDto> deleteRequests, List<QuestionDto> nonDeletedRequests,
                                       Set<Long> existingActiveIds, ChallengeSection section) {

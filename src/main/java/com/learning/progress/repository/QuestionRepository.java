@@ -38,4 +38,6 @@ public interface QuestionRepository extends JpaRepository<Question, Long> {
     List<Question> findByIdInAndDeletedAtIsNull(List<Long> questionIds);
 
     List<Question> findBySectionIdInAndDeletedAtIsNull(Set<Long> sectionIds);
+
+    long countByChallengeIdAndDeletedAtIsNull(Long challengeId);
 }
