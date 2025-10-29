@@ -4,16 +4,17 @@ import com.learning.progress.common.ChallengeStatus;
 import com.learning.progress.common.Const;
 import com.learning.progress.dto.challenge.*;
 import com.learning.progress.dto.DataResponse;
+import com.learning.progress.exception.ApiException;
 import com.learning.progress.service.DailyChallengeService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
+import org.springframework.http.*;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 @RestController
@@ -87,5 +88,30 @@ public class DailyChallengeController {
     public ResponseEntity<DataResponse<DailyChallengeHierarchyDTO>> getChallengeHierarchy(@PathVariable Long dailyChallengeId) {
         DailyChallengeHierarchyDTO response = dailyChallengeService.getChallengeHierarchy(dailyChallengeId);
         return new ResponseEntity<>(DataResponse.success(response, Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL), HttpStatus.OK);
+    }
+
+    @GetMapping("/{id}/export-worksheet")
+    @PreAuthorize("hasAnyRole('TEACHER', 'TEACHING_ASSISTANT')")
+    @Operation(summary = "Export daily challenge worksheet",
+            description = "Generate a Word document worksheet for students to complete on paper")
+    public ResponseEntity<byte[]> exportChallengeWorksheet(@PathVariable Long id) {
+        try {
+            byte[] worksheet = dailyChallengeService.exportChallengeWorksheet(id);
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_OCTET_STREAM);
+            headers.setContentDisposition(ContentDisposition.builder("attachment")
+                    .filename("challenge-worksheet-" + id + ".docx", StandardCharsets.UTF_8)
+                    .build());
+            headers.setContentLength(worksheet.length);
+
+            return new ResponseEntity<>(worksheet, headers, HttpStatus.OK);
+
+        } catch (ApiException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new ApiException("Failed to export worksheet: " + e.getMessage(),
+                    HttpStatus.INTERNAL_SERVER_ERROR.value());
+        }
     }
 }

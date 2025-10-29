@@ -33,6 +33,7 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
     private final DailyChallengeMapper dailyChallengeMapper;
     private final AppValidator appValidator;
     private final JwtUtil jwtUtil;
+    private final FileService fileService;
 
     /* --------------------------------------------------------
      * CREATE
@@ -47,6 +48,11 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
                 .orElseThrow(() -> notFound(traceId, Const.CLASS_LESSON.NOT_FOUND, request.getClassLessonId()));
 
         appValidator.validateUserAccessToClass(classLesson.getClassChapter().getClazz().getId());
+        boolean exists = dailyChallengeRepository.existsByClassLessonAndChallengeNameAndDeletedAtIsNull(
+                classLesson, request.getChallengeName());
+        if (exists) {
+            throw badRequest("Challenge name already exists for this lesson: " + request.getChallengeName());
+        }
 
         DailyChallenge challenge = dailyChallengeMapper.mapToEntity(request);
         challenge.setClassLesson(classLesson);
@@ -139,6 +145,12 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
 
         appValidator.validateUserAccessToClass(challenge.getClassLesson().getClassChapter().getClazz().getId());
         validateUpdateDailyChallenge(dto);
+
+        boolean exists = dailyChallengeRepository.existsByClassLessonAndChallengeNameAndDeletedAtIsNull(
+                challenge.getClassLesson(), dto.getChallengeName());
+        if (exists) {
+            throw badRequest("Challenge name already exists for this lesson: " + dto.getChallengeName());
+        }
 
         BeanUtils.copyProperties(dto, challenge);
         dailyChallengeRepository.save(challenge);
@@ -271,6 +283,7 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
             validateTestMethodCommon(
                     challenge.getHasAntiCheat(),
                     challenge.getTranslateOnScreen(),
+                    challenge.getDurationMinutes(),
                     "Update"
             );
         }
@@ -294,8 +307,6 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
             throw badRequest("Challenge must have valid start and end date");
         if (c.getEndDate().isBefore(c.getStartDate()))
             throw badRequest("End date must be after start date");
-        if (c.getDurationMinutes() == null || c.getDurationMinutes() <= 0)
-            throw badRequest("Duration minutes must be greater than 0");
         if (c.getSections() == null || c.getSections().isEmpty())
             throw badRequest("Challenge must have at least one section to publish");
 
@@ -304,17 +315,20 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
             validateTestMethodCommon(
                     c.getHasAntiCheat(),
                     c.getTranslateOnScreen(),
+                    c.getDurationMinutes(),
                     "Publish"
             );
         }
     }
 
     // --- COMMON TEST VALIDATION ---
-    private void validateTestMethodCommon(Boolean hasAntiCheat, Boolean translateOnScreen, String context) {
+    private void validateTestMethodCommon(Boolean hasAntiCheat, Boolean translateOnScreen, Integer durationMinutes, String context) {
         if (Boolean.FALSE.equals(hasAntiCheat))
             throw badRequest(context + " - Test method cannot disable anti-cheat");
         if (Boolean.TRUE.equals(translateOnScreen))
             throw badRequest(context + " - Test method cannot enable translate on screen");
+        if (durationMinutes == null || durationMinutes <= 0)
+            throw badRequest(context + " - Test method - Duration minutes must be greater than 0");
     }
 
 
@@ -332,5 +346,21 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
     private ApiException notFound(String traceId, String msg, Object id) {
         log.error("[{}] Not found: {} (id={})", traceId, msg, id);
         return new ApiException(msg, HttpStatus.NOT_FOUND.value());
+    }
+
+    @Override
+    public byte[] exportChallengeWorksheet(Long challengeId) {
+        String traceId = TraceUtil.getTraceId();
+        log.info("[{}] Exporting worksheet for challenge id: {}", traceId, challengeId);
+
+        // Verify challenge exists and user has access
+        DailyChallenge challenge = dailyChallengeRepository.findByIdAndDeletedAtIsNull(challengeId)
+                .orElseThrow(() -> notFound(traceId, Const.CHALLENGE.NOT_FOUND, challengeId));
+
+        appValidator.validateUserAccessToClass(
+                challenge.getClassLesson().getClassChapter().getClazz().getId());
+
+        // Generate worksheet using FileService
+        return fileService.generateChallengeWorksheet(challengeId);
     }
 }

@@ -33,7 +33,7 @@ public class ChallengeSectionController {
             @PathVariable Long challengeId,
             @RequestBody SectionWithQuestionsDto dto) {
         SectionWithQuestionsDto response = sectionService.saveSection(challengeId, dto);
-        return new ResponseEntity<>(DataResponse.success(response, Const.RESULT_MESSAGE_CODE.CREATE_SUCCESSFUL), HttpStatus.CREATED);
+        return new ResponseEntity<>(DataResponse.success(response, Const.RESULT_MESSAGE_CODE.SUCCESSFUL), HttpStatus.OK);
     }
 
     @PostMapping("/bulk-save/{challengeId}")
@@ -58,7 +58,7 @@ public class ChallengeSectionController {
             @Parameter(description = "Challenge ID") @PathVariable Long challengeId,
             @Valid @RequestBody List<QuickBulkSectionRequest> dtos) {
         sectionService.bulkOrderSection(challengeId, dtos);
-        return ResponseEntity.ok(DataResponse.success(null, Const.RESULT_MESSAGE_CODE.UPDATE_SUCCESSFUL));
+        return ResponseEntity.ok(DataResponse.success(null, Const.RESULT_MESSAGE_CODE.CREATE_SUCCESSFUL));
     }
 
     @GetMapping("/{id}")

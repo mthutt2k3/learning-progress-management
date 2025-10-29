@@ -1,5 +1,7 @@
 package com.learning.progress.service.impl;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.learning.progress.common.Const;
 import com.learning.progress.dto.excel.ImportTeacherDTO;
 import com.learning.progress.dto.excel.ImportStudentToClass;
@@ -9,23 +11,29 @@ import com.learning.progress.dto.excel.ImportChapterDTO;
 import com.learning.progress.dto.excel.ImportChapterInClassDTO;
 import com.learning.progress.dto.excel.ImportLessonDTO;
 import com.learning.progress.dto.excel.ImportSyllabusDTO;
+import com.learning.progress.entity.ChallengeSection;
+import com.learning.progress.entity.DailyChallenge;
+import com.learning.progress.entity.Question;
 import com.learning.progress.exception.ApiException;
+import com.learning.progress.repository.DailyChallengeRepository;
 import com.learning.progress.service.BlobSasService;
 import com.learning.progress.service.FileService;
+import com.learning.progress.util.TraceUtil;
 import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.wp.usermodel.HeaderFooterType;
 import org.apache.poi.xssf.usermodel.XSSFColor;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.apache.poi.xwpf.usermodel.*;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
+import java.io.*;
 import java.lang.reflect.Field;
+import java.math.BigInteger;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.text.ParseException;
@@ -65,6 +73,8 @@ public class FileServiceImpl implements FileService {
 
     XSSFColor errorColor = new XSSFColor(new java.awt.Color(251, 114, 114), null);
     XSSFColor successColor = new XSSFColor(new java.awt.Color(78, 250, 37), null);
+    @Autowired
+    private DailyChallengeRepository dailyChallengeRepository;
 
     @Override
     public byte[] generateStudentImportTemplate() {
@@ -1868,5 +1878,677 @@ public class FileServiceImpl implements FileService {
 
         // 4. Freeze panes
         newSheet.createFreezePane(0, 1);
+    }
+
+    @Override
+    public byte[] generateChallengeWorksheet(Long challengeId) {
+        try {
+            DailyChallenge challenge = dailyChallengeRepository.findByIdAndDeletedAtIsNull(challengeId)
+                    .orElseThrow(() -> new ApiException(Const.CHALLENGE.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+
+            XWPFDocument document = new XWPFDocument();
+
+            // Set page margins
+            CTSectPr sectPr = document.getDocument().getBody().addNewSectPr();
+            CTPageMar pageMar = sectPr.addNewPgMar();
+            pageMar.setLeft(BigInteger.valueOf(1440));
+            pageMar.setRight(BigInteger.valueOf(1440));
+            pageMar.setTop(BigInteger.valueOf(1440));
+            pageMar.setBottom(BigInteger.valueOf(1440));
+
+            // Header
+            addSimpleHeader(document, challenge.getChallengeName());
+
+            // Footer with page numbers
+            addSimpleFooter(document);
+
+            // Title
+            addCenteredTitle(document, challenge.getChallengeName());
+
+            // Student info table
+            addStudentInfoTable(document, challenge);
+
+            // Instructions
+//            addSimpleInstructions(document);
+
+            // Questions
+            addAllQuestions(document, challenge);
+
+            // Page break before answer sheet
+            addPageBreak(document);
+
+            // Answer sheet
+//            addSimpleAnswerSheet(document, challenge);
+
+            // Write to byte array
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            document.write(out);
+            document.close();
+
+            return out.toByteArray();
+
+        } catch (ApiException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new ApiException("Failed to generate challenge worksheet: " + e.getMessage(),
+                    HttpStatus.INTERNAL_SERVER_ERROR.value());
+        }
+    }
+
+    private void addSimpleHeader(XWPFDocument document, String challengeName) {
+        XWPFHeader header = document.createHeader(HeaderFooterType.DEFAULT);
+        XWPFParagraph headerPara = header.createParagraph();
+        headerPara.setAlignment(ParagraphAlignment.CENTER);
+        headerPara.setBorderBottom(Borders.SINGLE);
+
+        XWPFRun headerRun = headerPara.createRun();
+        headerRun.setText(challengeName);
+        headerRun.setBold(true);
+        headerRun.setFontSize(11);
+        headerRun.setFontFamily("Arial");
+    }
+
+    private void addSimpleFooter(XWPFDocument document) {
+        XWPFFooter footer = document.createFooter(HeaderFooterType.DEFAULT);
+        XWPFParagraph footerPara = footer.createParagraph();
+        footerPara.setAlignment(ParagraphAlignment.CENTER);
+        footerPara.setBorderTop(Borders.SINGLE);
+        footerPara.setSpacingBefore(100);
+
+        XWPFRun pageRun = footerPara.createRun();
+        pageRun.setText("Page ");
+        pageRun.setFontSize(10);
+        pageRun.setFontFamily("Arial");
+
+        footerPara.getCTP().addNewFldSimple().setInstr("PAGE \\* MERGEFORMAT");
+
+        XWPFRun ofRun = footerPara.createRun();
+        ofRun.setText(" of ");
+        ofRun.setFontSize(10);
+        ofRun.setFontFamily("Arial");
+
+        footerPara.getCTP().addNewFldSimple().setInstr("NUMPAGES \\* MERGEFORMAT");
+    }
+
+    private void addCenteredTitle(XWPFDocument document, String title) {
+        XWPFParagraph para = document.createParagraph();
+        para.setAlignment(ParagraphAlignment.CENTER);
+        para.setSpacingAfter(400);
+
+        XWPFRun run = para.createRun();
+        run.setText(title.toUpperCase());
+        run.setBold(true);
+        run.setFontSize(18);
+        run.setFontFamily("Arial");
+    }
+
+    private void addStudentInfoTable(XWPFDocument document, DailyChallenge challenge) {
+        // Calculate totals
+        double totalScore = 0;
+        int totalQuestions = 0;
+        if (challenge.getSections() != null) {
+            for (ChallengeSection section : challenge.getSections()) {
+                if (section.getQuestions() != null) {
+                    totalQuestions += section.getQuestions().size();
+                    for (Question q : section.getQuestions()) {
+                        totalScore += q.getScore().doubleValue();
+                    }
+                }
+            }
+        }
+
+        XWPFTable table = document.createTable(6, 2);
+        table.setWidth("100%");
+
+        // Borders
+        CTTblPr tblPr = table.getCTTbl().getTblPr();
+        if (tblPr == null) tblPr = table.getCTTbl().addNewTblPr();
+        CTTblBorders borders = tblPr.addNewTblBorders();
+        borders.addNewTop().setVal(STBorder.SINGLE);
+        borders.addNewBottom().setVal(STBorder.SINGLE);
+        borders.addNewLeft().setVal(STBorder.SINGLE);
+        borders.addNewRight().setVal(STBorder.SINGLE);
+        borders.addNewInsideH().setVal(STBorder.SINGLE);
+        borders.addNewInsideV().setVal(STBorder.SINGLE);
+
+        String[][] data = {
+                {"FULL NAME:", ""},
+                {"CLASS:", ""},
+                {"DATE:", ""},
+                {"DURATION:", (challenge.getDurationMinutes() != null ? challenge.getDurationMinutes() + " minutes" : "N/A")},
+                {"TOTAL QUESTIONS:", String.valueOf(totalQuestions)},
+                {"TOTAL SCORE:", String.format("%.1f points", totalScore)}
+        };
+
+        for (int i = 0; i < data.length; i++) {
+            XWPFTableRow row = table.getRow(i);
+
+            XWPFTableCell cell1 = row.getCell(0);
+            cell1.setVerticalAlignment(XWPFTableCell.XWPFVertAlign.CENTER);
+            cell1.setColor("E7E6E6");
+            CTTcPr tcpr1 = cell1.getCTTc().addNewTcPr();
+            tcpr1.addNewTcW().setW(BigInteger.valueOf(3000));
+
+            XWPFParagraph p1 = cell1.getParagraphs().get(0);
+            XWPFRun r1 = p1.createRun();
+            r1.setText(data[i][0]);
+            r1.setBold(true);
+            r1.setFontSize(10);
+            r1.setFontFamily("Arial");
+
+            XWPFTableCell cell2 = row.getCell(1);
+            cell2.setVerticalAlignment(XWPFTableCell.XWPFVertAlign.CENTER);
+            CTTcPr tcpr2 = cell2.getCTTc().addNewTcPr();
+            tcpr2.addNewTcW().setW(BigInteger.valueOf(6360));
+
+            XWPFParagraph p2 = cell2.getParagraphs().get(0);
+            XWPFRun r2 = p2.createRun();
+            r2.setText(data[i][1]);
+            r2.setFontSize(10);
+            r2.setFontFamily("Arial");
+        }
+
+        XWPFParagraph spacing = document.createParagraph();
+        spacing.setSpacingAfter(300);
+    }
+
+    private void addSimpleInstructions(XWPFDocument document) {
+        XWPFParagraph titlePara = document.createParagraph();
+        titlePara.setSpacingBefore(200);
+        titlePara.setSpacingAfter(100);
+
+        XWPFRun titleRun = titlePara.createRun();
+        titleRun.setText("INSTRUCTIONS:");
+        titleRun.setBold(true);
+        titleRun.setFontSize(11);
+        titleRun.setFontFamily("Arial");
+
+        String[] instructions = {
+                "• Read each question carefully before answering",
+                "• Write your answers clearly and legibly",
+                "• For multiple choice: Write the letter of your answer (A, B, C, or D)",
+                "• For fill-in-the-blank: Write your answer in the space provided",
+                "• Double-check your work before submitting"
+        };
+
+        for (String instruction : instructions) {
+            XWPFParagraph para = document.createParagraph();
+            para.setSpacingAfter(80);
+            para.setIndentationLeft(360);
+            XWPFRun run = para.createRun();
+            run.setText(instruction);
+            run.setFontSize(10);
+            run.setFontFamily("Arial");
+        }
+
+        XWPFParagraph spacing = document.createParagraph();
+        spacing.setSpacingAfter(200);
+    }
+
+    private void addAllQuestions(XWPFDocument document, DailyChallenge challenge) {
+        if (challenge.getSections() == null) return;
+
+        int questionNumber = 1;
+
+        for (int sectionIdx = 0; sectionIdx < challenge.getSections().size(); sectionIdx++) {
+            ChallengeSection section = challenge.getSections().get(sectionIdx);
+
+            // Section header (if exists)
+            if (section.getSectionTitle() != null && !section.getSectionTitle().trim().isEmpty()) {
+                XWPFParagraph sectionPara = document.createParagraph();
+                sectionPara.setSpacingBefore(400);
+                sectionPara.setSpacingAfter(200);
+                sectionPara.setBorderBottom(Borders.SINGLE);
+
+                XWPFRun run = sectionPara.createRun();
+                run.setText("SECTION " + (sectionIdx + 1) + ": " + section.getSectionTitle().toUpperCase());
+                run.setBold(true);
+                run.setFontSize(12);
+                run.setFontFamily("Arial");
+            }
+
+            // Section content/instructions (if exists)
+            if (section.getSectionsContent() != null && !section.getSectionsContent().trim().isEmpty()) {
+                XWPFParagraph contentPara = document.createParagraph();
+                contentPara.setSpacingAfter(200);
+                XWPFRun run = contentPara.createRun();
+                run.setText(section.getSectionsContent());
+                run.setItalic(true);
+                run.setFontSize(10);
+                run.setFontFamily("Arial");
+            }
+
+            // Questions in section
+            if (section.getQuestions() != null) {
+                for (Question question : section.getQuestions()) {
+                    addSimpleQuestion(document, question, questionNumber);
+                    questionNumber++;
+                }
+            }
+        }
+    }
+
+    private void addSimpleQuestion(XWPFDocument document, Question question, int questionNumber) {
+        // Question header
+        XWPFParagraph questionPara = document.createParagraph();
+        questionPara.setSpacingBefore(300);
+        questionPara.setSpacingAfter(100);
+
+        XWPFRun qNumRun = questionPara.createRun();
+        qNumRun.setText("Question " + questionNumber + ". ");
+        qNumRun.setBold(true);
+        qNumRun.setFontSize(11);
+        qNumRun.setFontFamily("Arial");
+
+        String questionText = cleanQuestionText(question.getQuestionText());
+        XWPFRun qTextRun = questionPara.createRun();
+        qTextRun.setText(questionText);
+        qTextRun.setFontSize(10);
+        qTextRun.setFontFamily("Arial");
+
+        XWPFRun qScoreRun = questionPara.createRun();
+        qScoreRun.setText(" (" + question.getScore() + " " +
+                (question.getScore().doubleValue() == 1 ? "point" : "points") + ")");
+        qScoreRun.setBold(true);
+        qScoreRun.setFontSize(9);
+        qScoreRun.setFontFamily("Arial");
+        qScoreRun.setColor("0066CC");
+
+        // Parse content
+        Map<String, Object> content = question.getQuestionContentJson();
+
+        // Add answer area based on type
+        String questionType = question.getQuestionType().toString();
+        switch (questionType) {
+            case "MULTIPLE_CHOICE":
+                addMultipleChoiceSimple(document, content);
+                break;
+            case "MULTIPLE_SELECT":
+                addMultipleSelectSimple(document, content);
+                break;
+            case "TRUE_OR_FALSE":
+                addTrueFalseSimple(document);
+                break;
+            case "FILL_IN_THE_BLANK":
+                addFillInTheBlankSimple(document, questionText);
+                break;
+            case "DROPDOWN":
+                addDropdownSimple(document, content);
+                break;
+            case "DRAG_AND_DROP":
+                addDragAndDropSimple(document, content, questionText);
+                break;
+            case "REARRANGE":
+                addRearrangeSimple(document, content);
+                break;
+            case "REWRITE":
+            case "WRITING":
+                addWritingSimple(document);
+                break;
+            default:
+                addOpenEndedSimple(document);
+        }
+    }
+
+    private void addMultipleChoiceSimple(XWPFDocument document, Map<String, Object> content) {
+        List<Map<String, Object>> options = (List<Map<String, Object>>) content.get("data");
+        if (options == null) return;
+
+        for (int i = 0; i < options.size(); i++) {
+            Map<String, Object> opt = options.get(i);
+            String letter = String.valueOf((char) ('A' + i));
+
+            XWPFParagraph para = document.createParagraph();
+            para.setIndentationLeft(720);
+            para.setSpacingAfter(80);
+
+            XWPFRun letterRun = para.createRun();
+            letterRun.setText(letter + ". ");
+            letterRun.setBold(true);
+            letterRun.setFontSize(10);
+            letterRun.setFontFamily("Arial");
+
+            XWPFRun optRun = para.createRun();
+            optRun.setText(opt.get("value").toString());
+            optRun.setFontSize(10);
+            optRun.setFontFamily("Arial");
+        }
+
+        // Answer line
+        XWPFParagraph answerPara = document.createParagraph();
+        answerPara.setIndentationLeft(720);
+        answerPara.setSpacingBefore(150);
+        answerPara.setSpacingAfter(100);
+    }
+
+    private void addMultipleSelectSimple(XWPFDocument document, Map<String, Object> content) {
+        List<Map<String, Object>> options = (List<Map<String, Object>>) content.get("data");
+        if (options == null) return;
+
+        XWPFParagraph instrPara = document.createParagraph();
+        instrPara.setIndentationLeft(720);
+        instrPara.setSpacingAfter(80);
+        XWPFRun instrRun = instrPara.createRun();
+        instrRun.setText("(Select all that apply)");
+        instrRun.setItalic(true);
+        instrRun.setFontSize(9);
+        instrRun.setFontFamily("Arial");
+
+        for (int i = 0; i < options.size(); i++) {
+            Map<String, Object> opt = options.get(i);
+            String letter = String.valueOf((char) ('A' + i));
+
+            XWPFParagraph para = document.createParagraph();
+            para.setIndentationLeft(720);
+            para.setSpacingAfter(80);
+
+            XWPFRun letterRun = para.createRun();
+            letterRun.setText(letter + ". ");
+            letterRun.setBold(true);
+            letterRun.setFontSize(10);
+            letterRun.setFontFamily("Arial");
+
+            XWPFRun optRun = para.createRun();
+            optRun.setText(opt.get("value").toString());
+            optRun.setFontSize(10);
+            optRun.setFontFamily("Arial");
+        }
+
+        XWPFParagraph answerPara = document.createParagraph();
+        answerPara.setIndentationLeft(720);
+        answerPara.setSpacingBefore(150);
+    }
+
+    private void addTrueFalseSimple(XWPFDocument document) {
+        String[] options = {"A. TRUE", "B. FALSE"};
+        for (String opt : options) {
+            XWPFParagraph para = document.createParagraph();
+            para.setIndentationLeft(720);
+            para.setSpacingAfter(80);
+            XWPFRun run = para.createRun();
+            run.setText(opt);
+            run.setBold(true);
+            run.setFontSize(10);
+            run.setFontFamily("Arial");
+        }
+
+        XWPFParagraph answerPara = document.createParagraph();
+        answerPara.setIndentationLeft(720);
+        answerPara.setSpacingBefore(150);
+    }
+
+    private void addFillInTheBlankSimple(XWPFDocument document, String questionText) {
+        int blankCount = (questionText.split("________", -1).length - 1);
+
+        for (int i = 1; i <= blankCount; i++) {
+            XWPFParagraph blankPara = document.createParagraph();
+            blankPara.setIndentationLeft(720);
+            blankPara.setSpacingAfter(100);
+        }
+    }
+
+    private void addRearrangeSimple(XWPFDocument document, Map<String, Object> content) {
+        List<Map<String, Object>> items = (List<Map<String, Object>>) content.get("data");
+        if (items == null || items.isEmpty()) return;
+
+        String questionText = (String) content.get("questionText");
+        if (questionText == null) return;
+
+        // Sort items theo thứ tự positionId nếu cần (giả sử data đã có thứ tự)
+        Map<String, String> posToValue = new LinkedHashMap<>();
+        for (Map<String, Object> item : items) {
+            String posId = (String) item.get("positionId");
+            if (posId != null) {
+                posToValue.put(posId, item.get("value").toString());
+            }
+        }
+
+        // Thay [[pos_]] bằng value thực
+        String displayQuestion = questionText;
+        for (Map.Entry<String, String> entry : posToValue.entrySet()) {
+            displayQuestion = displayQuestion.replace("[[" + entry.getKey() + "]]", entry.getValue());
+        }
+
+        XWPFParagraph qPara = document.createParagraph();
+        qPara.setIndentationLeft(720);
+        qPara.setSpacingAfter(80);
+
+        XWPFRun qRun = qPara.createRun();
+        qRun.setText(displayQuestion); // is/she/teacher/a
+        qRun.setFontSize(10);
+        qRun.setFontFamily("Arial");
+
+        // Dòng trống để học sinh viết
+        XWPFParagraph answerPara = document.createParagraph();
+        answerPara.setIndentationLeft(1080);
+        answerPara.setSpacingAfter(150);
+
+        XWPFRun answerRun = answerPara.createRun();
+        answerRun.setText("_________________________________________________________________");
+        answerRun.setFontSize(10);
+        answerRun.setFontFamily("Arial");
+    }
+
+    private void addDragAndDropSimple(XWPFDocument document, Map<String, Object> content, String questionText) {
+        List<Map<String, Object>> options = (List<Map<String, Object>>) content.get("data");
+        if (options == null || options.isEmpty()) return;
+
+        // Thay [[pos_]] bằng ____ trong câu hỏi
+        String displayQuestion = questionText.replaceAll("\\[\\[pos_\\w+\\]\\]", "____");
+
+        XWPFParagraph qPara = document.createParagraph();
+        qPara.setIndentationLeft(720);
+        qPara.setSpacingAfter(80);
+
+//        XWPFRun qRun = qPara.createRun();
+//        qRun.setText(displayQuestion);
+//        qRun.setFontSize(10);
+//        qRun.setFontFamily("Arial");
+
+        // Dòng đáp án: word1, word2, word3
+        XWPFParagraph optPara = document.createParagraph();
+        optPara.setIndentationLeft(1080);
+        optPara.setSpacingAfter(100);
+
+        XWPFRun optRun = optPara.createRun();
+        optRun.setFontSize(10);
+        optRun.setFontFamily("Arial");
+
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < options.size(); i++) {
+            sb.append(options.get(i).get("value"));
+            if (i < options.size() - 1) sb.append(", ");
+        }
+        optRun.setText(sb.toString());
+    }
+
+    // Helper: thay ________ thành ...
+    private String replaceBlanksWithDots(String text) {
+        return text.replaceAll("________", "...");
+    }
+
+    private void addDropdownSimple(XWPFDocument document, Map<String, Object> content) {
+        List<Map<String, Object>> options = (List<Map<String, Object>>) content.get("data");
+        if (options == null || options.isEmpty()) return;
+
+        String questionText = (String) content.get("questionText"); // Lấy câu hỏi gốc có [[pos_]]
+        if (questionText == null) return;
+
+        // Group options by positionId
+        Map<String, List<String>> optsByPos = new HashMap<>();
+        for (Map<String, Object> opt : options) {
+            String posId = (String) opt.get("positionId");
+            if (posId != null) {
+                optsByPos.computeIfAbsent(posId, k -> new ArrayList<>())
+                        .add(opt.get("value").toString());
+            }
+        }
+
+        XWPFParagraph para = document.createParagraph();
+        para.setIndentationLeft(720);
+        para.setSpacingAfter(100);
+
+        XWPFRun run = para.createRun();
+        run.setFontSize(10);
+        run.setFontFamily("Arial");
+
+        // Thay từng [[pos_]] bằng (a/ b/ c)
+        String result = questionText;
+        for (Map.Entry<String, List<String>> entry : optsByPos.entrySet()) {
+            String placeholder = "[[" + entry.getKey() + "]]";
+            StringBuilder dropdown = new StringBuilder("(");
+            List<String> opts = entry.getValue();
+            for (int i = 0; i < opts.size(); i++) {
+                dropdown.append(opts.get(i));
+                if (i < opts.size() - 1) dropdown.append("/ ");
+            }
+            dropdown.append(")");
+            result = result.replace(placeholder, dropdown.toString());
+        }
+
+        run.setText(result);
+    }
+
+    private void addWritingSimple(XWPFDocument document) {
+        XWPFParagraph instrPara = document.createParagraph();
+        instrPara.setIndentationLeft(720);
+        instrPara.setSpacingAfter(150);
+        XWPFRun instrRun = instrPara.createRun();
+        instrRun.setText("Write your answer:");
+        instrRun.setItalic(true);
+        instrRun.setFontSize(10);
+        instrRun.setFontFamily("Arial");
+
+        // 10 lines for writing
+        for (int i = 0; i < 10; i++) {
+            XWPFParagraph linePara = document.createParagraph();
+            linePara.setIndentationLeft(720);
+            linePara.setSpacingAfter(120);
+
+            XWPFRun lineRun = linePara.createRun();
+            lineRun.setText("_________________________________________________________________");
+            lineRun.setFontSize(10);
+        }
+    }
+
+    private void addOpenEndedSimple(XWPFDocument document) {
+        for (int i = 0; i < 3; i++) {
+            XWPFParagraph linePara = document.createParagraph();
+            linePara.setIndentationLeft(720);
+            linePara.setSpacingAfter(100);
+            XWPFRun lineRun = linePara.createRun();
+            lineRun.setText("_________________________________________________________________");
+            lineRun.setFontSize(10);
+        }
+    }
+
+    private void addSimpleAnswerSheet(XWPFDocument document, DailyChallenge challenge) {
+        // Title
+        XWPFParagraph titlePara = document.createParagraph();
+        titlePara.setAlignment(ParagraphAlignment.CENTER);
+        titlePara.setSpacingBefore(200);
+        titlePara.setSpacingAfter(300);
+
+        XWPFRun titleRun = titlePara.createRun();
+        titleRun.setText("ANSWER SHEET");
+        titleRun.setBold(true);
+        titleRun.setFontSize(14);
+        titleRun.setFontFamily("Arial");
+
+        // Count questions
+        int totalQuestions = 0;
+        if (challenge.getSections() != null) {
+            for (ChallengeSection section : challenge.getSections()) {
+                if (section.getQuestions() != null) {
+                    totalQuestions += section.getQuestions().size();
+                }
+            }
+        }
+
+        // Create answer sheet table
+        XWPFTable table = document.createTable(totalQuestions + 1, 2);
+        table.setWidth("100%");
+
+        // Set borders
+        CTTblPr tblPr = table.getCTTbl().getTblPr();
+        if (tblPr == null) tblPr = table.getCTTbl().addNewTblPr();
+        CTTblBorders borders = tblPr.addNewTblBorders();
+        borders.addNewTop().setVal(STBorder.SINGLE);
+        borders.addNewBottom().setVal(STBorder.SINGLE);
+        borders.addNewLeft().setVal(STBorder.SINGLE);
+        borders.addNewRight().setVal(STBorder.SINGLE);
+        borders.addNewInsideH().setVal(STBorder.SINGLE);
+        borders.addNewInsideV().setVal(STBorder.SINGLE);
+
+        // Header row
+        XWPFTableRow headerRow = table.getRow(0);
+
+        XWPFTableCell headerCell1 = headerRow.getCell(0);
+        headerCell1.setColor("4472C4");
+        headerCell1.setVerticalAlignment(XWPFTableCell.XWPFVertAlign.CENTER);
+        CTTcPr tcpr1 = headerCell1.getCTTc().addNewTcPr();
+        tcpr1.addNewTcW().setW(BigInteger.valueOf(2340));
+        XWPFParagraph p1 = headerCell1.getParagraphs().get(0);
+        p1.setAlignment(ParagraphAlignment.CENTER);
+        XWPFRun r1 = p1.createRun();
+        r1.setText("Question #");
+        r1.setBold(true);
+        r1.setFontSize(11);
+        r1.setFontFamily("Arial");
+        r1.setColor("FFFFFF");
+
+        XWPFTableCell headerCell2 = headerRow.getCell(1);
+        headerCell2.setColor("4472C4");
+        headerCell2.setVerticalAlignment(XWPFTableCell.XWPFVertAlign.CENTER);
+        CTTcPr tcpr2 = headerCell2.getCTTc().addNewTcPr();
+        tcpr2.addNewTcW().setW(BigInteger.valueOf(7020));
+        XWPFParagraph p2 = headerCell2.getParagraphs().get(0);
+        p2.setAlignment(ParagraphAlignment.CENTER);
+        XWPFRun r2 = p2.createRun();
+        r2.setText("Your Answer");
+        r2.setBold(true);
+        r2.setFontSize(11);
+        r2.setFontFamily("Arial");
+        r2.setColor("FFFFFF");
+
+        // Data rows
+        for (int i = 1; i <= totalQuestions; i++) {
+            XWPFTableRow row = table.getRow(i);
+
+            XWPFTableCell cell1 = row.getCell(0);
+            cell1.setVerticalAlignment(XWPFTableCell.XWPFVertAlign.CENTER);
+            if (i % 2 == 0) cell1.setColor("F2F2F2");
+            XWPFParagraph pa1 = cell1.getParagraphs().get(0);
+            pa1.setAlignment(ParagraphAlignment.CENTER);
+            XWPFRun ru1 = pa1.createRun();
+            ru1.setText(String.valueOf(i));
+            ru1.setFontSize(10);
+            ru1.setFontFamily("Arial");
+
+            XWPFTableCell cell2 = row.getCell(1);
+            cell2.setVerticalAlignment(XWPFTableCell.XWPFVertAlign.CENTER);
+            if (i % 2 == 0) cell2.setColor("F2F2F2");
+        }
+    }
+
+    private void addPageBreak(XWPFDocument document) {
+        XWPFParagraph para = document.createParagraph();
+        para.setPageBreak(true);
+    }
+
+    private String cleanQuestionText(String text) {
+        return text.replaceAll("\\[\\[pos_[^\\]]+\\]\\]", "________");
+    }
+
+    private Map<String, Object> parseQuestionContent(String jsonContent) {
+        if (jsonContent == null || jsonContent.trim().isEmpty()) {
+            return new HashMap<>();
+        }
+        try {
+            ObjectMapper objectMapper = new ObjectMapper();
+            return objectMapper.readValue(jsonContent, new TypeReference<Map<String, Object>>() {});
+        } catch (Exception e) {
+            return new HashMap<>();
+        }
     }
 }

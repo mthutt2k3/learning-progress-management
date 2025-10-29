@@ -1,5 +1,6 @@
 package com.learning.progress.dto.lesson;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.learning.progress.common.Const;
 import jakarta.persistence.Column;
 import jakarta.validation.constraints.Min;
@@ -9,6 +10,7 @@ import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 @Data
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class SyncLessonRequest {
 
     // Nullable cho lesson mới, required khi delete/update

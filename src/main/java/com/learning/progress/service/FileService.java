@@ -44,4 +44,6 @@ public interface FileService {
                                             String sheetName,
                                             ValidationResult<T> validationResult,
                                             Class<T> clazz);
+
+    byte[] generateChallengeWorksheet(Long challengeId);
 }
