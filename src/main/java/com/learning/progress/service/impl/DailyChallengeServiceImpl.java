@@ -33,6 +33,7 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
     private final DailyChallengeMapper dailyChallengeMapper;
     private final AppValidator appValidator;
     private final JwtUtil jwtUtil;
+    private final FileService fileService;
 
     /* --------------------------------------------------------
      * CREATE
@@ -332,5 +333,21 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
     private ApiException notFound(String traceId, String msg, Object id) {
         log.error("[{}] Not found: {} (id={})", traceId, msg, id);
         return new ApiException(msg, HttpStatus.NOT_FOUND.value());
+    }
+
+    @Override
+    public byte[] exportChallengeWorksheet(Long challengeId) {
+        String traceId = TraceUtil.getTraceId();
+        log.info("[{}] Exporting worksheet for challenge id: {}", traceId, challengeId);
+
+        // Verify challenge exists and user has access
+        DailyChallenge challenge = dailyChallengeRepository.findByIdAndDeletedAtIsNull(challengeId)
+                .orElseThrow(() -> notFound(traceId, Const.CHALLENGE.NOT_FOUND, challengeId));
+
+        appValidator.validateUserAccessToClass(
+                challenge.getClassLesson().getClassChapter().getClazz().getId());
+
+        // Generate worksheet using FileService
+        return fileService.generateChallengeWorksheet(challengeId);
     }
 }

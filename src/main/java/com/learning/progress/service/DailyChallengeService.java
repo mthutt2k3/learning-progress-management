@@ -22,4 +22,7 @@ public interface DailyChallengeService {
     DailyChallengeResponse updateChallengeStatus(Long id, ChallengeStatus challengeStatus);
 
     DailyChallengeHierarchyDTO getChallengeHierarchy(Long challengeId);
+
+    byte[] exportChallengeWorksheet(Long challengeId);
+
 }
