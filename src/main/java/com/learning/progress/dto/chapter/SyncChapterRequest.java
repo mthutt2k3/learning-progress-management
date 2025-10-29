@@ -1,5 +1,6 @@
 package com.learning.progress.dto.chapter;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.learning.progress.common.Const;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
@@ -8,6 +9,7 @@ import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 @Data
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class SyncChapterRequest {
     @NotNull(message = Const.CHAPTER.ID_REQUIRED, groups = Deleted.class)
     private Long id; // Required cho delete/update, null cho new
