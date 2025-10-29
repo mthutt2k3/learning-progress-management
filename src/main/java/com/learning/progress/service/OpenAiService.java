@@ -21,4 +21,5 @@ public interface OpenAiService {
 
     GenerateDistractorsResponse generateDistractors(GenerateDistractorsRequest request);
 
+    List<SectionWithQuestionsDto> parseQuestionsFromText(String textContent, String description);
 }

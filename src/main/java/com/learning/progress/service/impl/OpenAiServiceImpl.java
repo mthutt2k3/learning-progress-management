@@ -1258,4 +1258,39 @@ public class OpenAiServiceImpl implements OpenAiService {
             throw new RuntimeException("Failed to parse distractors: " + e.getMessage(), e);
         }
     }
+
+    @Override
+    public List<SectionWithQuestionsDto> parseQuestionsFromText(
+            String textContent,
+            String description) {
+
+        log.info("Starting to parse questions from text input (length: {})", textContent.length());
+
+        // 1. Validate input
+        if (textContent == null || textContent.trim().isEmpty()) {
+            throw new RuntimeException("Text content cannot be empty");
+        }
+
+        // 2. Build parsing prompt (reuse existing method)
+        String prompt = buildParsingPrompt(textContent, description);
+
+        // 3. Call OpenAI to parse and structure
+        String aiResponse = callOpenAI(prompt);
+
+        // 4. Parse response into sections (reuse existing method)
+        List<SectionWithQuestionsDto> sections = parseMultipleSectionsResponse(aiResponse);
+
+        // 5. Set all IDs to null (not saved to DB)
+        for (SectionWithQuestionsDto section : sections) {
+            section.getSection().setId(null);
+            for (QuestionDto question : section.getQuestions()) {
+                question.setId(null);
+            }
+        }
+
+        log.info("Successfully parsed {} sections with total {} questions from text",
+                sections.size(), sections.stream().mapToInt(s -> s.getQuestions().size()).sum());
+
+        return sections;
+    }
 }
