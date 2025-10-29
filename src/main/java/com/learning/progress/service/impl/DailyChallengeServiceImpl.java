@@ -198,6 +198,69 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
     }
 
     /* --------------------------------------------------------
+     * HIERARCHY INFO
+     * -------------------------------------------------------- */
+    @Override
+    public DailyChallengeHierarchyDTO getChallengeHierarchy(Long challengeId) {
+        String traceId = TraceUtil.getTraceId();
+        log.info("[{}] Getting challenge hierarchy for id: {}", traceId, challengeId);
+
+        DailyChallenge challenge = dailyChallengeRepository.findByIdAndDeletedAtIsNull(challengeId)
+                .orElseThrow(() -> notFound(traceId, Const.CHALLENGE.NOT_FOUND, challengeId));
+
+        appValidator.validateUserAccessToClass(challenge.getClassLesson().getClassChapter().getClazz().getId());
+
+        // Extract entities from hierarchy
+        ClassLesson classLesson = challenge.getClassLesson();
+        ClassChapter classChapter = classLesson.getClassChapter();
+        Clazz clazz = classChapter.getClazz();
+        Syllabus syllabus = clazz.getSyllabus();
+        Level level = syllabus != null ? syllabus.getLevel() : null;
+
+        // Build response DTO
+        return DailyChallengeHierarchyDTO.builder()
+                .level(buildLevelInfo(level))
+                .chapter(buildChapterInfo(classChapter))
+                .lesson(buildLessonInfo(classLesson))
+                .build();
+    }
+
+    private DailyChallengeHierarchyDTO.LevelInfo buildLevelInfo(Level level) {
+        if (level == null) return null;
+
+        return DailyChallengeHierarchyDTO.LevelInfo.builder()
+                .id(level.getId())
+                .levelName(level.getLevelName())
+                .levelCode(level.getLevelCode())
+                .description(level.getDescription())
+                .orderNumber(level.getOrderNumber())
+                .status(level.getStatus().toString())
+                .build();
+    }
+
+    private DailyChallengeHierarchyDTO.ChapterInfo buildChapterInfo(ClassChapter chapter) {
+        if (chapter == null) return null;
+
+        return DailyChallengeHierarchyDTO.ChapterInfo.builder()
+                .id(chapter.getId())
+                .chapterName(chapter.getClassChapterName())
+                .chapterCode(chapter.getClassChapterCode())
+                .orderNumber(chapter.getOrderNumber())
+                .build();
+    }
+
+    private DailyChallengeHierarchyDTO.LessonInfo buildLessonInfo(ClassLesson lesson) {
+        if (lesson == null) return null;
+
+        return DailyChallengeHierarchyDTO.LessonInfo.builder()
+                .id(lesson.getId())
+                .lessonName(lesson.getClassLessonName())
+                .lessonContent(lesson.getClassLessonContent())
+                .orderNumber(lesson.getOrderNumber())
+                .build();
+    }
+
+    /* --------------------------------------------------------
      * VALIDATION HELPERS
      * -------------------------------------------------------- */
     private void validateUpdateDailyChallenge(UpdateDailyChallengeDTO challenge) {
