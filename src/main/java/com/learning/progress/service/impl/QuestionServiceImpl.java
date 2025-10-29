@@ -1,6 +1,7 @@
 package com.learning.progress.service.impl;
 
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.learning.progress.common.ChallengeStatus;
 import com.learning.progress.common.Const;
 import com.learning.progress.common.QuestionType;
 import com.learning.progress.dto.challenge.section.QuestionDto;
@@ -284,6 +285,16 @@ public class QuestionServiceImpl implements QuestionService {
 
     private void validateBulkRequests(List<QuestionDto> deleteRequests, List<QuestionDto> nonDeletedRequests,
                                       Set<Long> existingActiveIds, ChallengeSection section) {
+        // ==== ✅ CHECK PUBLISHED → block add/delete ====
+        boolean hasAdd = nonDeletedRequests.stream().anyMatch(dto -> dto.getId() == null);
+        boolean hasDelete = deleteRequests.stream().anyMatch(QuestionDto::isToBeDeleted);
+
+        if ((hasAdd || hasDelete) && section.getChallenge().getChallengeStatus() == ChallengeStatus.PUBLISHED) {
+            throw new ApiException(
+                    "Challenge is PUBLISH. Cannot add or delete questions.",
+                    HttpStatus.BAD_REQUEST.value()
+            );
+        }
 
         for (QuestionDto deleteDto : deleteRequests) {
             Set<ConstraintViolation<QuestionDto>> violations = validator.validate(deleteDto, QuestionDto.Deleted.class);
