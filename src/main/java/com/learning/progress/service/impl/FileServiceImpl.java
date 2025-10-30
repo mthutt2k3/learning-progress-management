@@ -1,7 +1,5 @@
 package com.learning.progress.service.impl;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.learning.progress.common.Const;
 import com.learning.progress.dto.excel.ImportTeacherDTO;
 import com.learning.progress.dto.excel.ImportStudentToClass;
@@ -19,7 +17,6 @@ import com.learning.progress.repository.DailyChallengeRepository;
 import com.learning.progress.service.BlobSasService;
 import com.learning.progress.service.FileService;
 import com.learning.progress.service.OpenAiService;
-import com.learning.progress.util.TraceUtil;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.wp.usermodel.HeaderFooterType;
 import org.apache.poi.xssf.usermodel.XSSFColor;
@@ -72,8 +69,6 @@ public class FileServiceImpl implements FileService {
 
     @Value("${azure.storage.lesson-in-class-template}")
     private String lessonInClassTemplate;
-
-    private OpenAiService openAiService;
 
     XSSFColor errorColor = new XSSFColor(new java.awt.Color(251, 114, 114), null);
     XSSFColor successColor = new XSSFColor(new java.awt.Color(78, 250, 37), null);
@@ -2062,7 +2057,7 @@ public class FileServiceImpl implements FileService {
             ChallengeSection section = challenge.getSections().get(sectionIdx);
 
             // ✅ Hiển thị SECTION HEADER + SECTION CONTENT chỉ khi challengeType là RE
-            if ("RE".equalsIgnoreCase(challengeType) || "LI".equalsIgnoreCase(challengeType)) {
+            if ("RE".equalsIgnoreCase(challengeType)) {
 
                 // Section title (nếu có)
                 if (section.getSectionTitle() != null && !section.getSectionTitle().trim().isEmpty()) {
@@ -2077,32 +2072,13 @@ public class FileServiceImpl implements FileService {
                     run.setFontSize(12);
                     run.setFontFamily("Arial");
                 }
-
-                // Section content/instructions (nếu có)
-                if (section.getSectionsContent() != null && !section.getSectionsContent().trim().isEmpty()) {
-                    String prompt = """
-                            You are an expert English teacher. Your task is to clean and rephrase the following question text for printing in a worksheet.
-
-                            Rules:
-                            - Remove ALL HTML tags like <p>, <b>, <i>, &nbsp;, etc.
-                            - Fix grammar, spacing, and punctuation.
-                            - Keep the original meaning 100% intact.
-                            - Return ONLY the clean plain text. No explanations, no markdown, no quotes.
-
-                            Input:
-                            PLACEHOLDER
-                            """.replace("PLACEHOLDER", section.getSectionsContent());
-
-                    String aiResponse = openAiService.callOpenAI(prompt);
-
-                    XWPFParagraph contentPara = document.createParagraph();
-                    contentPara.setSpacingAfter(200);
-                    XWPFRun run = contentPara.createRun();
-                    run.setText(aiResponse);
-                    run.setItalic(true);
-                    run.setFontSize(10);
-                    run.setFontFamily("Arial");
-                }
+                XWPFParagraph contentPara = document.createParagraph();
+                contentPara.setSpacingAfter(200);
+                XWPFRun run = contentPara.createRun();
+                run.setText(cleanHtmlTags(section.getSectionsContent()));
+                run.setItalic(true);
+                run.setFontSize(10);
+                run.setFontFamily("Arial");
             }
 
             // Questions in section
@@ -2181,7 +2157,6 @@ public class FileServiceImpl implements FileService {
         scoreRun.setFontFamily("Arial");
     }
 
-    // ===== MULTIPLE_CHOICE: câu hỏi, điểm số, các đáp án, kẹp theo thứ tự là a,b,c,d =====
     private void addMultipleChoiceQuestion(XWPFDocument document, String questionText, Map<String, Object> content) {
         // Question text
         XWPFParagraph qPara = document.createParagraph();
@@ -2214,7 +2189,7 @@ public class FileServiceImpl implements FileService {
                 letterRun.setFontFamily("Arial");
 
                 XWPFRun optRun = optPara.createRun();
-                optRun.setText(opt.get("value").toString());
+                optRun.setText(cleanHtmlTags(opt.get("value").toString())); // ✅ THÊM cleanHtmlTags
                 optRun.setFontSize(10);
                 optRun.setFontFamily("Arial");
             }
@@ -2254,7 +2229,7 @@ public class FileServiceImpl implements FileService {
                 letterRun.setFontFamily("Arial");
 
                 XWPFRun optRun = optPara.createRun();
-                optRun.setText(opt.get("value").toString());
+                optRun.setText(cleanHtmlTags(opt.get("value").toString()));
                 optRun.setFontSize(10);
                 optRun.setFontFamily("Arial");
             }
@@ -2313,7 +2288,6 @@ public class FileServiceImpl implements FileService {
         qRun.setFontFamily("Arial");
     }
 
-    // ===== DROPDOWN: she (đáp án 1/ đáp án 2/ đáp án 3) a teacher =====
     private void addDropdownQuestion(XWPFDocument document, String questionText, Map<String, Object> content) {
         List<Map<String, Object>> options = (List<Map<String, Object>>) content.get("data");
         if (options == null || options.isEmpty()) {
@@ -2326,7 +2300,9 @@ public class FileServiceImpl implements FileService {
         for (Map<String, Object> opt : options) {
             String posId = (String) opt.get("positionId");
             if (posId != null) {
-                optsByPos.computeIfAbsent(posId, k -> new ArrayList<>()).add(opt.get("value").toString());
+                // ✅ Clean HTML trong value trước khi add
+                optsByPos.computeIfAbsent(posId, k -> new ArrayList<>())
+                        .add(cleanHtmlTags(opt.get("value").toString()));
             }
         }
 
@@ -2353,7 +2329,6 @@ public class FileServiceImpl implements FileService {
         qRun.setFontFamily("Arial");
     }
 
-    // ===== DRAG_AND_DROP: she ... a .... (xuống dòng) is, apple, teacher, him =====
     private void addDragAndDropQuestion(XWPFDocument document, String questionText, Map<String, Object> content) {
         // Display question với ... thay cho placeholder
         String displayText = questionText.replaceAll("\\[\\[pos_\\w+\\]\\]", "........");
@@ -2383,7 +2358,7 @@ public class FileServiceImpl implements FileService {
 
             List<String> optValues = new ArrayList<>();
             for (Map<String, Object> opt : options) {
-                optValues.add(opt.get("value").toString());
+                optValues.add(cleanHtmlTags(opt.get("value").toString())); // ✅ THÊM cleanHtmlTags
             }
 
             XWPFRun optRun = optPara.createRun();
@@ -2393,7 +2368,6 @@ public class FileServiceImpl implements FileService {
         }
     }
 
-    // ===== REARRANGE: is/she/teacher/a (xuống dòng tạo 1 dòng trống) =====
     private void addRearrangeQuestion(XWPFDocument document, String questionText, Map<String, Object> content) {
         List<Map<String, Object>> items = (List<Map<String, Object>>) content.get("data");
         if (items == null || items.isEmpty()) {
@@ -2404,7 +2378,7 @@ public class FileServiceImpl implements FileService {
         // Build display text: word1/word2/word3
         List<String> words = new ArrayList<>();
         for (Map<String, Object> item : items) {
-            words.add(item.get("value").toString());
+            words.add(cleanHtmlTags(item.get("value").toString())); // ✅ THÊM cleanHtmlTags
         }
 
         XWPFParagraph qPara = document.createParagraph();
