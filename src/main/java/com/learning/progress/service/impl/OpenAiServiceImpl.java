@@ -993,7 +993,8 @@ public class OpenAiServiceImpl implements OpenAiService {
         prompt.append("- Each ID must be UNIQUE across all positions\n");
     }
 
-    private String callOpenAI(String prompt) {
+    @Override
+    public String callOpenAI(String prompt) {
         String url = UriComponentsBuilder
                 .fromHttpUrl(endpoint + "/openai/deployments/gpt-4o-mini/chat/completions")
                 .queryParam("api-version", API_VERSION)
