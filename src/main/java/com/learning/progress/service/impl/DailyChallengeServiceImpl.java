@@ -86,6 +86,7 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
                 traceId, classId, page, size, sortBy, sortDir);
 
         appValidator.validatePaginationParams(page, size);
+        // sortBy/sortDir không còn dùng – vẫn validate để tránh lỗi cũ
         appValidator.validateSortParams(List.of("createdAt", "challengeName", "classLessonId"), sortBy, sortDir);
         appValidator.validateUserAccessToClass(classId);
 
@@ -93,8 +94,8 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
                 .filter(c -> c.getDeletedAt() == null)
                 .orElseThrow(() -> new ApiException(Const.CLASS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
-        Pageable pageable = PageRequest.of(page, size,
-                Sort.by(sortDir.equalsIgnoreCase("asc") ? Sort.Direction.ASC : Sort.Direction.DESC, sortBy));
+        // Không truyền Sort → query sẽ dùng ORDER BY cc.id, cl.orderNumber
+        Pageable pageable = PageRequest.of(page, size);
 
         boolean isTeacher = appValidator.hasRole(RoleName.TEACHER);
         Page<ClassLesson> lessonPage = dailyChallengeRepository.findLessonsWithChallengesByClassId(

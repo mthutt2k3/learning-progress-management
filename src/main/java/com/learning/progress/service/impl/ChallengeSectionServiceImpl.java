@@ -218,6 +218,11 @@ public class ChallengeSectionServiceImpl implements ChallengeSectionService {
 
         List<SectionWithQuestionsDto> data = mapSectionsToDtoWithQuestions(sectionPage.getContent());
 
+        long totalQuestions = data.stream()
+                .filter(s -> s.getQuestions() != null)
+                .mapToLong(s -> s.getQuestions().size())
+                .sum();
+
         cacheService.cacheObject(cacheKey, data, CacheService.SECTIONS_LIST_TTL_MINUTES);
         log.debug("Cache stored for sections list: challengeId={}, page={}", challengeId, page);
 
@@ -225,7 +230,7 @@ public class ChallengeSectionServiceImpl implements ChallengeSectionService {
         return DataResponse.success(data, Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL)
                 .page(page)
                 .size(size)
-                .totalElements(sectionPage.getTotalElements())
+                .totalElements(totalQuestions)
                 .totalPages(sectionPage.getTotalPages());
     }
 

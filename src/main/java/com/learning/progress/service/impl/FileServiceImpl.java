@@ -18,6 +18,7 @@ import com.learning.progress.exception.ApiException;
 import com.learning.progress.repository.DailyChallengeRepository;
 import com.learning.progress.service.BlobSasService;
 import com.learning.progress.service.FileService;
+import com.learning.progress.service.OpenAiService;
 import com.learning.progress.util.TraceUtil;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.wp.usermodel.HeaderFooterType;
@@ -33,6 +34,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.*;
 import java.lang.reflect.Field;
+import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.file.Files;
 import java.nio.file.Paths;
@@ -71,6 +73,8 @@ public class FileServiceImpl implements FileService {
     @Value("${azure.storage.lesson-in-class-template}")
     private String lessonInClassTemplate;
 
+    private OpenAiService openAiService;
+
     XSSFColor errorColor = new XSSFColor(new java.awt.Color(251, 114, 114), null);
     XSSFColor successColor = new XSSFColor(new java.awt.Color(78, 250, 37), null);
     @Autowired
@@ -104,8 +108,8 @@ public class FileServiceImpl implements FileService {
 
         ExcelSheetSpec importSheet = new ExcelSheetSpec("Import Data", columns);
         importSheet.setSampleData(List.of(
-                List.of("student1@example.com", "John Doe", "STUDENT", "parent1@example.com","Le Duc Dung", "0987654321", "Bố", "2000-01-01", "123 Main St", "0123456789", "MALE", "LEVEL_CODE"),
-                List.of("student2@example.com", "Alice Smith", "TEST_TAKER", "parent2@example.com","Le Duc Dung", "0987654321", "Mẹ", "2000-01-01", "123 Main St", "0123456789", "MALE", "LEVEL_CODE")
+                List.of("student1@example.com", "John Doe", "STUDENT", "parent1@example.com", "Le Duc Dung", "0987654321", "Bố", "2000-01-01", "123 Main St", "0123456789", "MALE", "LEVEL_CODE"),
+                List.of("student2@example.com", "Alice Smith", "TEST_TAKER", "parent2@example.com", "Le Duc Dung", "0987654321", "Mẹ", "2000-01-01", "123 Main St", "0123456789", "MALE", "LEVEL_CODE")
         ));
 
         byte[] templateFile = generateTemplate(List.of(sampleSheet, importSheet));
@@ -821,7 +825,8 @@ public class FileServiceImpl implements FileService {
                 SimpleDateFormat sdf = new SimpleDateFormat(pattern);
                 sdf.setLenient(false); // Strict parsing
                 return sdf.parse(dateStr);
-            } catch (ParseException ignored) {}
+            } catch (ParseException ignored) {
+            }
         }
 
         throw new ApiException(
@@ -869,7 +874,8 @@ public class FileServiceImpl implements FileService {
                     for (String pattern : patterns) {
                         try {
                             return new SimpleDateFormat(pattern).parse(str);
-                        } catch (ParseException ignored) {}
+                        } catch (ParseException ignored) {
+                        }
                     }
                     throw new IllegalArgumentException("Không parse được ngày: " + str);
                 }
@@ -1897,28 +1903,19 @@ public class FileServiceImpl implements FileService {
             pageMar.setBottom(BigInteger.valueOf(1440));
 
             // Header
-            addSimpleHeader(document, challenge.getChallengeName());
+            addChallengeHeader(document, challenge.getChallengeName());
 
             // Footer with page numbers
-            addSimpleFooter(document);
+            addChallengeFooter(document);
 
             // Title
-            addCenteredTitle(document, challenge.getChallengeName());
+            addChallengeTitle(document, challenge.getChallengeName());
 
             // Student info table
-            addStudentInfoTable(document, challenge);
+            addStudentInfoSection(document, challenge);
 
-            // Instructions
-//            addSimpleInstructions(document);
-
-            // Questions
+            // Questions - PHẦN QUAN TRỌNG
             addAllQuestions(document, challenge);
-
-            // Page break before answer sheet
-            addPageBreak(document);
-
-            // Answer sheet
-//            addSimpleAnswerSheet(document, challenge);
 
             // Write to byte array
             ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -1935,7 +1932,9 @@ public class FileServiceImpl implements FileService {
         }
     }
 
-    private void addSimpleHeader(XWPFDocument document, String challengeName) {
+// ===== HELPER METHODS =====
+
+    private void addChallengeHeader(XWPFDocument document, String challengeName) {
         XWPFHeader header = document.createHeader(HeaderFooterType.DEFAULT);
         XWPFParagraph headerPara = header.createParagraph();
         headerPara.setAlignment(ParagraphAlignment.CENTER);
@@ -1948,7 +1947,7 @@ public class FileServiceImpl implements FileService {
         headerRun.setFontFamily("Arial");
     }
 
-    private void addSimpleFooter(XWPFDocument document) {
+    private void addChallengeFooter(XWPFDocument document) {
         XWPFFooter footer = document.createFooter(HeaderFooterType.DEFAULT);
         XWPFParagraph footerPara = footer.createParagraph();
         footerPara.setAlignment(ParagraphAlignment.CENTER);
@@ -1970,7 +1969,7 @@ public class FileServiceImpl implements FileService {
         footerPara.getCTP().addNewFldSimple().setInstr("NUMPAGES \\* MERGEFORMAT");
     }
 
-    private void addCenteredTitle(XWPFDocument document, String title) {
+    private void addChallengeTitle(XWPFDocument document, String title) {
         XWPFParagraph para = document.createParagraph();
         para.setAlignment(ParagraphAlignment.CENTER);
         para.setSpacingAfter(400);
@@ -1982,7 +1981,7 @@ public class FileServiceImpl implements FileService {
         run.setFontFamily("Arial");
     }
 
-    private void addStudentInfoTable(XWPFDocument document, DailyChallenge challenge) {
+    private void addStudentInfoSection(XWPFDocument document, DailyChallenge challenge) {
         // Calculate totals
         double totalScore = 0;
         int totalQuestions = 0;
@@ -2052,350 +2051,289 @@ public class FileServiceImpl implements FileService {
         spacing.setSpacingAfter(300);
     }
 
-    private void addSimpleInstructions(XWPFDocument document) {
-        XWPFParagraph titlePara = document.createParagraph();
-        titlePara.setSpacingBefore(200);
-        titlePara.setSpacingAfter(100);
-
-        XWPFRun titleRun = titlePara.createRun();
-        titleRun.setText("INSTRUCTIONS:");
-        titleRun.setBold(true);
-        titleRun.setFontSize(11);
-        titleRun.setFontFamily("Arial");
-
-        String[] instructions = {
-                "• Read each question carefully before answering",
-                "• Write your answers clearly and legibly",
-                "• For multiple choice: Write the letter of your answer (A, B, C, or D)",
-                "• For fill-in-the-blank: Write your answer in the space provided",
-                "• Double-check your work before submitting"
-        };
-
-        for (String instruction : instructions) {
-            XWPFParagraph para = document.createParagraph();
-            para.setSpacingAfter(80);
-            para.setIndentationLeft(360);
-            XWPFRun run = para.createRun();
-            run.setText(instruction);
-            run.setFontSize(10);
-            run.setFontFamily("Arial");
-        }
-
-        XWPFParagraph spacing = document.createParagraph();
-        spacing.setSpacingAfter(200);
-    }
-
     private void addAllQuestions(XWPFDocument document, DailyChallenge challenge) {
         if (challenge.getSections() == null) return;
 
         int questionNumber = 1;
+        String challengeType = challenge.getChallengeType() != null ? challenge.getChallengeType().toString() : "";
+
 
         for (int sectionIdx = 0; sectionIdx < challenge.getSections().size(); sectionIdx++) {
             ChallengeSection section = challenge.getSections().get(sectionIdx);
 
-            // Section header (if exists)
-            if (section.getSectionTitle() != null && !section.getSectionTitle().trim().isEmpty()) {
-                XWPFParagraph sectionPara = document.createParagraph();
-                sectionPara.setSpacingBefore(400);
-                sectionPara.setSpacingAfter(200);
-                sectionPara.setBorderBottom(Borders.SINGLE);
+            // ✅ Hiển thị SECTION HEADER + SECTION CONTENT chỉ khi challengeType là RE
+            if ("RE".equalsIgnoreCase(challengeType) || "LI".equalsIgnoreCase(challengeType)) {
 
-                XWPFRun run = sectionPara.createRun();
-                run.setText("SECTION " + (sectionIdx + 1) + ": " + section.getSectionTitle().toUpperCase());
-                run.setBold(true);
-                run.setFontSize(12);
-                run.setFontFamily("Arial");
-            }
+                // Section title (nếu có)
+                if (section.getSectionTitle() != null && !section.getSectionTitle().trim().isEmpty()) {
+                    XWPFParagraph sectionPara = document.createParagraph();
+                    sectionPara.setSpacingBefore(400);
+                    sectionPara.setSpacingAfter(200);
+                    sectionPara.setBorderBottom(Borders.SINGLE);
 
-            // Section content/instructions (if exists)
-            if (section.getSectionsContent() != null && !section.getSectionsContent().trim().isEmpty()) {
-                XWPFParagraph contentPara = document.createParagraph();
-                contentPara.setSpacingAfter(200);
-                XWPFRun run = contentPara.createRun();
-                run.setText(section.getSectionsContent());
-                run.setItalic(true);
-                run.setFontSize(10);
-                run.setFontFamily("Arial");
+                    XWPFRun run = sectionPara.createRun();
+                    run.setText("SECTION " + (sectionIdx + 1) + ": " + section.getSectionTitle().toUpperCase());
+                    run.setBold(true);
+                    run.setFontSize(12);
+                    run.setFontFamily("Arial");
+                }
+
+                // Section content/instructions (nếu có)
+                if (section.getSectionsContent() != null && !section.getSectionsContent().trim().isEmpty()) {
+                    String prompt = """
+                            You are an expert English teacher. Your task is to clean and rephrase the following question text for printing in a worksheet.
+
+                            Rules:
+                            - Remove ALL HTML tags like <p>, <b>, <i>, &nbsp;, etc.
+                            - Fix grammar, spacing, and punctuation.
+                            - Keep the original meaning 100% intact.
+                            - Return ONLY the clean plain text. No explanations, no markdown, no quotes.
+
+                            Input:
+                            PLACEHOLDER
+                            """.replace("PLACEHOLDER", section.getSectionsContent());
+
+                    String aiResponse = openAiService.callOpenAI(prompt);
+
+                    XWPFParagraph contentPara = document.createParagraph();
+                    contentPara.setSpacingAfter(200);
+                    XWPFRun run = contentPara.createRun();
+                    run.setText(aiResponse);
+                    run.setItalic(true);
+                    run.setFontSize(10);
+                    run.setFontFamily("Arial");
+                }
             }
 
             // Questions in section
             if (section.getQuestions() != null) {
                 for (Question question : section.getQuestions()) {
-                    addSimpleQuestion(document, question, questionNumber);
+                    addQuestionByType(document, question, questionNumber);
                     questionNumber++;
                 }
             }
         }
     }
 
-    private void addSimpleQuestion(XWPFDocument document, Question question, int questionNumber) {
+    private void addQuestionByType(XWPFDocument document, Question question, int questionNumber) {
+        String questionType = question.getQuestionType().toString();
+
         // Question header
-        XWPFParagraph questionPara = document.createParagraph();
-        questionPara.setSpacingBefore(300);
-        questionPara.setSpacingAfter(100);
-
-        XWPFRun qNumRun = questionPara.createRun();
-        qNumRun.setText("Question " + questionNumber + ". ");
-        qNumRun.setBold(true);
-        qNumRun.setFontSize(11);
-        qNumRun.setFontFamily("Arial");
-
-        String questionText = cleanQuestionText(question.getQuestionText());
-        XWPFRun qTextRun = questionPara.createRun();
-        qTextRun.setText(questionText);
-        qTextRun.setFontSize(10);
-        qTextRun.setFontFamily("Arial");
-
-        XWPFRun qScoreRun = questionPara.createRun();
-        qScoreRun.setText(" (" + question.getScore() + " " +
-                (question.getScore().doubleValue() == 1 ? "point" : "points") + ")");
-        qScoreRun.setBold(true);
-        qScoreRun.setFontSize(9);
-        qScoreRun.setFontFamily("Arial");
-        qScoreRun.setColor("0066CC");
+        addQuestionHeader(document, questionNumber, question.getScore());
 
         // Parse content
         Map<String, Object> content = question.getQuestionContentJson();
+        String questionText = question.getQuestionText();
 
-        // Add answer area based on type
-        String questionType = question.getQuestionType().toString();
+        // Route to specific handler
         switch (questionType) {
             case "MULTIPLE_CHOICE":
-                addMultipleChoiceSimple(document, content);
+                addMultipleChoiceQuestion(document, questionText, content);
                 break;
             case "MULTIPLE_SELECT":
-                addMultipleSelectSimple(document, content);
+                addMultipleSelectQuestion(document, questionText, content);
                 break;
             case "TRUE_OR_FALSE":
-                addTrueFalseSimple(document);
+                addTrueFalseQuestion(document, questionText, content);
                 break;
             case "FILL_IN_THE_BLANK":
-                addFillInTheBlankSimple(document, questionText);
+                addFillInTheBlankQuestion(document, questionText);
                 break;
             case "DROPDOWN":
-                addDropdownSimple(document, content);
+                addDropdownQuestion(document, questionText, content);
                 break;
             case "DRAG_AND_DROP":
-                addDragAndDropSimple(document, content, questionText);
+                addDragAndDropQuestion(document, questionText, content);
                 break;
             case "REARRANGE":
-                addRearrangeSimple(document, content);
+                addRearrangeQuestion(document, questionText, content);
                 break;
             case "REWRITE":
+                addRewriteQuestion(document, questionText);
+                break;
             case "WRITING":
-                addWritingSimple(document);
+                addWritingQuestion(document, questionText);
                 break;
             default:
-                addOpenEndedSimple(document);
+                addDefaultQuestion(document, questionText);
         }
+
+        // Add spacing after question
+        XWPFParagraph spacing = document.createParagraph();
+        spacing.setSpacingAfter(200);
     }
 
-    private void addMultipleChoiceSimple(XWPFDocument document, Map<String, Object> content) {
-        List<Map<String, Object>> options = (List<Map<String, Object>>) content.get("data");
-        if (options == null) return;
+    private void addQuestionHeader(XWPFDocument document, int questionNumber, BigDecimal score) {
+        XWPFParagraph headerPara = document.createParagraph();
+        headerPara.setSpacingBefore(300);
+        headerPara.setSpacingAfter(100);
 
-        for (int i = 0; i < options.size(); i++) {
-            Map<String, Object> opt = options.get(i);
-            String letter = String.valueOf((char) ('A' + i));
+        XWPFRun numRun = headerPara.createRun();
+        numRun.setText("Question " + questionNumber + ". ");
+        numRun.setBold(true);
+        numRun.setFontSize(11);
+        numRun.setFontFamily("Arial");
 
-            XWPFParagraph para = document.createParagraph();
-            para.setIndentationLeft(720);
-            para.setSpacingAfter(80);
-
-            XWPFRun letterRun = para.createRun();
-            letterRun.setText(letter + ". ");
-            letterRun.setBold(true);
-            letterRun.setFontSize(10);
-            letterRun.setFontFamily("Arial");
-
-            XWPFRun optRun = para.createRun();
-            optRun.setText(opt.get("value").toString());
-            optRun.setFontSize(10);
-            optRun.setFontFamily("Arial");
-        }
-
-        // Answer line
-        XWPFParagraph answerPara = document.createParagraph();
-        answerPara.setIndentationLeft(720);
-        answerPara.setSpacingBefore(150);
-        answerPara.setSpacingAfter(100);
+        XWPFRun scoreRun = headerPara.createRun();
+        scoreRun.setText("(" + score + " " + (score.doubleValue() == 1 ? "point" : "points") + ")");
+        scoreRun.setBold(true);
+        scoreRun.setFontSize(9);
+        scoreRun.setFontFamily("Arial");
     }
 
-    private void addMultipleSelectSimple(XWPFDocument document, Map<String, Object> content) {
-        List<Map<String, Object>> options = (List<Map<String, Object>>) content.get("data");
-        if (options == null) return;
-
-        XWPFParagraph instrPara = document.createParagraph();
-        instrPara.setIndentationLeft(720);
-        instrPara.setSpacingAfter(80);
-        XWPFRun instrRun = instrPara.createRun();
-        instrRun.setText("(Select all that apply)");
-        instrRun.setItalic(true);
-        instrRun.setFontSize(9);
-        instrRun.setFontFamily("Arial");
-
-        for (int i = 0; i < options.size(); i++) {
-            Map<String, Object> opt = options.get(i);
-            String letter = String.valueOf((char) ('A' + i));
-
-            XWPFParagraph para = document.createParagraph();
-            para.setIndentationLeft(720);
-            para.setSpacingAfter(80);
-
-            XWPFRun letterRun = para.createRun();
-            letterRun.setText(letter + ". ");
-            letterRun.setBold(true);
-            letterRun.setFontSize(10);
-            letterRun.setFontFamily("Arial");
-
-            XWPFRun optRun = para.createRun();
-            optRun.setText(opt.get("value").toString());
-            optRun.setFontSize(10);
-            optRun.setFontFamily("Arial");
-        }
-
-        XWPFParagraph answerPara = document.createParagraph();
-        answerPara.setIndentationLeft(720);
-        answerPara.setSpacingBefore(150);
-    }
-
-    private void addTrueFalseSimple(XWPFDocument document) {
-        String[] options = {"A. TRUE", "B. FALSE"};
-        for (String opt : options) {
-            XWPFParagraph para = document.createParagraph();
-            para.setIndentationLeft(720);
-            para.setSpacingAfter(80);
-            XWPFRun run = para.createRun();
-            run.setText(opt);
-            run.setBold(true);
-            run.setFontSize(10);
-            run.setFontFamily("Arial");
-        }
-
-        XWPFParagraph answerPara = document.createParagraph();
-        answerPara.setIndentationLeft(720);
-        answerPara.setSpacingBefore(150);
-    }
-
-    private void addFillInTheBlankSimple(XWPFDocument document, String questionText) {
-        int blankCount = (questionText.split("________", -1).length - 1);
-
-        for (int i = 1; i <= blankCount; i++) {
-            XWPFParagraph blankPara = document.createParagraph();
-            blankPara.setIndentationLeft(720);
-            blankPara.setSpacingAfter(100);
-        }
-    }
-
-    private void addRearrangeSimple(XWPFDocument document, Map<String, Object> content) {
-        List<Map<String, Object>> items = (List<Map<String, Object>>) content.get("data");
-        if (items == null || items.isEmpty()) return;
-
-        String questionText = (String) content.get("questionText");
-        if (questionText == null) return;
-
-        // Sort items theo thứ tự positionId nếu cần (giả sử data đã có thứ tự)
-        Map<String, String> posToValue = new LinkedHashMap<>();
-        for (Map<String, Object> item : items) {
-            String posId = (String) item.get("positionId");
-            if (posId != null) {
-                posToValue.put(posId, item.get("value").toString());
-            }
-        }
-
-        // Thay [[pos_]] bằng value thực
-        String displayQuestion = questionText;
-        for (Map.Entry<String, String> entry : posToValue.entrySet()) {
-            displayQuestion = displayQuestion.replace("[[" + entry.getKey() + "]]", entry.getValue());
-        }
-
+    // ===== MULTIPLE_CHOICE: câu hỏi, điểm số, các đáp án, kẹp theo thứ tự là a,b,c,d =====
+    private void addMultipleChoiceQuestion(XWPFDocument document, String questionText, Map<String, Object> content) {
+        // Question text
         XWPFParagraph qPara = document.createParagraph();
         qPara.setIndentationLeft(720);
-        qPara.setSpacingAfter(80);
-
+        qPara.setSpacingAfter(150);
         XWPFRun qRun = qPara.createRun();
-        qRun.setText(displayQuestion); // is/she/teacher/a
-        qRun.setFontSize(10);
+        qRun.setText(cleanHtmlTags(questionText));
+        qRun.setFontSize(11);
         qRun.setFontFamily("Arial");
 
-        // Dòng trống để học sinh viết
-        XWPFParagraph answerPara = document.createParagraph();
-        answerPara.setIndentationLeft(1080);
-        answerPara.setSpacingAfter(150);
+        // Options với dấu ( )
+        List<Map<String, Object>> options = (List<Map<String, Object>>) content.get("data");
+        if (options != null) {
+            for (int i = 0; i < options.size(); i++) {
+                Map<String, Object> opt = options.get(i);
+                String letter = String.valueOf((char) ('A' + i));
 
-        XWPFRun answerRun = answerPara.createRun();
-        answerRun.setText("_________________________________________________________________");
-        answerRun.setFontSize(10);
-        answerRun.setFontFamily("Arial");
+                XWPFParagraph optPara = document.createParagraph();
+                optPara.setIndentationLeft(1080);
+                optPara.setSpacingAfter(100);
+
+                XWPFRun circleRun = optPara.createRun();
+                circleRun.setFontSize(10);
+                circleRun.setFontFamily("Arial");
+
+                XWPFRun letterRun = optPara.createRun();
+                letterRun.setText(letter + ". ");
+                letterRun.setBold(true);
+                letterRun.setFontSize(10);
+                letterRun.setFontFamily("Arial");
+
+                XWPFRun optRun = optPara.createRun();
+                optRun.setText(opt.get("value").toString());
+                optRun.setFontSize(10);
+                optRun.setFontFamily("Arial");
+            }
+        }
     }
 
-    private void addDragAndDropSimple(XWPFDocument document, Map<String, Object> content, String questionText) {
-        List<Map<String, Object>> options = (List<Map<String, Object>>) content.get("data");
-        if (options == null || options.isEmpty()) return;
+    // ===== MULTIPLE_SELECT: câu hỏi, điểm số, các đáp án, kẹp thêm ô vuông =====
+    private void addMultipleSelectQuestion(XWPFDocument document, String questionText, Map<String, Object> content) {
+        // Question text
+        XWPFParagraph qPara = document.createParagraph();
+        qPara.setIndentationLeft(720);
+        qPara.setSpacingAfter(150);
+        XWPFRun qRun = qPara.createRun();
+        qRun.setText(cleanHtmlTags(questionText));
+        qRun.setFontSize(11);
+        qRun.setFontFamily("Arial");
 
-        // Thay [[pos_]] bằng ____ trong câu hỏi
-        String displayQuestion = questionText.replaceAll("\\[\\[pos_\\w+\\]\\]", "____");
+        // Options với ô vuông [ ]
+        List<Map<String, Object>> options = (List<Map<String, Object>>) content.get("data");
+        if (options != null) {
+            for (int i = 0; i < options.size(); i++) {
+                Map<String, Object> opt = options.get(i);
+                String letter = String.valueOf((char) ('A' + i));
+
+                XWPFParagraph optPara = document.createParagraph();
+                optPara.setIndentationLeft(1080);
+                optPara.setSpacingAfter(100);
+
+                XWPFRun boxRun = optPara.createRun();
+                boxRun.setFontSize(10);
+                boxRun.setFontFamily("Arial");
+
+                XWPFRun letterRun = optPara.createRun();
+                letterRun.setText(letter + ". ");
+                letterRun.setBold(true);
+                letterRun.setFontSize(10);
+                letterRun.setFontFamily("Arial");
+
+                XWPFRun optRun = optPara.createRun();
+                optRun.setText(opt.get("value").toString());
+                optRun.setFontSize(10);
+                optRun.setFontFamily("Arial");
+            }
+        }
+    }
+
+    // ===== TRUE_OR_FALSE: câu hỏi, điểm số, các đáp án true false, kẹp thêm ô vuông =====
+    private void addTrueFalseQuestion(XWPFDocument document, String questionText, Map<String, Object> content) {
+        // Question text
+        XWPFParagraph qPara = document.createParagraph();
+        qPara.setIndentationLeft(720);
+        qPara.setSpacingAfter(150);
+        XWPFRun qRun = qPara.createRun();
+        qRun.setText(cleanHtmlTags(questionText));
+        qRun.setFontSize(11);
+        qRun.setFontFamily("Arial");
+
+        // True/False với ô vuông
+        String[] tfOptions = {"True", "False"};
+        for (int i = 0; i < tfOptions.length; i++) {
+            String letter = String.valueOf((char) ('A' + i));
+
+            XWPFParagraph optPara = document.createParagraph();
+            optPara.setIndentationLeft(1080);
+            optPara.setSpacingAfter(100);
+
+            XWPFRun boxRun = optPara.createRun();
+            boxRun.setFontSize(10);
+            boxRun.setFontFamily("Arial");
+
+            XWPFRun letterRun = optPara.createRun();
+            letterRun.setText(letter + ". ");
+            letterRun.setBold(true);
+            letterRun.setFontSize(10);
+            letterRun.setFontFamily("Arial");
+
+            XWPFRun optRun = optPara.createRun();
+            optRun.setText(tfOptions[i]);
+            optRun.setFontSize(10);
+            optRun.setFontFamily("Arial");
+        }
+    }
+
+    // ===== FILL_IN_THE_BLANK: câu hỏi có chỗ trống để học sinh viết vào =====
+    private void addFillInTheBlankQuestion(XWPFDocument document, String questionText) {
+        // Replace [[pos_xxx]] với ____________
+        String displayText = questionText.replaceAll("\\[\\[pos_\\w+\\]\\]", "____________");
+        displayText = cleanHtmlTags(displayText);
 
         XWPFParagraph qPara = document.createParagraph();
         qPara.setIndentationLeft(720);
-        qPara.setSpacingAfter(80);
-
-//        XWPFRun qRun = qPara.createRun();
-//        qRun.setText(displayQuestion);
-//        qRun.setFontSize(10);
-//        qRun.setFontFamily("Arial");
-
-        // Dòng đáp án: word1, word2, word3
-        XWPFParagraph optPara = document.createParagraph();
-        optPara.setIndentationLeft(1080);
-        optPara.setSpacingAfter(100);
-
-        XWPFRun optRun = optPara.createRun();
-        optRun.setFontSize(10);
-        optRun.setFontFamily("Arial");
-
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < options.size(); i++) {
-            sb.append(options.get(i).get("value"));
-            if (i < options.size() - 1) sb.append(", ");
-        }
-        optRun.setText(sb.toString());
+        qPara.setSpacingAfter(150);
+        XWPFRun qRun = qPara.createRun();
+        qRun.setText(displayText);
+        qRun.setFontSize(11);
+        qRun.setFontFamily("Arial");
     }
 
-    // Helper: thay ________ thành ...
-    private String replaceBlanksWithDots(String text) {
-        return text.replaceAll("________", "...");
-    }
-
-    private void addDropdownSimple(XWPFDocument document, Map<String, Object> content) {
+    // ===== DROPDOWN: she (đáp án 1/ đáp án 2/ đáp án 3) a teacher =====
+    private void addDropdownQuestion(XWPFDocument document, String questionText, Map<String, Object> content) {
         List<Map<String, Object>> options = (List<Map<String, Object>>) content.get("data");
-        if (options == null || options.isEmpty()) return;
+        if (options == null || options.isEmpty()) {
+            addDefaultQuestion(document, questionText);
+            return;
+        }
 
-        String questionText = (String) content.get("questionText"); // Lấy câu hỏi gốc có [[pos_]]
-        if (questionText == null) return;
-
-        // Group options by positionId
-        Map<String, List<String>> optsByPos = new HashMap<>();
+        // Group options by position
+        Map<String, List<String>> optsByPos = new LinkedHashMap<>();
         for (Map<String, Object> opt : options) {
             String posId = (String) opt.get("positionId");
             if (posId != null) {
-                optsByPos.computeIfAbsent(posId, k -> new ArrayList<>())
-                        .add(opt.get("value").toString());
+                optsByPos.computeIfAbsent(posId, k -> new ArrayList<>()).add(opt.get("value").toString());
             }
         }
 
-        XWPFParagraph para = document.createParagraph();
-        para.setIndentationLeft(720);
-        para.setSpacingAfter(100);
-
-        XWPFRun run = para.createRun();
-        run.setFontSize(10);
-        run.setFontFamily("Arial");
-
-        // Thay từng [[pos_]] bằng (a/ b/ c)
-        String result = questionText;
+        // Replace placeholders với (option1/ option2/ option3)
+        String result = cleanHtmlTags(questionText);
         for (Map.Entry<String, List<String>> entry : optsByPos.entrySet()) {
-            String placeholder = "[[" + entry.getKey() + "]]";
+            String placeholder = "[[pos_" + entry.getKey() + "]]";
             StringBuilder dropdown = new StringBuilder("(");
             List<String> opts = entry.getValue();
             for (int i = 0; i < opts.size(); i++) {
@@ -2406,149 +2344,156 @@ public class FileServiceImpl implements FileService {
             result = result.replace(placeholder, dropdown.toString());
         }
 
-        run.setText(result);
+        XWPFParagraph qPara = document.createParagraph();
+        qPara.setIndentationLeft(720);
+        qPara.setSpacingAfter(150);
+        XWPFRun qRun = qPara.createRun();
+        qRun.setText(result);
+        qRun.setFontSize(11);
+        qRun.setFontFamily("Arial");
     }
 
-    private void addWritingSimple(XWPFDocument document) {
-        XWPFParagraph instrPara = document.createParagraph();
-        instrPara.setIndentationLeft(720);
-        instrPara.setSpacingAfter(150);
-        XWPFRun instrRun = instrPara.createRun();
-        instrRun.setText("Write your answer:");
-        instrRun.setItalic(true);
-        instrRun.setFontSize(10);
-        instrRun.setFontFamily("Arial");
+    // ===== DRAG_AND_DROP: she ... a .... (xuống dòng) is, apple, teacher, him =====
+    private void addDragAndDropQuestion(XWPFDocument document, String questionText, Map<String, Object> content) {
+        // Display question với ... thay cho placeholder
+        String displayText = questionText.replaceAll("\\[\\[pos_\\w+\\]\\]", "........");
+        displayText = cleanHtmlTags(displayText);
 
-        // 10 lines for writing
-        for (int i = 0; i < 10; i++) {
-            XWPFParagraph linePara = document.createParagraph();
-            linePara.setIndentationLeft(720);
-            linePara.setSpacingAfter(120);
+        XWPFParagraph qPara = document.createParagraph();
+        qPara.setIndentationLeft(720);
+        qPara.setSpacingAfter(150);
+        XWPFRun qRun = qPara.createRun();
+        qRun.setText(displayText);
+        qRun.setFontSize(11);
+        qRun.setFontFamily("Arial");
 
-            XWPFRun lineRun = linePara.createRun();
-            lineRun.setText("_________________________________________________________________");
-            lineRun.setFontSize(10);
-        }
-    }
+        // Hiển thị options ở dòng dưới
+        List<Map<String, Object>> options = (List<Map<String, Object>>) content.get("data");
+        if (options != null && !options.isEmpty()) {
+            XWPFParagraph optPara = document.createParagraph();
+            optPara.setIndentationLeft(1080);
+            optPara.setSpacingBefore(100);
+            optPara.setSpacingAfter(150);
 
-    private void addOpenEndedSimple(XWPFDocument document) {
-        for (int i = 0; i < 3; i++) {
-            XWPFParagraph linePara = document.createParagraph();
-            linePara.setIndentationLeft(720);
-            linePara.setSpacingAfter(100);
-            XWPFRun lineRun = linePara.createRun();
-            lineRun.setText("_________________________________________________________________");
-            lineRun.setFontSize(10);
-        }
-    }
+            XWPFRun labelRun = optPara.createRun();
+            labelRun.setText("Options: ");
+            labelRun.setItalic(true);
+            labelRun.setFontSize(10);
+            labelRun.setFontFamily("Arial");
 
-    private void addSimpleAnswerSheet(XWPFDocument document, DailyChallenge challenge) {
-        // Title
-        XWPFParagraph titlePara = document.createParagraph();
-        titlePara.setAlignment(ParagraphAlignment.CENTER);
-        titlePara.setSpacingBefore(200);
-        titlePara.setSpacingAfter(300);
-
-        XWPFRun titleRun = titlePara.createRun();
-        titleRun.setText("ANSWER SHEET");
-        titleRun.setBold(true);
-        titleRun.setFontSize(14);
-        titleRun.setFontFamily("Arial");
-
-        // Count questions
-        int totalQuestions = 0;
-        if (challenge.getSections() != null) {
-            for (ChallengeSection section : challenge.getSections()) {
-                if (section.getQuestions() != null) {
-                    totalQuestions += section.getQuestions().size();
-                }
+            List<String> optValues = new ArrayList<>();
+            for (Map<String, Object> opt : options) {
+                optValues.add(opt.get("value").toString());
             }
-        }
 
-        // Create answer sheet table
-        XWPFTable table = document.createTable(totalQuestions + 1, 2);
-        table.setWidth("100%");
-
-        // Set borders
-        CTTblPr tblPr = table.getCTTbl().getTblPr();
-        if (tblPr == null) tblPr = table.getCTTbl().addNewTblPr();
-        CTTblBorders borders = tblPr.addNewTblBorders();
-        borders.addNewTop().setVal(STBorder.SINGLE);
-        borders.addNewBottom().setVal(STBorder.SINGLE);
-        borders.addNewLeft().setVal(STBorder.SINGLE);
-        borders.addNewRight().setVal(STBorder.SINGLE);
-        borders.addNewInsideH().setVal(STBorder.SINGLE);
-        borders.addNewInsideV().setVal(STBorder.SINGLE);
-
-        // Header row
-        XWPFTableRow headerRow = table.getRow(0);
-
-        XWPFTableCell headerCell1 = headerRow.getCell(0);
-        headerCell1.setColor("4472C4");
-        headerCell1.setVerticalAlignment(XWPFTableCell.XWPFVertAlign.CENTER);
-        CTTcPr tcpr1 = headerCell1.getCTTc().addNewTcPr();
-        tcpr1.addNewTcW().setW(BigInteger.valueOf(2340));
-        XWPFParagraph p1 = headerCell1.getParagraphs().get(0);
-        p1.setAlignment(ParagraphAlignment.CENTER);
-        XWPFRun r1 = p1.createRun();
-        r1.setText("Question #");
-        r1.setBold(true);
-        r1.setFontSize(11);
-        r1.setFontFamily("Arial");
-        r1.setColor("FFFFFF");
-
-        XWPFTableCell headerCell2 = headerRow.getCell(1);
-        headerCell2.setColor("4472C4");
-        headerCell2.setVerticalAlignment(XWPFTableCell.XWPFVertAlign.CENTER);
-        CTTcPr tcpr2 = headerCell2.getCTTc().addNewTcPr();
-        tcpr2.addNewTcW().setW(BigInteger.valueOf(7020));
-        XWPFParagraph p2 = headerCell2.getParagraphs().get(0);
-        p2.setAlignment(ParagraphAlignment.CENTER);
-        XWPFRun r2 = p2.createRun();
-        r2.setText("Your Answer");
-        r2.setBold(true);
-        r2.setFontSize(11);
-        r2.setFontFamily("Arial");
-        r2.setColor("FFFFFF");
-
-        // Data rows
-        for (int i = 1; i <= totalQuestions; i++) {
-            XWPFTableRow row = table.getRow(i);
-
-            XWPFTableCell cell1 = row.getCell(0);
-            cell1.setVerticalAlignment(XWPFTableCell.XWPFVertAlign.CENTER);
-            if (i % 2 == 0) cell1.setColor("F2F2F2");
-            XWPFParagraph pa1 = cell1.getParagraphs().get(0);
-            pa1.setAlignment(ParagraphAlignment.CENTER);
-            XWPFRun ru1 = pa1.createRun();
-            ru1.setText(String.valueOf(i));
-            ru1.setFontSize(10);
-            ru1.setFontFamily("Arial");
-
-            XWPFTableCell cell2 = row.getCell(1);
-            cell2.setVerticalAlignment(XWPFTableCell.XWPFVertAlign.CENTER);
-            if (i % 2 == 0) cell2.setColor("F2F2F2");
+            XWPFRun optRun = optPara.createRun();
+            optRun.setText(String.join(", ", optValues));
+            optRun.setFontSize(10);
+            optRun.setFontFamily("Arial");
         }
     }
 
-    private void addPageBreak(XWPFDocument document) {
-        XWPFParagraph para = document.createParagraph();
-        para.setPageBreak(true);
+    // ===== REARRANGE: is/she/teacher/a (xuống dòng tạo 1 dòng trống) =====
+    private void addRearrangeQuestion(XWPFDocument document, String questionText, Map<String, Object> content) {
+        List<Map<String, Object>> items = (List<Map<String, Object>>) content.get("data");
+        if (items == null || items.isEmpty()) {
+            addDefaultQuestion(document, questionText);
+            return;
+        }
+
+        // Build display text: word1/word2/word3
+        List<String> words = new ArrayList<>();
+        for (Map<String, Object> item : items) {
+            words.add(item.get("value").toString());
+        }
+
+        XWPFParagraph qPara = document.createParagraph();
+        qPara.setIndentationLeft(720);
+        qPara.setSpacingAfter(150);
+        XWPFRun qRun = qPara.createRun();
+        qRun.setText(String.join(" / ", words));
+        qRun.setFontSize(11);
+        qRun.setFontFamily("Arial");
+
+        // Dòng trống để viết đáp án
+        XWPFParagraph answerPara = document.createParagraph();
+        answerPara.setIndentationLeft(1080);
+        answerPara.setSpacingBefore(150);
+        answerPara.setSpacingAfter(100);
+        XWPFRun lineRun = answerPara.createRun();
+        lineRun.setText("Answer: _________________________________________________________________");
+        lineRun.setFontSize(10);
+        lineRun.setFontFamily("Arial");
     }
 
-    private String cleanQuestionText(String text) {
-        return text.replaceAll("\\[\\[pos_[^\\]]+\\]\\]", "________");
+    // ===== REWRITE: hiện đầu bài và chỗ trống (...) ở dòng dưới =====
+    private void addRewriteQuestion(XWPFDocument document, String questionText) {
+        // Remove HTML tags và placeholders
+        String cleanText = cleanHtmlTags(questionText);
+        cleanText = cleanText.replaceAll("\\[\\[pos_[^\\]]+\\]\\]", "").trim();
+
+        XWPFParagraph qPara = document.createParagraph();
+        qPara.setIndentationLeft(720);
+        qPara.setSpacingAfter(150);
+        XWPFRun qRun = qPara.createRun();
+        qRun.setText(cleanText);
+        qRun.setFontSize(11);
+        qRun.setFontFamily("Arial");
+
+        // Add 2 dòng để viết
+        for (int i = 0; i < 2; i++) {
+            XWPFParagraph linePara = document.createParagraph();
+            linePara.setIndentationLeft(1080);
+            linePara.setSpacingAfter(150);
+            XWPFRun lineRun = linePara.createRun();
+            lineRun.setText("_________________________________________________________________");
+            lineRun.setFontSize(10);
+            lineRun.setFontFamily("Arial");
+        }
     }
 
-    private Map<String, Object> parseQuestionContent(String jsonContent) {
-        if (jsonContent == null || jsonContent.trim().isEmpty()) {
-            return new HashMap<>();
+    // ===== WRITING: hiện đầu bài và chỗ trống dài hơn khoảng 20 dòng =====
+    private void addWritingQuestion(XWPFDocument document, String questionText) {
+        // Remove HTML tags và placeholders
+        String cleanText = cleanHtmlTags(questionText);
+        cleanText = cleanText.replaceAll("\\[\\[pos_[^\\]]+\\]\\]", "").trim();
+
+        XWPFParagraph qPara = document.createParagraph();
+        qPara.setIndentationLeft(720);
+        qPara.setSpacingAfter(150);
+        XWPFRun qRun = qPara.createRun();
+        qRun.setText(cleanText);
+        qRun.setFontSize(11);
+        qRun.setFontFamily("Arial");
+
+        // Add khoảng 20 dòng để viết
+        for (int i = 0; i < 20; i++) {
+            XWPFParagraph linePara = document.createParagraph();
+            linePara.setIndentationLeft(1080);
+            linePara.setSpacingAfter(120);
+            XWPFRun lineRun = linePara.createRun();
+            lineRun.setText("_________________________________________________________________");
+            lineRun.setFontSize(10);
+            lineRun.setFontFamily("Arial");
         }
-        try {
-            ObjectMapper objectMapper = new ObjectMapper();
-            return objectMapper.readValue(jsonContent, new TypeReference<Map<String, Object>>() {});
-        } catch (Exception e) {
-            return new HashMap<>();
-        }
+    }
+
+    // ===== DEFAULT: fallback cho các loại khác =====
+    private void addDefaultQuestion(XWPFDocument document, String questionText) {
+        String cleanText = cleanHtmlTags(questionText);
+
+        XWPFParagraph qPara = document.createParagraph();
+        qPara.setIndentationLeft(720);
+        qPara.setSpacingAfter(150);
+        XWPFRun qRun = qPara.createRun();
+        qRun.setText(cleanText);
+        qRun.setFontSize(11);
+        qRun.setFontFamily("Arial");
+    }
+
+    // ===== UTILITY METHOD =====
+    private String cleanHtmlTags(String text) {
+        if (text == null) return "";
+        return text.replaceAll("<[^>]*>", "").replaceAll("&nbsp;", " ").trim();
     }
 }
