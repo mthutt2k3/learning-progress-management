@@ -391,4 +391,10 @@ public class Const {
     public static class SUBMISSION {
         public static final String NOT_FOUND = "";
     }
+
+    public static final class TRANSLATOR {
+        public static final String API_ERROR = "Failed to connect to the translation service. Please try again later.";
+        public static final String TRANSLATION_FAILED = "Unable to translate the text. Please try again later.";
+    }
+
 }
