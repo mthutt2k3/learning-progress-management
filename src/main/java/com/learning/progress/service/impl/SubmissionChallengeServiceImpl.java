@@ -1,9 +1,9 @@
 package com.learning.progress.service.impl;
 
 import com.fasterxml.jackson.core.type.TypeReference;
-import com.learning.progress.common.ClassStudentStatus;
-import com.learning.progress.common.Const;
-import com.learning.progress.common.SubmissionStatus;
+import com.learning.progress.common.*;
+import org.json.JSONArray;
+import org.json.JSONObject;
 import com.learning.progress.dto.DataResponse;
 import com.learning.progress.dto.challenge.StudentChallengeListDTO;
 import com.learning.progress.dto.submission.StudentSubmissionDTO;
@@ -31,6 +31,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 @Service
 @Slf4j
@@ -88,41 +89,59 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
     }
 
     @Override
-    public DataResponse<List<StudentChallengeListDTO>> getAllChallengesForStudent(Long classId, int page, int size,
-                                                                                  String text) {
-        Long studentId = jwtUtil.extractUserIdFromCurrentRequest();
-        log.info("Listing daily challenges for student {} in class {} with page: {}, size: {}, text: '{}'",
-                studentId, classId, page, size, text);
+    @Transactional(readOnly = true)
+    public DataResponse<List<StudentChallengeListDTO>> getAllChallengesForStudent(
+            Long classId, int page, int size, String text) {
 
+        Long studentId = jwtUtil.extractUserIdFromCurrentRequest();
         appValidator.validatePaginationParams(page, size);
         appValidator.validateUserAccessToClass(classId);
 
-        if (!jwtUtil.extractUserIdFromCurrentRequest().equals(studentId)) {
-            throw new ApiException("Unauthorized: Cannot access challenges for another student", HttpStatus.FORBIDDEN.value());
-        }
-
         Pageable pageable = PageRequest.of(page, size);
+        Page<Object[]> result = dailyChallengeRepository.findStudentChallengesNative(
+                classId, studentId, text, (long) page * size, size, pageable
+        );
 
-        classRepository.findById(classId)
-                .filter(c -> c.getDeletedAt() == null)
-                .orElseThrow(() -> new ApiException(Const.CLASS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+        List<StudentChallengeListDTO> data = result.getContent().stream()
+                .map(row -> {
+                    Long lessonId = (Long) row[0];
+                    String name = (String) row[1];
+                    String content = (String) row[2];
+                    Integer order = (Integer) row[3];
+                    String challengesJson = (String) row[4];
 
-        Page<ClassLesson> lessonPage = dailyChallengeRepository.findLessonsWithChallengesByClassIdAndStudentId(
-                classId, studentId, (text == null || text.isBlank()) ? "" : text, false, pageable);
-
-        List<StudentChallengeListDTO> data = lessonPage.getContent().stream()
-                .map(submissionMapper::toStudentChallengeListDTO)
+                    List<StudentChallengeListDTO.StudentChallengeDTO> challenges = parseChallengesJson(challengesJson);
+                    return new StudentChallengeListDTO(lessonId, name, content, order, challenges);
+                })
                 .toList();
 
-        log.info("Retrieved {} lessons ({} total)", data.size(), lessonPage.getTotalElements());
-
         return DataResponse.success(data, Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL)
-                .page(page)
-                .size(size)
-                .totalElements(lessonPage.getTotalElements())
-                .totalPages(lessonPage.getTotalPages());
+                .page(page).size(size)
+                .totalElements(result.getTotalElements())
+                .totalPages(result.getTotalPages());
     }
+    private List<StudentChallengeListDTO.StudentChallengeDTO> parseChallengesJson(String json) {
+        if (json == null || json.equals("[]")) return List.of();
 
+        JSONArray array = new JSONArray(json);
+        return IntStream.range(0, array.length())
+                .mapToObj(i -> {
+                    JSONObject obj = array.getJSONObject(i);
+                    return new StudentChallengeListDTO.StudentChallengeDTO(
+                            obj.getLong("id"),
+                            obj.getString("challengeName"),
+                            ChallengeType.valueOf(obj.getString("challengeType")) ,
+                            ChallengeStatus.valueOf(obj.getString("challengeStatus")) ,
+                            obj.isNull("submissionChallengeId") ? null : obj.getLong("submissionChallengeId"),
+                            obj.isNull("startDate") ? null : OffsetDateTime.parse(obj.getString("startDate")),
+                            obj.isNull("endDate") ? null : OffsetDateTime.parse(obj.getString("endDate")),
+                            obj.isNull("submissionStatus") ? null : SubmissionStatus.valueOf(obj.getString("submissionStatus")) ,
+                            obj.isNull("submittedAt") ? null : OffsetDateTime.parse(obj.getString("submittedAt")),
+                            obj.isNull("totalScore") ? null : obj.getDouble("totalScore")
+                    );
+                })
+                .toList();
+    }
     @Override
     @Transactional(readOnly = true)
     public DataResponse<List<StudentSubmissionDTO>> getSubmissionsByChallenge(Long challengeId, int page, int size,

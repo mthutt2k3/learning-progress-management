@@ -1,5 +1,6 @@
 package com.learning.progress.mapper;
 
+import com.learning.progress.common.ChallengeStatus;
 import com.learning.progress.dto.challenge.DailyChallengeListDTO;
 import com.learning.progress.dto.challenge.StudentChallengeListDTO;
 import com.learning.progress.dto.submission.SaveSubmissionRequest;
@@ -25,7 +26,7 @@ public abstract class SubmissionMapper {
     @Mapping(target = "classLessonName", source = "classLessonName")
     @Mapping(target = "classLessonContent", source = "classLessonContent")
     @Mapping(target = "orderNumber", source = "orderNumber")
-    @Mapping(target = "challenges", source = "dailyChallenges", qualifiedByName = "mapStudentChallenges")
+    @Mapping(target = "challenges", source = "publishedDailyChallenges", qualifiedByName = "mapStudentChallenges")
     public abstract StudentChallengeListDTO toStudentChallengeListDTO(ClassLesson classLesson);
 
     @Named("mapDailyChallenges")
@@ -55,13 +56,21 @@ public abstract class SubmissionMapper {
 
         for (DailyChallenge challenge : dailyChallenges) {
             StudentChallengeListDTO.StudentChallengeDTO dto = new StudentChallengeListDTO.StudentChallengeDTO();
+            if(challenge.getChallengeStatus() != ChallengeStatus.PUBLISHED){
+                continue;
+            }
             dto.setId(challenge.getId());
             dto.setChallengeName(challenge.getChallengeName());
             dto.setChallengeType(challenge.getChallengeType());
             dto.setChallengeStatus(challenge.getChallengeStatus());
 
-            // Debug: kiểm tra submission tương ứng
-            SubmissionDailyChallenge submission = challenge.getSubmissionDailyChallenges().get(0);
+            List<SubmissionDailyChallenge> submissions = challenge.getSubmissionDailyChallenges();
+            SubmissionDailyChallenge submission = null;
+
+            if (submissions != null && !submissions.isEmpty()) {
+                submission = submissions.get(0);
+            }
+
             if (submission != null) {
                 dto.setSubmissionChallengeId(submission.getId());
                 dto.setStartDate(submission.getStartedAt());

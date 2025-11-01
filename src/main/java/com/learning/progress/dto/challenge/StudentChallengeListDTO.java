@@ -3,7 +3,9 @@ package com.learning.progress.dto.challenge;
 import com.learning.progress.common.ChallengeStatus;
 import com.learning.progress.common.ChallengeType;
 import com.learning.progress.common.SubmissionStatus;
+import lombok.AllArgsConstructor;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.time.OffsetDateTime;
@@ -11,6 +13,8 @@ import java.util.List;
 
 @Getter
 @Setter
+@AllArgsConstructor
+@NoArgsConstructor
 public class StudentChallengeListDTO {
     private Long classLessonId;
     private String classLessonName;
@@ -20,6 +24,8 @@ public class StudentChallengeListDTO {
 
     @Getter
     @Setter
+    @AllArgsConstructor
+    @NoArgsConstructor
     public static class StudentChallengeDTO {
         private Long id;
         private String challengeName;
