@@ -24,4 +24,6 @@ public interface OpenAiService {
     List<SectionWithQuestionsDto> parseQuestionsFromText(String textContent, String description);
 
     String callOpenAI(String prompt);
+
+    TranslationResponse translate(String text);
 }

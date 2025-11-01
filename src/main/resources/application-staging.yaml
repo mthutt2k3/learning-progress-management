@@ -138,6 +138,10 @@ azure:
     batch-size: 10
     thread-pool-size: 10
     max-question: 100
+  translator:
+    endpoint: ${TRANSLATOR_ENDPOINT}
+    key: ${TRANSLATOR_API_KEY}
+    region: southeastasia
 
 app:
   challenge:
