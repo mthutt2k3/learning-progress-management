@@ -33,6 +33,7 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
     private final DailyChallengeMapper dailyChallengeMapper;
     private final AppValidator appValidator;
     private final JwtUtil jwtUtil;
+    private final FileService fileService;
 
     /* --------------------------------------------------------
      * CREATE
@@ -85,6 +86,7 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
                 traceId, classId, page, size, sortBy, sortDir);
 
         appValidator.validatePaginationParams(page, size);
+        // sortBy/sortDir không còn dùng – vẫn validate để tránh lỗi cũ
         appValidator.validateSortParams(List.of("createdAt", "challengeName", "classLessonId"), sortBy, sortDir);
         appValidator.validateUserAccessToClass(classId);
 
@@ -92,8 +94,8 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
                 .filter(c -> c.getDeletedAt() == null)
                 .orElseThrow(() -> new ApiException(Const.CLASS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
-        Pageable pageable = PageRequest.of(page, size,
-                Sort.by(sortDir.equalsIgnoreCase("asc") ? Sort.Direction.ASC : Sort.Direction.DESC, sortBy));
+        // Không truyền Sort → query sẽ dùng ORDER BY cc.id, cl.orderNumber
+        Pageable pageable = PageRequest.of(page, size);
 
         boolean isTeacher = appValidator.hasRole(RoleName.TEACHER);
         Page<ClassLesson> lessonPage = dailyChallengeRepository.findLessonsWithChallengesByClassId(
@@ -345,5 +347,21 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
     private ApiException notFound(String traceId, String msg, Object id) {
         log.error("[{}] Not found: {} (id={})", traceId, msg, id);
         return new ApiException(msg, HttpStatus.NOT_FOUND.value());
+    }
+
+    @Override
+    public byte[] exportChallengeWorksheet(Long challengeId) {
+        String traceId = TraceUtil.getTraceId();
+        log.info("[{}] Exporting worksheet for challenge id: {}", traceId, challengeId);
+
+        // Verify challenge exists and user has access
+        DailyChallenge challenge = dailyChallengeRepository.findByIdAndDeletedAtIsNull(challengeId)
+                .orElseThrow(() -> notFound(traceId, Const.CHALLENGE.NOT_FOUND, challengeId));
+
+        appValidator.validateUserAccessToClass(
+                challenge.getClassLesson().getClassChapter().getClazz().getId());
+
+        // Generate worksheet using FileService
+        return fileService.generateChallengeWorksheet(challengeId);
     }
 }

@@ -18,23 +18,25 @@ public interface DailyChallengeRepository extends JpaRepository<DailyChallenge, 
 
 
     @Query("""
-        SELECT DISTINCT cl
-        FROM ClassLesson cl
-        JOIN cl.classChapter cc
-        JOIN cc.clazz c
-        LEFT JOIN FETCH cl.dailyChallenges dc
-        WHERE c.id = :classId
-          AND cl.deletedAt IS NULL
-          AND (
-                :text IS NULL OR :text = '' OR
-                LOWER(dc.challengeName) LIKE LOWER(CONCAT('%', :text, '%')) OR
-                LOWER(dc.description) LIKE LOWER(CONCAT('%', :text, '%'))
-          )
-          AND (
-                :isTeacher = TRUE
-                OR dc.challengeStatus = 'PUBLISHED'
-          )
-        ORDER BY cl.orderNumber ASC
+    SELECT cl
+    FROM ClassLesson cl
+    JOIN cl.classChapter cc
+    JOIN cc.clazz c
+    LEFT JOIN cl.dailyChallenges dc WITH dc.deletedAt IS NULL
+    WHERE c.id = :classId
+      AND cl.deletedAt IS NULL
+      AND (
+            :text IS NULL OR :text = '' OR
+            LOWER(dc.challengeName) LIKE LOWER(CONCAT('%', :text, '%')) OR
+            LOWER(cl.classLessonName) LIKE LOWER(CONCAT('%', :text, '%')) OR
+            LOWER(dc.description) LIKE LOWER(CONCAT('%', :text, '%'))
+      )
+      AND (
+            :isTeacher = TRUE
+            OR dc.challengeStatus = 'PUBLISHED'
+      )
+    GROUP BY cl.id, cc.id
+    ORDER BY cc.id ASC, cl.orderNumber ASC
     """)
     Page<ClassLesson> findLessonsWithChallengesByClassId(
             @Param("classId") Long classId,

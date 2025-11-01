@@ -9,23 +9,30 @@ import com.learning.progress.dto.excel.ImportChapterDTO;
 import com.learning.progress.dto.excel.ImportChapterInClassDTO;
 import com.learning.progress.dto.excel.ImportLessonDTO;
 import com.learning.progress.dto.excel.ImportSyllabusDTO;
+import com.learning.progress.entity.ChallengeSection;
+import com.learning.progress.entity.DailyChallenge;
+import com.learning.progress.entity.Question;
 import com.learning.progress.exception.ApiException;
+import com.learning.progress.repository.DailyChallengeRepository;
 import com.learning.progress.service.BlobSasService;
 import com.learning.progress.service.FileService;
+import com.learning.progress.service.OpenAiService;
 import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.wp.usermodel.HeaderFooterType;
 import org.apache.poi.xssf.usermodel.XSSFColor;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.apache.poi.xwpf.usermodel.*;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
+import java.io.*;
 import java.lang.reflect.Field;
+import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.text.ParseException;
@@ -65,6 +72,8 @@ public class FileServiceImpl implements FileService {
 
     XSSFColor errorColor = new XSSFColor(new java.awt.Color(251, 114, 114), null);
     XSSFColor successColor = new XSSFColor(new java.awt.Color(78, 250, 37), null);
+    @Autowired
+    private DailyChallengeRepository dailyChallengeRepository;
 
     @Override
     public byte[] generateStudentImportTemplate() {
@@ -94,8 +103,8 @@ public class FileServiceImpl implements FileService {
 
         ExcelSheetSpec importSheet = new ExcelSheetSpec("Import Data", columns);
         importSheet.setSampleData(List.of(
-                List.of("student1@example.com", "John Doe", "STUDENT", "parent1@example.com","Le Duc Dung", "0987654321", "Bố", "2000-01-01", "123 Main St", "0123456789", "MALE", "LEVEL_CODE"),
-                List.of("student2@example.com", "Alice Smith", "TEST_TAKER", "parent2@example.com","Le Duc Dung", "0987654321", "Mẹ", "2000-01-01", "123 Main St", "0123456789", "MALE", "LEVEL_CODE")
+                List.of("student1@example.com", "John Doe", "STUDENT", "parent1@example.com", "Le Duc Dung", "0987654321", "Bố", "2000-01-01", "123 Main St", "0123456789", "MALE", "LEVEL_CODE"),
+                List.of("student2@example.com", "Alice Smith", "TEST_TAKER", "parent2@example.com", "Le Duc Dung", "0987654321", "Mẹ", "2000-01-01", "123 Main St", "0123456789", "MALE", "LEVEL_CODE")
         ));
 
         byte[] templateFile = generateTemplate(List.of(sampleSheet, importSheet));
@@ -811,7 +820,8 @@ public class FileServiceImpl implements FileService {
                 SimpleDateFormat sdf = new SimpleDateFormat(pattern);
                 sdf.setLenient(false); // Strict parsing
                 return sdf.parse(dateStr);
-            } catch (ParseException ignored) {}
+            } catch (ParseException ignored) {
+            }
         }
 
         throw new ApiException(
@@ -859,7 +869,8 @@ public class FileServiceImpl implements FileService {
                     for (String pattern : patterns) {
                         try {
                             return new SimpleDateFormat(pattern).parse(str);
-                        } catch (ParseException ignored) {}
+                        } catch (ParseException ignored) {
+                        }
                     }
                     throw new IllegalArgumentException("Không parse được ngày: " + str);
                 }
@@ -1868,5 +1879,595 @@ public class FileServiceImpl implements FileService {
 
         // 4. Freeze panes
         newSheet.createFreezePane(0, 1);
+    }
+
+    @Override
+    public byte[] generateChallengeWorksheet(Long challengeId) {
+        try {
+            DailyChallenge challenge = dailyChallengeRepository.findByIdAndDeletedAtIsNull(challengeId)
+                    .orElseThrow(() -> new ApiException(Const.CHALLENGE.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+
+            XWPFDocument document = new XWPFDocument();
+
+            // Set page margins
+            CTSectPr sectPr = document.getDocument().getBody().addNewSectPr();
+            CTPageMar pageMar = sectPr.addNewPgMar();
+            pageMar.setLeft(BigInteger.valueOf(1440));
+            pageMar.setRight(BigInteger.valueOf(1440));
+            pageMar.setTop(BigInteger.valueOf(1440));
+            pageMar.setBottom(BigInteger.valueOf(1440));
+
+            // Header
+            addChallengeHeader(document, challenge.getChallengeName());
+
+            // Footer with page numbers
+            addChallengeFooter(document);
+
+            // Title
+            addChallengeTitle(document, challenge.getChallengeName());
+
+            // Student info table
+            addStudentInfoSection(document, challenge);
+
+            // Questions - PHẦN QUAN TRỌNG
+            addAllQuestions(document, challenge);
+
+            // Write to byte array
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            document.write(out);
+            document.close();
+
+            return out.toByteArray();
+
+        } catch (ApiException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new ApiException("Failed to generate challenge worksheet: " + e.getMessage(),
+                    HttpStatus.INTERNAL_SERVER_ERROR.value());
+        }
+    }
+
+// ===== HELPER METHODS =====
+
+    private void addChallengeHeader(XWPFDocument document, String challengeName) {
+        XWPFHeader header = document.createHeader(HeaderFooterType.DEFAULT);
+        XWPFParagraph headerPara = header.createParagraph();
+        headerPara.setAlignment(ParagraphAlignment.CENTER);
+        headerPara.setBorderBottom(Borders.SINGLE);
+
+        XWPFRun headerRun = headerPara.createRun();
+        headerRun.setText(challengeName);
+        headerRun.setBold(true);
+        headerRun.setFontSize(11);
+        headerRun.setFontFamily("Arial");
+    }
+
+    private void addChallengeFooter(XWPFDocument document) {
+        XWPFFooter footer = document.createFooter(HeaderFooterType.DEFAULT);
+        XWPFParagraph footerPara = footer.createParagraph();
+        footerPara.setAlignment(ParagraphAlignment.CENTER);
+        footerPara.setBorderTop(Borders.SINGLE);
+        footerPara.setSpacingBefore(100);
+
+        XWPFRun pageRun = footerPara.createRun();
+        pageRun.setText("Page ");
+        pageRun.setFontSize(10);
+        pageRun.setFontFamily("Arial");
+
+        footerPara.getCTP().addNewFldSimple().setInstr("PAGE \\* MERGEFORMAT");
+
+        XWPFRun ofRun = footerPara.createRun();
+        ofRun.setText(" of ");
+        ofRun.setFontSize(10);
+        ofRun.setFontFamily("Arial");
+
+        footerPara.getCTP().addNewFldSimple().setInstr("NUMPAGES \\* MERGEFORMAT");
+    }
+
+    private void addChallengeTitle(XWPFDocument document, String title) {
+        XWPFParagraph para = document.createParagraph();
+        para.setAlignment(ParagraphAlignment.CENTER);
+        para.setSpacingAfter(400);
+
+        XWPFRun run = para.createRun();
+        run.setText(title.toUpperCase());
+        run.setBold(true);
+        run.setFontSize(18);
+        run.setFontFamily("Arial");
+    }
+
+    private void addStudentInfoSection(XWPFDocument document, DailyChallenge challenge) {
+        // Calculate totals
+        double totalScore = 0;
+        int totalQuestions = 0;
+        if (challenge.getSections() != null) {
+            for (ChallengeSection section : challenge.getSections()) {
+                if (section.getQuestions() != null) {
+                    totalQuestions += section.getQuestions().size();
+                    for (Question q : section.getQuestions()) {
+                        totalScore += q.getScore().doubleValue();
+                    }
+                }
+            }
+        }
+
+        XWPFTable table = document.createTable(6, 2);
+        table.setWidth("100%");
+
+        // Borders
+        CTTblPr tblPr = table.getCTTbl().getTblPr();
+        if (tblPr == null) tblPr = table.getCTTbl().addNewTblPr();
+        CTTblBorders borders = tblPr.addNewTblBorders();
+        borders.addNewTop().setVal(STBorder.SINGLE);
+        borders.addNewBottom().setVal(STBorder.SINGLE);
+        borders.addNewLeft().setVal(STBorder.SINGLE);
+        borders.addNewRight().setVal(STBorder.SINGLE);
+        borders.addNewInsideH().setVal(STBorder.SINGLE);
+        borders.addNewInsideV().setVal(STBorder.SINGLE);
+
+        String[][] data = {
+                {"FULL NAME:", ""},
+                {"CLASS:", ""},
+                {"DATE:", ""},
+                {"DURATION:", (challenge.getDurationMinutes() != null ? challenge.getDurationMinutes() + " minutes" : "N/A")},
+                {"TOTAL QUESTIONS:", String.valueOf(totalQuestions)},
+                {"TOTAL SCORE:", String.format("%.1f points", totalScore)}
+        };
+
+        for (int i = 0; i < data.length; i++) {
+            XWPFTableRow row = table.getRow(i);
+
+            XWPFTableCell cell1 = row.getCell(0);
+            cell1.setVerticalAlignment(XWPFTableCell.XWPFVertAlign.CENTER);
+            cell1.setColor("E7E6E6");
+            CTTcPr tcpr1 = cell1.getCTTc().addNewTcPr();
+            tcpr1.addNewTcW().setW(BigInteger.valueOf(3000));
+
+            XWPFParagraph p1 = cell1.getParagraphs().get(0);
+            XWPFRun r1 = p1.createRun();
+            r1.setText(data[i][0]);
+            r1.setBold(true);
+            r1.setFontSize(10);
+            r1.setFontFamily("Arial");
+
+            XWPFTableCell cell2 = row.getCell(1);
+            cell2.setVerticalAlignment(XWPFTableCell.XWPFVertAlign.CENTER);
+            CTTcPr tcpr2 = cell2.getCTTc().addNewTcPr();
+            tcpr2.addNewTcW().setW(BigInteger.valueOf(6360));
+
+            XWPFParagraph p2 = cell2.getParagraphs().get(0);
+            XWPFRun r2 = p2.createRun();
+            r2.setText(data[i][1]);
+            r2.setFontSize(10);
+            r2.setFontFamily("Arial");
+        }
+
+        XWPFParagraph spacing = document.createParagraph();
+        spacing.setSpacingAfter(300);
+    }
+
+    private void addAllQuestions(XWPFDocument document, DailyChallenge challenge) {
+        if (challenge.getSections() == null) return;
+
+        int questionNumber = 1;
+        String challengeType = challenge.getChallengeType() != null ? challenge.getChallengeType().toString() : "";
+
+
+        for (int sectionIdx = 0; sectionIdx < challenge.getSections().size(); sectionIdx++) {
+            ChallengeSection section = challenge.getSections().get(sectionIdx);
+
+            // ✅ Hiển thị SECTION HEADER + SECTION CONTENT chỉ khi challengeType là RE
+            if ("RE".equalsIgnoreCase(challengeType)) {
+
+                // Section title (nếu có)
+                if (section.getSectionTitle() != null && !section.getSectionTitle().trim().isEmpty()) {
+                    XWPFParagraph sectionPara = document.createParagraph();
+                    sectionPara.setSpacingBefore(400);
+                    sectionPara.setSpacingAfter(200);
+                    sectionPara.setBorderBottom(Borders.SINGLE);
+
+                    XWPFRun run = sectionPara.createRun();
+                    run.setText("SECTION " + (sectionIdx + 1) + ": " + section.getSectionTitle().toUpperCase());
+                    run.setBold(true);
+                    run.setFontSize(12);
+                    run.setFontFamily("Arial");
+                }
+                XWPFParagraph contentPara = document.createParagraph();
+                contentPara.setSpacingAfter(200);
+                XWPFRun run = contentPara.createRun();
+                run.setText(cleanHtmlTags(section.getSectionsContent()));
+                run.setItalic(true);
+                run.setFontSize(10);
+                run.setFontFamily("Arial");
+            }
+
+            // Questions in section
+            if (section.getQuestions() != null) {
+                for (Question question : section.getQuestions()) {
+                    addQuestionByType(document, question, questionNumber);
+                    questionNumber++;
+                }
+            }
+        }
+    }
+
+    private void addQuestionByType(XWPFDocument document, Question question, int questionNumber) {
+        String questionType = question.getQuestionType().toString();
+
+        // Question header
+        addQuestionHeader(document, questionNumber, question.getScore());
+
+        // Parse content
+        Map<String, Object> content = question.getQuestionContentJson();
+        String questionText = question.getQuestionText();
+
+        // Route to specific handler
+        switch (questionType) {
+            case "MULTIPLE_CHOICE":
+                addMultipleChoiceQuestion(document, questionText, content);
+                break;
+            case "MULTIPLE_SELECT":
+                addMultipleSelectQuestion(document, questionText, content);
+                break;
+            case "TRUE_OR_FALSE":
+                addTrueFalseQuestion(document, questionText, content);
+                break;
+            case "FILL_IN_THE_BLANK":
+                addFillInTheBlankQuestion(document, questionText);
+                break;
+            case "DROPDOWN":
+                addDropdownQuestion(document, questionText, content);
+                break;
+            case "DRAG_AND_DROP":
+                addDragAndDropQuestion(document, questionText, content);
+                break;
+            case "REARRANGE":
+                addRearrangeQuestion(document, questionText, content);
+                break;
+            case "REWRITE":
+                addRewriteQuestion(document, questionText);
+                break;
+            case "WRITING":
+                addWritingQuestion(document, questionText);
+                break;
+            default:
+                addDefaultQuestion(document, questionText);
+        }
+
+        // Add spacing after question
+        XWPFParagraph spacing = document.createParagraph();
+        spacing.setSpacingAfter(200);
+    }
+
+    private void addQuestionHeader(XWPFDocument document, int questionNumber, BigDecimal score) {
+        XWPFParagraph headerPara = document.createParagraph();
+        headerPara.setSpacingBefore(300);
+        headerPara.setSpacingAfter(100);
+
+        XWPFRun numRun = headerPara.createRun();
+        numRun.setText("Question " + questionNumber + ". ");
+        numRun.setBold(true);
+        numRun.setFontSize(11);
+        numRun.setFontFamily("Arial");
+
+        XWPFRun scoreRun = headerPara.createRun();
+        scoreRun.setText("(" + score + " " + (score.doubleValue() == 1 ? "point" : "points") + ")");
+        scoreRun.setBold(true);
+        scoreRun.setFontSize(9);
+        scoreRun.setFontFamily("Arial");
+    }
+
+    private void addMultipleChoiceQuestion(XWPFDocument document, String questionText, Map<String, Object> content) {
+        // Question text
+        XWPFParagraph qPara = document.createParagraph();
+        qPara.setIndentationLeft(720);
+        qPara.setSpacingAfter(150);
+        XWPFRun qRun = qPara.createRun();
+        qRun.setText(cleanHtmlTags(questionText));
+        qRun.setFontSize(11);
+        qRun.setFontFamily("Arial");
+
+        // Options với dấu ( )
+        List<Map<String, Object>> options = (List<Map<String, Object>>) content.get("data");
+        if (options != null) {
+            for (int i = 0; i < options.size(); i++) {
+                Map<String, Object> opt = options.get(i);
+                String letter = String.valueOf((char) ('A' + i));
+
+                XWPFParagraph optPara = document.createParagraph();
+                optPara.setIndentationLeft(1080);
+                optPara.setSpacingAfter(100);
+
+                XWPFRun circleRun = optPara.createRun();
+                circleRun.setFontSize(10);
+                circleRun.setFontFamily("Arial");
+
+                XWPFRun letterRun = optPara.createRun();
+                letterRun.setText(letter + ". ");
+                letterRun.setBold(true);
+                letterRun.setFontSize(10);
+                letterRun.setFontFamily("Arial");
+
+                XWPFRun optRun = optPara.createRun();
+                optRun.setText(cleanHtmlTags(opt.get("value").toString())); // ✅ THÊM cleanHtmlTags
+                optRun.setFontSize(10);
+                optRun.setFontFamily("Arial");
+            }
+        }
+    }
+
+    // ===== MULTIPLE_SELECT: câu hỏi, điểm số, các đáp án, kẹp thêm ô vuông =====
+    private void addMultipleSelectQuestion(XWPFDocument document, String questionText, Map<String, Object> content) {
+        // Question text
+        XWPFParagraph qPara = document.createParagraph();
+        qPara.setIndentationLeft(720);
+        qPara.setSpacingAfter(150);
+        XWPFRun qRun = qPara.createRun();
+        qRun.setText(cleanHtmlTags(questionText));
+        qRun.setFontSize(11);
+        qRun.setFontFamily("Arial");
+
+        // Options với ô vuông [ ]
+        List<Map<String, Object>> options = (List<Map<String, Object>>) content.get("data");
+        if (options != null) {
+            for (int i = 0; i < options.size(); i++) {
+                Map<String, Object> opt = options.get(i);
+                String letter = String.valueOf((char) ('A' + i));
+
+                XWPFParagraph optPara = document.createParagraph();
+                optPara.setIndentationLeft(1080);
+                optPara.setSpacingAfter(100);
+
+                XWPFRun boxRun = optPara.createRun();
+                boxRun.setFontSize(10);
+                boxRun.setFontFamily("Arial");
+
+                XWPFRun letterRun = optPara.createRun();
+                letterRun.setText(letter + ". ");
+                letterRun.setBold(true);
+                letterRun.setFontSize(10);
+                letterRun.setFontFamily("Arial");
+
+                XWPFRun optRun = optPara.createRun();
+                optRun.setText(cleanHtmlTags(opt.get("value").toString()));
+                optRun.setFontSize(10);
+                optRun.setFontFamily("Arial");
+            }
+        }
+    }
+
+    // ===== TRUE_OR_FALSE: câu hỏi, điểm số, các đáp án true false, kẹp thêm ô vuông =====
+    private void addTrueFalseQuestion(XWPFDocument document, String questionText, Map<String, Object> content) {
+        // Question text
+        XWPFParagraph qPara = document.createParagraph();
+        qPara.setIndentationLeft(720);
+        qPara.setSpacingAfter(150);
+        XWPFRun qRun = qPara.createRun();
+        qRun.setText(cleanHtmlTags(questionText));
+        qRun.setFontSize(11);
+        qRun.setFontFamily("Arial");
+
+        // True/False với ô vuông
+        String[] tfOptions = {"True", "False"};
+        for (int i = 0; i < tfOptions.length; i++) {
+            String letter = String.valueOf((char) ('A' + i));
+
+            XWPFParagraph optPara = document.createParagraph();
+            optPara.setIndentationLeft(1080);
+            optPara.setSpacingAfter(100);
+
+            XWPFRun boxRun = optPara.createRun();
+            boxRun.setFontSize(10);
+            boxRun.setFontFamily("Arial");
+
+            XWPFRun letterRun = optPara.createRun();
+            letterRun.setText(letter + ". ");
+            letterRun.setBold(true);
+            letterRun.setFontSize(10);
+            letterRun.setFontFamily("Arial");
+
+            XWPFRun optRun = optPara.createRun();
+            optRun.setText(tfOptions[i]);
+            optRun.setFontSize(10);
+            optRun.setFontFamily("Arial");
+        }
+    }
+
+    // ===== FILL_IN_THE_BLANK: câu hỏi có chỗ trống để học sinh viết vào =====
+    private void addFillInTheBlankQuestion(XWPFDocument document, String questionText) {
+        // Replace [[pos_xxx]] với ____________
+        String displayText = questionText.replaceAll("\\[\\[pos_\\w+\\]\\]", "____________");
+        displayText = cleanHtmlTags(displayText);
+
+        XWPFParagraph qPara = document.createParagraph();
+        qPara.setIndentationLeft(720);
+        qPara.setSpacingAfter(150);
+        XWPFRun qRun = qPara.createRun();
+        qRun.setText(displayText);
+        qRun.setFontSize(11);
+        qRun.setFontFamily("Arial");
+    }
+
+    private void addDropdownQuestion(XWPFDocument document, String questionText, Map<String, Object> content) {
+        List<Map<String, Object>> options = (List<Map<String, Object>>) content.get("data");
+        if (options == null || options.isEmpty()) {
+            addDefaultQuestion(document, questionText);
+            return;
+        }
+
+        // Group options by position
+        Map<String, List<String>> optsByPos = new LinkedHashMap<>();
+        for (Map<String, Object> opt : options) {
+            String posId = (String) opt.get("positionId");
+            if (posId != null) {
+                // ✅ Clean HTML trong value trước khi add
+                optsByPos.computeIfAbsent(posId, k -> new ArrayList<>())
+                        .add(cleanHtmlTags(opt.get("value").toString()));
+            }
+        }
+
+        // Replace placeholders với (option1/ option2/ option3)
+        String result = cleanHtmlTags(questionText);
+        for (Map.Entry<String, List<String>> entry : optsByPos.entrySet()) {
+            String placeholder = "[[pos_" + entry.getKey() + "]]";
+            StringBuilder dropdown = new StringBuilder("(");
+            List<String> opts = entry.getValue();
+            for (int i = 0; i < opts.size(); i++) {
+                dropdown.append(opts.get(i));
+                if (i < opts.size() - 1) dropdown.append("/ ");
+            }
+            dropdown.append(")");
+            result = result.replace(placeholder, dropdown.toString());
+        }
+
+        XWPFParagraph qPara = document.createParagraph();
+        qPara.setIndentationLeft(720);
+        qPara.setSpacingAfter(150);
+        XWPFRun qRun = qPara.createRun();
+        qRun.setText(result);
+        qRun.setFontSize(11);
+        qRun.setFontFamily("Arial");
+    }
+
+    private void addDragAndDropQuestion(XWPFDocument document, String questionText, Map<String, Object> content) {
+        // Display question với ... thay cho placeholder
+        String displayText = questionText.replaceAll("\\[\\[pos_\\w+\\]\\]", "........");
+        displayText = cleanHtmlTags(displayText);
+
+        XWPFParagraph qPara = document.createParagraph();
+        qPara.setIndentationLeft(720);
+        qPara.setSpacingAfter(150);
+        XWPFRun qRun = qPara.createRun();
+        qRun.setText(displayText);
+        qRun.setFontSize(11);
+        qRun.setFontFamily("Arial");
+
+        // Hiển thị options ở dòng dưới
+        List<Map<String, Object>> options = (List<Map<String, Object>>) content.get("data");
+        if (options != null && !options.isEmpty()) {
+            XWPFParagraph optPara = document.createParagraph();
+            optPara.setIndentationLeft(1080);
+            optPara.setSpacingBefore(100);
+            optPara.setSpacingAfter(150);
+
+            XWPFRun labelRun = optPara.createRun();
+            labelRun.setText("Options: ");
+            labelRun.setItalic(true);
+            labelRun.setFontSize(10);
+            labelRun.setFontFamily("Arial");
+
+            List<String> optValues = new ArrayList<>();
+            for (Map<String, Object> opt : options) {
+                optValues.add(cleanHtmlTags(opt.get("value").toString())); // ✅ THÊM cleanHtmlTags
+            }
+
+            XWPFRun optRun = optPara.createRun();
+            optRun.setText(String.join(", ", optValues));
+            optRun.setFontSize(10);
+            optRun.setFontFamily("Arial");
+        }
+    }
+
+    private void addRearrangeQuestion(XWPFDocument document, String questionText, Map<String, Object> content) {
+        List<Map<String, Object>> items = (List<Map<String, Object>>) content.get("data");
+        if (items == null || items.isEmpty()) {
+            addDefaultQuestion(document, questionText);
+            return;
+        }
+
+        // Build display text: word1/word2/word3
+        List<String> words = new ArrayList<>();
+        for (Map<String, Object> item : items) {
+            words.add(cleanHtmlTags(item.get("value").toString())); // ✅ THÊM cleanHtmlTags
+        }
+
+        XWPFParagraph qPara = document.createParagraph();
+        qPara.setIndentationLeft(720);
+        qPara.setSpacingAfter(150);
+        XWPFRun qRun = qPara.createRun();
+        qRun.setText(String.join(" / ", words));
+        qRun.setFontSize(11);
+        qRun.setFontFamily("Arial");
+
+        // Dòng trống để viết đáp án
+        XWPFParagraph answerPara = document.createParagraph();
+        answerPara.setIndentationLeft(1080);
+        answerPara.setSpacingBefore(150);
+        answerPara.setSpacingAfter(100);
+        XWPFRun lineRun = answerPara.createRun();
+        lineRun.setText("Answer: _________________________________________________________________");
+        lineRun.setFontSize(10);
+        lineRun.setFontFamily("Arial");
+    }
+
+    // ===== REWRITE: hiện đầu bài và chỗ trống (...) ở dòng dưới =====
+    private void addRewriteQuestion(XWPFDocument document, String questionText) {
+        // Remove HTML tags và placeholders
+        String cleanText = cleanHtmlTags(questionText);
+        cleanText = cleanText.replaceAll("\\[\\[pos_[^\\]]+\\]\\]", "").trim();
+
+        XWPFParagraph qPara = document.createParagraph();
+        qPara.setIndentationLeft(720);
+        qPara.setSpacingAfter(150);
+        XWPFRun qRun = qPara.createRun();
+        qRun.setText(cleanText);
+        qRun.setFontSize(11);
+        qRun.setFontFamily("Arial");
+
+        // Add 2 dòng để viết
+        for (int i = 0; i < 2; i++) {
+            XWPFParagraph linePara = document.createParagraph();
+            linePara.setIndentationLeft(1080);
+            linePara.setSpacingAfter(150);
+            XWPFRun lineRun = linePara.createRun();
+            lineRun.setText("_________________________________________________________________");
+            lineRun.setFontSize(10);
+            lineRun.setFontFamily("Arial");
+        }
+    }
+
+    // ===== WRITING: hiện đầu bài và chỗ trống dài hơn khoảng 20 dòng =====
+    private void addWritingQuestion(XWPFDocument document, String questionText) {
+        // Remove HTML tags và placeholders
+        String cleanText = cleanHtmlTags(questionText);
+        cleanText = cleanText.replaceAll("\\[\\[pos_[^\\]]+\\]\\]", "").trim();
+
+        XWPFParagraph qPara = document.createParagraph();
+        qPara.setIndentationLeft(720);
+        qPara.setSpacingAfter(150);
+        XWPFRun qRun = qPara.createRun();
+        qRun.setText(cleanText);
+        qRun.setFontSize(11);
+        qRun.setFontFamily("Arial");
+
+        // Add khoảng 20 dòng để viết
+        for (int i = 0; i < 20; i++) {
+            XWPFParagraph linePara = document.createParagraph();
+            linePara.setIndentationLeft(1080);
+            linePara.setSpacingAfter(120);
+            XWPFRun lineRun = linePara.createRun();
+            lineRun.setText("_________________________________________________________________");
+            lineRun.setFontSize(10);
+            lineRun.setFontFamily("Arial");
+        }
+    }
+
+    // ===== DEFAULT: fallback cho các loại khác =====
+    private void addDefaultQuestion(XWPFDocument document, String questionText) {
+        String cleanText = cleanHtmlTags(questionText);
+
+        XWPFParagraph qPara = document.createParagraph();
+        qPara.setIndentationLeft(720);
+        qPara.setSpacingAfter(150);
+        XWPFRun qRun = qPara.createRun();
+        qRun.setText(cleanText);
+        qRun.setFontSize(11);
+        qRun.setFontFamily("Arial");
+    }
+
+    // ===== UTILITY METHOD =====
+    private String cleanHtmlTags(String text) {
+        if (text == null) return "";
+        return text.replaceAll("<[^>]*>", "").replaceAll("&nbsp;", " ").trim();
     }
 }
