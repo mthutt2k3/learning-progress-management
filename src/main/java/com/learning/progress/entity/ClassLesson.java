@@ -39,4 +39,9 @@ public class ClassLesson extends BaseEntity{
     @Where(clause = "deleted_at IS NULL")
     private List<DailyChallenge> dailyChallenges;
 
+    @OneToMany(mappedBy = "classLesson", fetch = FetchType.LAZY, cascade = CascadeType.ALL)
+    @Where(clause = "deleted_at IS NULL AND status = 'PUBLISHED'")
+    private List<DailyChallenge> publishedDailyChallenges;
+
+
 }

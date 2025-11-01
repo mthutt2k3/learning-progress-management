@@ -26,15 +26,13 @@ public class SubmissionChallengeController {
 
     @GetMapping("/class/{classId}")
     @PreAuthorize("hasAnyRole('STUDENT', 'TEST_TAKER')")
-    @Operation(summary = "List all daily challenges", description = "Retrieve a paginated list of daily challenges with optional filtering and sorting")
+    @Operation(summary = "List all daily challenges for current student", description = "Retrieve a paginated list of daily challenges with optional filtering and sorting")
     public ResponseEntity<DataResponse<List<StudentChallengeListDTO>>> getAllChallengesForStudent(
             @PathVariable Long classId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
-            @RequestParam(required = false) String text,
-            @RequestParam(defaultValue = "createdAt") String sortBy,
-            @RequestParam(defaultValue = "asc") String sortDir) {
-        DataResponse<List<StudentChallengeListDTO>> response = submissionChallengeService.getAllChallengesForStudent(classId, page, size, text, sortBy, sortDir);
+            @RequestParam(required = false) String text) {
+        DataResponse<List<StudentChallengeListDTO>> response = submissionChallengeService.getAllChallengesForStudent(classId, page, size, text);
         return new ResponseEntity<>(response, HttpStatus.OK);
     }
     @GetMapping("/challenge/{challengeId}/submissions")
