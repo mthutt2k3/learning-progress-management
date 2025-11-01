@@ -26,7 +26,6 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -90,28 +89,26 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
 
     @Override
     public DataResponse<List<StudentChallengeListDTO>> getAllChallengesForStudent(Long classId, int page, int size,
-                                                                                  String text, String sortBy, String sortDir) {
+                                                                                  String text) {
         Long studentId = jwtUtil.extractUserIdFromCurrentRequest();
-        log.info("Listing daily challenges for student {} in class {} with page: {}, size: {}, text: '{}', sortBy: {}, sortDir: {}",
-                studentId, classId, page, size, text, sortBy, sortDir);
+        log.info("Listing daily challenges for student {} in class {} with page: {}, size: {}, text: '{}'",
+                studentId, classId, page, size, text);
 
         appValidator.validatePaginationParams(page, size);
-        appValidator.validateSortParams(List.of("createdAt", "challengeName", "classLessonId"), sortBy, sortDir);
         appValidator.validateUserAccessToClass(classId);
 
         if (!jwtUtil.extractUserIdFromCurrentRequest().equals(studentId)) {
             throw new ApiException("Unauthorized: Cannot access challenges for another student", HttpStatus.FORBIDDEN.value());
         }
 
-        Sort sort = Sort.by(sortDir.equalsIgnoreCase("asc") ? Sort.Direction.ASC : Sort.Direction.DESC, sortBy);
-        Pageable pageable = PageRequest.of(page, size, sort);
+        Pageable pageable = PageRequest.of(page, size);
 
         classRepository.findById(classId)
                 .filter(c -> c.getDeletedAt() == null)
                 .orElseThrow(() -> new ApiException(Const.CLASS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
-        Page<ClassLesson> lessonPage = dailyChallengeRepository.findLessonsWithChallengesByClassId(
-                classId, (text == null || text.isBlank()) ? "" : text, false, pageable);
+        Page<ClassLesson> lessonPage = dailyChallengeRepository.findLessonsWithChallengesByClassIdAndStudentId(
+                classId, studentId, (text == null || text.isBlank()) ? "" : text, false, pageable);
 
         List<StudentChallengeListDTO> data = lessonPage.getContent().stream()
                 .map(submissionMapper::toStudentChallengeListDTO)

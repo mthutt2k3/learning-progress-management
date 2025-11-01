@@ -44,4 +44,25 @@ public interface DailyChallengeRepository extends JpaRepository<DailyChallenge, 
     );
 
     boolean existsByClassLessonAndChallengeNameAndDeletedAtIsNull(ClassLesson classLesson, String challengeName);
+
+    @Query("""
+        SELECT DISTINCT cl
+        FROM ClassLesson cl
+        JOIN cl.classChapter cc
+        JOIN cc.clazz c
+        LEFT JOIN FETCH cl.dailyChallenges dc
+        WHERE c.id = :classId
+          AND cl.deletedAt IS NULL
+          AND (
+                :text IS NULL OR :text = '' OR
+                LOWER(dc.challengeName) LIKE LOWER(CONCAT('%', :text, '%')) OR
+                LOWER(dc.description) LIKE LOWER(CONCAT('%', :text, '%'))
+          )
+          AND (
+                :isTeacher = TRUE
+                OR dc.challengeStatus = 'PUBLISHED'
+          )
+        ORDER BY cl.orderNumber ASC
+    """)
+    Page<ClassLesson> findLessonsWithChallengesByClassIdAndStudentId(Long classId, Long studentId, String text, boolean isTeacher, Pageable pageable);
 }
