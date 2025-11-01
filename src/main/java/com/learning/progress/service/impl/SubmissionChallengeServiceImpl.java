@@ -37,18 +37,30 @@ import java.util.stream.IntStream;
 @Slf4j
 public class SubmissionChallengeServiceImpl implements SubmissionChallengeService {
 
-    @Autowired private SubmissionDailyChallengeRepository submissionDailyChallengeRepository;
-    @Autowired private ClassStudentRepository classStudentRepository;
-    @Autowired private AppValidator appValidator;
-    @Autowired private ClassRepository classRepository;
-    @Autowired private ClassLessonRepository classLessonRepository;
-    @Autowired private SubmissionMapper submissionMapper;
-    @Autowired private JwtUtil jwtUtil;
-    @Autowired private SubmissionQuestionRepository submissionQuestionRepository;
-    @Autowired private QuestionRepository questionRepository;
-    @Autowired private DailyChallengeRepository dailyChallengeRepository;
-    @Autowired private GradingDailyChallengeRepository gradingDailyChallengeRepository;
-    @Autowired private CacheService cacheService;
+    @Autowired
+    private SubmissionDailyChallengeRepository submissionDailyChallengeRepository;
+    @Autowired
+    private ClassStudentRepository classStudentRepository;
+    @Autowired
+    private AppValidator appValidator;
+    @Autowired
+    private ClassRepository classRepository;
+    @Autowired
+    private ClassLessonRepository classLessonRepository;
+    @Autowired
+    private SubmissionMapper submissionMapper;
+    @Autowired
+    private JwtUtil jwtUtil;
+    @Autowired
+    private SubmissionQuestionRepository submissionQuestionRepository;
+    @Autowired
+    private QuestionRepository questionRepository;
+    @Autowired
+    private DailyChallengeRepository dailyChallengeRepository;
+    @Autowired
+    private GradingDailyChallengeRepository gradingDailyChallengeRepository;
+    @Autowired
+    private CacheService cacheService;
 
     @Override
     @Async("taskExecutor")
@@ -120,6 +132,7 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
                 .totalElements(result.getTotalElements())
                 .totalPages(result.getTotalPages());
     }
+
     private List<StudentChallengeListDTO.StudentChallengeDTO> parseChallengesJson(String json) {
         if (json == null || json.equals("[]")) return List.of();
 
@@ -130,18 +143,20 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
                     return new StudentChallengeListDTO.StudentChallengeDTO(
                             obj.getLong("id"),
                             obj.getString("challengeName"),
-                            ChallengeType.valueOf(obj.getString("challengeType")) ,
-                            ChallengeStatus.valueOf(obj.getString("challengeStatus")) ,
+                            ChallengeType.valueOf(obj.getString("challengeType")),
+                            ChallengeStatus.valueOf(obj.getString("challengeStatus")),
                             obj.isNull("submissionChallengeId") ? null : obj.getLong("submissionChallengeId"),
                             obj.isNull("startDate") ? null : OffsetDateTime.parse(obj.getString("startDate")),
                             obj.isNull("endDate") ? null : OffsetDateTime.parse(obj.getString("endDate")),
-                            obj.isNull("submissionStatus") ? null : SubmissionStatus.valueOf(obj.getString("submissionStatus")) ,
+                            obj.isNull("submissionStatus") ? null : SubmissionStatus.valueOf(obj.getString("submissionStatus")),
                             obj.isNull("submittedAt") ? null : OffsetDateTime.parse(obj.getString("submittedAt")),
-                            obj.isNull("totalScore") ? null : obj.getDouble("totalScore")
+                            obj.isNull("totalScore") ? null : obj.getDouble("totalScore"),
+                            obj.isNull("scorePercentage") ? null : obj.getDouble("scorePercentage")
                     );
                 })
                 .toList();
     }
+
     @Override
     @Transactional(readOnly = true)
     public DataResponse<List<StudentSubmissionDTO>> getSubmissionsByChallenge(Long challengeId, int page, int size,
@@ -149,7 +164,8 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
         log.debug("Attempting to get submissions for challengeId: {}", challengeId);
 
         String cacheKey = cacheService.buildSubmissionsByChallengeCacheKey(challengeId, page, size, text, sortBy, sortDir);
-        List<StudentSubmissionDTO> cachedData = cacheService.getCachedObject(cacheKey, new TypeReference<>() {});
+        List<StudentSubmissionDTO> cachedData = cacheService.getCachedObject(cacheKey, new TypeReference<>() {
+        });
 
         if (cachedData != null) {
             log.debug("Cache HIT for submissions: {}", cacheKey);

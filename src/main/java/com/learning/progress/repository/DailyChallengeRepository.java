@@ -106,6 +106,7 @@ public interface DailyChallengeRepository extends JpaRepository<DailyChallenge, 
             sdc.submission_status,
             sdc.submitted_at,
             gdc.total_score,
+            gdc.score_percentage,
             dc.class_lesson_id
         FROM daily_challenges dc
         LEFT JOIN submission_daily_challenges sdc 
@@ -139,7 +140,8 @@ public interface DailyChallengeRepository extends JpaRepository<DailyChallenge, 
                     'endDate', c.expired_at,
                     'submissionStatus', c.submission_status,
                     'submittedAt', c.submitted_at,
-                    'totalScore', c.total_score
+                    'totalScore', c.total_score,
+                    'scorePercentage', c.score_percentage
                 ) ORDER BY c.started_at
             ) FILTER (WHERE c.id IS NOT NULL) AS challenges_json
         FROM lesson_list l

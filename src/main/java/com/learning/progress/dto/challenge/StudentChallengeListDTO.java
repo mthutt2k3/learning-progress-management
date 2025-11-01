@@ -37,5 +37,6 @@ public class StudentChallengeListDTO {
         private SubmissionStatus submissionStatus; // Từ SubmissionDailyChallenge
         private OffsetDateTime submittedAt; // Từ SubmissionDailyChallenge
         private Double totalScore; // Từ GradingDailyChallenges
+        private Double scorePercentage; // Từ GradingDailyChallenges
     }
 }
