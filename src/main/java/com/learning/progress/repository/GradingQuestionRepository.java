@@ -12,4 +12,6 @@ import java.util.Optional;
 public interface GradingQuestionRepository  extends JpaRepository<GradingQuestion, Long> {
     Optional<GradingQuestion> findBySubmissionQuestionIdAndDeletedAtIsNull(Long submissionQuestionId);
     List<GradingQuestion> findBySubmissionQuestion_SubmissionDaily_IdAndDeletedAtIsNull(Long submissionDailyId);
+
+    List<GradingQuestion> findByGradingDailyIdAndDeletedAtIsNull(Long id);
 }

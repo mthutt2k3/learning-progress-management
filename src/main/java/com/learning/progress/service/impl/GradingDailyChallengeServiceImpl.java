@@ -7,6 +7,7 @@ import com.learning.progress.common.SubmissionStatus;
 import com.learning.progress.dto.challenge.section.DataContent;
 import com.learning.progress.dto.challenge.section.DataItem;
 import com.learning.progress.dto.grading.ManualGradingRequest;
+import com.learning.progress.dto.grading.SubmissionGradingResultResponse;
 import com.learning.progress.dto.submission.AnswerContent;
 import com.learning.progress.dto.submission.AnswerItem;
 import com.learning.progress.entity.*;
@@ -20,7 +21,6 @@ import com.learning.progress.util.JwtUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -54,6 +54,106 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
     private CacheService cacheService;
     @Autowired
     private ChallengeSectionRepository challengeSectionRepository;
+    @Override
+    @Transactional(readOnly = true)
+    public SubmissionGradingResultResponse getGradingResult(Long submissionId) {
+        validateAndGetSubmission(submissionId);
+
+        GradingDailyChallenge grading = gradingDailyChallengeRepository
+                .findBySubmissionDailyIdAndDeletedAtIsNull(submissionId)
+                .orElseThrow(() -> new ApiException("Submission not graded yet", HttpStatus.BAD_REQUEST.value()));
+//
+//        if (!grading.getIsFinalized()) {
+//            throw new ApiException("Grading not finalized", HttpStatus.BAD_REQUEST.value());
+//        }
+
+        // === TÍNH THỐNG KÊ CÂU HỎI ===
+        List<GradingQuestion> gqs = gradingQuestionRepository
+                .findByGradingDailyIdAndDeletedAtIsNull(grading.getId());
+
+        int totalQuestions = gqs.size();
+        int correct = 0;
+        int wrong = 0;
+        int skipped = 0;
+        int empty = 0;
+
+        double maxPossibleScore = 0.0;
+
+        for (GradingQuestion gq : gqs) {
+            SubmissionQuestion sq = gq.getSubmissionQuestion();
+            Question q = sq.getQuestion();
+            double maxScore = q.getScore().doubleValue();
+            double achieved = gq.getScore();
+            maxPossibleScore += maxScore;
+
+            if (sq.getSubmissionContentJson() == null || sq.getSubmissionContentJson().isEmpty()) {
+                empty++;
+            } else if (achieved >= maxScore * 0.99) {
+                correct++;
+            } else if (achieved > 0) {
+                wrong++;
+            } else {
+                skipped++;
+            }
+        }
+
+        double percentage = maxPossibleScore == 0 ? 0.0 : (grading.getTotalScore() / maxPossibleScore) * 100.0;
+
+        // === LẤY FEEDBACK ===
+        String teacherFeedback = null;
+        String aiSummary = null;
+
+        if (grading.getGrader() != null) {
+            // Manual grading → lấy feedback giáo viên
+            teacherFeedback = grading.getOverallFeedback();
+        } else {
+            // Auto-grading → sinh AI summary
+            long correctCount = correct;
+            int total = totalQuestions;
+            aiSummary = generateAiOverallSummary(correctCount, total, percentage);
+        }
+
+        return new SubmissionGradingResultResponse(
+                grading.getTotalScore(),
+                maxPossibleScore,
+                percentage,
+                totalQuestions,
+                correct,
+                wrong,
+                skipped,
+                empty,
+                teacherFeedback,
+                aiSummary
+        );
+    }
+    private SubmissionDailyChallenge validateAndGetSubmission(Long submissionId) {
+        SubmissionDailyChallenge submission = submissionDailyChallengeRepository
+                .findByIdAndDeletedAtIsNull(submissionId)
+                .orElseThrow(() -> new ApiException(Const.SUBMISSION.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+
+        Long classId = submission.getChallenge()
+                .getClassLesson().getClassChapter().getClazz().getId();
+
+        appValidator.validateUserAccessToClass(classId);
+
+        if (submission.getSubmissionStatus() != SubmissionStatus.GRADED) {
+            throw new ApiException("Submission not graded yet", HttpStatus.BAD_REQUEST.value());
+        }
+
+        return submission;
+    }
+    private String generateAiOverallSummary(long correct, int total, double percentage) {
+        if (total == 0) return "No questions to grade.";
+
+        String base = String.format("You got %d/%d correct (%.1f%%). ", correct, total, percentage);
+
+        if (percentage >= 90) return base + "Excellent work!";
+        if (percentage >= 75) return base + "Great job! Keep it up.";
+        if (percentage >= 60) return base + "Good effort. Review the mistakes.";
+        if (percentage >= 40) return base + "You can do better. Focus on weak areas.";
+        return base + "Keep practicing!";
+    }
+
 
     @Override
     @Transactional

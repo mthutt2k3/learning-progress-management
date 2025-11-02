@@ -61,11 +61,11 @@ public class SubmissionQuestionServiceImpl implements SubmissionQuestionService 
         Long userId = jwtUtil.extractUserIdFromCurrentRequest();
         String cacheKey = cacheService.buildSubmissionResultCacheKey(userId, submissionChallengeId);
 
-//        SubmissionResultResponse cached = cacheService.getCachedObject(cacheKey, new TypeReference<>() {});
-//        if (cached != null) {
-//            log.debug("Cache HIT for submission result: {}", cacheKey);
-//            return cached;
-//        }
+        SubmissionResultResponse cached = cacheService.getCachedObject(cacheKey, new TypeReference<>() {});
+        if (cached != null) {
+            log.debug("Cache HIT for submission result: {}", cacheKey);
+            return cached;
+        }
 
         // 1. Lấy submission + challenge
         SubmissionDailyChallenge submission = submissionDailyChallengeRepository
