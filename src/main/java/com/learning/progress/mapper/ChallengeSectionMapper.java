@@ -71,16 +71,6 @@ public interface ChallengeSectionMapper {
     @Mapping(source = "questions", target = "questions", qualifiedByName = "toStudentQuestionDtoList")
     StudentSectionWithQuestionsDto toStudentSectionWithQuestionsDto(SectionWithQuestionsDto sectionWithQuestionsDto);
 
-    @Named("toStudentQuestionDtoList")
-    default List<StudentSectionWithQuestionsDto.StudentQuestionDto> toStudentQuestionDtoList(List<QuestionDto> questionDtos) {
-        if (questionDtos == null) {
-            return Collections.emptyList();
-        }
-        return questionDtos.stream()
-                .map(this::toStudentQuestionDto)
-                .toList();
-    }
-
     // QuestionDto → StudentQuestionDto
     @Mapping(source = "id", target = "id")
     @Mapping(source = "questionText", target = "questionText")
@@ -90,9 +80,9 @@ public interface ChallengeSectionMapper {
     StudentSectionWithQuestionsDto.StudentQuestionDto toStudentQuestionDto(QuestionDto questionDto);
 
     // Custom mapping for content based on QuestionType
-    default StudentSectionWithQuestionsDto.StudentDataContent mapContentByQuestionType(DataContent content, String questionType) {
+    default StudentDataContent mapContentByQuestionType(DataContent content, String questionType) {
         if (content == null || content.getData() == null) {
-            return new StudentSectionWithQuestionsDto.StudentDataContent();
+            return new StudentDataContent();
         }
 
         // Parse QuestionType
@@ -100,7 +90,7 @@ public interface ChallengeSectionMapper {
         try {
             type = QuestionType.valueOf(questionType);
         } catch (IllegalArgumentException e) {
-            return new StudentSectionWithQuestionsDto.StudentDataContent();
+            return new StudentDataContent();
         }
 
         // Handle REWRITE: no content
@@ -109,17 +99,17 @@ public interface ChallengeSectionMapper {
         }
 
         // Map DataItems based on QuestionType
-        List<StudentSectionWithQuestionsDto.StudentDataItem> studentDataItems = content.getData().stream()
+        List<StudentDataItem> studentDataItems = content.getData().stream()
                 .map(item -> mapDataItemByQuestionType(item, type))
                 .toList();
 
-        StudentSectionWithQuestionsDto.StudentDataContent studentDataContent = new StudentSectionWithQuestionsDto.StudentDataContent();
+        StudentDataContent studentDataContent = new StudentDataContent();
         studentDataContent.setData(studentDataItems);
         return studentDataContent;
     }
 
-    default StudentSectionWithQuestionsDto.StudentDataItem mapDataItemByQuestionType(DataItem item, QuestionType questionType) {
-        StudentSectionWithQuestionsDto.StudentDataItem studentItem = new StudentSectionWithQuestionsDto.StudentDataItem();
+    default StudentDataItem mapDataItemByQuestionType(DataItem item, QuestionType questionType) {
+        StudentDataItem studentItem = new StudentDataItem();
         studentItem.setId(item.getId());
         studentItem.setValue(item.getValue());
         return studentItem;
@@ -144,5 +134,49 @@ public interface ChallengeSectionMapper {
 
     default Object mapFromDataItemList(List<DataItem> list) {
         return list == null ? null : JsonUtil.responseToObject(list, Object.class);
+    }
+
+    @Mapping(target = "data", source = "fullContent.data", qualifiedByName = "mapToStudentDataItems")
+    StudentDataContent toStudentDataContent(DataContent fullContent, @Context QuestionType questionType);
+
+    // Custom mapping logic
+    @Named("mapToStudentDataItems")
+    default List<StudentDataItem> mapToStudentDataItems(List<DataItem> dataItems,@Context QuestionType questionType) {
+        if (dataItems == null) {
+            return Collections.emptyList();
+        }
+
+        return dataItems.stream()
+                .map(item -> {
+                    String value = (questionType == QuestionType.REWRITE) ? null : item.getValue();
+                    return StudentDataItem.builder()
+                            .id(item.getId())
+                            .value(value)
+                            .build();
+                })
+                .toList();
+    }
+
+    // Cập nhật method này để dùng toStudentDataContent có questionType
+    @Named("toStudentQuestionDtoList")
+    default List<StudentSectionWithQuestionsDto.StudentQuestionDto> toStudentQuestionDtoList(List<QuestionDto> questionDtos) {
+        if (questionDtos == null) {
+            return Collections.emptyList();
+        }
+        return questionDtos.stream()
+                .map(dto -> {
+                    StudentSectionWithQuestionsDto.StudentQuestionDto studentDto = new StudentSectionWithQuestionsDto.StudentQuestionDto();
+                    studentDto.setId(dto.getId());
+                    studentDto.setQuestionText(dto.getQuestionText());
+                    studentDto.setOrderNumber(dto.getOrderNumber());
+                    studentDto.setQuestionType(dto.getQuestionType());
+
+                    QuestionType type = QuestionType.valueOf(dto.getQuestionType());
+                    StudentDataContent content = toStudentDataContent(dto.getContent(), type);
+                    studentDto.setContent(content);
+
+                    return studentDto;
+                })
+                .toList();
     }
 }

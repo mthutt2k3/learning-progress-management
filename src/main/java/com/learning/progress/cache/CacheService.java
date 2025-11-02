@@ -198,4 +198,8 @@ public class CacheService {
         String key = buildSubmissionResultCacheKey(userId, submissionId);
         delete(key);
     }
+
+    public String buildDraftSubmissionCacheKey(Long userId, Long submissionId) {
+        return "draft:submission:user:" + userId + ":sub:" + submissionId;
+    }
 }
