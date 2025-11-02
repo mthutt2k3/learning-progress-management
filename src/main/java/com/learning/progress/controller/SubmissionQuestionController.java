@@ -3,6 +3,7 @@ package com.learning.progress.controller;
 import com.learning.progress.common.Const;
 import com.learning.progress.dto.DataResponse;
 import com.learning.progress.dto.submission.AppendSubmissionLogRequest;
+import com.learning.progress.dto.submission.DraftSubmissionResponse;
 import com.learning.progress.dto.submission.SaveSubmissionRequest;
 import com.learning.progress.dto.submission.SubmissionResultResponse;
 import com.learning.progress.service.SubmissionLogService;
@@ -45,6 +46,15 @@ public class SubmissionQuestionController {
             @PathVariable Long submissionChallengeId) {
         SubmissionResultResponse result = submissionQuestionService.getSubmissionResult(submissionChallengeId);
         return new ResponseEntity<>(DataResponse.success(result, Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL), HttpStatus.OK);
+    }
+    @GetMapping("/{submissionChallengeId}/draft")
+    @PreAuthorize("hasAnyRole('STUDENT', 'TEST_TAKER')")
+    @Operation(summary = "Get draft submission to continue",
+            description = "Retrieve draft submission with student answers but without correct answers")
+    public ResponseEntity<DataResponse<DraftSubmissionResponse>> getDraftSubmission(
+            @PathVariable Long submissionChallengeId) {
+        DraftSubmissionResponse result = submissionQuestionService.getDraftSubmission(submissionChallengeId);
+        return ResponseEntity.ok(DataResponse.success(result, Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL));
     }
     @PostMapping("/{submissionChallengeId}/logs")
     @PreAuthorize("hasAnyRole('STUDENT', 'TEST_TAKER')")
