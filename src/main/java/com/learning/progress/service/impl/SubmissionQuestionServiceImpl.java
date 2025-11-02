@@ -5,6 +5,7 @@ import com.learning.progress.common.ChallengeType;
 import com.learning.progress.common.Const;
 import com.learning.progress.common.SubmissionStatus;
 import com.learning.progress.dto.challenge.section.DataContent;
+import com.learning.progress.dto.challenge.section.SectionDto;
 import com.learning.progress.dto.submission.AnswerContent;
 import com.learning.progress.dto.submission.SaveSubmissionRequest;
 import com.learning.progress.dto.submission.SubmissionResultResponse;
@@ -26,6 +27,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -48,6 +50,10 @@ public class SubmissionQuestionServiceImpl implements SubmissionQuestionService 
     private QuartzJobTriggerService quartzJobTriggerService;
     @Autowired
     private TransactionTemplate transactionTemplate;
+    @Autowired
+    private ChallengeSectionRepository challengeSectionRepository;
+    @Autowired
+    private GradingQuestionRepository gradingQuestionRepository;
 
     @Override
     @Transactional(readOnly = true)
@@ -55,60 +61,106 @@ public class SubmissionQuestionServiceImpl implements SubmissionQuestionService 
         Long userId = jwtUtil.extractUserIdFromCurrentRequest();
         String cacheKey = cacheService.buildSubmissionResultCacheKey(userId, submissionChallengeId);
 
-        SubmissionResultResponse cached = cacheService.getCachedObject(cacheKey, new TypeReference<>() {});
+//        SubmissionResultResponse cached = cacheService.getCachedObject(cacheKey, new TypeReference<>() {});
+//        if (cached != null) {
+//            log.debug("Cache HIT for submission result: {}", cacheKey);
+//            return cached;
+//        }
 
-        if (cached != null) {
-            log.debug("Cache HIT for submission result: {}", cacheKey);
-            return cached;
-        }
-
-        SubmissionDailyChallenge submission = submissionDailyChallengeRepository.findByIdAndDeletedAtIsNull(submissionChallengeId)
+        // 1. Lấy submission + challenge
+        SubmissionDailyChallenge submission = submissionDailyChallengeRepository
+                .findByIdAndDeletedAtIsNull(submissionChallengeId)
                 .orElseThrow(() -> {
-                    log.error("Submission not found for submissionChallengeId: {}", submissionChallengeId);
+                    log.error("Submission not found: {}", submissionChallengeId);
                     return new ApiException(Const.SUBMISSION.NOT_FOUND, HttpStatus.NOT_FOUND.value());
                 });
 
-        DailyChallenge dailyChallenge = submission.getChallenge();
-        Long dailyChallengeId = dailyChallenge.getId();
-        Long classId = dailyChallenge.getClassLesson().getClassChapter().getClazz().getId();
+        DailyChallenge challenge = submission.getChallenge();
+        Long challengeId = challenge.getId();
+        Long classId = challenge.getClassLesson().getClassChapter().getClazz().getId();
         appValidator.validateUserAccessToClass(classId);
 
-        List<Question> questions = questionRepository.findByChallengeIdAndDeletedAtIsNull(dailyChallengeId);
-        if (questions.isEmpty()) {
-            throw new ApiException("No questions found for challenge", HttpStatus.NOT_FOUND.value());
+        // 2. LẤY TẤT CẢ SECTIONS + QUESTIONS (chỉ 1 query nhờ JOIN FETCH)
+        List<ChallengeSection> sections = challengeSectionRepository
+                .findByChallengeIdAndDeletedAtIsNullOrderByOrderNumberAsc(challengeId);
+
+        if (sections.isEmpty()) {
+            throw new ApiException("No sections found for challenge", HttpStatus.NOT_FOUND.value());
         }
 
+        // 3. Lấy submission questions
         List<SubmissionQuestion> submissionQuestions = submissionQuestionRepository
                 .findBySubmissionDailyIdAndDeletedAtIsNull(submissionChallengeId);
+
         Map<Long, SubmissionQuestion> submissionQuestionMap = submissionQuestions.stream()
-                .collect(Collectors.toMap(sq -> sq.getQuestion().getId(), sq -> sq, (e, r) -> e));
+                .collect(Collectors.toMap(sq -> sq.getQuestion().getId(), sq -> sq, (e1, e2) -> e1));
+        Map<Long, BigDecimal> receivedScoreMap = gradingQuestionRepository
+                .findBySubmissionQuestion_SubmissionDaily_IdAndDeletedAtIsNull(submissionChallengeId)
+                .stream()
+                .collect(Collectors.toMap(
+                        gq -> gq.getSubmissionQuestion().getQuestion().getId(),
+                        gq -> BigDecimal.valueOf(gq.getScore()),
+                        (v1, v2) -> v1
+                ));
+        // 4. Xây dựng response
+        List<SubmissionResultResponse.SectionDetailDTO> sectionDetails = sections.stream()
+                .map(section -> {
+                    SubmissionResultResponse.SectionDetailDTO dto = new SubmissionResultResponse.SectionDetailDTO();
 
+                    // Map Section
+                    SectionDto sectionInfo = new SectionDto();
+                    sectionInfo.setId(section.getId());
+                    sectionInfo.setSectionTitle(section.getSectionTitle());
+                    sectionInfo.setSectionsUrl(section.getSectionsUrl());
+                    sectionInfo.setSectionsContent(section.getSectionsContent());
+                    sectionInfo.setOrderNumber(section.getOrderNumber());
+                    sectionInfo.setResourceType(section.getResourceType().name());
+                    dto.setSection(sectionInfo);
+
+                    // Map Questions (đã được load sẵn + sort + filter deleted)
+                    List<SubmissionResultResponse.QuestionResult> questionResults = section.getQuestions().stream()
+                            .map(question -> {
+                                SubmissionResultResponse.QuestionResult qr = new SubmissionResultResponse.QuestionResult();
+                                qr.setQuestionId(question.getId());
+                                qr.setQuestionText(question.getQuestionText());
+                                qr.setQuestionType(question.getQuestionType());
+                                qr.setOrderNumber(question.getOrderNumber());
+                                qr.setScore(question.getScore());
+                                qr.setReceivedScore(receivedScoreMap.get(question.getId()));
+
+                                // Parse question content
+                                DataContent questionContent = JsonUtil.responseToObject(
+                                        question.getQuestionContentJson(), DataContent.class);
+                                qr.setQuestionContent(questionContent);
+
+                                // Parse submitted answer
+                                SubmissionQuestion sq = submissionQuestionMap.get(question.getId());
+                                if (sq != null && sq.getSubmissionContentJson() != null) {
+                                    AnswerContent submittedContent = JsonUtil.responseToObject(
+                                            sq.getSubmissionContentJson(), AnswerContent.class);
+                                    qr.setSubmittedContent(submittedContent);
+                                } else {
+                                    qr.setSubmittedContent(null);
+                                }
+
+                                return qr;
+                            })
+                            .toList();
+
+                    dto.setQuestionResults(questionResults);
+                    return dto;
+                })
+                .toList();
+
+        // 5. Build response
         SubmissionResultResponse response = new SubmissionResultResponse();
-        response.setChallengeId(dailyChallengeId);
-        response.setSubmissionId(submissionChallengeId);
+        response.setChallengeId(challengeId);
+        response.setSubmissionChallengeId(submissionChallengeId);
+        response.setSectionDetails(sectionDetails);
 
-        List<SubmissionResultResponse.QuestionResult> questionResults = new ArrayList<>();
-        for (Question question : questions) {
-            SubmissionResultResponse.QuestionResult qr = new SubmissionResultResponse.QuestionResult();
-            qr.setQuestionId(question.getId());
+        log.info("Retrieved submission result for challengeId: {}, submissionId: {}", challengeId, submissionChallengeId);
 
-            DataContent questionContent = JsonUtil.responseToObject(question.getQuestionContentJson(), DataContent.class);
-            qr.setQuestionContent(questionContent);
-
-            SubmissionQuestion sq = submissionQuestionMap.get(question.getId());
-            if (sq != null) {
-                AnswerContent submittedContent = JsonUtil.responseToObject(sq.getSubmissionContentJson(), AnswerContent.class);
-                qr.setSubmittedContent(submittedContent);
-            } else {
-                qr.setSubmittedContent(null);
-            }
-
-            questionResults.add(qr);
-        }
-
-        response.setQuestionResults(questionResults);
-        log.info("Successfully retrieved submission result for challengeId: {}, submissionChallengeId: {}", dailyChallengeId, submissionChallengeId);
-
+        // 6. Cache
         if (submission.getSubmissionStatus() == SubmissionStatus.SUBMITTED ||
                 submission.getSubmissionStatus() == SubmissionStatus.GRADED) {
             cacheService.cacheObject(cacheKey, response, 10);
