@@ -6,6 +6,8 @@ import com.learning.progress.common.UserStatus;
 import com.learning.progress.dto.account.AccountDTO;
 import com.learning.progress.dto.account.CreateNewAccountRequest;
 import com.learning.progress.dto.DataResponse;
+import com.learning.progress.dto.dashboard.AdminAccountDashboardResponse;
+import com.learning.progress.dto.dashboard.TrendResponse;
 import com.learning.progress.entity.Role;
 import com.learning.progress.entity.User;
 import com.learning.progress.exception.ApiException;
@@ -33,7 +35,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
-import java.util.List;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -346,5 +348,133 @@ public class AccountServiceImpl implements AccountService {
         targetUser.setDeletedAt(OffsetDateTime.now());
         userRepository.save(targetUser);
     }
+    @Override
+    public AdminAccountDashboardResponse getAdminAccountDashboard() {
+        OffsetDateTime todayStart = OffsetDateTime.now().withHour(0).withMinute(0).withSecond(0);
+        long total = userRepository.count();
 
+        long active = userRepository.countByStatus(UserStatus.ACTIVE);
+        long pending = userRepository.countByStatus(UserStatus.PENDING);
+        long inactive = userRepository.countByStatus(UserStatus.INACTIVE);
+        long newToday = userRepository.countByCreatedAtAfter(todayStart);
+
+        List<AdminAccountDashboardResponse.RoleBreakdown> roleBreakdown = Arrays.stream(RoleName.values())
+                .map(role -> {
+                    long count = userRepository.countByRole_Name(role);
+                    double percentage = total > 0 ? (count * 100.0 / total) : 0.0;
+                    return AdminAccountDashboardResponse.RoleBreakdown.builder()
+                            .role(role).count(count).percentage(Math.round(percentage * 10) / 10.0).build();
+                })
+                .filter(r -> r.getCount() > 0)
+                .toList();
+
+        List<AdminAccountDashboardResponse.StatusBreakdown> statusBreakdown = Arrays.stream(UserStatus.values())
+                .map(status -> {
+                    long count = userRepository.countByStatus(status);
+                    double percentage = total > 0 ? (count * 100.0 / total) : 0.0;
+                    return AdminAccountDashboardResponse.StatusBreakdown.builder()
+                            .status(status).count(count).percentage(Math.round(percentage * 10) / 10.0).build();
+                })
+                .toList();
+
+        List<User> recent = userRepository.findTop5ByOrderByCreatedAtDesc();
+        List<AdminAccountDashboardResponse.RecentAccount> recentAccounts = recent.stream()
+                .map(u -> AdminAccountDashboardResponse.RecentAccount.builder()
+                        .userId(u.getId())
+                        .email(u.getEmail())
+                        .role(u.getRole() != null ? u.getRole().getName() : null)
+                        .status(u.getStatus())
+                        .createdAt(u.getCreatedAt())
+                        .build())
+                .toList();
+
+        return AdminAccountDashboardResponse.builder()
+                .summary(AdminAccountDashboardResponse.AccountSummary.builder()
+                        .totalAccounts(total).activeAccounts(active).pendingAccounts(pending)
+                        .inactiveAccounts(inactive).newToday(newToday).build())
+                .roleBreakdown(roleBreakdown)
+                .statusBreakdown(statusBreakdown)
+                .recentAccounts(recentAccounts)
+                .build();
+    }
+
+    @Override
+    public List<TrendResponse> getUserTrend(String type, String period, int range) {
+        return switch (type) {
+            case "newUsers" -> getNewUsersTrend(period, range);
+            case "role" -> getRoleTrend(period, range);
+            case "status" -> getStatusTrend(period, range);
+            default -> throw new IllegalArgumentException("Invalid type: " + type);
+        };
+    }
+
+    private List<TrendResponse> getNewUsersTrend(String period, int range) {
+        OffsetDateTime start = period.equals("day")
+                ? OffsetDateTime.now().minusDays(range)
+                : OffsetDateTime.now().minusMonths(range);
+
+        List<Object[]> raw = period.equals("day")
+                ? userRepository.findDailyNewUsers(start)
+                : userRepository.findMonthlyNewUsers(start);
+
+        List<TrendResponse.TrendDataPoint> points = raw.stream()
+                .map(row -> TrendResponse.TrendDataPoint.builder()
+                        .label(row[0].toString())
+                        .count(((Number) row[1]).longValue())
+                        .build())
+                .toList();
+
+        return List.of(TrendResponse.builder()
+                .type("newUsers").period(period).data(points).build());
+    }
+
+    private List<TrendResponse> getRoleTrend(String period, int range) {
+        if (!period.equals("month")) throw new IllegalArgumentException("Role trend only supports month");
+        OffsetDateTime start = OffsetDateTime.now().minusMonths(range);
+        List<Object[]> raw = userRepository.findRoleByMonth(start);
+
+        Map<String, Map<String, Long>> map = new HashMap<>();
+        for (Object[] row : raw) {
+            String month = row[0].toString();
+            String role = row[1].toString();
+            Long count = ((Number) row[2]).longValue();
+            map.computeIfAbsent(month, k -> new HashMap<>()).put(role, count);
+        }
+
+        List<TrendResponse.TrendDataPoint> points = map.entrySet().stream()
+                .map(e -> TrendResponse.TrendDataPoint.builder()
+                        .label(e.getKey())
+                        .count(e.getValue().values().stream().mapToLong(Long::longValue).sum())
+                        .breakdown(e.getValue())
+                        .build())
+                .sorted(Comparator.comparing(TrendResponse.TrendDataPoint::getLabel))
+                .toList();
+
+        return List.of(TrendResponse.builder().type("role").period("month").data(points).build());
+    }
+
+    private List<TrendResponse> getStatusTrend(String period, int range) {
+        if (!period.equals("day")) throw new IllegalArgumentException("Status trend only supports day");
+        OffsetDateTime start = OffsetDateTime.now().minusDays(range);
+        List<Object[]> raw = userRepository.findStatusByDay(start);
+
+        Map<String, Map<String, Long>> map = new HashMap<>();
+        for (Object[] row : raw) {
+            String date = row[0].toString();
+            String status = row[1].toString();
+            Long count = ((Number) row[2]).longValue();
+            map.computeIfAbsent(date, k -> new HashMap<>()).put(status, count);
+        }
+
+        List<TrendResponse.TrendDataPoint> points = map.entrySet().stream()
+                .map(e -> TrendResponse.TrendDataPoint.builder()
+                        .label(e.getKey())
+                        .count(e.getValue().values().stream().mapToLong(Long::longValue).sum())
+                        .breakdown(e.getValue())
+                        .build())
+                .sorted(Comparator.comparing(TrendResponse.TrendDataPoint::getLabel))
+                .toList();
+
+        return List.of(TrendResponse.builder().type("status").period("day").data(points).build());
+    }
 }

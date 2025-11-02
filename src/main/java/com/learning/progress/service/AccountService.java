@@ -4,6 +4,8 @@ import com.learning.progress.common.UserStatus;
 import com.learning.progress.dto.account.AccountDTO;
 import com.learning.progress.dto.account.CreateNewAccountRequest;
 import com.learning.progress.dto.DataResponse;
+import com.learning.progress.dto.dashboard.AdminAccountDashboardResponse;
+import com.learning.progress.dto.dashboard.TrendResponse;
 import com.learning.progress.entity.User;
 
 import java.util.List;
@@ -22,4 +24,9 @@ public interface AccountService {
     AccountDTO updateStatusAccount(Long id, UserStatus userStatus);
 
     void deleteAccount(Long id);
+
+    AdminAccountDashboardResponse getAdminAccountDashboard();
+
+    List<TrendResponse> getUserTrend(String type, String period, int range);
+
 }

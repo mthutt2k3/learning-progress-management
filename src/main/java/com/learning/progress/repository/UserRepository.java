@@ -11,6 +11,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 import org.springframework.data.domain.Pageable;
 
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -35,8 +36,6 @@ public interface UserRepository extends JpaRepository<User, Long> {
             @Param("statuses") List<UserStatus> statuses,
             @Param("text") String text,
             Pageable pageable);
-
-
 
     @Query("SELECT CASE WHEN COUNT(u) > 0 THEN true ELSE false END FROM User u WHERE LOWER(u.userName) = LOWER(:userName)")
     boolean existsByUserName(String userName);
@@ -88,4 +87,54 @@ public interface UserRepository extends JpaRepository<User, Long> {
     Page<User> findAllByDeletedAtIsNull(Pageable pageable);
 
     List<User> findAllByIdInAndDeletedAtIsNull(List<Long> userIds);
+
+    // COUNT
+    long countByStatus(UserStatus status);
+    long countByRole_Name(RoleName role);
+    long countByCreatedAtAfter(OffsetDateTime date);
+
+    // RECENT
+    List<User> findTop5ByOrderByCreatedAtDesc();
+
+    // TREND: NEW USERS
+    @Query(value = """
+    SELECT DATE(created_at), COUNT(*) 
+    FROM users 
+    WHERE created_at >= :start 
+      AND deleted_at IS NULL 
+    GROUP BY DATE(created_at) 
+    ORDER BY 1
+    """, nativeQuery = true)
+    List<Object[]> findDailyNewUsers(@Param("start") OffsetDateTime start);
+
+    @Query(value = """
+    SELECT TO_CHAR(created_at, 'YYYY-MM'), COUNT(*) 
+    FROM users 
+    WHERE created_at >= :start 
+      AND deleted_at IS NULL 
+    GROUP BY TO_CHAR(created_at, 'YYYY-MM') 
+    ORDER BY 1
+    """, nativeQuery = true)
+    List<Object[]> findMonthlyNewUsers(@Param("start") OffsetDateTime start);
+
+    // TREND: ROLE
+    @Query(value = """
+    SELECT TO_CHAR(u.created_at, 'YYYY-MM'), r.name, COUNT(*)
+    FROM users u 
+    JOIN roles r ON u.role_id = r.id
+    WHERE u.created_at >= :start 
+      AND u.deleted_at IS NULL 
+    GROUP BY TO_CHAR(u.created_at, 'YYYY-MM'), r.name 
+    ORDER BY 1, 2
+    """, nativeQuery = true)
+    List<Object[]> findRoleByMonth(@Param("start") OffsetDateTime start);
+
+    // TREND: STATUS
+    @Query(value = """
+        SELECT DATE(u.created_at), u.status, COUNT(*)
+        FROM users u
+        WHERE u.created_at >= :start
+        GROUP BY 1, 2 ORDER BY 1, 2
+        """, nativeQuery = true)
+    List<Object[]> findStatusByDay(@Param("start") OffsetDateTime start);
 }
