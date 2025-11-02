@@ -65,8 +65,8 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
                     return new ApiException(Const.SUBMISSION.NOT_FOUND, HttpStatus.NOT_FOUND.value());
                 });
 
-        if (submission.getSubmissionStatus() != SubmissionStatus.SUBMITTED) {
-            throw new ApiException("Manual grading is only allowed when submission is in SUBMITTED status", HttpStatus.BAD_REQUEST.value());
+        if (submission.getSubmissionStatus() == SubmissionStatus.PENDING) {
+            throw new ApiException("Manual grading is only allowed when submission SUBMITTED", HttpStatus.BAD_REQUEST.value());
         }
 
         DailyChallenge challenge = submission.getChallenge();
@@ -86,11 +86,11 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
                     return new ApiException(Const.ACCOUNT.ACCOUNT_NOT_FOUND, HttpStatus.BAD_REQUEST.value());
                 });
 
-        gradingDailyChallengeRepository.findBySubmissionDailyIdAndIsFinalizedTrueAndDeletedAtIsNull(submissionId)
-                .ifPresent(g -> {
-                    log.error("Submission {} is already finalized", submissionId);
-                    throw new ApiException("Submission is already finalized and cannot be re-graded", HttpStatus.BAD_REQUEST.value());
-                });
+//        gradingDailyChallengeRepository.findBySubmissionDailyIdAndIsFinalizedTrueAndDeletedAtIsNull(submissionId)
+//                .ifPresent(g -> {
+//                    log.error("Submission {} is already finalized", submissionId);
+//                    throw new ApiException("Submission is already finalized and cannot be re-graded", HttpStatus.BAD_REQUEST.value());
+//                });
 
         List<Long> submissionQuestionIds = request.getQuestionGradings().stream()
                 .map(ManualGradingRequest.QuestionGrading::getSubmissionQuestionId)
@@ -129,6 +129,8 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
             gradingQuestion.setGrader(grader);
             gradingQuestion.setScore(qg.getScore());
             gradingQuestion.setFeedback(qg.getFeedback());
+            String json = JsonUtil.objectToJson(qg.getHighlightComments());
+            gradingQuestion.setHighlightCommentsJson(json);
             gradingQuestions.add(gradingQuestion);
         }
         gradingQuestionRepository.saveAll(gradingQuestions);

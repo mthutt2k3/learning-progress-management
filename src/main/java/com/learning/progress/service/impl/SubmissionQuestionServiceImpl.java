@@ -99,7 +99,7 @@ public class SubmissionQuestionServiceImpl implements SubmissionQuestionService 
                 .stream()
                 .collect(Collectors.toMap(
                         gq -> gq.getSubmissionQuestion().getQuestion().getId(),
-                        gq -> BigDecimal.valueOf(gq.getScore()),
+                        gq -> BigDecimal.valueOf(gq.getScore() == null ? 0.0 : gq.getScore()),
                         (v1, v2) -> v1
                 ));
         // 4. Xây dựng response

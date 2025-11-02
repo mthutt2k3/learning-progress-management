@@ -32,6 +32,27 @@ public class ManualGradingRequest {
 
         private String feedback;
 
-        private String highlightCommentsJson; // Optional, for detailed comments
+        // Thay vì String, giờ là List<HighlightComment>
+        private List<HighlightComment> highlightComments;
+    }
+
+    // Class mới đại diện cho từng comment highlight
+    @Getter
+    @Setter
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class HighlightComment {
+        @NotNull(message = "Start index is required")
+        @Min(value = 0, message = "Start index must be non-negative")
+        private Integer startIndex;
+
+        @NotNull(message = "End index is required")
+        @Min(value = 0, message = "End index must be non-negative")
+        private Integer endIndex;
+
+        private String comment;
+
+        private String id; // Optional: để tracking feedback
+
+        private String timestamp; // Optional: thời gian tạo
     }
 }

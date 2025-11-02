@@ -49,7 +49,7 @@ public class GradingQuestion extends BaseEntity{
 
     @Column(name = "highlight_comments_json")
     @JdbcTypeCode(SqlTypes.JSON)
-    private Map<String, Object> highlightCommentsJson;
+    private String highlightCommentsJson;
 
 
 }
