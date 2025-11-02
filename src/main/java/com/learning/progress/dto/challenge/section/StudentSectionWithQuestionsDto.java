@@ -30,22 +30,4 @@ public class StudentSectionWithQuestionsDto {
         private StudentDataContent content; // Nội dung câu hỏi không chứa isCorrect
 
     }
-
-    @Data
-    @NoArgsConstructor
-    @AllArgsConstructor
-    @Builder
-    public static class StudentDataContent {
-        private List<StudentDataItem> data; // Danh sách các lựa chọn hoặc câu trả lời
-
-    }
-
-    @Data
-    @NoArgsConstructor
-    @AllArgsConstructor
-    @Builder
-    public static class StudentDataItem {
-        private String id;
-        private String value;
-    }
 }

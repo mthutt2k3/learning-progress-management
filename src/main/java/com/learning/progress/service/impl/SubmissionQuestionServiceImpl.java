@@ -6,12 +6,15 @@ import com.learning.progress.common.Const;
 import com.learning.progress.common.SubmissionStatus;
 import com.learning.progress.dto.challenge.section.DataContent;
 import com.learning.progress.dto.challenge.section.SectionDto;
+import com.learning.progress.dto.challenge.section.StudentDataContent;
 import com.learning.progress.dto.submission.AnswerContent;
+import com.learning.progress.dto.submission.DraftSubmissionResponse;
 import com.learning.progress.dto.submission.SaveSubmissionRequest;
 import com.learning.progress.dto.submission.SubmissionResultResponse;
 import com.learning.progress.entity.*;
 import com.learning.progress.exception.ApiException;
 import com.learning.progress.job.QuartzJobTriggerService;
+import com.learning.progress.mapper.ChallengeSectionMapper;
 import com.learning.progress.repository.*;
 import com.learning.progress.cache.CacheService;
 import com.learning.progress.service.GradingDailyChallengeService;
@@ -54,6 +57,8 @@ public class SubmissionQuestionServiceImpl implements SubmissionQuestionService 
     private ChallengeSectionRepository challengeSectionRepository;
     @Autowired
     private GradingQuestionRepository gradingQuestionRepository;
+    @Autowired
+    private ChallengeSectionMapper challengeSectionMapper;
 
     @Override
     @Transactional(readOnly = true)
@@ -169,6 +174,101 @@ public class SubmissionQuestionServiceImpl implements SubmissionQuestionService 
         return response;
     }
 
+    // SubmissionQuestionServiceImpl.java
+    @Override
+    @Transactional(readOnly = true)
+    public DraftSubmissionResponse getDraftSubmission(Long submissionChallengeId) {
+        Long userId = jwtUtil.extractUserIdFromCurrentRequest();
+        String cacheKey = cacheService.buildDraftSubmissionCacheKey(userId, submissionChallengeId);
+
+        DraftSubmissionResponse cached = cacheService.getCachedObject(cacheKey, new TypeReference<>() {});
+        if (cached != null) {
+            log.debug("Cache HIT for draft: {}", cacheKey);
+            return cached;
+        }
+
+        // 1. Lấy submission
+        SubmissionDailyChallenge submission = submissionDailyChallengeRepository
+                .findByIdAndDeletedAtIsNull(submissionChallengeId)
+                .orElseThrow(() -> new ApiException(Const.SUBMISSION.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+
+        // Kiểm tra quyền + trạng thái
+        Long classId = submission.getChallenge().getClassLesson().getClassChapter().getClazz().getId();
+        appValidator.validateUserAccessToClass(classId);
+
+        if (submission.getSubmissionStatus() != SubmissionStatus.DRAFT) {
+            throw new ApiException("Submission is not in draft mode", HttpStatus.BAD_REQUEST.value());
+        }
+
+        DailyChallenge challenge = submission.getChallenge();
+        Long challengeId = challenge.getId();
+
+        // 2. Load sections + questions
+        List<ChallengeSection> sections = challengeSectionRepository
+                .findByChallengeIdAndDeletedAtIsNullOrderByOrderNumberAsc(challengeId);
+
+        // 3. Load submitted answers
+        List<SubmissionQuestion> submissionQuestions = submissionQuestionRepository
+                .findBySubmissionDailyIdAndDeletedAtIsNull(submissionChallengeId);
+
+        Map<Long, SubmissionQuestion> submittedMap = submissionQuestions.stream()
+                .collect(Collectors.toMap(sq -> sq.getQuestion().getId(), sq -> sq));
+
+        // 4. Build response
+        List<DraftSubmissionResponse.SectionDraftDTO> sectionDtos = sections.stream()
+                .map(section -> {
+                    DraftSubmissionResponse.SectionDraftDTO secDto = new DraftSubmissionResponse.SectionDraftDTO();
+
+                    // Section info
+                    SectionDto sectionInfo = new SectionDto();
+                    sectionInfo.setId(section.getId());
+                    sectionInfo.setSectionTitle(section.getSectionTitle());
+                    sectionInfo.setOrderNumber(section.getOrderNumber());
+                    secDto.setSection(sectionInfo);
+
+                    // Questions (student view + submitted)
+                    List<DraftSubmissionResponse.QuestionDraftDTO> qDtos = section.getQuestions().stream()
+                            .map(q -> {
+                                DraftSubmissionResponse.QuestionDraftDTO qDto = new DraftSubmissionResponse.QuestionDraftDTO();
+                                qDto.setQuestionId(q.getId());
+                                qDto.setQuestionText(q.getQuestionText());
+                                qDto.setOrderNumber(q.getOrderNumber());
+                                qDto.setScore(q.getScore());
+                                qDto.setQuestionType(q.getQuestionType());
+
+                                // Nội dung câu hỏi: không có đáp án đúng
+                                DataContent fullContent = JsonUtil.responseToObject(q.getQuestionContentJson(), DataContent.class);
+                                StudentDataContent studentContent = challengeSectionMapper.toStudentDataContent(fullContent, q.getQuestionType());
+                                qDto.setContent(studentContent);
+
+                                // Câu trả lời đã chọn
+                                SubmissionQuestion sq = submittedMap.get(q.getId());
+                                if (sq != null && sq.getSubmissionContentJson() != null) {
+                                    AnswerContent answer = JsonUtil.responseToObject(sq.getSubmissionContentJson(), AnswerContent.class);
+                                    qDto.setSubmittedContent(answer);
+                                }
+
+                                return qDto;
+                            })
+                            .toList();
+
+                    secDto.setQuestions(qDtos);
+                    return secDto;
+                })
+                .toList();
+
+        DraftSubmissionResponse response = new DraftSubmissionResponse();
+        response.setChallengeId(challengeId);
+        response.setSubmissionChallengeId(submissionChallengeId);
+        response.setStatus(submission.getSubmissionStatus());
+        response.setSectionDetails(sectionDtos);
+
+        // Cache 5 phút
+        cacheService.cacheObject(cacheKey, response, 5);
+
+        return response;
+    }
+
     @Override
 // @Transactional
     public void saveSubmission(Long submissionChallengeId, SaveSubmissionRequest request) {
@@ -178,7 +278,10 @@ public class SubmissionQuestionServiceImpl implements SubmissionQuestionService 
         DailyChallenge dailyChallenge = submission.getChallenge();
         Long classId = dailyChallenge.getClassLesson().getClassChapter().getClazz().getId();
         appValidator.validateUserAccessToClass(classId);
-
+        SubmissionStatus status = submission.getSubmissionStatus();
+        if (status == SubmissionStatus.SUBMITTED || status == SubmissionStatus.GRADED) {
+            throw new ApiException("Submission already completed", HttpStatus.BAD_REQUEST.value());
+        }
         OffsetDateTime now = OffsetDateTime.now();
         if (submission.getStartedAt() != null && submission.getExpiredAt() != null &&
                 (now.isBefore(submission.getStartedAt()) || now.isAfter(submission.getExpiredAt()))) {
@@ -227,15 +330,15 @@ public class SubmissionQuestionServiceImpl implements SubmissionQuestionService 
         }
 
         if (!toSave.isEmpty()) {
+            if (status != SubmissionStatus.DRAFT) {
+                submission.setSubmissionStatus(SubmissionStatus.DRAFT);
+                submissionDailyChallengeRepository.save(submission);
+            }
             submissionQuestionRepository.saveAll(toSave);
         }
 
         // === CHỈ KHI NỘP CHÍNH THỨC ===
         if (!request.getSaveAsDraft()) {
-            if (submission.getSubmissionStatus() == SubmissionStatus.SUBMITTED) {
-                throw new ApiException("Submission is already submitted", HttpStatus.BAD_REQUEST.value());
-            }
-
             submission.setSubmissionStatus(SubmissionStatus.SUBMITTED);
             submission.setSubmittedAt(OffsetDateTime.now());
             submission.setAutoSubmitted(false);
