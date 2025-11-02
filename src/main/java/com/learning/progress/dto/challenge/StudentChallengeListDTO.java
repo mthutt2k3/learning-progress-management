@@ -35,6 +35,7 @@ public class StudentChallengeListDTO {
         private OffsetDateTime startDate; // Từ SubmissionDailyChallenge.startedAt
         private OffsetDateTime endDate; // Từ SubmissionDailyChallenge.expiredAt
         private SubmissionStatus submissionStatus; // Từ SubmissionDailyChallenge
+        private boolean isLate; // Từ SubmissionDailyChallenge
         private OffsetDateTime submittedAt; // Từ SubmissionDailyChallenge
         private Double totalScore; // Từ GradingDailyChallenges
         private Double scorePercentage; // Từ GradingDailyChallenges

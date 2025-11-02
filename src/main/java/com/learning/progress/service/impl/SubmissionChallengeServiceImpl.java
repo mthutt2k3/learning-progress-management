@@ -149,6 +149,7 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
                             obj.isNull("startDate") ? null : OffsetDateTime.parse(obj.getString("startDate")),
                             obj.isNull("endDate") ? null : OffsetDateTime.parse(obj.getString("endDate")),
                             obj.isNull("submissionStatus") ? null : SubmissionStatus.valueOf(obj.getString("submissionStatus")),
+                            obj.isNull("isLate") ? null : obj.getBoolean("isLate"),
                             obj.isNull("submittedAt") ? null : OffsetDateTime.parse(obj.getString("submittedAt")),
                             obj.isNull("totalScore") ? null : obj.getDouble("totalScore"),
                             obj.isNull("scorePercentage") ? null : obj.getDouble("scorePercentage")
@@ -224,6 +225,7 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
                     dto.setSubmissionStatus(submission.getSubmissionStatus());
                     dto.setSubmittedAt(submission.getSubmittedAt());
                     dto.setExpiredAt(submission.getExpiredAt());
+                    dto.setLate(submission.getIsLate());
                     dto.setAutoSubmitted(submission.getAutoSubmitted());
                     dto.setPlagiarismScore(submission.getPlagiarismScore());
                     dto.setTotalScore(gradingScoreMap.get(submission.getId()));
@@ -246,14 +248,14 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
     @Override
     @Transactional
     public void autoSubmitExpiredSubmissions() {
-        log.info("Processing auto-submit for expired submissions");
+        log.info("Processing auto-submit for expired TEST submissions");
 
         int pageSize = 100;
         Pageable pageable = PageRequest.of(0, pageSize);
         Page<SubmissionDailyChallenge> submissionPage;
 
         do {
-            submissionPage = submissionDailyChallengeRepository.findBySubmissionStatusAndAutoSubmittedFalseAndExpiredAtBefore(
+            submissionPage = submissionDailyChallengeRepository.findExpiredTestSubmissionsForAutoSubmit(
                     SubmissionStatus.PENDING, OffsetDateTime.now(), pageable);
 
             List<SubmissionDailyChallenge> toUpdate = submissionPage.getContent();
@@ -264,12 +266,32 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
                     submission.setSubmittedAt(OffsetDateTime.now());
                 });
                 submissionDailyChallengeRepository.saveAll(toUpdate);
-                log.debug("Auto-submitted {} submissions", toUpdate.size());
+                log.debug("Auto-submitted {} TEST submissions", toUpdate.size());
             }
 
             pageable = pageable.next();
         } while (submissionPage.hasNext());
 
-        log.info("Auto-submit task completed");
+        log.info("Auto-submit task for TEST challenges completed");
     }
+    @Override
+    @Transactional
+    public int detectAndMarkLateSubmissions() {
+
+        OffsetDateTime now = OffsetDateTime.now();
+        List<SubmissionDailyChallenge> lateSubmissions =
+                submissionDailyChallengeRepository.findBySubmissionStatusAndExpiredAtBeforeAndDeletedAtIsNull(
+                        SubmissionStatus.PENDING, now);
+
+        if (lateSubmissions.isEmpty()) {
+            log.debug("No late submissions found.");
+            return 0;
+        }
+
+        lateSubmissions.forEach(s -> s.setIsLate(true));
+        log.info("Marked {} submission(s) as LATE", lateSubmissions.size());
+
+        return lateSubmissions.size();
+    }
+
 }
