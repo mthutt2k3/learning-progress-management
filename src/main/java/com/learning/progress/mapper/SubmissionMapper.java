@@ -76,6 +76,7 @@ public abstract class SubmissionMapper {
                 dto.setStartDate(submission.getStartedAt());
                 dto.setEndDate(submission.getExpiredAt());
                 dto.setSubmissionStatus(submission.getSubmissionStatus());
+                dto.setLate(submission.getIsLate());
                 dto.setSubmittedAt(submission.getSubmittedAt());
 
                 // Lấy totalScore từ GradingDailyChallenges

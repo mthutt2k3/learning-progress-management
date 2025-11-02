@@ -48,7 +48,7 @@ public class DailyChallengeController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasRole('TEACHER')")
+    @PreAuthorize("hasAnyRole('TEACHER', 'TEACHING_ASSISTANT', 'STUDENT', 'TEST_TAKER')")
     @Operation(summary = "Get daily challenge by ID", description = "Retrieve details of a specific daily challenge")
     public ResponseEntity<DataResponse<DailyChallengeResponse>> getChallengeById(@PathVariable Long id) {
         DailyChallengeResponse response = dailyChallengeService.getChallengeById(id);

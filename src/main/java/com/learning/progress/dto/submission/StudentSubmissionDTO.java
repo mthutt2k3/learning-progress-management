@@ -15,6 +15,7 @@ public class StudentSubmissionDTO {
     private SubmissionStatus submissionStatus;
     private OffsetDateTime submittedAt;
     private OffsetDateTime expiredAt;
+    private boolean isLate;
     private Boolean autoSubmitted;
     private Double plagiarismScore; // Nullable
     private Double totalScore; // Total score for the submission

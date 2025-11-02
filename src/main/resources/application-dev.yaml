@@ -153,7 +153,12 @@ app:
       enabled: true               # có thể bật/tắt job nếu cần
       cron: "0 0 0 * * *"         # chạy mỗi ngày lúc 0h00
       upcoming-end-days: 7        # số ngày trước endDate để chuyển sang UPCOMING_END
-
+    # Job phát hiện submission quá hạn (LATE)
+    submission-late-detection-job:
+      enabled: true
+      cron: "0 */5 * * * *"         # Chạy mỗi 5 phút
+      # Có thể thêm batch-size nếu dùng batch update
+      batch-size: 100
 env:
   class:
     max-teaching-assistant-in-class: 2

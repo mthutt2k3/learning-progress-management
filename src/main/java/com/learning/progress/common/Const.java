@@ -389,7 +389,7 @@ public class Const {
     }
 
     public static class SUBMISSION {
-        public static final String NOT_FOUND = "";
+        public static final String NOT_FOUND = "Submission not found";
     }
 
     public static final class TRANSLATOR {
