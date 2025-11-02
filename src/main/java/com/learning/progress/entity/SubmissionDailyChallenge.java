@@ -50,7 +50,7 @@ public class SubmissionDailyChallenge extends BaseEntity{
 
     @Column(name = "submission_logs_json")
     @JdbcTypeCode(SqlTypes.JSON)
-    private Map<String, Object> submissionLogsJson;
+    private String submissionLogsJson;
 
     @ColumnDefault("CURRENT_TIMESTAMP")
     @Column(name = "started_at")

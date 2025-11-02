@@ -70,7 +70,19 @@ public final class JsonUtil {
             return Collections.emptyMap();
         }
     }
-
+    public static <T> List<T> jsonToList(String json, Class<T> clazz) {
+        if (json == null || json.isBlank()) {
+            return Collections.emptyList();
+        }
+        try {
+            ObjectMapper mapper = new ObjectMapper();
+            mapper.disable(SerializationFeature.FAIL_ON_EMPTY_BEANS);
+            return mapper.readValue(json, mapper.getTypeFactory().constructCollectionType(List.class, clazz));
+        } catch (Exception e) {
+            log.error("Error deserializing JSON to List<{}>", clazz.getSimpleName(), e);
+            return Collections.emptyList();
+        }
+    }
 
 }
 

@@ -2,6 +2,7 @@ package com.learning.progress.controller;
 
 import com.learning.progress.dto.DataResponse;
 import com.learning.progress.dto.grading.ManualGradingRequest;
+import com.learning.progress.dto.grading.SubmissionGradingResultResponse;
 import com.learning.progress.service.GradingDailyChallengeService;
 import com.learning.progress.common.Const;
 import io.swagger.v3.oas.annotations.Operation;
@@ -21,16 +22,24 @@ public class GradingDailyChallengeController {
 
     @Autowired
     private GradingDailyChallengeService gradingDailyChallengeService;
+    @GetMapping("/submission/{submissionId}/result")
+    @PreAuthorize("hasAnyRole('STUDENT', 'TEST_TAKER', 'TEACHER', 'TEACHING_ASSISTANT')")
+    @Operation(summary = "Get complete grading result (score + summary feedback)",
+            description = "Returns total score, question stats, and overall feedback from teacher (if manual) or AI (if auto-graded)")
+    public ResponseEntity<DataResponse<SubmissionGradingResultResponse>> getGradingResult(
+            @PathVariable Long submissionId) {
+        SubmissionGradingResultResponse result = gradingDailyChallengeService.getGradingResult(submissionId);
+        return new ResponseEntity<>(DataResponse.success(result, Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL), HttpStatus.OK);
+    }
 
-    @PostMapping("/challenge/{challengeId}/submission/{submissionId}/grade")
+    @PostMapping("/submission/{submissionId}/grade")
     @PreAuthorize("hasAnyRole('TEACHER', 'TEACHING_ASSISTANT')")
     @Operation(summary = "Manually grade a submission", 
                description = "Submit manual grading for WRITING or SPEAKING challenge submissions, including total score and per-question scores/feedback")
     public ResponseEntity<DataResponse<?>> gradeSubmissionManually(
-            @Parameter(description = "Challenge ID") @PathVariable Long challengeId,
             @Parameter(description = "Submission ID") @PathVariable Long submissionId,
             @Valid @RequestBody ManualGradingRequest request) {
-        gradingDailyChallengeService.gradeSubmissionManually(challengeId, submissionId, request);
+        gradingDailyChallengeService.gradeSubmissionManually(submissionId, request);
         return new ResponseEntity<>(DataResponse.success(null, Const.RESULT_MESSAGE_CODE.UPDATE_SUCCESSFUL), HttpStatus.OK);
     }
 }

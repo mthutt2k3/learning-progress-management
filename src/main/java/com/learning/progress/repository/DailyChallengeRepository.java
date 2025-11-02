@@ -47,34 +47,6 @@ public interface DailyChallengeRepository extends JpaRepository<DailyChallenge, 
 
     boolean existsByClassLessonAndChallengeNameAndDeletedAtIsNull(ClassLesson classLesson, String challengeName);
 
-    @Query("""
-    SELECT cl
-    FROM ClassLesson cl
-    JOIN cl.classChapter cc
-    JOIN cc.clazz c
-    LEFT JOIN cl.publishedDailyChallenges dc
-    LEFT JOIN dc.submissionDailyChallenges sdc WITH 
-          sdc.user.id = :studentId 
-      AND sdc.deletedAt IS NULL
-    WHERE c.id = :classId
-      AND cl.deletedAt IS NULL
-      AND (
-            :text IS NULL OR :text = '' OR
-            LOWER(cl.classLessonName) LIKE LOWER(CONCAT('%', :text, '%')) OR
-            (dc IS NOT NULL AND (
-                LOWER(dc.challengeName) LIKE LOWER(CONCAT('%', :text, '%')) OR
-                LOWER(dc.description) LIKE LOWER(CONCAT('%', :text, '%'))
-            ))
-      )
-    GROUP BY cl.id, cc.id
-    ORDER BY cc.orderNumber ASC, cl.orderNumber ASC
-    """)
-    Page<ClassLesson> findAllLessonsWithPublishedChallengesAndSubmissions(
-            @Param("classId") Long classId,
-            @Param("studentId") Long studentId,
-            @Param("text") String text,
-            Pageable pageable
-    );
     @Query(value = """
     WITH lesson_list AS (
         SELECT 
@@ -104,8 +76,10 @@ public interface DailyChallengeRepository extends JpaRepository<DailyChallenge, 
             sdc.started_at,
             sdc.expired_at,
             sdc.submission_status,
+            sdc.is_late,
             sdc.submitted_at,
             gdc.total_score,
+            gdc.score_percentage,
             dc.class_lesson_id
         FROM daily_challenges dc
         LEFT JOIN submission_daily_challenges sdc 
@@ -138,8 +112,10 @@ public interface DailyChallengeRepository extends JpaRepository<DailyChallenge, 
                     'startDate', c.started_at,
                     'endDate', c.expired_at,
                     'submissionStatus', c.submission_status,
+                    'isLate', c.is_late,
                     'submittedAt', c.submitted_at,
-                    'totalScore', c.total_score
+                    'totalScore', c.total_score,
+                    'scorePercentage', c.score_percentage
                 ) ORDER BY c.started_at
             ) FILTER (WHERE c.id IS NOT NULL) AS challenges_json
         FROM lesson_list l
@@ -173,4 +149,5 @@ public interface DailyChallengeRepository extends JpaRepository<DailyChallenge, 
             Pageable pageable
     );
 
+    boolean existsByClassLessonAndChallengeNameAndDeletedAtIsNullAndIdNot(ClassLesson classLesson, String challengeName, Long id);
 }

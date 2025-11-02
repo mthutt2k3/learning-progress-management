@@ -1,5 +1,6 @@
 package com.learning.progress.repository;
 
+import com.learning.progress.common.ChallengeMethod;
 import com.learning.progress.common.SubmissionStatus;
 import com.learning.progress.entity.SubmissionDailyChallenge;
 import org.springframework.data.domain.Page;
@@ -55,4 +56,19 @@ public interface SubmissionDailyChallengeRepository extends JpaRepository<Submis
     Page<SubmissionDailyChallenge> findByChallengeIdAndDeletedAtIsNull(Long challengeId, String text, Pageable pageable);
 
     Page<SubmissionDailyChallenge> findBySubmissionStatusAndAutoSubmittedFalseAndExpiredAtBefore(SubmissionStatus submissionStatus, OffsetDateTime now, Pageable pageable);
+
+    List<SubmissionDailyChallenge> findBySubmissionStatusAndExpiredAtBeforeAndDeletedAtIsNull(SubmissionStatus submissionStatus, OffsetDateTime now);
+
+    @Query("""
+    SELECT s FROM SubmissionDailyChallenge s
+    JOIN s.challenge c
+    WHERE s.submissionStatus = :status
+      AND s.autoSubmitted = false
+      AND s.expiredAt < :now
+      AND c.challengeMethod = 'TEST'
+    """)
+    Page<SubmissionDailyChallenge> findExpiredTestSubmissionsForAutoSubmit(
+            @Param("status") SubmissionStatus status,
+            @Param("now") OffsetDateTime now,
+            Pageable pageable);
 }
