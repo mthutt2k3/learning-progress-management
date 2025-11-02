@@ -147,18 +147,30 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
         appValidator.validateUserAccessToClass(challenge.getClassLesson().getClassChapter().getClazz().getId());
         validateUpdateDailyChallenge(dto);
 
-        boolean exists = dailyChallengeRepository.existsByClassLessonAndChallengeNameAndDeletedAtIsNull(
-                challenge.getClassLesson(), dto.getChallengeName());
+        boolean exists = dailyChallengeRepository
+                .existsByClassLessonAndChallengeNameAndDeletedAtIsNullAndIdNot(
+                        challenge.getClassLesson(), dto.getChallengeName(), id
+                );
+
         if (exists) {
             throw badRequest("Challenge name already exists for this lesson: " + dto.getChallengeName());
         }
 
-        BeanUtils.copyProperties(dto, challenge);
-        dailyChallengeRepository.save(challenge);
+        // instead of copy all
+        challenge.setChallengeName(dto.getChallengeName());
+        challenge.setDescription(dto.getDescription());
+        challenge.setChallengeMethod(dto.getChallengeMethod());
+        challenge.setDurationMinutes(dto.getDurationMinutes());
+        challenge.setHasAntiCheat(dto.getHasAntiCheat());
+        challenge.setShuffleQuestion(dto.getShuffleQuestion());
+        challenge.setTranslateOnScreen(dto.getTranslateOnScreen());
+        challenge.setStartDate(dto.getStartDate());
+        challenge.setEndDate(dto.getEndDate());
 
         log.info("[{}] Updated challenge id: {}", traceId, id);
         return dailyChallengeMapper.mapToDTO(challenge);
     }
+
 
     /* --------------------------------------------------------
      * DELETE
@@ -292,11 +304,15 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
 
     private void validateBasicFields(UpdateDailyChallengeDTO c) {
         if (isBlank(c.getChallengeName())) throw badRequest("Challenge name cannot be null or empty");
-        if (c.getChallengeType() == null) throw badRequest("Challenge type cannot be null");
         if (c.getStartDate() == null) throw badRequest("Start date cannot be null");
         if (c.getEndDate() == null) throw badRequest("End date cannot be null");
         if (c.getEndDate().isBefore(c.getStartDate()))
             throw badRequest("End date must be after start date");
+        // ✅ Start date must be >= now
+        OffsetDateTime now = OffsetDateTime.now();
+        if (c.getStartDate().isBefore(now)) {
+            throw badRequest("Start date must be in the future");
+        }
     }
 
     // --- VALIDATE PUBLISH ---

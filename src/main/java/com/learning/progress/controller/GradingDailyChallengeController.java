@@ -22,15 +22,14 @@ public class GradingDailyChallengeController {
     @Autowired
     private GradingDailyChallengeService gradingDailyChallengeService;
 
-    @PostMapping("/challenge/{challengeId}/submission/{submissionId}/grade")
+    @PostMapping("/submission/{submissionId}/grade")
     @PreAuthorize("hasAnyRole('TEACHER', 'TEACHING_ASSISTANT')")
     @Operation(summary = "Manually grade a submission", 
                description = "Submit manual grading for WRITING or SPEAKING challenge submissions, including total score and per-question scores/feedback")
     public ResponseEntity<DataResponse<?>> gradeSubmissionManually(
-            @Parameter(description = "Challenge ID") @PathVariable Long challengeId,
             @Parameter(description = "Submission ID") @PathVariable Long submissionId,
             @Valid @RequestBody ManualGradingRequest request) {
-        gradingDailyChallengeService.gradeSubmissionManually(challengeId, submissionId, request);
+        gradingDailyChallengeService.gradeSubmissionManually(submissionId, request);
         return new ResponseEntity<>(DataResponse.success(null, Const.RESULT_MESSAGE_CODE.UPDATE_SUCCESSFUL), HttpStatus.OK);
     }
 }

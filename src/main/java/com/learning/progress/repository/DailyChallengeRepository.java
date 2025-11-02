@@ -47,34 +47,6 @@ public interface DailyChallengeRepository extends JpaRepository<DailyChallenge, 
 
     boolean existsByClassLessonAndChallengeNameAndDeletedAtIsNull(ClassLesson classLesson, String challengeName);
 
-    @Query("""
-    SELECT cl
-    FROM ClassLesson cl
-    JOIN cl.classChapter cc
-    JOIN cc.clazz c
-    LEFT JOIN cl.publishedDailyChallenges dc
-    LEFT JOIN dc.submissionDailyChallenges sdc WITH 
-          sdc.user.id = :studentId 
-      AND sdc.deletedAt IS NULL
-    WHERE c.id = :classId
-      AND cl.deletedAt IS NULL
-      AND (
-            :text IS NULL OR :text = '' OR
-            LOWER(cl.classLessonName) LIKE LOWER(CONCAT('%', :text, '%')) OR
-            (dc IS NOT NULL AND (
-                LOWER(dc.challengeName) LIKE LOWER(CONCAT('%', :text, '%')) OR
-                LOWER(dc.description) LIKE LOWER(CONCAT('%', :text, '%'))
-            ))
-      )
-    GROUP BY cl.id, cc.id
-    ORDER BY cc.orderNumber ASC, cl.orderNumber ASC
-    """)
-    Page<ClassLesson> findAllLessonsWithPublishedChallengesAndSubmissions(
-            @Param("classId") Long classId,
-            @Param("studentId") Long studentId,
-            @Param("text") String text,
-            Pageable pageable
-    );
     @Query(value = """
     WITH lesson_list AS (
         SELECT 
@@ -177,4 +149,5 @@ public interface DailyChallengeRepository extends JpaRepository<DailyChallenge, 
             Pageable pageable
     );
 
+    boolean existsByClassLessonAndChallengeNameAndDeletedAtIsNullAndIdNot(ClassLesson classLesson, String challengeName, Long id);
 }

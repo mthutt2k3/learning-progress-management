@@ -57,7 +57,7 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
 
     @Override
     @Transactional
-    public void gradeSubmissionManually(Long challengeId, Long submissionId, ManualGradingRequest request) {
+    public void gradeSubmissionManually(Long submissionId, ManualGradingRequest request) {
         SubmissionDailyChallenge submission = submissionDailyChallengeRepository
                 .findByIdAndDeletedAtIsNull(submissionId)
                 .orElseThrow(() -> {

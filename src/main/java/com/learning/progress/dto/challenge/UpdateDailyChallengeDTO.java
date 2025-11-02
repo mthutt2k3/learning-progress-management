@@ -21,9 +21,6 @@ public class UpdateDailyChallengeDTO {
 
     private String description;
 
-    @NotNull(message = "Challenge type is required")
-    private ChallengeType challengeType;
-
     @NotNull(message = "Challenge method is required")
     private ChallengeMethod challengeMethod;
 
