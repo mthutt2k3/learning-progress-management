@@ -29,6 +29,7 @@ public class DraftSubmissionResponse {
     @Getter @Setter
     public static class QuestionDraftDTO {
         private Long questionId;
+        private Long submissionQuestionId;
         private String questionText;
         private int orderNumber;
         private BigDecimal score;
