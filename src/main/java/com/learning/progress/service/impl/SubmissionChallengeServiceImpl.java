@@ -158,7 +158,7 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
 
                     for (DailyChallenge ch : challenges) {
                         // Only include published challenges for students (mirrors previous behavior)
-                        if (ch.getChallengeStatus() != ChallengeStatus.PUBLISHED) continue;
+                        if (ch.getChallengeStatus() == ChallengeStatus.DRAFT) continue;
 
                         // Text filter (approximate: challenge name or description or lesson name)
                         if (text != null && !text.isBlank()) {

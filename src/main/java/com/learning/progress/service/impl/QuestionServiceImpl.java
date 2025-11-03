@@ -338,7 +338,7 @@ public class QuestionServiceImpl implements QuestionService {
         boolean hasAdd = nonDeletedRequests.stream().anyMatch(dto -> dto.getId() == null);
         boolean hasDelete = deleteRequests.stream().anyMatch(QuestionDto::isToBeDeleted);
 
-        if ((hasAdd || hasDelete) && section.getChallenge().getChallengeStatus() == ChallengeStatus.PUBLISHED) {
+        if ((hasAdd || hasDelete) && section.getChallenge().getChallengeStatus() != ChallengeStatus.DRAFT) {
             throw new ApiException(
                     "Challenge is PUBLISH. Cannot add or delete questions.",
                     HttpStatus.BAD_REQUEST.value()
