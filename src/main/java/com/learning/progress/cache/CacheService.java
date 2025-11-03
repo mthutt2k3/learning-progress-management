@@ -3,6 +3,8 @@ package com.learning.progress.cache;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.learning.progress.common.Const;
+import com.learning.progress.controller.*;
+import com.learning.progress.service.impl.*;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
 import org.springframework.data.redis.core.RedisTemplate;

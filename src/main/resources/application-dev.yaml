@@ -149,6 +149,8 @@ app:
   pagination:
     max-size: 100
   scheduler:
+    autoSubmit:
+      fixedRate: "60000" # milliseconds (string)
     class-status-job:
       enabled: true               # có thể bật/tắt job nếu cần
       cron: "0 0 0 * * *"         # chạy mỗi ngày lúc 0h00

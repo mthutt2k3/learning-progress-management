@@ -347,6 +347,7 @@ public class SubmissionQuestionServiceImpl implements SubmissionQuestionService 
             }
             submissionQuestionRepository.saveAll(toSave);
         }
+        Long userId = jwtUtil.extractUserIdFromCurrentRequest();
 
         // === CHỈ KHI NỘP CHÍNH THỨC ===
         if (!request.getSaveAsDraft()) {
@@ -359,11 +360,9 @@ public class SubmissionQuestionServiceImpl implements SubmissionQuestionService 
             if (type == ChallengeType.GV || type == ChallengeType.RE || type == ChallengeType.LI) {
                 quartzJobTriggerService.triggerAutoGrade(submission.getId());
             }
-
-            // XÓA CACHE
-            Long userId = jwtUtil.extractUserIdFromCurrentRequest();
-            cacheService.clearSubmissionCache(userId, submissionChallengeId);
             cacheService.clearSubmissionsCacheForChallenge(dailyChallenge.getId());
         }
+        // XÓA CACHE
+        cacheService.clearSubmissionCache(userId, submissionChallengeId);
     }
 }
