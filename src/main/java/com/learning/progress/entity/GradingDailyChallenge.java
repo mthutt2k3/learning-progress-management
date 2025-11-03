@@ -39,9 +39,6 @@ public class GradingDailyChallenge extends BaseEntity{
     @Column(name = "overall_feedback")
     private String overallFeedback;
 
-    @Column(name = "ai_suggested_overall_feedback")
-    private String aiSuggestedOverallFeedback;
-
     @ColumnDefault("false")
     @Column(name = "is_finalized")
     private Boolean isFinalized;

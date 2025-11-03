@@ -44,9 +44,6 @@ public class GradingQuestion extends BaseEntity{
     @Column(name = "feedback", length = Integer.MAX_VALUE)
     private String feedback;
 
-    @Column(name = "ai_suggested_feedback", length = Integer.MAX_VALUE)
-    private String aiSuggestedFeedback;
-
     @Column(name = "highlight_comments_json")
     @JdbcTypeCode(SqlTypes.JSON)
     private String highlightCommentsJson;
