@@ -73,4 +73,7 @@ public interface SubmissionDailyChallengeRepository extends JpaRepository<Submis
 
     // New helper: fetch all (non-deleted) submissions for a given challenge id
     List<SubmissionDailyChallenge> findByChallengeIdAndDeletedAtIsNull(Long challengeId);
+
+    long countByChallengeIdAndSubmittedAtIsNotNullAndDeletedAtIsNull(Long id);
 }
+
