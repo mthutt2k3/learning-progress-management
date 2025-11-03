@@ -64,12 +64,11 @@ public class DailyChallengeController {
         return new ResponseEntity<>(DataResponse.success(response, Const.RESULT_MESSAGE_CODE.UPDATE_SUCCESSFUL), HttpStatus.OK);
     }
 
-    @PutMapping("/{id}/status")
+    @PostMapping("/{id}/publish")
     @PreAuthorize("hasRole('TEACHER')")
-    @Operation(summary = "Update daily challenge status", description = "Update daily challenge status")
-    public ResponseEntity<DataResponse<DailyChallengeResponse>> updateChallengeStatus(
-            @PathVariable Long id, @Valid @RequestParam ChallengeStatus challengeStatus) {
-        DailyChallengeResponse response = dailyChallengeService.updateChallengeStatus(id, challengeStatus);
+    @Operation(summary = "Publish daily challenge", description = "Publish a daily challenge (teacher only)")
+    public ResponseEntity<DataResponse<DailyChallengeResponse>> publishChallenge(@PathVariable Long id) {
+        DailyChallengeResponse response = dailyChallengeService.publishChallenge(id);
         return new ResponseEntity<>(DataResponse.success(response, Const.RESULT_MESSAGE_CODE.UPDATE_SUCCESSFUL), HttpStatus.OK);
     }
 

@@ -73,9 +73,27 @@ public class Const {
     }
 
     public static class CHALLENGE {
+        // validation / not found
         public static final String NAME_REQUIRED = "Challenge name is required";
         public static final String CLASS_LESSON_REQUIRED = "Class lesson is required";
-        public static final String NOT_FOUND = "Challenge does not exist or has been deleted";
+        public static final String NOT_FOUND = "Challenge not found or has been deleted";
+
+        // Date related validations
+        public static final String START_DATE_REQUIRED = "Start date is required";
+        public static final String END_DATE_REQUIRED = "End date is required";
+        public static final String INVALID_DATE_RANGE = "End date must be after start date";
+        public static final String START_DATE_MUST_BE_FUTURE = "Start date must be in the future";
+
+        // Content validations
+        public static final String NO_SECTIONS = "Challenge must have at least one section to publish";
+        public static final String NAME_ALREADY_EXISTS_WITH_NAME = "Challenge name already exists for this lesson: %s";
+
+        // New specific/error templates and messages
+        public static final String NOT_DRAFT = "Challenge is not in DRAFT status: %s";
+        public static final String CANNOT_CHANGE_START_DATE = "Cannot change startDate after challenge has started or been closed";
+        public static final String CANNOT_CHANGE_END_DATE = "Cannot change endDate after challenge has been closed";
+        public static final String TYPE_REQUIRED = "Challenge type is required";
+        public static final String CHALLENGE_INVALID_DATES = "Challenge must have valid start and end date";
 
     }
     public static class DOB {

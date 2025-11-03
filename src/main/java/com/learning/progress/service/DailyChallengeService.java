@@ -5,6 +5,7 @@ import com.learning.progress.dto.DataResponse;
 import com.learning.progress.dto.challenge.*;
 import jakarta.validation.Valid;
 
+import java.time.OffsetDateTime;
 import java.util.List;
 
 public interface DailyChallengeService {
@@ -19,10 +20,11 @@ public interface DailyChallengeService {
 
     void deleteChallenge(Long id);
 
-    DailyChallengeResponse updateChallengeStatus(Long id, ChallengeStatus challengeStatus);
+    DailyChallengeResponse publishChallenge(Long id);
 
     DailyChallengeHierarchyDTO getChallengeHierarchy(Long challengeId);
 
     byte[] exportChallengeWorksheet(Long challengeId);
 
+    void processScheduledStatusTransitions(OffsetDateTime now);
 }
