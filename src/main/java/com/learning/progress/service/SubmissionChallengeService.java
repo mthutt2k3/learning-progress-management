@@ -21,4 +21,7 @@ public interface SubmissionChallengeService {
 
     // New: update submissions' startedAt/expiredAt when the parent challenge's dates change
     void updateSubmissionsDatesForChallenge(Long challengeId, OffsetDateTime newStart, OffsetDateTime newEnd);
+
+    // New: mark that student started working on a submission (PENDING -> DRAFT, set actualStartAt)
+    void startSubmission(Long submissionId);
 }

@@ -347,7 +347,6 @@ public class SubmissionQuestionServiceImpl implements SubmissionQuestionService 
         if (!request.getSaveAsDraft()) {
             submission.setSubmissionStatus(SubmissionStatus.SUBMITTED);
             submission.setSubmittedAt(OffsetDateTime.now());
-            submission.setAutoSubmitted(false);
             submissionDailyChallengeRepository.saveAndFlush(submission);
 
             ChallengeType type = dailyChallenge.getChallengeType();

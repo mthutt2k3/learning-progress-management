@@ -37,13 +37,6 @@ public class SubmissionDailyChallenge extends BaseEntity{
     @JoinColumn(name = "challenge_id", nullable = false)
     private DailyChallenge challenge;
 
-    @ColumnDefault("false")
-    @Column(name = "auto_submitted")
-    private Boolean autoSubmitted;
-
-    @Column(name = "plagiarism_score")
-    private Double plagiarismScore;
-
     @Column(name = "submission_logs_json")
     @JdbcTypeCode(SqlTypes.JSON)
     private String submissionLogsJson;
