@@ -214,6 +214,7 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
         grading.setSubmissionDaily(submission);
         grading.setGrader(grader);
         grading.setTotalScore(request.getTotalScore());
+        grading.setScorePercentage(request.getTotalScore() * 10);
         grading.setOverallFeedback(request.getOverallFeedback());
         grading.setIsFinalized(true);
         gradingDailyChallengeRepository.save(grading);
@@ -238,9 +239,6 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
         submission.setSubmissionStatus(SubmissionStatus.GRADED);
         submission.setSubmittedAt(OffsetDateTime.now());
         submissionDailyChallengeRepository.save(submission);
-
-        // Clear individual submission cache (new)
-        cacheService.clearSubmissionCache(submission.getUser().getId(), submissionId);
 
         cacheService.clearSubmissionsCacheForChallenge(challenge.getId());
         log.info("Successfully graded submission {}", submissionId);
@@ -423,9 +421,6 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
 
         submission.setSubmissionStatus(SubmissionStatus.GRADED);
         submissionDailyChallengeRepository.save(submission);
-
-        // Clear individual submission cache (new)
-        cacheService.clearSubmissionCache(submission.getUser().getId(), submissionId);
 
         cacheService.clearSubmissionsCacheForChallenge(challenge.getId());
 

@@ -79,17 +79,37 @@ public class ChallengeSectionServiceImpl implements ChallengeSectionService {
     @Override
     @Transactional
     public SectionWithQuestionsDto saveSection(Long challengeId, SectionWithQuestionsDto dto) {
+        long tStart = System.currentTimeMillis();
         log.info("Saving section for challengeId: {}", challengeId);
 
+        long tValidateStart = System.currentTimeMillis();
         validateSectionDto(dto);
+        long tValidate = System.currentTimeMillis() - tValidateStart;
+
+        long tLoadChallengeStart = System.currentTimeMillis();
         DailyChallenge challenge = validateChallengeExists(challengeId);
+        long tLoadChallenge = System.currentTimeMillis() - tLoadChallengeStart;
+
+        long tAccessStart = System.currentTimeMillis();
         validateUserAccessToClass(challenge.getClassLesson().getClassChapter().getClazz().getId());
         appValidator.validateEnumValue(ResourceType.class, dto.getSection().getResourceType());
+        long tAccess = System.currentTimeMillis() - tAccessStart;
 
+        long tSaveSectionStart = System.currentTimeMillis();
         ChallengeSection section = saveOrUpdateSection(dto.getSection(), challenge);
-        List<QuestionDto> questions = saveQuestions(dto.getQuestions(), section.getId());
+        long tSaveSection = System.currentTimeMillis() - tSaveSectionStart;
 
+        long tSaveQuestionsStart = System.currentTimeMillis();
+        List<QuestionDto> questions = saveQuestions(dto.getQuestions(), section.getId());
+        long tSaveQuestions = System.currentTimeMillis() - tSaveQuestionsStart;
+
+        long tCacheClearStart = System.currentTimeMillis();
         cacheService.clearCacheForSection(section.getId(), challengeId);
+        long tCacheClear = System.currentTimeMillis() - tCacheClearStart;
+
+        long total = System.currentTimeMillis() - tStart;
+        log.info("saveSection durations(ms) validate={}, loadChallenge={}, accessChecks={}, saveSection={}, saveQuestions={}, cacheClear={}, total={}",
+                tValidate, tLoadChallenge, tAccess, tSaveSection, tSaveQuestions, tCacheClear, total);
 
         log.info("Successfully saved section with ID: {} for challengeId: {}", section.getId(), challengeId);
         return challengeSectionMapper.toSectionWithQuestionsDto(section, questions);
@@ -520,3 +540,4 @@ public class ChallengeSectionServiceImpl implements ChallengeSectionService {
         }
     }
 }
+

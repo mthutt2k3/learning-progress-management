@@ -293,12 +293,6 @@ public class SubmissionQuestionServiceImpl implements SubmissionQuestionService 
         if (status == SubmissionStatus.SUBMITTED || status == SubmissionStatus.GRADED) {
             throw new ApiException("Submission already completed", HttpStatus.BAD_REQUEST.value());
         }
-//        OffsetDateTime now = OffsetDateTime.now();
-//        if (submission.getStartedAt() != null && submission.getExpiredAt() != null &&
-//                (now.isBefore(submission.getStartedAt()) || now.isAfter(submission.getExpiredAt()))) {
-//            throw new ApiException("Submission is not allowed outside the challenge time range", HttpStatus.BAD_REQUEST.value());
-//        }
-
          submissionQuestionValidator.validateSubmissionQuestions(dailyChallenge.getId(), request);
 
         List<SubmissionQuestion> existingQuestions = submissionQuestionRepository
