@@ -93,7 +93,7 @@ public class OpenAiServiceImpl implements OpenAiService {
         // Configure RestTemplate with sensible timeouts to avoid long hangs
         SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
         int connectTimeoutMs = 5000;
-        int readTimeoutMs = 30000;
+        int readTimeoutMs = 300000; // 5 minutes for long AI calls
         requestFactory.setConnectTimeout(connectTimeoutMs);
         requestFactory.setReadTimeout(readTimeoutMs);
 
@@ -2312,37 +2312,61 @@ public class OpenAiServiceImpl implements OpenAiService {
 
         StringBuilder prompt = new StringBuilder();
 
-        prompt.append("You are an experienced English writing teacher. Provide focused, high-value feedback only.\n");
-        prompt.append("Context: Chapter: ").append(context.classChapterName).append(" | Level: ").append(context.studentLevel).append("\n\n");
+        // System role ensures JSON-only responses and basic restrictions
+        prompt.append(SYSTEM_ROLE_JSON_INSTRUCTION).append("\n\n");
+
+        // Enforce Vietnamese for feedback content (values) while preserving JSON keys (English)
+        prompt.append("IMPORTANT: All human-readable feedback content (the values of ")
+                .append("`overallFeedback`, each comment's `commentText` and `correction`) ")
+                .append("MUST be written in Vietnamese. Do NOT translate or change JSON field names (they must remain in English). ")
+                .append("Return ONLY valid JSON, no markdown, no explanations, no extra text.\n\n");
+
+        prompt.append("You are an experienced English writing teacher. Provide focused, high-value feedback only.\n\n");
+
+        prompt.append("Context: Chapter: ").append(context.classChapterName)
+                .append(" | Level: ").append(context.studentLevel).append("\n\n");
 
         prompt.append("TASK: Read the writing below and produce a JSON object containing:\n");
-        prompt.append(" - overallFeedback (100-200 words) summarizing strengths, key weaknesses, and a 2-3 step study plan.\n");
-        prompt.append(" - suggestedScore (0.0 - 10.0).\n");
-        prompt.append(" - comments: 7-12 items, prioritized by impact on communication. Each comment must include startIndex, endIndex, commentText (15-80 chars), severity (error|warning|suggestion), category (grammar|vocabulary|cohesion|task|other), and correction (concise).\n\n");
+        prompt.append(" - overallFeedback: 100-200 words in Vietnamese summarizing strengths, key weaknesses, and a 2-3 step study plan.\n");
+        prompt.append(" - suggestedScore: numeric (0.0 - 10.0).\n");
+        prompt.append(" - comments: 7-12 items, prioritized by impact on communication. Each comment must include:\n");
+        prompt.append("     startIndex (0-based char index), endIndex (exclusive),\n");
+        prompt.append("     commentText (15-80 characters, in Vietnamese),\n");
+        prompt.append("     severity (one of: error|warning|suggestion),\n");
+        prompt.append("     category (one of: grammar|vocabulary|cohesion|task|other),\n");
+        prompt.append("     correction (concise suggested correction or rephrase, in Vietnamese).\n\n");
 
         prompt.append("GUIDELINES:\n");
         prompt.append("- Prioritize meaning-impacting issues (unclear sentences, wrong tense affecting meaning, wrong word choice, omitted information).\n");
         prompt.append("- Avoid trivial punctuation/capitalization comments unless frequent or harming readability.\n");
-        prompt.append("- Provide a one-line correction or alternative phrasing for each comment.\n");
+        prompt.append("- Provide a one-line correction or alternative phrasing for each comment (in Vietnamese).\n");
         prompt.append("- Indices must be 0-based character positions matching the STUDENT'S WRITING section below.\n");
-        prompt.append("- Maintain neutrality and constructive tone.\n\n");
+        prompt.append("- Maintain neutral, constructive tone.\n\n");
 
         prompt.append("WRITING TASK:\n").append(questionText).append("\n\n");
         prompt.append("STUDENT'S WRITING:\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
         prompt.append(studentWriting).append("\n");
         prompt.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n");
 
-        prompt.append("OUTPUT (exact JSON, no extra text):\n");
+        prompt.append("OUTPUT (exact JSON only, no extra text). Note: ALL textual values must be in Vietnamese:\n");
         prompt.append("{\n");
-        prompt.append("  \"overallFeedback\": \"...\",\n");
+        prompt.append("  \"overallFeedback\": \"Tóm tắt ngắn gọn bằng tiếng Việt: ...\",\n");
         prompt.append("  \"suggestedScore\": 7.5,\n");
         prompt.append("  \"comments\": [\n");
-        prompt.append("    {\"startIndex\": 0, \"endIndex\": 5, \"commentText\": \"Short explanation + fix\", \"severity\": \"error\", \"category\": \"grammar\", \"correction\": \"corrected text\"}\n");
+        prompt.append("    {\n");
+        prompt.append("      \"startIndex\": 0,\n");
+        prompt.append("      \"endIndex\": 5,\n");
+        prompt.append("      \"commentText\": \"Nhận xét ngắn (tiếng Việt, 15-80 ký tự)\",\n");
+        prompt.append("      \"severity\": \"error\",\n");
+        prompt.append("      \"category\": \"grammar\",\n");
+        prompt.append("      \"correction\": \"Sửa ngắn gọn bằng tiếng Việt\"\n");
+        prompt.append("    }\n");
         prompt.append("  ]\n");
         prompt.append("}\n");
 
         return prompt.toString();
     }
+
 
     // Improved parsing: validate indices, filter trivial comments, prioritize by severity, keep 7-12 best
     private GradingWritingResponse parseGradingResponse(String jsonResponse, String studentWriting) {
