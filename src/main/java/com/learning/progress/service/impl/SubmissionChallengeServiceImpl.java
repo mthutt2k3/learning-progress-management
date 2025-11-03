@@ -28,8 +28,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -94,6 +96,9 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
 
             if (!submissions.isEmpty()) {
                 submissionDailyChallengeRepository.saveAll(submissions);
+
+                // Clear submissions list cache for the challenge (new)
+                cacheService.clearSubmissionsCacheForChallenge(challenge.getId());
             }
 
             pageable = pageable.next();
@@ -267,6 +272,14 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
                 });
                 submissionDailyChallengeRepository.saveAll(toUpdate);
                 log.debug("Auto-submitted {} TEST submissions", toUpdate.size());
+
+                // Clear caches for updated submissions and affected challenges (new)
+                Set<Long> affectedChallenges = new HashSet<>();
+                toUpdate.forEach(s -> {
+                    cacheService.clearSubmissionCache(s.getUser().getId(), s.getId());
+                    affectedChallenges.add(s.getChallenge().getId());
+                });
+                affectedChallenges.forEach(cacheService::clearSubmissionsCacheForChallenge);
             }
 
             pageable = pageable.next();
