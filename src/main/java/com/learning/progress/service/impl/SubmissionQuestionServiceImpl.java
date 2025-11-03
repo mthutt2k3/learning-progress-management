@@ -222,6 +222,9 @@ public class SubmissionQuestionServiceImpl implements SubmissionQuestionService 
                     // Section info
                     SectionDto sectionInfo = new SectionDto();
                     sectionInfo.setId(section.getId());
+                    sectionInfo.setSectionsUrl(section.getSectionsUrl());
+                    sectionInfo.setSectionsContent(section.getSectionsContent());
+                    sectionInfo.setResourceType(section.getResourceType().name());
                     sectionInfo.setSectionTitle(section.getSectionTitle());
                     sectionInfo.setOrderNumber(section.getOrderNumber());
                     secDto.setSection(sectionInfo);
