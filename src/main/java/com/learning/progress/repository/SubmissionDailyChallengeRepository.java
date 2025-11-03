@@ -71,4 +71,9 @@ public interface SubmissionDailyChallengeRepository extends JpaRepository<Submis
             @Param("status") SubmissionStatus status,
             @Param("now") OffsetDateTime now,
             Pageable pageable);
+
+    List<SubmissionDailyChallenge> findByUserIdAndChallengeIdInAndDeletedAtIsNull(Long studentId, List<Long> challengeIds);
+
+    // New helper: fetch all (non-deleted) submissions for a given challenge id
+    List<SubmissionDailyChallenge> findByChallengeIdAndDeletedAtIsNull(Long challengeId);
 }

@@ -19,7 +19,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 @Slf4j
 @Service
@@ -51,7 +53,7 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
         boolean exists = dailyChallengeRepository.existsByClassLessonAndChallengeNameAndDeletedAtIsNull(
                 classLesson, request.getChallengeName());
         if (exists) {
-            throw badRequest("Challenge name already exists for this lesson: " + request.getChallengeName());
+            throw badRequest(String.format(Const.CHALLENGE.NAME_ALREADY_EXISTS_WITH_NAME, request.getChallengeName()));
         }
 
         DailyChallenge challenge = dailyChallengeMapper.mapToEntity(request);
@@ -153,8 +155,30 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
                 );
 
         if (exists) {
-            throw badRequest("Challenge name already exists for this lesson: " + dto.getChallengeName());
+            throw badRequest(String.format(Const.CHALLENGE.NAME_ALREADY_EXISTS_WITH_NAME, dto.getChallengeName()));
         }
+
+        // Business rules:
+        // - Once IN_PROGRESS or CLOSED, teacher cannot change startDate.
+        // - Once CLOSED, teacher cannot change endDate.
+        if ((challenge.getChallengeStatus() == ChallengeStatus.IN_PROGRESS
+                || challenge.getChallengeStatus() == ChallengeStatus.CLOSED)
+                && dto.getStartDate() != null
+                && !dto.getStartDate().equals(challenge.getStartDate())) {
+            throw badRequest(Const.CHALLENGE.CANNOT_CHANGE_START_DATE);
+        }
+
+        if (challenge.getChallengeStatus() == ChallengeStatus.CLOSED
+                && dto.getEndDate() != null
+                && !dto.getEndDate().equals(challenge.getEndDate())) {
+            throw badRequest(Const.CHALLENGE.CANNOT_CHANGE_END_DATE);
+        }
+
+        // detect whether dates will change
+        OffsetDateTime oldStart = challenge.getStartDate();
+        OffsetDateTime oldEnd = challenge.getEndDate();
+        boolean startChanged = dto.getStartDate() != null && !Objects.equals(dto.getStartDate(), oldStart);
+        boolean endChanged = dto.getEndDate() != null && !Objects.equals(dto.getEndDate(), oldEnd);
 
         // instead of copy all
         challenge.setChallengeName(dto.getChallengeName());
@@ -166,6 +190,12 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
         challenge.setTranslateOnScreen(dto.getTranslateOnScreen());
         challenge.setStartDate(dto.getStartDate());
         challenge.setEndDate(dto.getEndDate());
+
+        // propagate date changes to related submissions if needed
+        if (startChanged || endChanged) {
+            // call service to update submissions' startedAt/expiredAt accordingly
+            submissionChallengeService.updateSubmissionsDatesForChallenge(challenge.getId(), dto.getStartDate(), dto.getEndDate());
+        }
 
         log.info("[{}] Updated challenge id: {}", traceId, id);
         return dailyChallengeMapper.mapToDTO(challenge);
@@ -197,28 +227,27 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
      * -------------------------------------------------------- */
     @Override
     @Transactional
-    public DailyChallengeResponse updateChallengeStatus(Long id, ChallengeStatus newStatus) {
+    public DailyChallengeResponse publishChallenge(Long id) {
         String traceId = TraceUtil.getTraceId();
-        log.info("[{}] Changing challenge status: id={}, newStatus={}", traceId, id, newStatus);
+        log.info("[{}] Publishing challenge id: {}", traceId, id);
 
         DailyChallenge challenge = dailyChallengeRepository.findByIdAndDeletedAtIsNull(id)
                 .orElseThrow(() -> notFound(traceId, Const.CHALLENGE.NOT_FOUND, id));
 
         appValidator.validateUserAccessToClass(challenge.getClassLesson().getClassChapter().getClazz().getId());
 
-        if (challenge.getChallengeStatus() == ChallengeStatus.PUBLISHED && newStatus == ChallengeStatus.DRAFT) {
-            throw badRequest("Cannot revert challenge from PUBLISHED to DRAFT");
+        if (challenge.getChallengeStatus() != ChallengeStatus.DRAFT) {
+            throw badRequest(String.format(Const.CHALLENGE.NOT_DRAFT, challenge.getChallengeStatus()));
         }
 
-        if (newStatus == ChallengeStatus.PUBLISHED) {
-            validatePublishable(challenge);
-        }
+        // Validate that challenge can be published
+        validatePublishable(challenge);
 
-        challenge.setChallengeStatus(newStatus);
+        challenge.setChallengeStatus(ChallengeStatus.PUBLISHED);
         submissionChallengeService.createTemporarySubmissionsAsync(challenge);
         dailyChallengeRepository.save(challenge);
 
-        log.info("[{}] Updated challenge status to {}", traceId, newStatus);
+        log.info("[{}] Challenge {} set to PUBLISHED", traceId, id);
         return dailyChallengeMapper.mapToDTO(challenge);
     }
 
@@ -303,29 +332,29 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
     }
 
     private void validateBasicFields(UpdateDailyChallengeDTO c) {
-        if (isBlank(c.getChallengeName())) throw badRequest("Challenge name cannot be null or empty");
-        if (c.getStartDate() == null) throw badRequest("Start date cannot be null");
-        if (c.getEndDate() == null) throw badRequest("End date cannot be null");
+        if (isBlank(c.getChallengeName())) throw badRequest(Const.CHALLENGE.NAME_REQUIRED);
+        if (c.getStartDate() == null) throw badRequest(Const.CHALLENGE.START_DATE_REQUIRED);
+        if (c.getEndDate() == null) throw badRequest(Const.CHALLENGE.END_DATE_REQUIRED);
         if (c.getEndDate().isBefore(c.getStartDate()))
-            throw badRequest("End date must be after start date");
+            throw badRequest(Const.CHALLENGE.INVALID_DATE_RANGE);
         // ✅ Start date must be >= now
         OffsetDateTime now = OffsetDateTime.now();
         if (c.getStartDate().isBefore(now)) {
-            throw badRequest("Start date must be in the future");
+            throw badRequest(Const.CHALLENGE.START_DATE_MUST_BE_FUTURE);
         }
     }
 
     // --- VALIDATE PUBLISH ---
     private void validatePublishable(DailyChallenge c) {
         if (c == null) throw badRequest("Challenge cannot be null");
-        if (isBlank(c.getChallengeName())) throw badRequest("Challenge name cannot be null or empty");
-        if (c.getChallengeType() == null) throw badRequest("Challenge type cannot be null");
+        if (isBlank(c.getChallengeName())) throw badRequest(Const.CHALLENGE.NAME_REQUIRED);
+        if (c.getChallengeType() == null) throw badRequest(Const.CHALLENGE.TYPE_REQUIRED);
         if (c.getStartDate() == null || c.getEndDate() == null)
-            throw badRequest("Challenge must have valid start and end date");
+            throw badRequest(Const.CHALLENGE.CHALLENGE_INVALID_DATES);
         if (c.getEndDate().isBefore(c.getStartDate()))
-            throw badRequest("End date must be after start date");
+            throw badRequest(Const.CHALLENGE.INVALID_DATE_RANGE);
         if (c.getSections() == null || c.getSections().isEmpty())
-            throw badRequest("Challenge must have at least one section to publish");
+            throw badRequest(Const.CHALLENGE.NO_SECTIONS);
 
         // Validate TEST method
         if (c.getChallengeMethod() == ChallengeMethod.TEST) {
@@ -379,5 +408,58 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
 
         // Generate worksheet using FileService
         return fileService.generateChallengeWorksheet(challengeId);
+    }
+
+    /* --------------------------------------------------------
+     * SCHEDULED TRANSITIONS
+     * -------------------------------------------------------- */
+    @Override
+    @Transactional
+    public void processScheduledStatusTransitions(OffsetDateTime now) {
+        log.debug("Processing scheduled challenge status transitions at {}", now);
+        List<DailyChallenge> all = dailyChallengeRepository.findAll();
+        if (all == null || all.isEmpty()) {
+            log.debug("No challenges found for scheduled processing.");
+            return;
+        }
+
+        List<DailyChallenge> toSave = new ArrayList<>();
+        for (DailyChallenge ch : all) {
+            if (ch.getDeletedAt() != null) continue;
+
+            ChallengeStatus current = ch.getChallengeStatus();
+            OffsetDateTime start = ch.getStartDate();
+            OffsetDateTime end = ch.getEndDate();
+
+            try {
+                boolean changed = false;
+
+                // PUBLISHED -> IN_PROGRESS when startDate reached
+                if (current == ChallengeStatus.PUBLISHED && start != null && !start.isAfter(now)) {
+                    ch.setChallengeStatus(ChallengeStatus.IN_PROGRESS);
+                    changed = true;
+                    log.info("Scheduled transition: challenge {} PUBLISHED -> IN_PROGRESS", ch.getId());
+                }
+
+                // PUBLISHED|IN_PROGRESS -> CLOSED when endDate reached
+                if ((current == ChallengeStatus.PUBLISHED || current == ChallengeStatus.IN_PROGRESS)
+                        && end != null && !end.isAfter(now)) {
+                    ch.setChallengeStatus(ChallengeStatus.CLOSED);
+                    changed = true;
+                    log.info("Scheduled transition: challenge {} -> CLOSED", ch.getId());
+                }
+
+                if (changed) toSave.add(ch);
+            } catch (Exception e) {
+                log.error("Failed to evaluate scheduled transition for challenge {}: {}", ch.getId(), e.getMessage(), e);
+            }
+        }
+
+        if (!toSave.isEmpty()) {
+            dailyChallengeRepository.saveAll(toSave);
+            log.info("Saved {} challenges after scheduled status transitions", toSave.size());
+        } else {
+            log.debug("No scheduled status transitions necessary at {}", now);
+        }
     }
 }

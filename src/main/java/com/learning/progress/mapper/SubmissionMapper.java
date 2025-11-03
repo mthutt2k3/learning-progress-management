@@ -10,6 +10,8 @@ import com.learning.progress.entity.GradingDailyChallenge;
 import com.learning.progress.entity.SubmissionDailyChallenge;
 import org.mapstruct.*;
 
+import java.time.Duration;
+import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -78,6 +80,17 @@ public abstract class SubmissionMapper {
                 dto.setSubmissionStatus(submission.getSubmissionStatus());
                 dto.setLate(submission.getIsLate());
                 dto.setSubmittedAt(submission.getSubmittedAt());
+
+                OffsetDateTime start = submission.getActualStartAt();
+                OffsetDateTime end   = submission.getSubmittedAt();
+
+                Duration duration = null;
+
+                if (start != null && end != null) {
+                    duration = Duration.between(start, end);
+                }
+
+                dto.setActualDuration(duration);
 
                 // Lấy totalScore từ GradingDailyChallenges
                 if (submission.getGradingDailyChallenges() != null && !submission.getGradingDailyChallenges().isEmpty()) {
