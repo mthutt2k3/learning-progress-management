@@ -197,9 +197,15 @@ public class SubmissionQuestionServiceImpl implements SubmissionQuestionService 
         Long classId = submission.getChallenge().getClassLesson().getClassChapter().getClazz().getId();
         appValidator.validateUserAccessToClass(classId);
 
-        if (submission.getSubmissionStatus() != SubmissionStatus.DRAFT) {
+        SubmissionStatus status = submission.getSubmissionStatus();
+
+        if (status == SubmissionStatus.PENDING) {
+            submission.setSubmissionStatus(SubmissionStatus.DRAFT);
+            submissionDailyChallengeRepository.save(submission);
+        } else if (status != SubmissionStatus.DRAFT) {
             throw new ApiException("Submission is not in draft mode", HttpStatus.BAD_REQUEST.value());
         }
+
 
         DailyChallenge challenge = submission.getChallenge();
         Long challengeId = challenge.getId();
@@ -287,11 +293,11 @@ public class SubmissionQuestionServiceImpl implements SubmissionQuestionService 
         if (status == SubmissionStatus.SUBMITTED || status == SubmissionStatus.GRADED) {
             throw new ApiException("Submission already completed", HttpStatus.BAD_REQUEST.value());
         }
-        OffsetDateTime now = OffsetDateTime.now();
-        if (submission.getStartedAt() != null && submission.getExpiredAt() != null &&
-                (now.isBefore(submission.getStartedAt()) || now.isAfter(submission.getExpiredAt()))) {
-            throw new ApiException("Submission is not allowed outside the challenge time range", HttpStatus.BAD_REQUEST.value());
-        }
+//        OffsetDateTime now = OffsetDateTime.now();
+//        if (submission.getStartedAt() != null && submission.getExpiredAt() != null &&
+//                (now.isBefore(submission.getStartedAt()) || now.isAfter(submission.getExpiredAt()))) {
+//            throw new ApiException("Submission is not allowed outside the challenge time range", HttpStatus.BAD_REQUEST.value());
+//        }
 
          submissionQuestionValidator.validateSubmissionQuestions(dailyChallenge.getId(), request);
 
