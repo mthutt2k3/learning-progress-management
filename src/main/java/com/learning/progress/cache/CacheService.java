@@ -30,6 +30,7 @@ public class CacheService {
     public static final String QUESTIONS_SECTION_KEY_PREFIX = "questions:section:";
     public static final String SUBMISSIONS_CHALLENGE_KEY_PREFIX = "submissions:challenge:";
     public static final String SUBMISSION_RESULT_KEY_PREFIX = "submission:result:user:";
+    public static final String SUBMISSION_DRAFT_KEY_PREFIX = "submission:draft:user:";
 
     // LEVEL CACHE (MỚI)
     public static final long LEVEL_TTL_MINUTES = 15;
@@ -194,12 +195,7 @@ public class CacheService {
         log.debug("Cleared submissions cache for challenge: {}", challengeId);
     }
 
-    public void clearSubmissionResultCache(Long userId, Long submissionId) {
-        String key = buildSubmissionResultCacheKey(userId, submissionId);
-        delete(key);
-    }
-
     public String buildDraftSubmissionCacheKey(Long userId, Long submissionId) {
-        return "draft:submission:user:" + userId + ":sub:" + submissionId;
+        return String.format("%s%d:submission:%d", SUBMISSION_DRAFT_KEY_PREFIX, userId, submissionId);
     }
 }
