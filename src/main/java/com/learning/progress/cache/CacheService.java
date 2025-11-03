@@ -156,6 +156,9 @@ public class CacheService {
         return String.format("%s%d:submission:%d", SUBMISSION_RESULT_KEY_PREFIX, userId, submissionId);
     }
 
+    public String buildDraftSubmissionCacheKey(Long userId, Long submissionId) {
+        return String.format("%s%d:submission:%d", SUBMISSION_DRAFT_KEY_PREFIX, userId, submissionId);
+    }
     // =====================================================================
     // CLEAR CACHE HELPERS (KHÔNG CẦN traceId)
     // =====================================================================
@@ -194,8 +197,17 @@ public class CacheService {
         deletePattern(SUBMISSIONS_CHALLENGE_KEY_PREFIX + challengeId + ":*");
         log.debug("Cleared submissions cache for challenge: {}", challengeId);
     }
+    public void clearSubmissionCache(Long userId, Long submissionId) {
+        try {
+            String resultKey = buildSubmissionResultCacheKey(userId, submissionId);
+            String draftKey = buildDraftSubmissionCacheKey(userId, submissionId);
 
-    public String buildDraftSubmissionCacheKey(Long userId, Long submissionId) {
-        return String.format("%s%d:submission:%d", SUBMISSION_DRAFT_KEY_PREFIX, userId, submissionId);
+            delete(resultKey);
+            delete(draftKey);
+            log.debug("Cleared submission caches for userId: {}, submissionId: {}", userId, submissionId);
+        } catch (Exception e) {
+            log.warn("Failed to clear submission cache: userId={}, submissionId={}", userId, submissionId, e);
+        }
     }
+
 }

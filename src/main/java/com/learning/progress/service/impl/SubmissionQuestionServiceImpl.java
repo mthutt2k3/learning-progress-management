@@ -362,8 +362,7 @@ public class SubmissionQuestionServiceImpl implements SubmissionQuestionService 
 
             // XÓA CACHE
             Long userId = jwtUtil.extractUserIdFromCurrentRequest();
-            String resultCacheKey = cacheService.buildSubmissionResultCacheKey(userId, submissionChallengeId);
-            cacheService.delete(resultCacheKey);
+            cacheService.clearSubmissionCache(userId, submissionChallengeId);
             cacheService.clearSubmissionsCacheForChallenge(dailyChallenge.getId());
         }
     }
