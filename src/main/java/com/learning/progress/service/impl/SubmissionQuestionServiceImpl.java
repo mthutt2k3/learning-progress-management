@@ -248,6 +248,7 @@ public class SubmissionQuestionServiceImpl implements SubmissionQuestionService 
                                 // Câu trả lời đã chọn
                                 SubmissionQuestion sq = submittedMap.get(q.getId());
                                 if (sq != null && sq.getSubmissionContentJson() != null) {
+                                    qDto.setSubmissionQuestionId(sq.getId());
                                     AnswerContent answer = JsonUtil.responseToObject(sq.getSubmissionContentJson(), AnswerContent.class);
                                     qDto.setSubmittedContent(answer);
                                 }
