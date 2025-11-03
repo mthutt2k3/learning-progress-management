@@ -46,17 +46,7 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
     @Autowired
     private AppValidator appValidator;
     @Autowired
-    private ClassRepository classRepository;
-    @Autowired
-    private ClassLessonRepository classLessonRepository;
-    @Autowired
-    private SubmissionMapper submissionMapper;
-    @Autowired
     private JwtUtil jwtUtil;
-    @Autowired
-    private SubmissionQuestionRepository submissionQuestionRepository;
-    @Autowired
-    private QuestionRepository questionRepository;
     @Autowired
     private DailyChallengeRepository dailyChallengeRepository;
     @Autowired
@@ -87,7 +77,6 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
                     submission.setUser(student);
                     submission.setChallenge(challenge);
                     submission.setSubmissionStatus(SubmissionStatus.PENDING);
-                    submission.setAutoSubmitted(false);
                     submission.setStartedAt(challenge.getStartDate());
                     submission.setExpiredAt(challenge.getEndDate());
                     submissions.add(submission);
@@ -146,7 +135,7 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
         List<Long> submissionIds = submissionsForStudent.stream().map(SubmissionDailyChallenge::getId).toList();
 
         Map<Long, GradingDailyChallenge> gradingBySubmissionId = submissionIds.isEmpty() ? Map.of() :
-                gradingDailyChallengeRepository.findBySubmissionDailyIdInAndIsFinalizedTrueAndDeletedAtIsNull(submissionIds)
+                gradingDailyChallengeRepository.findBySubmissionDailyIdInAndDeletedAtIsNull(submissionIds)
                         .stream()
                         .collect(Collectors.toMap(g -> g.getSubmissionDaily().getId(), g -> g, (a, b) -> a));
 
@@ -273,14 +262,11 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
                 .map(SubmissionDailyChallenge::getId)
                 .toList();
 
-        Map<Long, Double> gradingScoreMap = submissionIds.isEmpty() ? Map.of() :
-                gradingDailyChallengeRepository.findBySubmissionDailyIdInAndIsFinalizedTrueAndDeletedAtIsNull(submissionIds)
+        // Batch load finalized gradings and map by submissionId to provide totalScore + scorePercentage
+        Map<Long, GradingDailyChallenge> gradingMap = submissionIds.isEmpty() ? Map.of() :
+                gradingDailyChallengeRepository.findBySubmissionDailyIdInAndDeletedAtIsNull(submissionIds)
                         .stream()
-                        .collect(Collectors.toMap(
-                                g -> g.getSubmissionDaily().getId(),
-                                GradingDailyChallenge::getTotalScore,
-                                (existing, replacement) -> existing
-                        ));
+                        .collect(Collectors.toMap(g -> g.getSubmissionDaily().getId(), g -> g, (a, b) -> a));
 
         List<StudentSubmissionDTO> data = submissionPage.getContent().stream()
                 .map(submission -> {
@@ -291,12 +277,31 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
                             ? submission.getUser().getFullName()
                             : submission.getUser().getEmail());
                     dto.setSubmissionStatus(submission.getSubmissionStatus());
+
+                    // times
                     dto.setSubmittedAt(submission.getSubmittedAt());
-                    dto.setExpiredAt(submission.getExpiredAt());
+                    dto.setStartDate(submission.getStartedAt());
+                    dto.setEndDate(submission.getExpiredAt());
+                    dto.setActualStartAt(submission.getActualStartAt());
+
+                    // actual duration = submittedAt - actualStartAt (if both present)
+                    if (submission.getActualStartAt() != null && submission.getSubmittedAt() != null) {
+                        dto.setActualDuration(Duration.between(submission.getActualStartAt(), submission.getSubmittedAt()));
+                    } else {
+                        dto.setActualDuration(null);
+                    }
+
+                    // grading
+                    GradingDailyChallenge g = gradingMap.get(submission.getId());
+                    if (g != null) {
+                        dto.setTotalScore(g.getTotalScore());
+                        dto.setScorePercentage(g.getScorePercentage());
+                    } else {
+                        dto.setTotalScore(null);
+                        dto.setScorePercentage(null);
+                    }
+
                     dto.setLate(submission.getIsLate());
-                    dto.setAutoSubmitted(submission.getAutoSubmitted());
-                    dto.setPlagiarismScore(submission.getPlagiarismScore());
-                    dto.setTotalScore(gradingScoreMap.get(submission.getId()));
                     return dto;
                 })
                 .toList();
@@ -330,7 +335,6 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
             if (!toUpdate.isEmpty()) {
                 toUpdate.forEach(submission -> {
                     submission.setSubmissionStatus(SubmissionStatus.SUBMITTED);
-                    submission.setAutoSubmitted(true);
                     submission.setSubmittedAt(OffsetDateTime.now());
                 });
                 submissionDailyChallengeRepository.saveAll(toUpdate);
@@ -411,6 +415,36 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
             });
             affectedChallenges.forEach(cacheService::clearSubmissionsCacheForChallenge);
         }
+    }
+
+    @Override
+    @Transactional
+    public void startSubmission(Long submissionId) {
+        log.info("Student requested to START submissionId={}", submissionId);
+        Long userId = jwtUtil.extractUserIdFromCurrentRequest();
+
+        SubmissionDailyChallenge submission = submissionDailyChallengeRepository
+                .findByIdAndDeletedAtIsNull(submissionId)
+                .orElseThrow(() -> new ApiException("Submission not found", HttpStatus.NOT_FOUND.value()));
+
+        if (!submission.getUser().getId().equals(userId)) {
+            log.warn("User {} attempted to start submission {} owned by {}", userId, submissionId, submission.getUser().getId());
+            throw new ApiException("Forbidden: not the owner of the submission", HttpStatus.FORBIDDEN.value());
+        }
+
+        if (submission.getSubmissionStatus() != SubmissionStatus.PENDING) {
+            log.debug("Submission {} is not PENDING (current={}), cannot start", submissionId, submission.getSubmissionStatus());
+            throw new ApiException("Submission cannot be started in its current status", HttpStatus.BAD_REQUEST.value());
+        }
+
+        submission.setSubmissionStatus(SubmissionStatus.DRAFT);
+        submission.setActualStartAt(OffsetDateTime.now());
+        submissionDailyChallengeRepository.save(submission);
+
+        // Clear individual submission cache
+        cacheService.clearSubmissionCache(userId, submissionId);
+        cacheService.clearSubmissionsCacheForChallenge(submission.getChallenge().getId());
+        log.info("Submission {} started by user {}", submissionId, userId);
     }
 
 }

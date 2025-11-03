@@ -17,6 +17,17 @@ public interface DailyChallengeRepository extends JpaRepository<DailyChallenge, 
 
     Optional<DailyChallenge> findByIdAndDeletedAtIsNull(Long id);
 
+    @Query("""
+        SELECT dc FROM DailyChallenge dc
+        LEFT JOIN FETCH dc.classLesson cl
+        LEFT JOIN FETCH cl.classChapter cc
+        LEFT JOIN FETCH cc.clazz c
+        LEFT JOIN FETCH c.syllabus s
+        LEFT JOIN FETCH s.level l
+        WHERE dc.id = :id AND dc.deletedAt IS NULL
+        """)
+    Optional<DailyChallenge> findByIdWithFullHierarchy(@Param("id") Long id);
+
 
     @Query("""
     SELECT cl
