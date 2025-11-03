@@ -26,4 +26,6 @@ public interface OpenAiService {
     String callOpenAI(String prompt);
 
     TranslationResponse translate(String text);
+
+    GradingWritingResponse gradeWriting(GradingWritingRequest request);
 }
