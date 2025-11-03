@@ -13,8 +13,6 @@ public interface SubmissionQuestionRepository extends JpaRepository<SubmissionQu
     /**
      * Find a SubmissionQuestion by submissionDailyId and questionId where deletedAt is null.
      */
-    Optional<SubmissionQuestion> findBySubmissionDailyIdAndQuestionIdAndDeletedAtIsNull(Long submissionDailyId, Long questionId);
-
     List<SubmissionQuestion> findBySubmissionDailyIdAndDeletedAtIsNull(Long id);
 
     List<SubmissionQuestion> findBySubmissionDailyIdAndIdInAndDeletedAtIsNull(Long submissionId, List<Long> submissionQuestionIds);

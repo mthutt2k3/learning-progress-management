@@ -55,15 +55,12 @@ public interface SubmissionDailyChallengeRepository extends JpaRepository<Submis
             "OR LOWER(s.user.email) LIKE LOWER(CONCAT('%', :text, '%')))")
     Page<SubmissionDailyChallenge> findByChallengeIdAndDeletedAtIsNull(Long challengeId, String text, Pageable pageable);
 
-    Page<SubmissionDailyChallenge> findBySubmissionStatusAndAutoSubmittedFalseAndExpiredAtBefore(SubmissionStatus submissionStatus, OffsetDateTime now, Pageable pageable);
-
     List<SubmissionDailyChallenge> findBySubmissionStatusAndExpiredAtBeforeAndDeletedAtIsNull(SubmissionStatus submissionStatus, OffsetDateTime now);
 
     @Query("""
     SELECT s FROM SubmissionDailyChallenge s
     JOIN s.challenge c
     WHERE s.submissionStatus = :status
-      AND s.autoSubmitted = false
       AND s.expiredAt < :now
       AND c.challengeMethod = 'TEST'
     """)
