@@ -149,10 +149,16 @@ app:
   pagination:
     max-size: 100
   scheduler:
+    autoSubmit:
+      fixedRate: "60000" # milliseconds (string)
     class-status-job:
       enabled: true               # có thể bật/tắt job nếu cần
       cron: "0 0 0 * * *"         # chạy mỗi ngày lúc 0h00
       upcoming-end-days: 7        # số ngày trước endDate để chuyển sang UPCOMING_END
+    # New: separate scheduler configuration for challenge status transitions (IN_PROGRESS/CLOSED)
+    challenge-status-job:
+      enabled: true               # enable/disable challenge status job
+      cron: "0 */15 * * * *"         # schedule for challenge status transitions (default: daily midnight)
     # Job phát hiện submission quá hạn (LATE)
     submission-late-detection-job:
       enabled: true
