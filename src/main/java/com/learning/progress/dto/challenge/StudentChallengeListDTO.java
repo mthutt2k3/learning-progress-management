@@ -8,6 +8,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.List;
 
@@ -36,7 +37,9 @@ public class StudentChallengeListDTO {
         private OffsetDateTime endDate; // Từ SubmissionDailyChallenge.expiredAt
         private SubmissionStatus submissionStatus; // Từ SubmissionDailyChallenge
         private boolean isLate; // Từ SubmissionDailyChallenge
+        private Duration actualDuration;
         private OffsetDateTime submittedAt; // Từ SubmissionDailyChallenge
+
         private Double totalScore; // Từ GradingDailyChallenges
         private Double scorePercentage; // Từ GradingDailyChallenges
     }

@@ -141,6 +141,7 @@ public class SubmissionQuestionServiceImpl implements SubmissionQuestionService 
                                 // Parse submitted answer
                                 SubmissionQuestion sq = submissionQuestionMap.get(question.getId());
                                 if (sq != null && sq.getSubmissionContentJson() != null) {
+                                    qr.setSubmissionQuestionId(sq.getId());
                                     AnswerContent submittedContent = JsonUtil.responseToObject(
                                             sq.getSubmissionContentJson(), AnswerContent.class);
                                     qr.setSubmittedContent(submittedContent);
@@ -196,9 +197,15 @@ public class SubmissionQuestionServiceImpl implements SubmissionQuestionService 
         Long classId = submission.getChallenge().getClassLesson().getClassChapter().getClazz().getId();
         appValidator.validateUserAccessToClass(classId);
 
-        if (submission.getSubmissionStatus() != SubmissionStatus.DRAFT) {
+        SubmissionStatus status = submission.getSubmissionStatus();
+
+        if (status == SubmissionStatus.PENDING) {
+            submission.setSubmissionStatus(SubmissionStatus.DRAFT);
+            submissionDailyChallengeRepository.save(submission);
+        } else if (status != SubmissionStatus.DRAFT) {
             throw new ApiException("Submission is not in draft mode", HttpStatus.BAD_REQUEST.value());
         }
+
 
         DailyChallenge challenge = submission.getChallenge();
         Long challengeId = challenge.getId();
@@ -222,6 +229,9 @@ public class SubmissionQuestionServiceImpl implements SubmissionQuestionService 
                     // Section info
                     SectionDto sectionInfo = new SectionDto();
                     sectionInfo.setId(section.getId());
+                    sectionInfo.setSectionsUrl(section.getSectionsUrl());
+                    sectionInfo.setSectionsContent(section.getSectionsContent());
+                    sectionInfo.setResourceType(section.getResourceType().name());
                     sectionInfo.setSectionTitle(section.getSectionTitle());
                     sectionInfo.setOrderNumber(section.getOrderNumber());
                     secDto.setSection(sectionInfo);
@@ -244,6 +254,7 @@ public class SubmissionQuestionServiceImpl implements SubmissionQuestionService 
                                 // Câu trả lời đã chọn
                                 SubmissionQuestion sq = submittedMap.get(q.getId());
                                 if (sq != null && sq.getSubmissionContentJson() != null) {
+                                    qDto.setSubmissionQuestionId(sq.getId());
                                     AnswerContent answer = JsonUtil.responseToObject(sq.getSubmissionContentJson(), AnswerContent.class);
                                     qDto.setSubmittedContent(answer);
                                 }
@@ -282,12 +293,6 @@ public class SubmissionQuestionServiceImpl implements SubmissionQuestionService 
         if (status == SubmissionStatus.SUBMITTED || status == SubmissionStatus.GRADED) {
             throw new ApiException("Submission already completed", HttpStatus.BAD_REQUEST.value());
         }
-        OffsetDateTime now = OffsetDateTime.now();
-        if (submission.getStartedAt() != null && submission.getExpiredAt() != null &&
-                (now.isBefore(submission.getStartedAt()) || now.isAfter(submission.getExpiredAt()))) {
-            throw new ApiException("Submission is not allowed outside the challenge time range", HttpStatus.BAD_REQUEST.value());
-        }
-
          submissionQuestionValidator.validateSubmissionQuestions(dailyChallenge.getId(), request);
 
         List<SubmissionQuestion> existingQuestions = submissionQuestionRepository
@@ -336,6 +341,7 @@ public class SubmissionQuestionServiceImpl implements SubmissionQuestionService 
             }
             submissionQuestionRepository.saveAll(toSave);
         }
+        Long userId = jwtUtil.extractUserIdFromCurrentRequest();
 
         // === CHỈ KHI NỘP CHÍNH THỨC ===
         if (!request.getSaveAsDraft()) {
@@ -348,12 +354,9 @@ public class SubmissionQuestionServiceImpl implements SubmissionQuestionService 
             if (type == ChallengeType.GV || type == ChallengeType.RE || type == ChallengeType.LI) {
                 quartzJobTriggerService.triggerAutoGrade(submission.getId());
             }
-
-            // XÓA CACHE
-            Long userId = jwtUtil.extractUserIdFromCurrentRequest();
-            String resultCacheKey = cacheService.buildSubmissionResultCacheKey(userId, submissionChallengeId);
-            cacheService.delete(resultCacheKey);
             cacheService.clearSubmissionsCacheForChallenge(dailyChallenge.getId());
         }
+        // XÓA CACHE
+        cacheService.clearSubmissionCache(userId, submissionChallengeId);
     }
 }

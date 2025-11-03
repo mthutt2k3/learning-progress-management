@@ -214,6 +214,7 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
         grading.setSubmissionDaily(submission);
         grading.setGrader(grader);
         grading.setTotalScore(request.getTotalScore());
+        grading.setScorePercentage(request.getTotalScore() * 10);
         grading.setOverallFeedback(request.getOverallFeedback());
         grading.setIsFinalized(true);
         gradingDailyChallengeRepository.save(grading);

@@ -4,6 +4,7 @@ import com.learning.progress.common.QuestionType;
 import com.learning.progress.dto.challenge.section.DataContent;
 import com.learning.progress.dto.challenge.section.QuestionDto;
 import com.learning.progress.dto.challenge.section.SectionDto;
+import com.learning.progress.entity.User;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -28,12 +29,24 @@ public class SubmissionResultResponse {
     @Setter
     public static class QuestionResult {
         private Long questionId;
+        private Long submissionQuestionId;
         private String questionText;
         private int orderNumber;
         private QuestionType questionType;
         private BigDecimal score;
         private BigDecimal receivedScore;
+        private GradingQuestionResult gradingQuestionResult;
         private DataContent questionContent; // Question content with correct answers
         private AnswerContent submittedContent; // Student's submitted answers
+    }
+    @Getter
+    @Setter
+    public static class GradingQuestionResult {
+        private Long gradingQuestionId;
+        private Double score;
+        private User grader;
+        private String feedback;
+        private String aiSuggestedFeedback;
+        private String highlightCommentsJson;
     }
 }
