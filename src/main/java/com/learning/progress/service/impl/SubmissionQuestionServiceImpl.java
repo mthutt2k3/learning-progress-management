@@ -141,6 +141,7 @@ public class SubmissionQuestionServiceImpl implements SubmissionQuestionService 
                                 // Parse submitted answer
                                 SubmissionQuestion sq = submissionQuestionMap.get(question.getId());
                                 if (sq != null && sq.getSubmissionContentJson() != null) {
+                                    qr.setSubmissionQuestionId(sq.getId());
                                     AnswerContent submittedContent = JsonUtil.responseToObject(
                                             sq.getSubmissionContentJson(), AnswerContent.class);
                                     qr.setSubmittedContent(submittedContent);

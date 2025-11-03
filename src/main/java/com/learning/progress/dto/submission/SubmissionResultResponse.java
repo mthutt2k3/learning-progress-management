@@ -28,6 +28,7 @@ public class SubmissionResultResponse {
     @Setter
     public static class QuestionResult {
         private Long questionId;
+        private Long submissionQuestionId;
         private String questionText;
         private int orderNumber;
         private QuestionType questionType;
