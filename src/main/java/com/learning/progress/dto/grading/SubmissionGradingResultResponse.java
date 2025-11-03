@@ -20,6 +20,6 @@ public class SubmissionGradingResultResponse {
     private Integer empty;
 
     // Chỉ overall, không chi tiết từng câu
-    private String teacherFeedback;  // null nếu auto-grade
-    private String aiSummary;        // null nếu manual-grade
+    private String teacherFeedback;
+    private String aiSummary;
 }
