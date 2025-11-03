@@ -37,6 +37,10 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
     private final JwtUtil jwtUtil;
     private final FileService fileService;
 
+    // New injections required to compute counts
+    private final SubmissionDailyChallengeRepository submissionDailyChallengeRepository;
+    private final ClassStudentRepository classStudentRepository;
+
     /* --------------------------------------------------------
      * CREATE
      * -------------------------------------------------------- */
@@ -103,8 +107,29 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
         Page<ClassLesson> lessonPage = dailyChallengeRepository.findLessonsWithChallengesByClassId(
                 classId, (text == null || text.isBlank()) ? "" : text, isTeacher, pageable);
 
+        // compute total students for the class using direct count (avoid page trick)
+        long totalStudents = classStudentRepository
+                .countByClassIdAndStatus(classId, ClassStudentStatus.ACTIVE);
+
         List<DailyChallengeListDTO> data = lessonPage.getContent().stream()
-                .map(dailyChallengeMapper::toLessonWithChallengesDTO)
+                .map(lesson -> {
+                    // base mapping from mapper
+                    DailyChallengeListDTO lessonDto = dailyChallengeMapper.toLessonWithChallengesDTO(lesson, totalStudents);
+
+                    // populate submittedCount and totalStudents for each challenge in lessonDto
+                    if (lessonDto.getDailyChallenges() != null) {
+                        for (DailyChallengeListDTO.DailyChallengeInLessonDTO chDto : lessonDto.getDailyChallenges()) {
+                            if (chDto.getId() != null) {
+                                long submittedCount = submissionDailyChallengeRepository
+                                        .countByChallengeIdAndSubmittedAtIsNotNullAndDeletedAtIsNull(chDto.getId());
+                                chDto.setSubmittedCount(submittedCount);
+                            } else {
+                                chDto.setSubmittedCount(0L);
+                            }
+                        }
+                    }
+                    return lessonDto;
+                })
                 .toList();
 
         log.info("[{}] Retrieved {} lessons ({} total)", traceId, data.size(), lessonPage.getTotalElements());

@@ -46,17 +46,7 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
     @Autowired
     private AppValidator appValidator;
     @Autowired
-    private ClassRepository classRepository;
-    @Autowired
-    private ClassLessonRepository classLessonRepository;
-    @Autowired
-    private SubmissionMapper submissionMapper;
-    @Autowired
     private JwtUtil jwtUtil;
-    @Autowired
-    private SubmissionQuestionRepository submissionQuestionRepository;
-    @Autowired
-    private QuestionRepository questionRepository;
     @Autowired
     private DailyChallengeRepository dailyChallengeRepository;
     @Autowired
@@ -145,7 +135,7 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
         List<Long> submissionIds = submissionsForStudent.stream().map(SubmissionDailyChallenge::getId).toList();
 
         Map<Long, GradingDailyChallenge> gradingBySubmissionId = submissionIds.isEmpty() ? Map.of() :
-                gradingDailyChallengeRepository.findBySubmissionDailyIdInAndIsFinalizedTrueAndDeletedAtIsNull(submissionIds)
+                gradingDailyChallengeRepository.findBySubmissionDailyIdInAndDeletedAtIsNull(submissionIds)
                         .stream()
                         .collect(Collectors.toMap(g -> g.getSubmissionDaily().getId(), g -> g, (a, b) -> a));
 
@@ -274,7 +264,7 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
 
         // Batch load finalized gradings and map by submissionId to provide totalScore + scorePercentage
         Map<Long, GradingDailyChallenge> gradingMap = submissionIds.isEmpty() ? Map.of() :
-                gradingDailyChallengeRepository.findBySubmissionDailyIdInAndIsFinalizedTrueAndDeletedAtIsNull(submissionIds)
+                gradingDailyChallengeRepository.findBySubmissionDailyIdInAndDeletedAtIsNull(submissionIds)
                         .stream()
                         .collect(Collectors.toMap(g -> g.getSubmissionDaily().getId(), g -> g, (a, b) -> a));
 
