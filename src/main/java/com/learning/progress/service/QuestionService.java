@@ -15,4 +15,12 @@ public interface QuestionService {
 
     void updateScoreQuestion(Long questionId, double score);
     Map<Long, List<QuestionDto>> bulkInsertQuestionsForSections(Map<Long, List<QuestionDto>> sectionQuestionsMap);
+
+    /**
+     * Check if there are any updates to the questions in the given section.
+     * @param dtos List of QuestionDto representing the new state of the questions.
+     * @param sectionId The ID of the section containing the questions.
+     * @return true if there are updates, false otherwise.
+     */
+    boolean hasUpdates(List<QuestionDto> dtos, Long sectionId);
 }
