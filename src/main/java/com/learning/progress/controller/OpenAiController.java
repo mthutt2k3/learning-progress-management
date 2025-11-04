@@ -4,6 +4,7 @@ import com.learning.progress.common.Const;
 import com.learning.progress.dto.DataResponse;
 import com.learning.progress.dto.ai.*;
 import com.learning.progress.dto.challenge.section.SectionWithQuestionsDto;
+import com.learning.progress.exception.ApiException;
 import com.learning.progress.service.OpenAiService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -144,6 +145,44 @@ public class OpenAiController {
             @Valid @RequestBody GradingWritingRequest request) {
 
         GradingWritingResponse result = openAiService.gradeWriting(request);
+
+        return new ResponseEntity<>(
+                DataResponse.success(result, Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL),
+                HttpStatus.OK
+        );
+    }
+
+    @PostMapping("/pronunciation-assessment")
+    @Operation(summary = "Assess pronunciation from audio file",
+            description = "Upload audio file and get pronunciation assessment with scores for accuracy, fluency, prosody")
+    public ResponseEntity<DataResponse<PronunciationAssessmentResponse>> assessPronunciation(
+            @RequestParam("audioFile") @Valid MultipartFile audioFile,
+            @RequestParam("referenceText") @Valid String referenceText,
+            @RequestParam(value = "enableMiscue", required = false, defaultValue = "true") Boolean enableMiscue,
+            @RequestParam(value = "enableProsody", required = false, defaultValue = "true") Boolean enableProsody,
+            @RequestParam(value = "gradingSystem", required = false, defaultValue = "HundredMark") String gradingSystem,
+            @RequestParam(value = "granularity", required = false, defaultValue = "Phoneme") String granularity) {
+
+        // Validate file
+        if (audioFile.isEmpty()) {
+            throw new ApiException("Audio file cannot be empty", HttpStatus.BAD_REQUEST.value());
+        }
+
+        // Validate reference text
+        if (referenceText == null || referenceText.trim().isEmpty()) {
+            throw new ApiException("Reference text cannot be empty", HttpStatus.BAD_REQUEST.value());
+        }
+
+        PronunciationAssessmentRequest request = PronunciationAssessmentRequest.builder()
+                .audioFile(audioFile)
+                .referenceText(referenceText)
+                .enableMiscue(enableMiscue)
+                .enableProsody(enableProsody)
+                .gradingSystem(gradingSystem)
+                .granularity(granularity)
+                .build();
+
+        PronunciationAssessmentResponse result = openAiService.assessPronunciation(request);
 
         return new ResponseEntity<>(
                 DataResponse.success(result, Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL),

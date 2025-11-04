@@ -28,4 +28,7 @@ public interface OpenAiService {
     TranslationResponse translate(String text);
 
     GradingWritingResponse gradeWriting(GradingWritingRequest request);
+
+    PronunciationAssessmentResponse assessPronunciation(PronunciationAssessmentRequest request);
+
 }

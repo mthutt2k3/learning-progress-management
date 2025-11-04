@@ -1,6 +1,7 @@
 package com.learning.progress.dto.ai;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
@@ -20,6 +21,10 @@ public class GenerateGVQuestionsRequest {
     private List<QuestionTypeConfig> questionTypeConfigs;
 
     private String description; // Optional additional context for AI
+
+    @Min(value = 6, message = "Age must be at least 6")
+    @Max(value = 18, message = "Age must be at most 18")
+    private Integer age;
 
     @Data
     public static class QuestionTypeConfig {

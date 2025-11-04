@@ -12,6 +12,8 @@ import com.learning.progress.repository.SubmissionQuestionRepository;
 import com.learning.progress.service.OpenAiService;
 import com.learning.progress.util.FileContentExtractor;
 import com.learning.progress.util.TraceUtil;
+import com.microsoft.cognitiveservices.speech.*;
+import com.microsoft.cognitiveservices.speech.audio.AudioConfig;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
@@ -26,6 +28,8 @@ import org.springframework.web.client.RestTemplate;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.util.UriComponentsBuilder;
 
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.*;
@@ -68,6 +72,12 @@ public class OpenAiServiceImpl implements OpenAiService {
 
     @Value("${azure.translator.region}")
     private String translatorRegion;
+
+    @Value("${azure.speech.key}")
+    private String speechKey;
+
+    @Value("${azure.speech.region}")
+    private String speechRegion;
 
     // Changed: create RestTemplate in init() so we can configure timeouts and reuse it
     private RestTemplate restTemplate;
@@ -163,7 +173,8 @@ public class OpenAiServiceImpl implements OpenAiService {
                         questionType,
                         request.getDescription(),
                         contextInfo,
-                        sectionOrder++
+                        sectionOrder++,
+                        request.getAge()
                 ));
             }
         }
@@ -315,7 +326,8 @@ public class OpenAiServiceImpl implements OpenAiService {
                                 request.getDescription(),
                                 contextInfo,
                                 dailyChallengeType,
-                                questionOrder++
+                                questionOrder++,
+                                request.getAge()
                         ));
                     }
                 }
@@ -465,7 +477,8 @@ public class OpenAiServiceImpl implements OpenAiService {
                         firstTask.questionType,
                         firstTask.userDescription,
                         firstTask.contextInfo,
-                        batch.size()
+                        batch.size(),
+                        firstTask.age
                 );
 
                 String aiResponse = callOpenAI(prompt);
@@ -526,7 +539,8 @@ public class OpenAiServiceImpl implements OpenAiService {
                         batch.size(),
                         firstTask.userDescription,
                         firstTask.contextInfo,
-                        firstTask.dailyChallengeType
+                        firstTask.dailyChallengeType,
+                        firstTask.age
                 );
 
                 String aiResponse = callOpenAI(prompt);
@@ -580,14 +594,16 @@ public class OpenAiServiceImpl implements OpenAiService {
         String userDescription;
         String contextInfo;
         int sectionOrder;
+        Integer age;
 
         QuestionGenerationTask(ChallengeContext context, String questionType,
-                               String userDescription, String contextInfo, int sectionOrder) {
+                               String userDescription, String contextInfo, int sectionOrder, Integer age) {
             this.context = context;
             this.questionType = questionType;
             this.userDescription = userDescription;
             this.contextInfo = contextInfo;
             this.sectionOrder = sectionOrder;
+            this.age = age;
         }
     }
 
@@ -599,10 +615,12 @@ public class OpenAiServiceImpl implements OpenAiService {
         String contextInfo;
         String dailyChallengeType;
         int orderNumber;
+        Integer age;
 
         ContentBasedQuestionTask(ChallengeContext context, SectionDto section,
                                  String questionType, String userDescription,
-                                 String contextInfo, String dailyChallengeType, int orderNumber) {
+                                 String contextInfo, String dailyChallengeType, int orderNumber,
+                                 Integer age) {
             this.context = context;
             this.section = section;
             this.questionType = questionType;
@@ -610,6 +628,7 @@ public class OpenAiServiceImpl implements OpenAiService {
             this.contextInfo = contextInfo;
             this.dailyChallengeType = dailyChallengeType;
             this.orderNumber = orderNumber;
+            this.age = age;
         }
     }
 
@@ -624,129 +643,293 @@ public class OpenAiServiceImpl implements OpenAiService {
         }
     }
 
-    /**
-     * ✨ UPDATED: Determine student level from context and user description
-     */
-    private String determineStudentLevel(ChallengeContext context, String userDescription) {
-        // Default level from context
-        String systemLevel = context.studentLevel;
-
-        // Check if user specified level in description
-        if (userDescription != null && !userDescription.isBlank()) {
-            String descLower = userDescription.toLowerCase();
-
-            // Priority: User's explicit level specification
-            if (descLower.contains("beginner") || descLower.contains("basic") || descLower.contains("elementary")) {
-                return "Beginner";
-            } else if (descLower.contains("pre-intermediate") || descLower.contains("pre intermediate")) {
-                return "Pre-Intermediate";
-            } else if (descLower.contains("intermediate") && !descLower.contains("pre") && !descLower.contains("upper")) {
-                return "Intermediate";
-            } else if (descLower.contains("upper-intermediate") || descLower.contains("upper intermediate")) {
-                return "Upper-Intermediate";
-            } else if (descLower.contains("advanced") || descLower.contains("proficient")) {
-                return "Advanced";
-            }
+    private String getAgeBasedLevelInstructions(Integer age) {
+        if (age == null) {
+            age = 12; // default to middle level
         }
 
-        // Use system level if no user override
-        return systemLevel;
-    }
+        if (age >= 6 && age <= 8) {
+            // 6-8 tuổi: Pre-A1 Level (Little Explorers)
+            return """
+        📊 STUDENT AGE: 6-8 YEARS OLD (Pre-A1 / Little Explorers Level)
+        
+        🎯 COGNITIVE & LANGUAGE DEVELOPMENT:
+        - Attention span: 5-10 minutes
+        - Concrete thinking, need visual/physical examples
+        - Learning through play, songs, and repetition
+        - Beginning literacy in native language
+        
+        📚 VOCABULARY & TOPICS:
+        - Range: 100-300 common words
+        - Topics: family, animals, colors, numbers 1-20, toys, food, body parts, classroom objects
+        - Use only high-frequency everyday words
+        - Examples: cat, dog, red, blue, apple, mom, dad, one, two, happy, sad
+        
+        ✍️ GRAMMAR & STRUCTURES:
+        - Present simple: "I am happy", "This is a cat"
+        - Have got: "I have got a toy"
+        - Basic plurals: cat → cats
+        - Simple questions: "What is this?", "How old are you?"
+        - Imperatives: "Stand up", "Sit down"
+        - DO NOT use: past tense, future tense, continuous forms, conditionals
+        
+        📝 SENTENCE COMPLEXITY:
+        - Length: 3-5 words maximum
+        - Structure: Subject + Verb + Object/Complement
+        - Examples: "I like apples.", "This is my dog.", "She is happy."
+        - Avoid complex or embedded clauses
+        
+        🎨 CONTENT REQUIREMENTS:
+        - Very short texts (20-50 words for reading)
+        - Use simple, clear images or context
+        - Lots of repetition and patterns
+        - Fun, engaging, game-like activities
+        - Clear instructions with visual cues
+        
+        ❌ AVOID:
+        - Abstract concepts
+        - Long sentences or paragraphs
+        - Complex grammar or vocabulary
+        - Topics outside daily life experience
+        """;
 
-    /**
-     * ✨ NEW: Get level-specific instructions for AI
-     */
-    private String getLevelInstructions(String level) {
-        switch (level.toLowerCase()) {
-            case "little explorers":
-            case "little-explorers":
-            case "explorers":
-                return """
-            📊 STUDENT LEVEL: LITTLE EXPLORERS (Pre-A1)
-            - For very young learners (ages 6–8)
-            - Use very simple vocabulary (animals, colors, toys, food, family)
-            - Use only basic sentence patterns: "This is a cat.", "I like apples."
-            - Focus on listening and recognizing familiar words
-            - Grammar: be (am/is/are), have got, simple plurals, basic questions
-            - Avoid long or abstract sentences
-            - Use clear contexts with pictures or daily-life examples
-            """;
+        } else if (age >= 9 && age <= 10) {
+            // 9-10 tuổi: A1 Level (Starters)
+            return """
+        📊 STUDENT AGE: 9-10 YEARS OLD (A1 / Cambridge Starters Level)
+        
+        🎯 COGNITIVE & LANGUAGE DEVELOPMENT:
+        - Attention span: 10-15 minutes
+        - Developing abstract thinking
+        - Can follow simple multi-step instructions
+        - Improving reading and writing skills
+        
+        📚 VOCABULARY & TOPICS:
+        - Range: 300-500 words
+        - Topics: school, home, hobbies, weather, clothes, sports, daily routines
+        - Common adjectives: big, small, new, old, fast, slow
+        - Basic prepositions: in, on, under, next to
+        - Examples: pencil, notebook, sunny, rainy, shirt, pants, football, breakfast
+        
+        ✍️ GRAMMAR & STRUCTURES:
+        - Present simple: "I go to school every day"
+        - Present continuous: "She is playing now"
+        - Can/can't: "I can swim"
+        - There is/are: "There is a book on the table"
+        - Possessive adjectives: my, your, his, her
+        - Simple past (be/have/go only): "I was happy", "She had a toy"
+        - DO NOT use: perfect tenses, passive voice, complex conditionals
+        
+        📝 SENTENCE COMPLEXITY:
+        - Length: 5-8 words
+        - Can use simple conjunctions: and, but
+        - Examples: "I like apples and oranges.", "My brother plays football, but I like swimming."
+        
+        🎨 CONTENT REQUIREMENTS:
+        - Short texts (50-100 words for reading)
+        - Clear context and simple storylines
+        - Familiar, concrete situations
+        - Picture support helpful
+        - Mix of recognition and production tasks
+        
+        ❌ AVOID:
+        - Idioms and phrasal verbs
+        - Complex time expressions
+        - Formal or academic language
+        """;
 
-            case "starters":
-                return """
-            📊 STUDENT LEVEL: STARTERS (Cambridge Pre-A1)
-            - For children around ages 7–9
-            - Vocabulary range: 300–500 common words
-            - Grammar: be/have/do, simple present, can/can’t
-            - Sentence length: 5–8 words
-            - Focus on daily topics: school, home, clothes, animals, food
-            - Clear, concrete contexts with simple sentences
-            - Avoid complex tenses or idioms
-            """;
+        } else if (age >= 11 && age <= 12) {
+            // 11-12 tuổi: A1-A2 Level (Movers/Flyers)
+            return """
+        📊 STUDENT AGE: 11-12 YEARS OLD (A1-A2 / Cambridge Movers-Flyers Level)
+        
+        🎯 COGNITIVE & LANGUAGE DEVELOPMENT:
+        - Attention span: 15-20 minutes
+        - Can think abstractly and hypothetically
+        - Developing critical thinking skills
+        - Can self-correct and monitor language use
+        
+        📚 VOCABULARY & TOPICS:
+        - Range: 600-1000 words
+        - Topics: travel, technology, environment, health, friendship, school subjects
+        - Descriptive adjectives: beautiful, expensive, dangerous, important
+        - Common phrasal verbs: get up, turn on, take off
+        - Connectors: because, so, when, before, after
+        
+        ✍️ GRAMMAR & STRUCTURES:
+        - All present tenses: simple, continuous, perfect (basic)
+        - Past simple: regular and common irregular verbs
+        - Future: will, going to
+        - Comparatives and superlatives
+        - Basic modals: must, should, could, might
+        - Some/any, much/many, a lot of
+        - DO NOT use: passive voice extensively, complex conditionals (2nd/3rd)
+        
+        📝 SENTENCE COMPLEXITY:
+        - Length: 8-12 words
+        - Can use multiple clauses with connectors
+        - Examples: "I went to the park because it was sunny.", "If it rains tomorrow, we will stay at home."
+        
+        🎨 CONTENT REQUIREMENTS:
+        - Medium texts (100-200 words for reading)
+        - Simple narratives and descriptions
+        - Personal experiences and opinions
+        - Can follow short dialogues
+        - Tasks require basic inference
+        
+        ❌ AVOID:
+        - Advanced idioms
+        - Complex academic vocabulary
+        - Highly formal or literary language
+        """;
 
-            case "movers":
-                return """
-            📊 STUDENT LEVEL: MOVERS (Cambridge A1)
-            - For learners ages 8–11
-            - Vocabulary: 600–800 words
-            - Grammar: present simple, present continuous, past simple of be/have/go
-            - Sentences: 8–12 words, basic conjunctions (and, but, because)
-            - Topics: hobbies, weather, holidays, daily activities
-            - Include basic question and answer forms
-            - Encourage short reading and listening comprehension
-            """;
+        } else if (age >= 13 && age <= 14) {
+            // 13-14 tuổi: A2-B1 Level (KET/PET)
+            return """
+        📊 STUDENT AGE: 13-14 YEARS OLD (A2-B1 / KET-PET Level)
+        
+        🎯 COGNITIVE & LANGUAGE DEVELOPMENT:
+        - Attention span: 20-30 minutes
+        - Abstract thinking well developed
+        - Can analyze, synthesize, and evaluate
+        - Developing personal opinions and arguments
+        - Can monitor and self-correct effectively
+        
+        📚 VOCABULARY & TOPICS:
+        - Range: 1500-2500 words
+        - Topics: education, careers, social issues, culture, media, science (basic)
+        - Academic vocabulary: analyze, describe, explain, compare
+        - Phrasal verbs: look after, find out, give up, carry on
+        - Collocations: make a decision, take an exam, do homework
+        
+        ✍️ GRAMMAR & STRUCTURES:
+        - All tenses including perfect continuous
+        - Passive voice: present and past simple
+        - First and second conditionals
+        - Reported speech (basic)
+        - Relative clauses: who, which, that
+        - Modals for deduction: must be, might be, can't be
+        - Used to, be/get used to
+        
+        📝 SENTENCE COMPLEXITY:
+        - Length: 12-18 words
+        - Multiple clauses and complex sentences
+        - Linking words: although, however, therefore, in addition
+        - Examples: "Although it was raining heavily, we decided to go to the beach because we had already made plans."
+        
+        🎨 CONTENT REQUIREMENTS:
+        - Longer texts (200-350 words for reading)
+        - Can follow arguments and explanations
+        - Express and justify opinions
+        - Understand main ideas and specific details
+        - Tasks require inference and interpretation
+        
+        ❌ AVOID:
+        - Highly specialized technical vocabulary
+        - Complex literary devices
+        - Very advanced idiomatic expressions
+        """;
 
-            case "flyers":
-                return """
-            📊 STUDENT LEVEL: FLYERS (Cambridge A2)
-            - For learners ages 9–12
-            - Vocabulary: 1000–1200 words
-            - Grammar: all present tenses, simple past, future with will/going to
-            - Sentences: 10–15 words, include comparatives and superlatives
-            - Topics: travel, family, school life, sports, animals
-            - Introduce short descriptive texts or stories
-            - Begin using connectors (before, after, when)
-            """;
+        } else if (age >= 15 && age <= 16) {
+            // 15-16 tuổi: B1-B2 Level (PET/FCE)
+            return """
+        📊 STUDENT AGE: 15-16 YEARS OLD (B1-B2 / PET-FCE Level)
+        
+        🎯 COGNITIVE & LANGUAGE DEVELOPMENT:
+        - Attention span: 30-45 minutes
+        - Fully developed abstract and critical thinking
+        - Can engage in complex discussions and debates
+        - Developing academic skills and exam techniques
+        - Can produce well-structured extended texts
+        
+        📚 VOCABULARY & TOPICS:
+        - Range: 2500-4000 words
+        - Topics: global issues, economics, politics, psychology, literature, advanced science
+        - Academic vocabulary: investigate, demonstrate, hypothesis, significant, crucial
+        - Advanced phrasal verbs: come across, put up with, run out of
+        - Idiomatic expressions: piece of cake, hit the nail on the head
+        - Formal and informal register distinction
+        
+        ✍️ GRAMMAR & STRUCTURES:
+        - All tenses including future perfect
+        - Passive voice: all forms
+        - All conditionals including third conditional and mixed
+        - Advanced modals: ought to, would rather, had better
+        - Reported speech: all forms including questions and commands
+        - Wish/if only structures
+        - Inversion for emphasis
+        
+        📝 SENTENCE COMPLEXITY:
+        - Length: 15-25 words
+        - Complex and compound-complex sentences
+        - Advanced linking: despite, whereas, nevertheless, consequently
+        - Examples: "Despite having studied for weeks, she found the exam challenging, particularly the section on grammar, which required not only knowledge but also quick thinking."
+        
+        🎨 CONTENT REQUIREMENTS:
+        - Extended texts (350-600 words for reading)
+        - Complex arguments and abstract ideas
+        - Multiple perspectives and nuances
+        - Inference, implication, and author's attitude
+        - Sophisticated task types
+        - Can understand implicit meaning
+        
+        ❌ AVOID:
+        - Extremely specialized jargon
+        - Archaic or very literary language (unless teaching literature)
+        """;
 
-            case "a2":
-            case "ket":
-            case "a2/ket":
-                return """
-            📊 STUDENT LEVEL: A2 / KET
-            - Vocabulary: about 1500 words
-            - Grammar: present, past, future tenses; modals (can, must, should)
-            - Sentence length: 12–18 words
-            - Use common phrasal verbs and prepositions
-            - Topics: daily routines, travel, technology, school, work
-            - Focus on understanding short texts and dialogues
-            - Encourage expressing simple opinions and experiences
-            """;
+        } else if (age >= 17 && age <= 18) {
+            // 17-18 tuổi: B2-C1 Level (FCE/CAE)
+            return """
+        📊 STUDENT AGE: 17-18 YEARS OLD (B2-C1 / FCE-CAE Level)
+        
+        🎯 COGNITIVE & LANGUAGE DEVELOPMENT:
+        - Attention span: 45-60 minutes+
+        - Mature critical and analytical thinking
+        - Can handle university-level academic content
+        - Sophisticated argumentation and reasoning skills
+        - Near-native discourse management
+        
+        📚 VOCABULARY & TOPICS:
+        - Range: 4000-6000+ words
+        - Topics: any academic or professional topic, complex social issues, philosophy, advanced sciences
+        - Advanced academic vocabulary: methodology, paradigm, correlation, implicit
+        - Sophisticated collocations: reach a consensus, pose a threat, exert influence
+        - Full range of idioms and expressions
+        - Nuanced vocabulary: distinctions between similar words
+        
+        ✍️ GRAMMAR & STRUCTURES:
+        - All grammar structures including advanced/rare forms
+        - Complex passive constructions
+        - Advanced participle clauses
+        - Cleft sentences for emphasis
+        - Subjunctive mood
+        - Advanced modal combinations
+        - Sophisticated discourse markers
+        
+        📝 SENTENCE COMPLEXITY:
+        - Length: 20-30+ words
+        - Highly complex sentence structures
+        - Sophisticated cohesion and coherence
+        - Examples: "Having extensively researched the implications of climate change on marine ecosystems, scientists have concluded that, unless immediate action is taken, irreversible damage will occur, potentially affecting not only biodiversity but also human livelihoods."
+        
+        🎨 CONTENT REQUIREMENTS:
+        - Long, complex texts (600-1000+ words)
+        - Abstract and theoretical concepts
+        - Subtle distinctions and implications
+        - Evaluation of complex arguments
+        - Understanding of text organization and purpose
+        - Can appreciate stylistic devices
+        
+        ✅ CAN INCLUDE:
+        - Academic writing conventions
+        - Critical analysis and evaluation
+        - Complex rhetorical devices
+        - Sophisticated register management
+        """;
 
-            case "b1":
-            case "pet":
-            case "b1/pet":
-                return """
-            📊 STUDENT LEVEL: B1 / PET
-            - Vocabulary: 2000–3000 words
-            - Grammar: all main tenses, basic conditionals, passive voice
-            - Sentences: 15–20 words, with linking words (although, because, so)
-            - Include phrasal verbs and common idioms
-            - Topics: environment, health, culture, relationships, education
-            - Require some inference and opinion-based understanding
-            - Students can describe experiences and justify opinions
-            """;
-
-            default:
-                return """
-            📊  STUDENT LEVEL: B1 / PET
-            - Vocabulary: 2000–3000 words
-            - Grammar: all main tenses, basic conditionals, passive voice
-            - Sentences: 15–20 words, with linking words (although, because, so)
-            - Include phrasal verbs and common idioms
-            - Topics: environment, health, culture, relationships, education
-            - Require some inference and opinion-based understanding
-            - Students can describe experiences and justify opinions
-            """;
+        }else {
+            return getAgeBasedLevelInstructions(12);
         }
     }
 
@@ -756,12 +939,21 @@ public class OpenAiServiceImpl implements OpenAiService {
             String questionType,
             String userDescription,
             String contextInfo,
-            int numberOfQuestions) {
+            int numberOfQuestions,
+            Integer age) {
 
         StringBuilder prompt = new StringBuilder();
 
         // ====================== THÊM SYSTEM ROLE MỚI ======================
         prompt.append("You are an experienced English teacher working at a reputable English language center for students aged 6 to 18.\n");
+
+        String ageInstructions = getAgeBasedLevelInstructions(age);
+        prompt.append(ageInstructions).append("\n\n");
+
+        String studentLevel = context.studentLevel;
+        prompt.append("📌 CURRENT STUDENT: Age ").append(age != null ? age : "not specified")
+                .append(" | Level: ").append(studentLevel).append("\n\n");
+
         prompt.append("You are responsible for creating professional, age-appropriate, lesson-aligned English test questions for different proficiency levels (Little Explorers → Advanced).\n\n");
         prompt.append("Always analyze the lesson content and chapter topic carefully before writing questions.\n");
         prompt.append("Your questions must directly test the grammar, vocabulary, and language skills actually taught in the current lesson, not random English knowledge.\n\n");
@@ -772,12 +964,6 @@ public class OpenAiServiceImpl implements OpenAiService {
         prompt.append("- Have plausible distractors and one clear correct answer.\n");
         prompt.append("- Follow the Vietnamese National High School (THPT Quốc Gia) style for clarity and fairness.\n");
         prompt.append("- When generating drag-and-drop questions, strictly follow the JSON format and placeholder rules provided by the user.\n\n");
-        // ====================================================================
-
-        String studentLevel = determineStudentLevel(context, userDescription);
-        String levelInstructions = getLevelInstructions(studentLevel);
-
-//        prompt.append("You are an expert English test creator for Vietnamese National High School Examination (THPT Quốc Gia).\n");
         prompt.append("Create PROFESSIONAL, ACADEMIC-STANDARD questions that test real English proficiency.\n\n");
 
         prompt.append("EXAM STANDARDS - VIETNAMESE NATIONAL HIGH SCHOOL EXAM FORMAT:\n");
@@ -788,9 +974,6 @@ public class OpenAiServiceImpl implements OpenAiService {
         prompt.append("- Each question should have a clear linguistic focus (grammar point, vocabulary, collocation)\n");
         prompt.append("- Progressive difficulty: start easier, gradually increase complexity\n");
         prompt.append("- Contextual questions preferred over isolated grammar drills\n\n");
-
-        // Level instructions
-        prompt.append(levelInstructions).append("\n");
 
         // Lesson content
         prompt.append("LESSON CONTENT (Extract key teaching points from this):\n");
@@ -921,12 +1104,21 @@ public class OpenAiServiceImpl implements OpenAiService {
             int numberOfQuestions,
             String userDescription,
             String contextInfo,
-            String dailyChallengeType) {
+            String dailyChallengeType,
+            Integer age) {
 
         StringBuilder prompt = new StringBuilder();
 
         // ====================== THÊM SYSTEM ROLE MỚI ======================
         prompt.append("You are an experienced English teacher working at a reputable English language center for students aged 6 to 18.\n");
+
+        String ageInstructions = getAgeBasedLevelInstructions(age);
+        prompt.append(ageInstructions).append("\n\n");
+
+        String studentLevel = context.studentLevel;
+        prompt.append("📌 CURRENT STUDENT: Age ").append(age != null ? age : "not specified")
+                .append(" | Level: ").append(studentLevel).append("\n\n");
+
         prompt.append("You are responsible for creating professional, age-appropriate, lesson-aligned English test questions for different proficiency levels (Little Explorers → Advanced).\n\n");
         prompt.append("Always analyze the lesson content and chapter topic carefully before writing questions.\n");
         prompt.append("Your questions must directly test the grammar, vocabulary, and language skills actually taught in the current lesson, not random English knowledge.\n\n");
@@ -937,12 +1129,6 @@ public class OpenAiServiceImpl implements OpenAiService {
         prompt.append("- Have plausible distractors and one clear correct answer.\n");
         prompt.append("- Follow the Vietnamese National High School (THPT Quốc Gia) style for clarity and fairness.\n");
         prompt.append("- When generating drag-and-drop questions, strictly follow the JSON format and placeholder rules provided by the user.\n\n");
-        // ====================================================================
-
-        String studentLevel = determineStudentLevel(context, userDescription);
-        String levelInstructions = getLevelInstructions(studentLevel);
-
-//        prompt.append("You are an expert English test creator for Vietnamese National High School Examination (THPT Quốc Gia).\n");
         prompt.append("Create PROFESSIONAL reading comprehension questions that test genuine understanding.\n\n");
 
         prompt.append("THPT QG READING COMPREHENSION STANDARDS:\n");
@@ -956,9 +1142,6 @@ public class OpenAiServiceImpl implements OpenAiService {
 
         prompt.append("CHALLENGE TYPE: ").append(dailyChallengeType).append("\n");
         appendDCTypeInstructions(prompt, dailyChallengeType);
-
-        // Level instructions
-        prompt.append("\n").append(levelInstructions).append("\n");
 
         prompt.append("PASSAGE TO CREATE QUESTIONS FROM:\n");
         prompt.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
@@ -1861,7 +2044,8 @@ public class OpenAiServiceImpl implements OpenAiService {
                 wordsPerParagraph,
                 request.getDescription(),
                 "",
-                context.studentLevel
+                context.studentLevel,
+                request.getAge()
         );
 
         String aiResponse = callOpenAI(prompt);
@@ -1878,15 +2062,18 @@ public class OpenAiServiceImpl implements OpenAiService {
             int wordsPerParagraph,
             String description,
             String contextInfo,
-            String level) {
+            String level,
+            Integer age) {
 
         StringBuilder prompt = new StringBuilder();
 
-        String levelInstructions = getLevelInstructions(level);
-
         prompt.append("You are an expert English teacher creating reading passages.\n\n");
 
-        prompt.append(levelInstructions).append("\n");
+        String ageInstructions = getAgeBasedLevelInstructions(age);
+        prompt.append(ageInstructions).append("\n\n");
+
+        prompt.append("📌 CURRENT STUDENT: Age ").append(age != null ? age : "not specified")
+                .append(" | Level: ").append(level).append("\n\n");
 
         if (description != null && !description.isBlank()) {
             prompt.append("🔥 USER REQUIREMENTS (ABSOLUTE PRIORITY) 🔥\n");
@@ -2450,6 +2637,421 @@ public class OpenAiServiceImpl implements OpenAiService {
             log.error("Failed to parse grading response: {}", e.getMessage(), e);
             throw new RuntimeException("Failed to parse AI grading response: " + e.getMessage(), e);
         }
+    }
+
+    @Override
+    public PronunciationAssessmentResponse assessPronunciation(PronunciationAssessmentRequest request) {
+        String traceId = TraceUtil.getTraceId();
+        log.info("[{}] Starting pronunciation assessment for file: {}",
+                traceId, request.getAudioFile().getOriginalFilename());
+
+        try {
+            // 1. Validate audio file
+            validateAudioFile(request.getAudioFile());
+
+            // 2. Save audio file temporarily
+            File tempAudioFile = saveTempAudioFile(request.getAudioFile());
+
+            try {
+                // 3. Create Speech SDK configuration
+                SpeechConfig speechConfig = SpeechConfig.fromSubscription(speechKey, speechRegion);
+                speechConfig.setSpeechRecognitionLanguage("en-US");
+
+                // 4. Create audio config from file
+                AudioConfig audioConfig = AudioConfig.fromWavFileInput(tempAudioFile.getAbsolutePath());
+
+                // 5. Create pronunciation assessment config
+                PronunciationAssessmentConfig pronConfig = new PronunciationAssessmentConfig(
+                        request.getReferenceText(),
+                        mapGradingSystem(request.getGradingSystem()),
+                        mapGranularity(request.getGranularity()),
+                        request.getEnableMiscue()
+                );
+
+                if (request.getEnableProsody()) {
+                    pronConfig.enableProsodyAssessment();
+                }
+
+                // 6. Create recognizer
+                SpeechRecognizer recognizer = new SpeechRecognizer(speechConfig, audioConfig);
+                pronConfig.applyTo(recognizer);
+
+                // 7. Perform recognition
+                SpeechRecognitionResult result = recognizer.recognizeOnceAsync().get();
+
+                // 8. Process results
+                if (result.getReason() == ResultReason.RecognizedSpeech) {
+                    PronunciationAssessmentResponse response = processRecognitionResult(
+                            result,
+                            request.getReferenceText(),
+                            request.getEnableMiscue()
+                    );
+
+                    log.info("[{}] Pronunciation assessment completed. Score: {}",
+                            traceId, response.getPronunciationScore());
+
+                    return response;
+
+                } else if (result.getReason() == ResultReason.NoMatch) {
+                    log.error("[{}] No speech could be recognized", traceId);
+                    throw new ApiException("No speech could be recognized from the audio file",
+                            HttpStatus.BAD_REQUEST.value());
+
+                } else if (result.getReason() == ResultReason.Canceled) {
+                    CancellationDetails cancellation = CancellationDetails.fromResult(result);
+                    log.error("[{}] Speech recognition canceled. Reason: {}, Error: {}",
+                            traceId, cancellation.getReason(), cancellation.getErrorDetails());
+                    throw new ApiException("Speech recognition failed: " + cancellation.getErrorDetails(),
+                            HttpStatus.INTERNAL_SERVER_ERROR.value());
+                }
+
+                throw new ApiException("Unexpected recognition result",
+                        HttpStatus.INTERNAL_SERVER_ERROR.value());
+
+            } finally {
+                // Cleanup temp file
+                if (tempAudioFile.exists()) {
+                    tempAudioFile.delete();
+                }
+            }
+
+        } catch (ApiException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("[{}] Pronunciation assessment failed: {}", traceId, e.getMessage(), e);
+            throw new ApiException("Failed to assess pronunciation: " + e.getMessage(),
+                    HttpStatus.INTERNAL_SERVER_ERROR.value());
+        }
+    }
+
+    /**
+     * Validate audio file format and size
+     */
+    private void validateAudioFile(MultipartFile audioFile) {
+        // Check file size (max 10MB)
+        long maxSize = 50 * 1024 * 1024; // 10MB
+        if (audioFile.getSize() > maxSize) {
+            throw new ApiException("Audio file size exceeds 10MB limit", HttpStatus.BAD_REQUEST.value());
+        }
+
+        // Check file format (WAV only for Speech SDK)
+        String filename = audioFile.getOriginalFilename();
+        if (filename == null || !filename.toLowerCase().endsWith(".wav")) {
+            throw new ApiException("Only WAV audio format is supported", HttpStatus.BAD_REQUEST.value());
+        }
+    }
+
+    /**
+     * Save uploaded file to temp directory
+     */
+    private File saveTempAudioFile(MultipartFile audioFile) throws IOException {
+        String tempDir = System.getProperty("java.io.tmpdir");
+        String filename = "pronunciation_" + UUID.randomUUID() + ".wav";
+        File tempFile = new File(tempDir, filename);
+
+        try (FileOutputStream fos = new FileOutputStream(tempFile)) {
+            fos.write(audioFile.getBytes());
+        }
+
+        log.debug("Saved temp audio file: {}", tempFile.getAbsolutePath());
+        return tempFile;
+    }
+
+    /**
+     * Map grading system string to enum
+     */
+    private PronunciationAssessmentGradingSystem mapGradingSystem(String gradingSystem) {
+        if ("FivePoint".equalsIgnoreCase(gradingSystem)) {
+            return PronunciationAssessmentGradingSystem.FivePoint;
+        }
+        return PronunciationAssessmentGradingSystem.HundredMark;
+    }
+
+    /**
+     * Map granularity string to enum
+     */
+    private PronunciationAssessmentGranularity mapGranularity(String granularity) {
+        switch (granularity.toLowerCase()) {
+            case "word":
+                return PronunciationAssessmentGranularity.Word;
+            case "fulltext":
+                return PronunciationAssessmentGranularity.FullText;
+            default:
+                return PronunciationAssessmentGranularity.Phoneme;
+        }
+    }
+
+    /**
+     * Process recognition result and extract scores
+     */
+    private PronunciationAssessmentResponse processRecognitionResult(
+            SpeechRecognitionResult result,
+            String referenceText,
+            boolean enableMiscue) throws Exception {
+
+        String recognizedText = result.getText();
+
+        // Get pronunciation assessment result
+        PronunciationAssessmentResult pronResult = PronunciationAssessmentResult.fromResult(result);
+
+        // Extract overall scores
+        double accuracyScore = pronResult.getAccuracyScore();
+        double fluencyScore = pronResult.getFluencyScore();
+        double completenessScore = pronResult.getCompletenessScore();
+        double pronunciationScore = pronResult.getPronunciationScore();
+        Double prosodyScore = null;
+
+        try {
+            prosodyScore = pronResult.getProsodyScore();
+        } catch (Exception e) {
+            // Prosody might not be available
+            log.debug("Prosody score not available");
+        }
+
+        // Parse JSON for word-level details
+        String jsonResult = result.getProperties().getProperty(PropertyId.SpeechServiceResponse_JsonResult);
+        List<PronunciationAssessmentResponse.WordAssessment> wordAssessments =
+                parseWordAssessments(jsonResult, enableMiscue, referenceText);
+
+        // Generate feedback
+        String feedback = generateFeedback(
+                pronunciationScore,
+                accuracyScore,
+                fluencyScore,
+                completenessScore,
+                prosodyScore,
+                wordAssessments
+        );
+
+        return PronunciationAssessmentResponse.builder()
+                .pronunciationScore(pronunciationScore)
+                .accuracyScore(accuracyScore)
+                .fluencyScore(fluencyScore)
+                .completenessScore(completenessScore)
+                .prosodyScore(prosodyScore)
+                .recognizedText(recognizedText)
+                .referenceText(referenceText)
+                .words(wordAssessments)
+                .feedback(feedback)
+                .build();
+    }
+
+    /**
+     * Parse word-level assessment from JSON response
+     */
+    private List<PronunciationAssessmentResponse.WordAssessment> parseWordAssessments(
+            String jsonResult,
+            boolean enableMiscue,
+            String referenceText) {
+
+        List<PronunciationAssessmentResponse.WordAssessment> wordAssessments = new ArrayList<>();
+
+        try {
+            JsonNode rootNode = objectMapper.readTree(jsonResult);
+            JsonNode nBestArray = rootNode.get("NBest");
+
+            if (nBestArray != null && nBestArray.isArray() && nBestArray.size() > 0) {
+                JsonNode nBestItem = nBestArray.get(0);
+                JsonNode wordsArray = nBestItem.get("Words");
+
+                if (wordsArray != null && wordsArray.isArray()) {
+                    int position = 0;
+                    for (JsonNode wordNode : wordsArray) {
+                        String word = wordNode.get("Word").asText();
+                        Long duration = wordNode.has("Duration") ? wordNode.get("Duration").asLong() : null;
+
+                        JsonNode pronAssessment = wordNode.get("PronunciationAssessment");
+                        double wordAccuracy = pronAssessment.get("AccuracyScore").asDouble();
+                        String errorType = pronAssessment.get("ErrorType").asText();
+
+                        wordAssessments.add(
+                                PronunciationAssessmentResponse.WordAssessment.builder()
+                                        .word(word)
+                                        .accuracyScore(wordAccuracy)
+                                        .errorType(errorType)
+                                        .position(position++)
+                                        .duration(duration)
+                                        .build()
+                        );
+                    }
+                }
+            }
+
+            // If miscue detection enabled, compare with reference text
+            if (enableMiscue && !wordAssessments.isEmpty()) {
+                wordAssessments = detectMiscues(wordAssessments, referenceText);
+            }
+
+        } catch (Exception e) {
+            log.error("Error parsing word assessments: {}", e.getMessage(), e);
+        }
+
+        return wordAssessments;
+    }
+
+    /**
+     * Detect omissions and insertions by comparing with reference text
+     */
+    private List<PronunciationAssessmentResponse.WordAssessment> detectMiscues(
+            List<PronunciationAssessmentResponse.WordAssessment> recognizedWords,
+            String referenceText) {
+
+        // Parse reference words
+        String[] refWords = referenceText.toLowerCase().split("\\s+");
+        List<String> refWordsList = new ArrayList<>();
+        for (String word : refWords) {
+            // Remove punctuation
+            word = word.replaceAll("^\\p{Punct}+|\\p{Punct}+$", "");
+            if (!word.isEmpty()) {
+                refWordsList.add(word);
+            }
+        }
+
+        // Extract recognized word strings
+        List<String> recWordsList = recognizedWords.stream()
+                .map(w -> w.getWord().toLowerCase().replaceAll("^\\p{Punct}+|\\p{Punct}+$", ""))
+                .collect(Collectors.toList());
+
+        // Compare and mark omissions/insertions (simplified diff algorithm)
+        List<PronunciationAssessmentResponse.WordAssessment> finalWords = new ArrayList<>();
+
+        int refIndex = 0;
+        int recIndex = 0;
+
+        while (refIndex < refWordsList.size() || recIndex < recWordsList.size()) {
+            if (refIndex >= refWordsList.size()) {
+                // Extra recognized words (insertions)
+                PronunciationAssessmentResponse.WordAssessment word = recognizedWords.get(recIndex);
+                word.setErrorType("Insertion");
+                finalWords.add(word);
+                recIndex++;
+            } else if (recIndex >= recWordsList.size()) {
+                // Missing words (omissions)
+                finalWords.add(
+                        PronunciationAssessmentResponse.WordAssessment.builder()
+                                .word(refWordsList.get(refIndex))
+                                .accuracyScore(0.0)
+                                .errorType("Omission")
+                                .position(finalWords.size())
+                                .build()
+                );
+                refIndex++;
+            } else if (refWordsList.get(refIndex).equals(recWordsList.get(recIndex))) {
+                // Words match
+                finalWords.add(recognizedWords.get(recIndex));
+                refIndex++;
+                recIndex++;
+            } else {
+                // Mismatch - check if it's omission or insertion
+                // (simplified logic - could use more sophisticated diff algorithm)
+                if (recIndex + 1 < recWordsList.size() &&
+                        refWordsList.get(refIndex).equals(recWordsList.get(recIndex + 1))) {
+                    // Likely insertion
+                    PronunciationAssessmentResponse.WordAssessment word = recognizedWords.get(recIndex);
+                    word.setErrorType("Insertion");
+                    finalWords.add(word);
+                    recIndex++;
+                } else {
+                    // Likely omission
+                    finalWords.add(
+                            PronunciationAssessmentResponse.WordAssessment.builder()
+                                    .word(refWordsList.get(refIndex))
+                                    .accuracyScore(0.0)
+                                    .errorType("Omission")
+                                    .position(finalWords.size())
+                                    .build()
+                    );
+                    refIndex++;
+                }
+            }
+        }
+
+        return finalWords;
+    }
+
+    /**
+     * Generate Vietnamese feedback based on scores
+     */
+    private String generateFeedback(
+            double pronunciationScore,
+            double accuracyScore,
+            double fluencyScore,
+            double completenessScore,
+            Double prosodyScore,
+            List<PronunciationAssessmentResponse.WordAssessment> words) {
+
+        StringBuilder feedback = new StringBuilder();
+
+        // Overall assessment
+        feedback.append("📊 **Đánh giá tổng quan:**\n");
+        feedback.append(String.format("- Điểm phát âm tổng thể: **%.1f/100**\n", pronunciationScore));
+
+        if (pronunciationScore >= 80) {
+            feedback.append("✅ Xuất sắc! Phát âm của bạn rất tốt.\n\n");
+        } else if (pronunciationScore >= 60) {
+            feedback.append("👍 Tốt! Phát âm của bạn ở mức khá, cần cải thiện thêm một số điểm.\n\n");
+        } else if (pronunciationScore >= 40) {
+            feedback.append("📝 Trung bình. Bạn cần luyện tập thêm để cải thiện phát âm.\n\n");
+        } else {
+            feedback.append("💪 Cần cố gắng hơn. Hãy luyện tập thường xuyên để cải thiện phát âm.\n\n");
+        }
+
+        // Detailed scores
+        feedback.append("📈 **Chi tiết điểm số:**\n");
+        feedback.append(String.format("- Độ chính xác (Accuracy): %.1f/100\n", accuracyScore));
+        feedback.append(String.format("- Độ trôi chảy (Fluency): %.1f/100\n", fluencyScore));
+        feedback.append(String.format("- Độ hoàn chỉnh (Completeness): %.1f/100\n", completenessScore));
+        if (prosodyScore != null) {
+            feedback.append(String.format("- Ngữ điệu (Prosody): %.1f/100\n", prosodyScore));
+        }
+        feedback.append("\n");
+
+        // Word-level errors
+        long errorCount = words.stream()
+                .filter(w -> !"None".equals(w.getErrorType()))
+                .count();
+
+        if (errorCount > 0) {
+            feedback.append(String.format("⚠️ **Lỗi phát hiện được:** %d từ\n", errorCount));
+
+            long mispronunciations = words.stream()
+                    .filter(w -> "Mispronunciation".equals(w.getErrorType()))
+                    .count();
+            long omissions = words.stream()
+                    .filter(w -> "Omission".equals(w.getErrorType()))
+                    .count();
+            long insertions = words.stream()
+                    .filter(w -> "Insertion".equals(w.getErrorType()))
+                    .count();
+
+            if (mispronunciations > 0) {
+                feedback.append(String.format("- Phát âm sai: %d từ\n", mispronunciations));
+            }
+            if (omissions > 0) {
+                feedback.append(String.format("- Thiếu: %d từ\n", omissions));
+            }
+            if (insertions > 0) {
+                feedback.append(String.format("- Thừa: %d từ\n", insertions));
+            }
+            feedback.append("\n");
+        }
+
+        // Recommendations
+        feedback.append("💡 **Gợi ý cải thiện:**\n");
+        if (accuracyScore < 70) {
+            feedback.append("- Tập trung luyện phát âm các âm chuẩn xác hơn\n");
+        }
+        if (fluencyScore < 70) {
+            feedback.append("- Luyện nói trôi chảy hơn, giảm ngập ngừng\n");
+        }
+        if (completenessScore < 70) {
+            feedback.append("- Đọc đầy đủ tất cả các từ trong câu\n");
+        }
+        if (prosodyScore != null && prosodyScore < 70) {
+            feedback.append("- Chú ý đến ngữ điệu, trọng âm và nhịp điệu\n");
+        }
+
+        return feedback.toString();
     }
 
     @Override
