@@ -21,7 +21,7 @@ public class QuestionDto {
     @Min(value = 1, message = Const.ORDER_NUMBER.ORDER_NUMBER_MIN, groups = NotDeleted.class)
     private int orderNumber;
     @Min(value = 0, message = Const.QUESTION.INVALID_SCORE, groups = NotDeleted.class)
-    private double score;
+    private double weight;
     @NotBlank(message = Const.QUESTION.TYPE_REQUIRED, groups = NotDeleted.class)
     private String questionType;
     @NotNull(message = Const.QUESTION.CONTENT_REQUIRED, groups = NotDeleted.class)

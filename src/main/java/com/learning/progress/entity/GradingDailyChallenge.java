@@ -10,8 +10,6 @@ import org.hibernate.annotations.ColumnDefault;
 import org.hibernate.annotations.OnDelete;
 import org.hibernate.annotations.OnDeleteAction;
 
-import java.time.OffsetDateTime;
-
 @SuperBuilder
 @NoArgsConstructor
 @AllArgsConstructor
@@ -30,12 +28,6 @@ public class GradingDailyChallenge extends BaseEntity{
     @JoinColumn(name = "grader_id")
     private User grader;
 
-    @Column(name = "total_score")
-    private Double totalScore;
-
-    @Column(name = "score_percentage ")
-    private Double scorePercentage;
-
     @Column(name = "overall_feedback")
     private String overallFeedback;
 
@@ -44,3 +36,4 @@ public class GradingDailyChallenge extends BaseEntity{
     private Boolean isFinalized;
 
 }
+

@@ -30,7 +30,6 @@ import java.time.OffsetDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
-import java.util.stream.Stream;
 
 @Service
 @Slf4j
@@ -192,7 +191,7 @@ public class QuestionServiceImpl implements QuestionService {
         Question question = questionRepository.findByIdAndDeletedAtIsNull(questionId)
                 .orElseThrow(() -> new ApiException(Const.QUESTION.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
-        question.setScore(BigDecimal.valueOf(score));
+        question.setWeight(BigDecimal.valueOf(score));
         questionRepository.save(question);
 
         Long sectionId = question.getSection().getId();
@@ -262,7 +261,7 @@ public class QuestionServiceImpl implements QuestionService {
                 Question q = new Question();
                 q.setSection(section);
                 q.setQuestionText(dto.getQuestionText());
-                q.setScore(BigDecimal.valueOf(dto.getScore()));
+                q.setWeight(BigDecimal.valueOf(dto.getWeight()));
                 q.setQuestionType(QuestionType.valueOf(dto.getQuestionType()));
                 q.setOrderNumber(order);
                 q.setQuestionContentJson(JsonUtil.objectToMap(dto.getContent()));
@@ -444,7 +443,7 @@ public class QuestionServiceImpl implements QuestionService {
                     .filter(qq -> qq.getDeletedAt() == null)
                     .orElseThrow(() -> new ApiException("Question not found: " + dto.getId(), HttpStatus.NOT_FOUND.value()));
             q.setQuestionText(dto.getQuestionText());
-            q.setScore(BigDecimal.valueOf(dto.getScore()));
+            q.setWeight(BigDecimal.valueOf(dto.getWeight()));
             q.setQuestionType(QuestionType.valueOf(dto.getQuestionType()));
             q.setOrderNumber(dto.getOrderNumber());
             q.setQuestionContentJson(JsonUtil.objectToMap(dto.getContent()));
@@ -456,7 +455,7 @@ public class QuestionServiceImpl implements QuestionService {
             Question q = new Question();
             q.setSection(section);
             q.setQuestionText(dto.getQuestionText());
-            q.setScore(BigDecimal.valueOf(dto.getScore()));
+            q.setWeight(BigDecimal.valueOf(dto.getWeight()));
             q.setQuestionType(QuestionType.valueOf(dto.getQuestionType()));
             q.setOrderNumber(dto.getOrderNumber());
             q.setQuestionContentJson(JsonUtil.objectToMap(dto.getContent()));

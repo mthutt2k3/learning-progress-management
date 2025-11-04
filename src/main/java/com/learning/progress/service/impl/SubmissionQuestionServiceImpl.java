@@ -104,7 +104,7 @@ public class SubmissionQuestionServiceImpl implements SubmissionQuestionService 
                 .stream()
                 .collect(Collectors.toMap(
                         gq -> gq.getSubmissionQuestion().getQuestion().getId(),
-                        gq -> BigDecimal.valueOf(gq.getScore() == null ? 0.0 : gq.getScore()),
+                        gq -> BigDecimal.valueOf(gq.getReceivedWeight() == null ? 0.0 : gq.getReceivedWeight()),
                         (v1, v2) -> v1
                 ));
         // 4. Xây dựng response
@@ -130,7 +130,7 @@ public class SubmissionQuestionServiceImpl implements SubmissionQuestionService 
                                 qr.setQuestionText(question.getQuestionText());
                                 qr.setQuestionType(question.getQuestionType());
                                 qr.setOrderNumber(question.getOrderNumber());
-                                qr.setScore(question.getScore());
+                                qr.setScore(question.getWeight());
                                 qr.setReceivedScore(receivedScoreMap.get(question.getId()));
 
                                 // Parse question content
@@ -243,7 +243,7 @@ public class SubmissionQuestionServiceImpl implements SubmissionQuestionService 
                                 qDto.setQuestionId(q.getId());
                                 qDto.setQuestionText(q.getQuestionText());
                                 qDto.setOrderNumber(q.getOrderNumber());
-                                qDto.setScore(q.getScore());
+                                qDto.setScore(q.getWeight());
                                 qDto.setQuestionType(q.getQuestionType());
 
                                 // Nội dung câu hỏi: không có đáp án đúng
