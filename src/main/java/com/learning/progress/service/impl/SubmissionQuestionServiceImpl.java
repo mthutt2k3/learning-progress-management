@@ -358,4 +358,50 @@ public class SubmissionQuestionServiceImpl implements SubmissionQuestionService 
         // XÓA CACHE
         cacheService.clearSubmissionCache(userId, submissionChallengeId);
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public SubmissionResultResponse.QuestionResult getQuestionDetail(Long submissionQuestionId) {
+        SubmissionQuestion sq = submissionQuestionRepository.findById(submissionQuestionId)
+                .orElseThrow(() -> new ApiException(Const.SUBMISSION.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+        if (sq.getDeletedAt() != null) {
+            throw new ApiException(Const.SUBMISSION.NOT_FOUND, HttpStatus.NOT_FOUND.value());
+        }
+
+        SubmissionDailyChallenge submission = sq.getSubmissionDaily();
+        if (submission == null) {
+            throw new ApiException(Const.SUBMISSION.NOT_FOUND, HttpStatus.NOT_FOUND.value());
+        }
+
+        // Access check consistent with other endpoints
+        Long classId = submission.getChallenge().getClassLesson().getClassChapter().getClazz().getId();
+        appValidator.validateUserAccessToClass(classId);
+
+        Question q = sq.getQuestion();
+
+        SubmissionResultResponse.QuestionResult qr = new SubmissionResultResponse.QuestionResult();
+        qr.setSubmissionQuestionId(submissionQuestionId);
+        if (q != null) {
+            qr.setQuestionId(q.getId());
+            qr.setQuestionText(q.getQuestionText());
+            qr.setQuestionType(q.getQuestionType());
+            qr.setOrderNumber(q.getOrderNumber());
+            qr.setScore(q.getWeight());
+            // question content
+            DataContent questionContent = JsonUtil.responseToObject(q.getQuestionContentJson(), DataContent.class);
+            qr.setQuestionContent(questionContent);
+        }
+
+        // submitted answer (if any)
+        if (sq.getSubmissionContentJson() != null) {
+            AnswerContent submitted = JsonUtil.responseToObject(sq.getSubmissionContentJson(), AnswerContent.class);
+            qr.setSubmittedContent(submitted);
+        }
+
+        // received score from grading question (if exists)
+        gradingQuestionRepository.findBySubmissionQuestionIdAndDeletedAtIsNull(submissionQuestionId)
+                .ifPresent(gq -> qr.setReceivedScore(BigDecimal.valueOf(gq.getReceivedWeight() == null ? 0.0 : gq.getReceivedWeight())));
+
+        return qr;
+    }
 }
