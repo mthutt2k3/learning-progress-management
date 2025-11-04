@@ -464,4 +464,59 @@ public class QuestionServiceImpl implements QuestionService {
 
         return result;
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public boolean hasUpdates(List<QuestionDto> dtos, Long sectionId) {
+        log.debug("Checking for updates in questions for sectionId: {}", sectionId);
+
+        // Load existing questions for the section
+        List<Question> existingQuestions = questionRepository
+                .findBySectionIdAndDeletedAtIsNullOrderByOrderNumberAsc(sectionId);
+
+        // Map existing questions by ID for comparison
+        Map<Long, Question> existingMap = existingQuestions.stream()
+                .collect(Collectors.toMap(Question::getId, q -> q));
+
+        for (QuestionDto dto : dtos) {
+            if (dto.getId() == null) {
+                // New question detected
+                log.debug("New question detected: {}", dto);
+                return true;
+            }
+
+            Question existing = existingMap.get(dto.getId());
+            if (existing == null) {
+                // Question not found in existing data (deleted or invalid)
+                log.debug("Question not found in existing data: {}", dto);
+                return true;
+            }
+
+            // Compare fields for updates
+            if (!Objects.equals(existing.getQuestionText(), dto.getQuestionText())
+                    || !Objects.equals(existing.getWeight(), BigDecimal.valueOf(dto.getWeight()))
+                    || !Objects.equals(existing.getQuestionType().name(), dto.getQuestionType())
+                    || !Objects.equals(existing.getOrderNumber(), dto.getOrderNumber())
+                    || !Objects.equals(existing.getQuestionContentJson(), JsonUtil.objectToMap(dto.getContent()))) {
+                log.debug("Question updated: {}", dto);
+                return true;
+            }
+        }
+
+        // Check for deleted questions
+        Set<Long> dtoIds = dtos.stream()
+                .map(QuestionDto::getId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        for (Question existing : existingQuestions) {
+            if (!dtoIds.contains(existing.getId())) {
+                log.debug("Question deleted: {}", existing);
+                return true;
+            }
+        }
+
+        log.debug("No updates detected for sectionId: {}", sectionId);
+        return false;
+    }
 }
+
