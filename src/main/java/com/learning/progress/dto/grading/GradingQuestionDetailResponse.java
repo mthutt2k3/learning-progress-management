@@ -10,7 +10,8 @@ import java.util.List;
 public class GradingQuestionDetailResponse {
     private Long gradingQuestionId;
     private Long submissionQuestionId;
-    private Double score;
+    private Double receivedWeight;
+    private Double questionWeight;
     private String feedback;
     private List<HighlightComment> highlightComments;
     private Long graderId;

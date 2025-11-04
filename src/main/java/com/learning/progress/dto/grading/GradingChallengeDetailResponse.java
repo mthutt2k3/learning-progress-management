@@ -1,16 +1,18 @@
 package com.learning.progress.dto.grading;
 
 import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
+@Builder
 public class GradingChallengeDetailResponse {
-    private Double totalScore;
-    private Double maxPossibleScore;
-    private Double scorePercentage;
+    private Double totalWeight;
+    private Double maxPossibleWeight;
+    private Double finalScore;
 
     private Integer totalQuestions;
     private Integer correctAnswers;

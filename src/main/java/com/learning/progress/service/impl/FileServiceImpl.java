@@ -16,7 +16,6 @@ import com.learning.progress.exception.ApiException;
 import com.learning.progress.repository.DailyChallengeRepository;
 import com.learning.progress.service.BlobSasService;
 import com.learning.progress.service.FileService;
-import com.learning.progress.service.OpenAiService;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.wp.usermodel.HeaderFooterType;
 import org.apache.poi.xssf.usermodel.XSSFColor;
@@ -1985,7 +1984,7 @@ public class FileServiceImpl implements FileService {
                 if (section.getQuestions() != null) {
                     totalQuestions += section.getQuestions().size();
                     for (Question q : section.getQuestions()) {
-                        totalScore += q.getScore().doubleValue();
+                        totalScore += q.getWeight().doubleValue();
                     }
                 }
             }
@@ -2095,7 +2094,7 @@ public class FileServiceImpl implements FileService {
         String questionType = question.getQuestionType().toString();
 
         // Question header
-        addQuestionHeader(document, questionNumber, question.getScore());
+        addQuestionHeader(document, questionNumber, question.getWeight());
 
         // Parse content
         Map<String, Object> content = question.getQuestionContentJson();

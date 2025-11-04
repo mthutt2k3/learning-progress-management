@@ -20,6 +20,7 @@ import com.learning.progress.cache.CacheService;
 import com.learning.progress.service.GradingDailyChallengeService;
 import com.learning.progress.util.AppValidator;
 import com.learning.progress.util.JsonUtil;
+import com.learning.progress.util.DataUtil;
 import com.learning.progress.util.JwtUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -77,43 +78,50 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
         int skipped = 0;
         int empty = 0;
 
+        // compute stats, sum achieved weights and sum max possible weights (weights stored on Question)
         double maxPossibleScore = 0.0;
+        double achievedSum = 0.0;
 
         for (GradingQuestion gq : gqs) {
             SubmissionQuestion sq = gq.getSubmissionQuestion();
-            Question q = sq.getQuestion();
-            double maxScore = q.getScore().doubleValue();
-            double achieved = gq.getScore();
-            maxPossibleScore += maxScore;
+            Question q = sq != null ? sq.getQuestion() : null;
+            double maxScore = q != null && q.getWeight() != null ? q.getWeight().doubleValue() : 0.0;
+            Double achieved = gq.getReceivedWeight();
 
-            if (sq.getSubmissionContentJson() == null || sq.getSubmissionContentJson().isEmpty()) {
+            maxPossibleScore += maxScore;
+            achievedSum += (achieved == null ? 0.0 : achieved);
+
+            if (sq == null || sq.getSubmissionContentJson() == null || sq.getSubmissionContentJson().isEmpty()) {
                 empty++;
-            } else if (achieved >= maxScore * 0.99) {
+            } else if (achieved != null && achieved >= maxScore * 0.99) {
                 correct++;
-            } else if (achieved > 0) {
+            } else if (achieved != null && achieved > 0) {
                 wrong++;
             } else {
                 skipped++;
             }
         }
 
-        double percentage = maxPossibleScore == 0 ? 0.0 : (grading.getTotalScore() / maxPossibleScore) * 100.0;
+        // finalScore on a 10-point scale (uses DataUtil to convert achieved/max -> scale of 10)
+        Double finalScoreOn10 = DataUtil.getFinalScore(achievedSum, maxPossibleScore);
 
         // === LẤY FEEDBACK ===
         String teacherFeedback = grading.getOverallFeedback();
 
-        return new GradingChallengeDetailResponse(
-                grading.getTotalScore(),
-                maxPossibleScore,
-                percentage,
-                totalQuestions,
-                correct,
-                wrong,
-                skipped,
-                empty,
-                teacherFeedback
-        );
+        return GradingChallengeDetailResponse.builder()
+                .totalWeight(achievedSum)
+                .maxPossibleWeight(maxPossibleScore)
+                .finalScore(finalScoreOn10)
+                .totalQuestions(totalQuestions)
+                .correctAnswers(correct)
+                .wrongAnswers(wrong)
+                .skipped(skipped)
+                .empty(empty)
+                .teacherFeedback(teacherFeedback)
+                .build();
+
     }
+
     private SubmissionDailyChallenge validateAndGetSubmission(Long submissionId) {
         SubmissionDailyChallenge submission = submissionDailyChallengeRepository
                 .findByIdAndDeletedAtIsNull(submissionId)
@@ -185,7 +193,7 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
                 .collect(Collectors.toMap(Question::getId, q -> q));
 
         // === KẾT QUẢ CHUNG ===
-        double totalScore = 0.0;
+        double totalWeight = 0.0;
         double maxPossibleScore = 0.0;
         List<GradingQuestion> gradingQuestions = new ArrayList<>();
 
@@ -210,7 +218,7 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
 
             for (Question question : sectionQuestions) {
                 Long qId = question.getId();
-                double qMaxScore = question.getScore().doubleValue();
+                double qMaxScore = question.getWeight().doubleValue();
                 sectionMaxScore += qMaxScore;
                 maxPossibleScore += qMaxScore;
 
@@ -242,7 +250,7 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
                         // NỘP NHƯNG RỖNG
                         emptyInSection++;
                         gq.setSubmissionQuestion(sq);
-                        gq.setScore(0.0);
+                        gq.setReceivedWeight(0.0);
                         log.info("   [EMPTY] sectionId {} | sqId={} | qId={} | type={} | score={} → 0.00",
                                 section.getId(), sq.getId(), qId, question.getQuestionType(), qMaxScore);
                     } else {
@@ -251,7 +259,7 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
                         if (questionContent == null || questionContent.getData() == null) {
                             log.warn("Invalid question content for qId: {}", qId);
                             gq.setSubmissionQuestion(sq);
-                            gq.setScore(0.0);
+                            gq.setReceivedWeight(0.0);
                         } else {
                             GradingResult result = getAnswerScoreFractionDetailed(
                                     sq.getId(),
@@ -262,10 +270,11 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
 
                             questionScore = result.fraction() * qMaxScore;
                             sectionAchievedScore += questionScore;
-                            totalScore += questionScore;
+                            totalWeight += questionScore;
 
                             gq.setSubmissionQuestion(sq);
-                            gq.setScore(questionScore);
+                            double receivedWeight = Double.parseDouble(String.format("%.2f", questionScore));
+                            gq.setReceivedWeight(receivedWeight);
 
                             log.info("   [GRADED] sectionId {} | sqId={} | qId={} | type={} | expect={} | actual={} | correct={} | score={} → {}",
                                     section.getId(), sq.getId(), qId, question.getQuestionType(),
@@ -282,7 +291,7 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
 
         // === TÍNH % TỔNG ===
         double scorePercentage = maxPossibleScore == 0 ? 0.0 :
-                BigDecimal.valueOf((totalScore / maxPossibleScore) * 100.0)
+                BigDecimal.valueOf((totalWeight / maxPossibleScore) * 100.0)
                         .setScale(2, RoundingMode.HALF_UP)
                         .doubleValue();
 
@@ -292,8 +301,6 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
                 .findBySubmissionDailyIdAndDeletedAtIsNull(submissionId)
                 .orElse(new GradingDailyChallenge());
         grading.setSubmissionDaily(submission);
-        grading.setTotalScore(totalScore);
-        grading.setScorePercentage(scorePercentage);
         grading.setIsFinalized(true);
         gradingDailyChallengeRepository.save(grading);
 
@@ -323,7 +330,7 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
                 totalQuestions,
                 totalQuestions - totalSkipped - totalEmpty,
                 totalSkipped, totalEmpty,
-                maxPossibleScore, totalScore, scorePercentage);
+                maxPossibleScore, totalWeight, scorePercentage);
     }
 
     private GradingResult getAnswerScoreFractionDetailed(
@@ -469,9 +476,7 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
                 .orElse(new GradingDailyChallenge());
         grading.setSubmissionDaily(submission);
         grading.setGrader(grader);
-        grading.setTotalScore(request.getTotalScore());
-        // previous approach used totalScore * 10 — keep a similar heuristic or compute outside if needed
-        grading.setScorePercentage(request.getTotalScore() == null ? null : request.getTotalScore() * 10);
+        // Do not persist totalWeight on grading header; per-question weights are the source of truth.
         grading.setOverallFeedback(request.getOverallFeedback());
         grading.setIsFinalized(true);
         gradingDailyChallengeRepository.save(grading);
@@ -532,7 +537,7 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
         gq.setSubmissionQuestion(sq);
         gq.setGradingDaily(grading);
         gq.setGrader(grader);
-        gq.setScore(request.getScore());
+        gq.setReceivedWeight(request.getReceivedWeight());
         gq.setFeedback(request.getFeedback());
         String json = JsonUtil.objectToJson(request.getHighlightComments());
         gq.setHighlightCommentsJson(json);
@@ -563,7 +568,20 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
 
         GradingQuestionDetailResponse resp = new GradingQuestionDetailResponse();
         resp.setSubmissionQuestionId(submissionQuestionId);
-        resp.setScore(gq.getScore());
+
+        // received weight = what grader assigned for this question
+        resp.setReceivedWeight(gq.getReceivedWeight());
+        // question weight = original max weight of the question (from Question.weight)
+        Double questionWeight = null;
+        SubmissionQuestion sq = gq.getSubmissionQuestion();
+        if (sq != null) {
+            Question q = sq.getQuestion();
+            if (q != null && q.getWeight() != null) {
+                questionWeight = q.getWeight().doubleValue();
+            }
+        }
+        resp.setQuestionWeight(questionWeight);
+
         resp.setFeedback(gq.getFeedback());
         resp.setHighlightComments(highlights);
         resp.setGraderId(gq.getGrader() != null ? gq.getGrader().getId() : null);

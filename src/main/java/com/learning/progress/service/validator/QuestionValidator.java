@@ -15,7 +15,6 @@ import org.springframework.stereotype.Component;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 @Slf4j
 @Component
@@ -48,7 +47,7 @@ public class QuestionValidator {
             throw new ApiException(Const.QUESTION.EMPTY_TEXT, HttpStatus.BAD_REQUEST.value());
         }
 
-        if (dto.getScore() <= 0) {
+        if (dto.getWeight() <= 0) {
             log.error("[{}] {}", traceId, Const.QUESTION.INVALID_SCORE);
             throw new ApiException(Const.QUESTION.INVALID_SCORE, HttpStatus.BAD_REQUEST.value());
         }

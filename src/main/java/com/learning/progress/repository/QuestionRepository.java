@@ -12,20 +12,11 @@ import java.util.Optional;
 import java.util.Set;
 
 public interface QuestionRepository extends JpaRepository<Question, Long> {
-
-    @Query("SELECT q FROM Question q WHERE q.section.challenge.id = :challengeId AND q.deletedAt IS NULL")
-    List<Question> findByChallengeId(@Param("challengeId") Long challengeId);
-
-    @Query("SELECT q FROM Question q WHERE q.section.id = :sectionId AND q.deletedAt IS NULL")
-    List<Question> findBySectionId(@Param("sectionId") Long sectionId);
-
     List<Question> findBySectionIdAndDeletedAtIsNull(Long sectionId);
 
     Optional<Question> findByIdAndDeletedAtIsNull(Long id);
 
     List<Question> findBySectionIdAndDeletedAtIsNullOrderByOrderNumberAsc(Long sectionId);
-
-    boolean existsBySectionAndQuestionTextIgnoreCaseAndDeletedAtIsNull(ChallengeSection section, String trimmedText);
 
     List<Question> findAllByIdInAndDeletedAtIsNull(List<Long> ids);
 
@@ -37,8 +28,6 @@ public interface QuestionRepository extends JpaRepository<Question, Long> {
 
     List<Question> findByIdInAndDeletedAtIsNull(List<Long> questionIds);
 
-    List<Question> findBySectionIdInAndDeletedAtIsNull(Set<Long> sectionIds);
-
     @Query("""
     SELECT COUNT(q)
     FROM Question q
@@ -48,4 +37,12 @@ public interface QuestionRepository extends JpaRepository<Question, Long> {
       AND s.deletedAt IS NULL
 """)
     long countByChallengeIdAndDeletedAtIsNull(@Param("challengeId") Long challengeId);
+
+    /**
+     * Sum question weight grouped by challenge id for a list of challengeIds.
+     * Returns list of Object[] where index 0 = challengeId (Long) and index 1 = sum(weight) (BigDecimal).
+     */
+    @Query("SELECT q.section.challenge.id, SUM(q.weight) FROM Question q WHERE q.section.challenge.id IN :challengeIds AND q.deletedAt IS NULL GROUP BY q.section.challenge.id")
+    List<Object[]> sumWeightByChallengeIds(@Param("challengeIds") List<Long> challengeIds);
+
 }
