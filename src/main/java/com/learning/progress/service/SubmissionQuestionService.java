@@ -11,4 +11,9 @@ public interface SubmissionQuestionService {
     SubmissionResultResponse getSubmissionResult(Long submissionChallengeId);
 
     DraftSubmissionResponse getDraftSubmission(Long submissionChallengeId);
+
+    /**
+     * Return question content and submitted answer for a single submissionQuestionId.
+     */
+    SubmissionResultResponse.QuestionResult getQuestionDetail(Long submissionQuestionId);
 }

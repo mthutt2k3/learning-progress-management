@@ -47,5 +47,7 @@ public interface SubmissionDailyChallengeRepository extends JpaRepository<Submis
     List<SubmissionDailyChallenge> findByChallengeIdAndDeletedAtIsNull(Long challengeId);
 
     long countByChallengeIdAndSubmittedAtIsNotNullAndDeletedAtIsNull(Long id);
-}
 
+    @Query("SELECT s.id FROM SubmissionDailyChallenge s WHERE s.challenge.id = :challengeId AND s.deletedAt IS NULL")
+    List<Long> findIdsByChallengeIdAndDeletedAtIsNull(@Param("challengeId") Long challengeId);
+}

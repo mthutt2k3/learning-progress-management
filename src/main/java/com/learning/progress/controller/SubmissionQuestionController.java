@@ -67,4 +67,15 @@ public class SubmissionQuestionController {
         submissionLogService.appendLogs(submissionChallengeId, userId, request.getLogs());
         return new ResponseEntity<>(DataResponse.success(null, Const.RESULT_MESSAGE_CODE.SUCCESSFUL), HttpStatus.ACCEPTED);
     }
+
+    @GetMapping("question/{submissionQuestionId}")
+    @PreAuthorize("hasAnyRole('STUDENT', 'TEST_TAKER', 'TEACHER', 'TEACHING_ASSISTANT')")
+    @Operation(summary = "Get a single submission question detail",
+            description = "Retrieve question content and submitted answer for a specific submissionQuestionId")
+    public ResponseEntity<DataResponse<SubmissionResultResponse.QuestionResult>> getSubmissionQuestionDetail(
+            @PathVariable Long submissionQuestionId) {
+
+        SubmissionResultResponse.QuestionResult result = submissionQuestionService.getQuestionDetail(submissionQuestionId);
+        return ResponseEntity.ok(DataResponse.success(result, Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL));
+    }
 }
