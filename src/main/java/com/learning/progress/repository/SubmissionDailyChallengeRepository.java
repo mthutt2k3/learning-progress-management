@@ -15,38 +15,10 @@ import java.util.List;
 import java.util.Optional;
 
 public interface SubmissionDailyChallengeRepository extends JpaRepository<SubmissionDailyChallenge, Long> {
-    @Query("SELECT s.challenge.id, g.totalScore, s.submittedAt " +
-            "FROM SubmissionDailyChallenge s " +
-            "JOIN GradingDailyChallenge g ON s.id = g.submissionDaily.id " +
-            "WHERE s.user.id = :userId AND s.challenge.classLesson.classChapter.clazz.id = :classId")
-    List<Object[]> getStudentPerformance(Long classId, Long userId);
-
-    @Query("SELECT s.challenge.id, s.submissionStatus " +
-            "FROM SubmissionDailyChallenge s " +
-            "WHERE s.user.id = :userId AND s.challenge.classLesson.classChapter.clazz.id = :classId")
-    List<Object[]> getStudentProgress(Long classId, Long userId);
     /**
      * Find a SubmissionDailyChallenge by userId and challengeId where deletedAt is null.
      */
     Optional<SubmissionDailyChallenge> findByUserIdAndChallengeIdAndDeletedAtIsNull(Long userId, Long challengeId);
-
-    @Query("""
-        SELECT sdc
-        FROM SubmissionDailyChallenge sdc
-        LEFT JOIN FETCH sdc.gradingDailyChallenges g
-        WHERE sdc.challenge.id IN :challengeIds
-          AND sdc.user.id = :userId
-          AND sdc.submittedAt = (
-              SELECT MAX(s.submittedAt)
-              FROM SubmissionDailyChallenge s
-              WHERE s.challenge.id = sdc.challenge.id
-                AND s.user.id = :userId
-          )
-    """)
-    List<SubmissionDailyChallenge> findLatestByChallengeIdInAndUserId(
-            @Param("challengeIds") Collection<Long> challengeIds,
-            @Param("userId") Long userId
-    );
 
     Optional<SubmissionDailyChallenge> findByIdAndDeletedAtIsNull(Long submissionChallengeId);
 

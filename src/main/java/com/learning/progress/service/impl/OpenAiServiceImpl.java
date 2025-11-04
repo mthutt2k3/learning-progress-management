@@ -1677,7 +1677,7 @@ public class OpenAiServiceImpl implements OpenAiService {
         question.setOrderNumber(orderNode != null ? orderNode.asInt() : index);
 
         JsonNode scoreNode = questionNode.get("score");
-        question.setScore(scoreNode != null ? scoreNode.asDouble() : 1.0);
+        question.setWeight(scoreNode != null ? scoreNode.asDouble() : 1.0);
 
         JsonNode typeNode = questionNode.get("questionType");
         question.setQuestionType(typeNode != null ? typeNode.asText() : expectedType);

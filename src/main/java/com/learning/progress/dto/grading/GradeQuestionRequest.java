@@ -12,9 +12,9 @@ import java.util.List;
 @Setter
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class GradeQuestionRequest {
-    @NotNull(message = "Score is required")
-    @Min(value = 0, message = "Score must be non-negative")
-    private Double score;
+    @NotNull(message = "receivedWeight is required")
+    @Min(value = 0, message = "receivedWeight must be non-negative")
+    private Double receivedWeight;
 
     private String feedback;
 

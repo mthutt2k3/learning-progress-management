@@ -14,14 +14,16 @@ public class StudentSubmissionDTO {
     private Long studentId;
     private String studentName; // Full name or email of the student
     private SubmissionStatus submissionStatus;
-    private Double totalScore; // Total score for the submission
-    private Double scorePercentage; // New: percentage score from grading
     private OffsetDateTime startDate; // submission.startedAt
     private OffsetDateTime endDate; // submission.expiredAt (alias)
     private OffsetDateTime actualStartAt;
     private OffsetDateTime submittedAt;
     private Duration actualDuration;
     private boolean isLate;
+
+    private Double totalWeight;
+    private Double maxPossibleWeight;
+    private Double finalScore;
 
     private String overallFeedback;
 }

@@ -23,7 +23,7 @@ public class GradingDailyChallengeController {
     @Autowired
     private GradingDailyChallengeService gradingDailyChallengeService;
 
-    @GetMapping("/submission-challenges/{submissionChallengeId}/grading")
+    @GetMapping("/submission-challenges/{submissionChallengeId}")
     @PreAuthorize("hasAnyRole('STUDENT', 'TEST_TAKER', 'TEACHER', 'TEACHING_ASSISTANT')")
     @Operation(summary = "Get grading summary for a submission",
             description = "Return overall grading summary (total score, max possible, percentage, question stats and teacher feedback) for a submission")
@@ -33,7 +33,7 @@ public class GradingDailyChallengeController {
         return new ResponseEntity<>(DataResponse.success(result, Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL), HttpStatus.OK);
     }
 
-    @GetMapping("/submission-questions/{submissionQuestionId}/grading")
+    @GetMapping("/submission-questions/{submissionQuestionId}")
     @PreAuthorize("hasAnyRole('TEACHER', 'TEACHING_ASSISTANT', 'STUDENT', 'TEST_TAKER')")
     @Operation(summary = "Get grading detail for a submission question",
             description = "Return teacher's highlights and feedback for a specific submission question")
@@ -43,7 +43,7 @@ public class GradingDailyChallengeController {
         return new ResponseEntity<>(DataResponse.success(resp, Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL), HttpStatus.OK);
     }
 
-    @PostMapping("/submission-challenges/{submissionChallengeId}/grading/summary")
+    @PostMapping("/submission-challenges/{submissionChallengeId}")
     @PreAuthorize("hasAnyRole('TEACHER', 'TEACHING_ASSISTANT')")
     @Operation(summary = "Finalize grading for a submission (summary)",
                description = "Teacher/TA sets the total score and overall feedback and finalizes the grading for the submission")
@@ -54,7 +54,7 @@ public class GradingDailyChallengeController {
         return new ResponseEntity<>(DataResponse.success(null, Const.RESULT_MESSAGE_CODE.UPDATE_SUCCESSFUL), HttpStatus.OK);
     }
 
-    @PostMapping("/submission-questions/{submissionQuestionId}/grading")
+    @PostMapping("/submission-questions/{submissionQuestionId}")
     @PreAuthorize("hasAnyRole('TEACHER', 'TEACHING_ASSISTANT')")
     @Operation(summary = "Grade a single submission question",
                description = "Update score, feedback and highlight comments for a single submission question (does not finalize the overall submission grading)")
