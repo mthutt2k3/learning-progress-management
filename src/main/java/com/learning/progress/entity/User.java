@@ -8,6 +8,7 @@ import lombok.*;
 import lombok.experimental.SuperBuilder;
 import org.hibernate.annotations.OnDelete;
 import org.hibernate.annotations.OnDeleteAction;
+import org.hibernate.annotations.Where;
 
 import java.util.Date;
 
@@ -17,6 +18,7 @@ import java.util.Date;
 @Data
 @Entity
 @Table(name = "users")
+@Where(clause = "deleted_at IS NULL")
 public class User extends BaseEntity {
 
     @Column(name = "user_name", length = 50)
