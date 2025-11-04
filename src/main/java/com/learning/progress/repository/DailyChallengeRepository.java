@@ -34,7 +34,7 @@ public interface DailyChallengeRepository extends JpaRepository<DailyChallenge, 
       )
       AND (
             :isTeacher = TRUE
-            OR dc.challengeStatus = 'PUBLISHED'
+            OR dc.challengeStatus != 'DRAFT'
             OR dc IS NULL
       )
     GROUP BY cl.id, cc.id

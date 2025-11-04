@@ -17,7 +17,7 @@ public class Const {
     public static class QUESTION {
         public static final String NULL_OBJECT = "Question DTO cannot be null";
         public static final String EMPTY_TEXT = "Question text cannot be empty";
-        public static final String INVALID_SCORE = "Score must be positive";
+        public static final String INVALID_SCORE = "Weight must be positive";
         public static final String EMPTY_CONTENT = "Question content cannot be empty";
         public static final String NO_CORRECT_ANSWER = "Question must have at least one correct answer";
         public static final String MISSING_CONTENT_DATA = "Missing content data for placeholders";

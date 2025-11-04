@@ -7,11 +7,11 @@ import com.learning.progress.dto.challenge.StudentChallengeListDTO;
 import com.learning.progress.dto.submission.StudentSubmissionDTO;
 import com.learning.progress.entity.*;
 import com.learning.progress.exception.ApiException;
-import com.learning.progress.mapper.SubmissionMapper;
 import com.learning.progress.repository.*;
 import com.learning.progress.cache.CacheService;
 import com.learning.progress.service.SubmissionChallengeService;
 import com.learning.progress.util.AppValidator;
+import com.learning.progress.util.DataUtil;
 import com.learning.progress.util.JwtUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,16 +24,15 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.OffsetDateTime;
+import java.math.BigDecimal;
 import java.time.Duration;
+import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
-import java.util.stream.IntStream;
-import java.util.Optional;
 
 @Service
 @Slf4j
@@ -52,7 +51,11 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
     @Autowired
     private GradingDailyChallengeRepository gradingDailyChallengeRepository;
     @Autowired
+    private GradingQuestionRepository gradingQuestionRepository;
+    @Autowired
     private CacheService cacheService;
+    @Autowired
+    private QuestionRepository questionRepository;
 
     @Override
     @Async("taskExecutor")
@@ -139,6 +142,15 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
                         .stream()
                         .collect(Collectors.toMap(g -> g.getSubmissionDaily().getId(), g -> g, (a, b) -> a));
 
+        // Batch fetch max possible weight per challenge (sum of question weights)
+        List<Object[]> sums = challengeIds.isEmpty() ? List.of() :
+                questionRepository.sumWeightByChallengeIds(challengeIds);
+        Map<Long, Double> maxWeightByChallengeId = sums.stream()
+                .collect(Collectors.toMap(
+                        r -> ((Number) r[0]).longValue(),
+                        r -> ((BigDecimal) r[1]).doubleValue()
+                ));
+
         // Assemble DTOs without further DB calls
         List<StudentChallengeListDTO> data = lessonPage.getContent().stream()
                 .map(lesson -> {
@@ -167,8 +179,9 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
                         Boolean isLate = false;
                         OffsetDateTime submittedAt = null;
                         Duration actualDuration = null;
-                        Double totalScore = null;
-                        Double scorePercentage = null;
+                        Double totalWeight = null;
+                        Double finalScore = null;
+                        Double maxPossibleWeight = null;
 
                         if (s != null) {
                             submissionChallengeId = s.getId();
@@ -182,26 +195,32 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
                             }
                             GradingDailyChallenge g = gradingBySubmissionId.get(s.getId());
                             if (g != null) {
-                                totalScore = g.getTotalScore();
-                                scorePercentage = g.getScorePercentage();
+                                // compute totalWeight dynamically from grading questions
+                                totalWeight = gradingQuestionRepository.findByGradingDailyIdAndDeletedAtIsNull(g.getId())
+                                        .stream()
+                                        .mapToDouble(gqt -> gqt.getReceivedWeight() == null ? 0.0 : gqt.getReceivedWeight())
+                                        .sum();
+                                maxPossibleWeight = maxWeightByChallengeId.get(ch.getId());
+                                finalScore = DataUtil.getFinalScore(totalWeight, maxPossibleWeight);
                             }
                         }
 
-                        StudentChallengeListDTO.StudentChallengeDTO dto = new StudentChallengeListDTO.StudentChallengeDTO(
-                                ch.getId(),
-                                ch.getChallengeName(),
-                                ch.getChallengeType(),
-                                ch.getChallengeStatus(),
-                                submissionChallengeId,
-                                startDate,
-                                endDate,
-                                submissionStatus,
-                                isLate != null ? isLate : false,
-                                actualDuration,
-                                submittedAt,
-                                totalScore,
-                                scorePercentage
-                        );
+                        StudentChallengeListDTO.StudentChallengeDTO dto = StudentChallengeListDTO.StudentChallengeDTO.builder()
+                                .id(ch.getId())
+                                .challengeName(ch.getChallengeName())
+                                .challengeType(ch.getChallengeType())
+                                .challengeStatus(ch.getChallengeStatus())
+                                .submissionChallengeId(submissionChallengeId)
+                                .startDate(startDate)
+                                .endDate(endDate)
+                                .submissionStatus(submissionStatus)
+                                .isLate(isLate != null ? isLate : false)
+                                .actualDuration(actualDuration)
+                                .submittedAt(submittedAt)
+                                .totalWeight(totalWeight)
+                                .finalScore(finalScore)
+                                .maxPossibleWeight(maxPossibleWeight)
+                                .build();
                         dtoChallenges.add(dto);
                     }
 
@@ -268,6 +287,13 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
                         .stream()
                         .collect(Collectors.toMap(g -> g.getSubmissionDaily().getId(), g -> g, (a, b) -> a));
 
+        // compute max possible weight for the whole challenge (sum of question weights)
+        List<Question> questionsForChallenge = questionRepository.findByChallengeIdAndDeletedAtIsNull(challengeId);
+        double challengeMaxPossibleWeight = questionsForChallenge == null ? 0.0 :
+                questionsForChallenge.stream()
+                        .mapToDouble(q -> q.getWeight() == null ? 0.0 : q.getWeight().doubleValue())
+                        .sum();
+
         List<StudentSubmissionDTO> data = submissionPage.getContent().stream()
                 .map(submission -> {
                     StudentSubmissionDTO dto = new StudentSubmissionDTO();
@@ -294,11 +320,18 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
                     // grading
                     GradingDailyChallenge g = gradingMap.get(submission.getId());
                     if (g != null) {
-                        dto.setTotalScore(g.getTotalScore());
-                        dto.setScorePercentage(g.getScorePercentage());
+                        // achieved total = sum of per-question receivedWeight
+                        Double achievedTotal = gradingQuestionRepository.findByGradingDailyIdAndDeletedAtIsNull(g.getId())
+                                .stream()
+                                .mapToDouble(gqt -> gqt.getReceivedWeight() == null ? 0.0 : gqt.getReceivedWeight())
+                                .sum();
+                        dto.setTotalWeight(achievedTotal);
+                        dto.setMaxPossibleWeight(challengeMaxPossibleWeight);
+                        dto.setFinalScore(DataUtil.getFinalScore(achievedTotal, challengeMaxPossibleWeight));
                     } else {
-                        dto.setTotalScore(null);
-                        dto.setScorePercentage(null);
+                        dto.setTotalWeight(null);
+                        dto.setMaxPossibleWeight(null);
+                        dto.setFinalScore(null);
                     }
 
                     dto.setLate(submission.getIsLate());

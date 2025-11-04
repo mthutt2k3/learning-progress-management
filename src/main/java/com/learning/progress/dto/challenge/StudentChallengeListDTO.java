@@ -3,10 +3,7 @@ package com.learning.progress.dto.challenge;
 import com.learning.progress.common.ChallengeStatus;
 import com.learning.progress.common.ChallengeType;
 import com.learning.progress.common.SubmissionStatus;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.*;
 
 import java.time.Duration;
 import java.time.OffsetDateTime;
@@ -16,6 +13,7 @@ import java.util.List;
 @Setter
 @AllArgsConstructor
 @NoArgsConstructor
+@Builder
 public class StudentChallengeListDTO {
     private Long classLessonId;
     private String classLessonName;
@@ -27,6 +25,7 @@ public class StudentChallengeListDTO {
     @Setter
     @AllArgsConstructor
     @NoArgsConstructor
+    @Builder
     public static class StudentChallengeDTO {
         private Long id;
         private String challengeName;
@@ -40,7 +39,8 @@ public class StudentChallengeListDTO {
         private Duration actualDuration;
         private OffsetDateTime submittedAt; // Từ SubmissionDailyChallenge
 
-        private Double totalScore; // Từ GradingDailyChallenges
-        private Double scorePercentage; // Từ GradingDailyChallenges
+        private Double maxPossibleWeight; // total question weight for the challenge
+        private Double totalWeight; // Từ GradingDailyChallenges
+        private Double finalScore; // final score on scale 10
     }
 }
