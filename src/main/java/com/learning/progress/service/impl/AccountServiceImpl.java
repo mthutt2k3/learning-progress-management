@@ -6,6 +6,8 @@ import com.learning.progress.common.UserStatus;
 import com.learning.progress.dto.account.AccountDTO;
 import com.learning.progress.dto.account.CreateNewAccountRequest;
 import com.learning.progress.dto.DataResponse;
+import com.learning.progress.dto.dashboard.AccountGrowthByRoleResponse;
+import com.learning.progress.dto.dashboard.AdminAccountDashboardResponse;
 import com.learning.progress.entity.Role;
 import com.learning.progress.entity.User;
 import com.learning.progress.exception.ApiException;
@@ -32,8 +34,13 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.sql.Timestamp;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
-import java.util.List;
+import java.time.ZoneOffset;
+import java.time.Year;
+import java.time.YearMonth;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -346,5 +353,149 @@ public class AccountServiceImpl implements AccountService {
         targetUser.setDeletedAt(OffsetDateTime.now());
         userRepository.save(targetUser);
     }
+    @Override
+    public AdminAccountDashboardResponse getAdminAccountDashboard() {
+        OffsetDateTime todayStart = OffsetDateTime.now().withHour(0).withMinute(0).withSecond(0);
+        long total = userRepository.count();
+
+        long active = userRepository.countByStatus(UserStatus.ACTIVE);
+        long pending = userRepository.countByStatus(UserStatus.PENDING);
+        long inactive = userRepository.countByStatus(UserStatus.INACTIVE);
+        long newToday = userRepository.countByCreatedAtAfter(todayStart);
+
+        List<AdminAccountDashboardResponse.RoleBreakdown> roleBreakdown = Arrays.stream(RoleName.values())
+                .map(role -> {
+                    long count = userRepository.countByRole_Name(role);
+                    double percentage = total > 0 ? (count * 100.0 / total) : 0.0;
+                    return AdminAccountDashboardResponse.RoleBreakdown.builder()
+                            .role(role).count(count).percentage(Math.round(percentage * 10) / 10.0).build();
+                })
+                .filter(r -> r.getCount() > 0)
+                .toList();
+
+        List<AdminAccountDashboardResponse.StatusBreakdown> statusBreakdown = Arrays.stream(UserStatus.values())
+                .map(status -> {
+                    long count = userRepository.countByStatus(status);
+                    double percentage = total > 0 ? (count * 100.0 / total) : 0.0;
+                    return AdminAccountDashboardResponse.StatusBreakdown.builder()
+                            .status(status).count(count).percentage(Math.round(percentage * 10) / 10.0).build();
+                })
+                .toList();
+
+        List<User> recent = userRepository.findTop5ByOrderByCreatedAtDesc();
+        List<AdminAccountDashboardResponse.RecentAccount> recentAccounts = recent.stream()
+                .map(u -> AdminAccountDashboardResponse.RecentAccount.builder()
+                        .userId(u.getId())
+                        .email(u.getEmail())
+                        .role(u.getRole() != null ? u.getRole().getName() : null)
+                        .status(u.getStatus())
+                        .createdAt(u.getCreatedAt())
+                        .build())
+                .toList();
+
+        return AdminAccountDashboardResponse.builder()
+                .summary(AdminAccountDashboardResponse.AccountSummary.builder()
+                        .totalAccounts(total).activeAccounts(active).pendingAccounts(pending)
+                        .inactiveAccounts(inactive).newToday(newToday).build())
+                .roleBreakdown(roleBreakdown)
+                .statusBreakdown(statusBreakdown)
+                .recentAccounts(recentAccounts)
+                .build();
+    }
+
+    @Override
+    public AccountGrowthByRoleResponse getAccountGrowthByRole(int range, String unit) {
+        if (range <= 0) range = 30;
+        String u = unit == null ? "daily" : unit.trim().toLowerCase();
+
+        List<String> labels = new ArrayList<>(range);
+        Map<String, Integer> labelIndex = new HashMap<>(range);
+        OffsetDateTime startOffset;
+        List<Object[]> rows = Collections.emptyList();
+
+        switch (u) {
+            case "monthly": {
+                YearMonth today = YearMonth.now(ZoneOffset.UTC);
+                YearMonth start = today.minusMonths(range - 1L);
+                for (int i = 0; i < range; i++) {
+                    YearMonth ym = start.plusMonths(i);
+                    String label = ym.toString(); // YYYY-MM
+                    labels.add(label);
+                    labelIndex.put(label, i);
+                }
+                startOffset = start.atDay(1).atStartOfDay().atOffset(ZoneOffset.UTC);
+                rows = userRepository.findRoleByMonth(startOffset);
+                break;
+            }
+            case "yearly": {
+                Year today = Year.now(ZoneOffset.UTC);
+                Year start = today.minusYears(range - 1L);
+                for (int i = 0; i < range; i++) {
+                    Year y = start.plusYears(i);
+                    String label = y.toString(); // YYYY
+                    labels.add(label);
+                    labelIndex.put(label, i);
+                }
+                startOffset = LocalDate.of(start.getValue(), 1, 1).atStartOfDay().atOffset(ZoneOffset.UTC);
+                rows = userRepository.findRoleByYear(startOffset);
+                break;
+            }
+            default: { // daily
+                LocalDate today = LocalDate.now(ZoneOffset.UTC);
+                LocalDate start = today.minusDays(range - 1L);
+                for (int i = 0; i < range; i++) {
+                    String d = start.plusDays(i).toString(); // YYYY-MM-DD
+                    labels.add(d);
+                    labelIndex.put(d, i);
+                }
+                startOffset = LocalDate.parse(labels.get(0)).atStartOfDay().atOffset(ZoneOffset.UTC);
+                rows = userRepository.findRoleByDay(startOffset);
+                break;
+            }
+        }
+
+        Map<RoleName, long[]> counts = new EnumMap<>(RoleName.class);
+        for (RoleName rn : RoleName.values()) counts.put(rn, new long[range]);
+
+        for (Object[] row : rows) {
+            if (row == null || row.length < 3) continue;
+            Object dateObj = row[0];
+            String dateStr;
+            if (dateObj instanceof String) {
+                dateStr = (String) dateObj;
+            } else if (dateObj instanceof java.sql.Date) {
+                dateStr = ((java.sql.Date) dateObj).toLocalDate().toString();
+            } else if (dateObj instanceof java.sql.Timestamp) {
+                dateStr = ((java.sql.Timestamp) dateObj).toLocalDateTime().toLocalDate().toString();
+            } else {
+                dateStr = String.valueOf(dateObj);
+            }
+
+            String roleNameStr = row[1] == null ? null : row[1].toString();
+            Number cntNum = row[2] instanceof Number ? (Number) row[2] : null;
+            long cnt = cntNum == null ? 0L : cntNum.longValue();
+
+            Integer idx = labelIndex.get(dateStr);
+            if (idx == null) continue;
+            try {
+                RoleName rn = RoleName.valueOf(roleNameStr);
+                long[] arr = counts.get(rn);
+                arr[idx] += cnt;
+            } catch (Exception ignored) {
+                // skip unknown role names
+            }
+        }
+
+        List<AccountGrowthByRoleResponse.Series> series = new ArrayList<>(RoleName.values().length);
+        for (RoleName rn : RoleName.values()) {
+            long[] arr = counts.get(rn);
+            List<Long> data = new ArrayList<>(range);
+            for (long v : arr) data.add(v);
+            series.add(AccountGrowthByRoleResponse.Series.builder().role(rn).data(data).build());
+        }
+
+        return new AccountGrowthByRoleResponse(labels, series);
+    }
 
 }
+
