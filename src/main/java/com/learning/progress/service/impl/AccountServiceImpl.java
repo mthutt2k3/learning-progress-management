@@ -6,8 +6,8 @@ import com.learning.progress.common.UserStatus;
 import com.learning.progress.dto.account.AccountDTO;
 import com.learning.progress.dto.account.CreateNewAccountRequest;
 import com.learning.progress.dto.DataResponse;
+import com.learning.progress.dto.dashboard.AccountGrowthByRoleResponse;
 import com.learning.progress.dto.dashboard.AdminAccountDashboardResponse;
-import com.learning.progress.dto.dashboard.TrendResponse;
 import com.learning.progress.entity.Role;
 import com.learning.progress.entity.User;
 import com.learning.progress.exception.ApiException;
@@ -34,7 +34,12 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.sql.Timestamp;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.time.Year;
+import java.time.YearMonth;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -399,82 +404,98 @@ public class AccountServiceImpl implements AccountService {
     }
 
     @Override
-    public List<TrendResponse> getUserTrend(String type, String period, int range) {
-        return switch (type) {
-            case "newUsers" -> getNewUsersTrend(period, range);
-            case "role" -> getRoleTrend(period, range);
-            case "status" -> getStatusTrend(period, range);
-            default -> throw new IllegalArgumentException("Invalid type: " + type);
-        };
-    }
+    public AccountGrowthByRoleResponse getAccountGrowthByRole(int range, String unit) {
+        if (range <= 0) range = 30;
+        String u = unit == null ? "daily" : unit.trim().toLowerCase();
 
-    private List<TrendResponse> getNewUsersTrend(String period, int range) {
-        OffsetDateTime start = period.equals("day")
-                ? OffsetDateTime.now().minusDays(range)
-                : OffsetDateTime.now().minusMonths(range);
+        List<String> labels = new ArrayList<>(range);
+        Map<String, Integer> labelIndex = new HashMap<>(range);
+        OffsetDateTime startOffset;
+        List<Object[]> rows = Collections.emptyList();
 
-        List<Object[]> raw = period.equals("day")
-                ? userRepository.findDailyNewUsers(start)
-                : userRepository.findMonthlyNewUsers(start);
-
-        List<TrendResponse.TrendDataPoint> points = raw.stream()
-                .map(row -> TrendResponse.TrendDataPoint.builder()
-                        .label(row[0].toString())
-                        .count(((Number) row[1]).longValue())
-                        .build())
-                .toList();
-
-        return List.of(TrendResponse.builder()
-                .type("newUsers").period(period).data(points).build());
-    }
-
-    private List<TrendResponse> getRoleTrend(String period, int range) {
-        if (!period.equals("month")) throw new IllegalArgumentException("Role trend only supports month");
-        OffsetDateTime start = OffsetDateTime.now().minusMonths(range);
-        List<Object[]> raw = userRepository.findRoleByMonth(start);
-
-        Map<String, Map<String, Long>> map = new HashMap<>();
-        for (Object[] row : raw) {
-            String month = row[0].toString();
-            String role = row[1].toString();
-            Long count = ((Number) row[2]).longValue();
-            map.computeIfAbsent(month, k -> new HashMap<>()).put(role, count);
+        switch (u) {
+            case "monthly": {
+                YearMonth today = YearMonth.now(ZoneOffset.UTC);
+                YearMonth start = today.minusMonths(range - 1L);
+                for (int i = 0; i < range; i++) {
+                    YearMonth ym = start.plusMonths(i);
+                    String label = ym.toString(); // YYYY-MM
+                    labels.add(label);
+                    labelIndex.put(label, i);
+                }
+                startOffset = start.atDay(1).atStartOfDay().atOffset(ZoneOffset.UTC);
+                rows = userRepository.findRoleByMonth(startOffset);
+                break;
+            }
+            case "yearly": {
+                Year today = Year.now(ZoneOffset.UTC);
+                Year start = today.minusYears(range - 1L);
+                for (int i = 0; i < range; i++) {
+                    Year y = start.plusYears(i);
+                    String label = y.toString(); // YYYY
+                    labels.add(label);
+                    labelIndex.put(label, i);
+                }
+                startOffset = LocalDate.of(start.getValue(), 1, 1).atStartOfDay().atOffset(ZoneOffset.UTC);
+                rows = userRepository.findRoleByYear(startOffset);
+                break;
+            }
+            default: { // daily
+                LocalDate today = LocalDate.now(ZoneOffset.UTC);
+                LocalDate start = today.minusDays(range - 1L);
+                for (int i = 0; i < range; i++) {
+                    String d = start.plusDays(i).toString(); // YYYY-MM-DD
+                    labels.add(d);
+                    labelIndex.put(d, i);
+                }
+                startOffset = LocalDate.parse(labels.get(0)).atStartOfDay().atOffset(ZoneOffset.UTC);
+                rows = userRepository.findRoleByDay(startOffset);
+                break;
+            }
         }
 
-        List<TrendResponse.TrendDataPoint> points = map.entrySet().stream()
-                .map(e -> TrendResponse.TrendDataPoint.builder()
-                        .label(e.getKey())
-                        .count(e.getValue().values().stream().mapToLong(Long::longValue).sum())
-                        .breakdown(e.getValue())
-                        .build())
-                .sorted(Comparator.comparing(TrendResponse.TrendDataPoint::getLabel))
-                .toList();
+        Map<RoleName, long[]> counts = new EnumMap<>(RoleName.class);
+        for (RoleName rn : RoleName.values()) counts.put(rn, new long[range]);
 
-        return List.of(TrendResponse.builder().type("role").period("month").data(points).build());
-    }
+        for (Object[] row : rows) {
+            if (row == null || row.length < 3) continue;
+            Object dateObj = row[0];
+            String dateStr;
+            if (dateObj instanceof String) {
+                dateStr = (String) dateObj;
+            } else if (dateObj instanceof java.sql.Date) {
+                dateStr = ((java.sql.Date) dateObj).toLocalDate().toString();
+            } else if (dateObj instanceof java.sql.Timestamp) {
+                dateStr = ((java.sql.Timestamp) dateObj).toLocalDateTime().toLocalDate().toString();
+            } else {
+                dateStr = String.valueOf(dateObj);
+            }
 
-    private List<TrendResponse> getStatusTrend(String period, int range) {
-        if (!period.equals("day")) throw new IllegalArgumentException("Status trend only supports day");
-        OffsetDateTime start = OffsetDateTime.now().minusDays(range);
-        List<Object[]> raw = userRepository.findStatusByDay(start);
+            String roleNameStr = row[1] == null ? null : row[1].toString();
+            Number cntNum = row[2] instanceof Number ? (Number) row[2] : null;
+            long cnt = cntNum == null ? 0L : cntNum.longValue();
 
-        Map<String, Map<String, Long>> map = new HashMap<>();
-        for (Object[] row : raw) {
-            String date = row[0].toString();
-            String status = row[1].toString();
-            Long count = ((Number) row[2]).longValue();
-            map.computeIfAbsent(date, k -> new HashMap<>()).put(status, count);
+            Integer idx = labelIndex.get(dateStr);
+            if (idx == null) continue;
+            try {
+                RoleName rn = RoleName.valueOf(roleNameStr);
+                long[] arr = counts.get(rn);
+                arr[idx] += cnt;
+            } catch (Exception ignored) {
+                // skip unknown role names
+            }
         }
 
-        List<TrendResponse.TrendDataPoint> points = map.entrySet().stream()
-                .map(e -> TrendResponse.TrendDataPoint.builder()
-                        .label(e.getKey())
-                        .count(e.getValue().values().stream().mapToLong(Long::longValue).sum())
-                        .breakdown(e.getValue())
-                        .build())
-                .sorted(Comparator.comparing(TrendResponse.TrendDataPoint::getLabel))
-                .toList();
+        List<AccountGrowthByRoleResponse.Series> series = new ArrayList<>(RoleName.values().length);
+        for (RoleName rn : RoleName.values()) {
+            long[] arr = counts.get(rn);
+            List<Long> data = new ArrayList<>(range);
+            for (long v : arr) data.add(v);
+            series.add(AccountGrowthByRoleResponse.Series.builder().role(rn).data(data).build());
+        }
 
-        return List.of(TrendResponse.builder().type("status").period("day").data(points).build());
+        return new AccountGrowthByRoleResponse(labels, series);
     }
+
 }
+

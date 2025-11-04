@@ -96,45 +96,40 @@ public interface UserRepository extends JpaRepository<User, Long> {
     // RECENT
     List<User> findTop5ByOrderByCreatedAtDesc();
 
-    // TREND: NEW USERS
+    // TREND: ROLE (daily)
     @Query(value = """
-    SELECT DATE(created_at), COUNT(*) 
-    FROM users 
-    WHERE created_at >= :start 
-      AND deleted_at IS NULL 
-    GROUP BY DATE(created_at) 
-    ORDER BY 1
+    SELECT DATE(u.created_at) as d, r.name, COUNT(*) 
+    FROM users u 
+    JOIN roles r ON u.role_id = r.id
+    WHERE u.created_at >= :start 
+      AND u.deleted_at IS NULL 
+    GROUP BY DATE(u.created_at), r.name 
+    ORDER BY DATE(u.created_at), r.name
     """, nativeQuery = true)
-    List<Object[]> findDailyNewUsers(@Param("start") OffsetDateTime start);
+    List<Object[]> findRoleByDay(@Param("start") OffsetDateTime start);
 
+    // TREND: ROLE (monthly) - returns rows (YYYY-MM, roleName, count)
     @Query(value = """
-    SELECT TO_CHAR(created_at, 'YYYY-MM'), COUNT(*) 
-    FROM users 
-    WHERE created_at >= :start 
-      AND deleted_at IS NULL 
-    GROUP BY TO_CHAR(created_at, 'YYYY-MM') 
-    ORDER BY 1
-    """, nativeQuery = true)
-    List<Object[]> findMonthlyNewUsers(@Param("start") OffsetDateTime start);
-
-    // TREND: ROLE
-    @Query(value = """
-    SELECT TO_CHAR(u.created_at, 'YYYY-MM'), r.name, COUNT(*)
+    SELECT TO_CHAR(u.created_at, 'YYYY-MM') as m, r.name, COUNT(*) 
     FROM users u 
     JOIN roles r ON u.role_id = r.id
     WHERE u.created_at >= :start 
       AND u.deleted_at IS NULL 
     GROUP BY TO_CHAR(u.created_at, 'YYYY-MM'), r.name 
-    ORDER BY 1, 2
+    ORDER BY TO_CHAR(u.created_at, 'YYYY-MM'), r.name
     """, nativeQuery = true)
     List<Object[]> findRoleByMonth(@Param("start") OffsetDateTime start);
 
-    // TREND: STATUS
+    // TREND: ROLE (yearly) - returns rows (YYYY, roleName, count)
     @Query(value = """
-        SELECT DATE(u.created_at), u.status, COUNT(*)
-        FROM users u
-        WHERE u.created_at >= :start
-        GROUP BY 1, 2 ORDER BY 1, 2
-        """, nativeQuery = true)
-    List<Object[]> findStatusByDay(@Param("start") OffsetDateTime start);
+    SELECT TO_CHAR(u.created_at, 'YYYY') as y, r.name, COUNT(*) 
+    FROM users u 
+    JOIN roles r ON u.role_id = r.id
+    WHERE u.created_at >= :start 
+      AND u.deleted_at IS NULL 
+    GROUP BY TO_CHAR(u.created_at, 'YYYY'), r.name 
+    ORDER BY TO_CHAR(u.created_at, 'YYYY'), r.name
+    """, nativeQuery = true)
+    List<Object[]> findRoleByYear(@Param("start") OffsetDateTime start);
+
 }
