@@ -16,10 +16,8 @@ import org.springframework.web.multipart.MultipartFile;
 @AllArgsConstructor
 public class PronunciationAssessmentRequest {
 
-    @NotNull(message = "Audio file is required")
-    private MultipartFile audioFile;
+    private String audioUrl;
 
-    @NotBlank(message = "Reference text is required")
     private String referenceText;
 
     /**

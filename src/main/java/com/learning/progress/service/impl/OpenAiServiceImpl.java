@@ -12,8 +12,6 @@ import com.learning.progress.repository.SubmissionQuestionRepository;
 import com.learning.progress.service.OpenAiService;
 import com.learning.progress.util.FileContentExtractor;
 import com.learning.progress.util.TraceUtil;
-import com.microsoft.cognitiveservices.speech.*;
-import com.microsoft.cognitiveservices.speech.audio.AudioConfig;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
@@ -27,11 +25,7 @@ import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.util.UriComponentsBuilder;
-
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.time.Instant;
+import java.io.*;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.regex.Matcher;
@@ -44,7 +38,6 @@ public class OpenAiServiceImpl implements OpenAiService {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final DailyChallengeRepository dailyChallengeRepository;
-    private final SubmissionQuestionRepository submissionQuestionRepository;
 
     private ExecutorService executorService;
 
@@ -73,12 +66,6 @@ public class OpenAiServiceImpl implements OpenAiService {
     @Value("${azure.translator.region}")
     private String translatorRegion;
 
-    @Value("${azure.speech.key}")
-    private String speechKey;
-
-    @Value("${azure.speech.region}")
-    private String speechRegion;
-
     // Changed: create RestTemplate in init() so we can configure timeouts and reuse it
     private RestTemplate restTemplate;
 
@@ -90,9 +77,8 @@ public class OpenAiServiceImpl implements OpenAiService {
             "You are an expert English teacher. Return ONLY valid JSON (no markdown, no comments, no extra text). " +
             "Do NOT include trailing commas or non-standard JSON syntax.";
 
-    public OpenAiServiceImpl(DailyChallengeRepository dailyChallengeRepository, SubmissionQuestionRepository submissionQuestionRepository) {
+    public OpenAiServiceImpl(DailyChallengeRepository dailyChallengeRepository) {
         this.dailyChallengeRepository = dailyChallengeRepository;
-        this.submissionQuestionRepository = submissionQuestionRepository;
     }
 
     @PostConstruct
@@ -402,7 +388,7 @@ public class OpenAiServiceImpl implements OpenAiService {
     /**
      * ✅ NEW: Eager load all lazy relationships to prevent LazyInitializationException in async threads
      */
-    private ChallengeContext eagerLoadChallengeContext(DailyChallenge challenge) {
+    public ChallengeContext eagerLoadChallengeContext(DailyChallenge challenge) {
         ChallengeContext context = new ChallengeContext();
 
         // Load lesson content
@@ -450,7 +436,7 @@ public class OpenAiServiceImpl implements OpenAiService {
     /**
      * ✅ NEW: Immutable context object containing all needed data (no lazy proxies)
      */
-    private static class ChallengeContext {
+    public static class ChallengeContext {
         String classLessonContent;
         String studentLevel;
         String classChapterName;
@@ -643,7 +629,7 @@ public class OpenAiServiceImpl implements OpenAiService {
         }
     }
 
-    private String getAgeBasedLevelInstructions(Integer age) {
+    public String getAgeBasedLevelInstructions(Integer age) {
         if (age == null) {
             age = 12; // default to middle level
         }
@@ -1765,6 +1751,7 @@ public class OpenAiServiceImpl implements OpenAiService {
 
     @Override
     public String callOpenAI(String prompt) {
+        log.info("OpenAI start response");
         String url = UriComponentsBuilder
                 .fromHttpUrl(endpoint + "/openai/deployments/gpt-5-mini/chat/completions")
                 .queryParam("api-version", API_VERSION)
@@ -1808,6 +1795,51 @@ public class OpenAiServiceImpl implements OpenAiService {
         throw new RuntimeException("No response from OpenAI");
     }
 
+    public String callOpenAIForFeedback(String prompt) {
+        log.info("OpenAI start feedback response");
+        String url = UriComponentsBuilder
+                .fromHttpUrl(endpoint + "/openai/deployments/gpt-5-mini/chat/completions")
+                .queryParam("api-version", API_VERSION)
+                .toUriString();
+
+        Map<String, Object> requestBody = Map.of(
+                "messages", new Object[]{
+                        Map.of("role", "system", "content", "You are an expert English teacher."),
+                        Map.of("role", "user", "content", prompt)
+                },
+                "max_completion_tokens", 16000
+        );
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.set("api-key", apiKey);
+
+        HttpEntity<Map<String, Object>> requestEntity = new HttpEntity<>(requestBody, headers);
+
+        try {
+            ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.POST, requestEntity, Map.class);
+
+            if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
+                var choices = (List<Map<String, Object>>) response.getBody().get("choices");
+                if (choices != null && !choices.isEmpty()) {
+                    Map<String, Object> message = (Map<String, Object>) choices.get(0).get("message");
+                    String content = (String) message.get("content");
+
+                    // Clean the response
+                    content = cleanJsonResponse(content);
+
+                    log.debug("OpenAI response (cleaned, first 1000 chars): {}", content.length() > 1000 ? content.substring(0, 1000) : content);
+                    return content;
+                }
+            }
+        } catch (Exception e) {
+            log.error("Error calling OpenAI: {}", e.getMessage(), e);
+            throw new RuntimeException("Failed to call OpenAI: " + e.getMessage(), e);
+        }
+
+        throw new RuntimeException("No response from OpenAI");
+    }
+
     /**
      * Robust JSON cleaning:
      * - Strip code fences and common assistant commentary
@@ -1815,7 +1847,7 @@ public class OpenAiServiceImpl implements OpenAiService {
      * - Remove trailing commas
      * - Try to fix common quote problems
      */
-    private String cleanJsonResponse(String content) {
+    public String cleanJsonResponse(String content) {
         if (content == null) return "";
 
         String s = content.trim();
@@ -2428,631 +2460,6 @@ public class OpenAiServiceImpl implements OpenAiService {
         return sections;
     }
 
-    // Thêm vào OpenAiServiceImpl.java
-
-    @Override
-    @Transactional(readOnly = true)
-    public GradingWritingResponse gradeWriting(GradingWritingRequest request) {
-        log.info("Starting AI grading for submissionQuestionId: {}", request.getSubmissionQuestionId());
-
-        // 1. Load submission question
-        SubmissionQuestion submissionQuestion = submissionQuestionRepository
-                .findById(request.getSubmissionQuestionId())
-                .orElseThrow(() -> new ApiException("Submission question not found", HttpStatus.NOT_FOUND.value()));
-
-        // 2. Extract student's writing from submission_content_json
-        String studentWriting = extractWritingFromSubmission(submissionQuestion.getSubmissionContentJson());
-
-        if (studentWriting == null || studentWriting.trim().isEmpty()) {
-            throw new ApiException("No writing content found in submission", HttpStatus.BAD_REQUEST.value());
-        }
-
-        // 3. Load question and challenge context
-        Question question = submissionQuestion.getQuestion();
-        ChallengeSection section = question.getSection();
-        DailyChallenge challenge = section.getChallenge();
-
-        // Eager load context
-        ChallengeContext context = eagerLoadChallengeContext(challenge);
-
-        // 4. Build grading prompt
-        String prompt = buildWritingGradingPrompt(
-                context,
-                question.getQuestionText(),
-                studentWriting
-        );
-
-        // 5. Call OpenAI
-        String aiResponse = callOpenAI(prompt);
-
-        // 6. Parse response (validate comments against actual student text)
-        GradingWritingResponse result = parseGradingResponse(aiResponse, studentWriting);
-
-        log.info("Successfully graded writing. Overall score: {}", result.getSuggestedScore());
-
-        return result;
-    }
-
-    // Helper method: Extract writing text from JSON
-    private String extractWritingFromSubmission(Map<String, Object> submissionContentJson) {
-        try {
-            Object dataObj = submissionContentJson.get("data");
-            if (dataObj instanceof List<?> dataList && !dataList.isEmpty()) {
-                Object firstItem = dataList.get(0);
-                if (firstItem instanceof Map<?, ?> firstMap) {
-                    Object value = firstMap.get("value");
-                    return value != null ? value.toString() : null;
-                }
-            }
-            return null;
-        } catch (Exception e) {
-            log.error("Failed to extract writing: {}", e.getMessage());
-            throw new RuntimeException("Invalid submission content format", e);
-        }
-    }
-
-    // Build grading prompt
-    private String buildWritingGradingPrompt(
-            ChallengeContext context,
-            String questionText,
-            String studentWriting) {
-
-        StringBuilder prompt = new StringBuilder();
-
-        // System role ensures JSON-only responses and basic restrictions
-        prompt.append(SYSTEM_ROLE_JSON_INSTRUCTION).append("\n\n");
-
-        // Enforce Vietnamese for feedback content (values) while preserving JSON keys (English)
-        prompt.append("IMPORTANT: All human-readable feedback content (the values of ")
-                .append("`overallFeedback`, each comment's `commentText` and `correction`) ")
-                .append("MUST be written in Vietnamese. Do NOT translate or change JSON field names (they must remain in English). ")
-                .append("Return ONLY valid JSON, no markdown, no explanations, no extra text.\n\n");
-
-        prompt.append("You are an experienced English writing teacher. Provide focused, high-value feedback only.\n\n");
-
-        prompt.append("Context: Chapter: ").append(context.classChapterName)
-                .append(" | Level: ").append(context.studentLevel).append("\n\n");
-
-        prompt.append("TASK: Read the writing below and produce a JSON object containing:\n");
-        prompt.append(" - overallFeedback: 100-200 words in Vietnamese summarizing strengths, key weaknesses, and a 2-3 step study plan.\n");
-        prompt.append(" - suggestedScore: numeric (0.0 - 10.0).\n");
-        prompt.append(" - comments: 7-12 items, prioritized by impact on communication. Each comment must include:\n");
-        prompt.append("     startIndex (0-based char index), endIndex (exclusive),\n");
-        prompt.append("     commentText (15-80 characters, in Vietnamese),\n");
-        prompt.append("     severity (one of: error|warning|suggestion),\n");
-        prompt.append("     category (one of: grammar|vocabulary|cohesion|task|other),\n");
-        prompt.append("     correction (concise suggested correction or rephrase, in Vietnamese).\n\n");
-
-        prompt.append("GUIDELINES:\n");
-        prompt.append("- Prioritize meaning-impacting issues (unclear sentences, wrong tense affecting meaning, wrong word choice, omitted information).\n");
-        prompt.append("- Avoid trivial punctuation/capitalization comments unless frequent or harming readability.\n");
-        prompt.append("- Provide a one-line correction or alternative phrasing for each comment (in Vietnamese).\n");
-        prompt.append("- Indices must be 0-based character positions matching the STUDENT'S WRITING section below.\n");
-        prompt.append("- Maintain neutral, constructive tone.\n\n");
-
-        prompt.append("WRITING TASK:\n").append(questionText).append("\n\n");
-        prompt.append("STUDENT'S WRITING:\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
-        prompt.append(studentWriting).append("\n");
-        prompt.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n");
-
-        prompt.append("OUTPUT (exact JSON only, no extra text). Note: ALL textual values must be in Vietnamese:\n");
-        prompt.append("{\n");
-        prompt.append("  \"overallFeedback\": \"Tóm tắt ngắn gọn bằng tiếng Việt: ...\",\n");
-        prompt.append("  \"suggestedScore\": 7.5,\n");
-        prompt.append("  \"comments\": [\n");
-        prompt.append("    {\n");
-        prompt.append("      \"startIndex\": 0,\n");
-        prompt.append("      \"endIndex\": 5,\n");
-        prompt.append("      \"commentText\": \"Nhận xét ngắn (tiếng Việt, 15-80 ký tự)\",\n");
-        prompt.append("      \"severity\": \"error\",\n");
-        prompt.append("      \"category\": \"grammar\",\n");
-        prompt.append("      \"correction\": \"Sửa ngắn gọn bằng tiếng Việt\"\n");
-        prompt.append("    }\n");
-        prompt.append("  ]\n");
-        prompt.append("}\n");
-
-        return prompt.toString();
-    }
-
-
-    // Improved parsing: validate indices, filter trivial comments, prioritize by severity, keep 7-12 best
-    private GradingWritingResponse parseGradingResponse(String jsonResponse, String studentWriting) {
-        try {
-            String cleaned = cleanJsonResponse(jsonResponse);
-            JsonNode root = objectMapper.readTree(cleaned);
-
-            String overallFeedback = root.hasNonNull("overallFeedback") ? root.get("overallFeedback").asText().trim() : "";
-            double suggestedScore = 0.0;
-            if (root.hasNonNull("suggestedScore")) {
-                suggestedScore = root.get("suggestedScore").asDouble(0.0);
-            }
-            // clamp
-            if (Double.isNaN(suggestedScore) || suggestedScore < 0) suggestedScore = 0.0;
-            if (suggestedScore > 10) suggestedScore = 10.0;
-
-            List<WritingComment> comments = new ArrayList<>();
-            JsonNode commentsNode = root.get("comments");
-            int textLength = studentWriting != null ? studentWriting.length() : 0;
-
-            if (commentsNode != null && commentsNode.isArray()) {
-                for (JsonNode commentNode : commentsNode) {
-                    try {
-                        if (!commentNode.hasNonNull("startIndex") || !commentNode.hasNonNull("endIndex")) continue;
-                        int start = commentNode.get("startIndex").asInt(-1);
-                        int end = commentNode.get("endIndex").asInt(-1);
-                        if (start < 0 || end <= start || start >= textLength) continue;
-                        if (end > textLength) end = textLength;
-
-                        String commentText = commentNode.hasNonNull("commentText") ? commentNode.get("commentText").asText().trim() : "";
-                        if (commentText.isEmpty()) continue;
-
-                        // Avoid trivial short comments
-                        String lower = commentText.toLowerCase();
-                        if (commentText.length() < 12 && !lower.contains("error") && !lower.contains("use") && !lower.contains("replace")) {
-                            continue;
-                        }
-
-                        String severity = commentNode.hasNonNull("severity") ? commentNode.get("severity").asText().toLowerCase() : "suggestion";
-                        String category = commentNode.hasNonNull("category") ? commentNode.get("category").asText().toLowerCase() : "other";
-                        String correction = commentNode.hasNonNull("correction") ? commentNode.get("correction").asText() : "";
-
-                        // Build id + timestamp
-                        String id = "fb-" + UUID.randomUUID();
-                        String isoTs = Instant.now().toString();
-
-                        WritingComment wc = WritingComment.builder()
-                                .id(id)
-                                .comment(commentText)
-                                .startIndex(start)
-                                .endIndex(end)
-                                .timestamp(isoTs)
-                                .build();
-
-                        // attach additional info via comment string if model didn't provide fields (keeps compatibility)
-                        comments.add(wc);
-
-                    } catch (Exception ex) {
-                        log.debug("Skipping malformed comment node: {}", ex.getMessage());
-                    }
-                }
-            }
-
-            // Prioritize comments: we don't have explicit severity stored on WritingComment, but we keep order returned by AI.
-            // Keep between 7 and 12 comments, prefer earlier ones (AI asked to prioritize)
-            int minKeep = 7;
-            int maxKeep = 12;
-            if (comments.size() < minKeep) {
-                // if AI returned fewer, keep all
-            } else if (comments.size() > maxKeep) {
-                comments = comments.subList(0, maxKeep);
-            }
-
-            return GradingWritingResponse.builder()
-                    .overallFeedback(overallFeedback)
-                    .suggestedScore(suggestedScore)
-                    .comments(comments)
-                    .build();
-
-        } catch (Exception e) {
-            log.error("Failed to parse grading response: {}", e.getMessage(), e);
-            throw new RuntimeException("Failed to parse AI grading response: " + e.getMessage(), e);
-        }
-    }
-
-    @Override
-    public PronunciationAssessmentResponse assessPronunciation(PronunciationAssessmentRequest request) {
-        String traceId = TraceUtil.getTraceId();
-        log.info("[{}] Starting pronunciation assessment for file: {}",
-                traceId, request.getAudioFile().getOriginalFilename());
-
-        try {
-            // 1. Validate audio file
-            validateAudioFile(request.getAudioFile());
-
-            // 2. Save audio file temporarily
-            File tempAudioFile = saveTempAudioFile(request.getAudioFile());
-
-            try {
-                // 3. Create Speech SDK configuration
-                SpeechConfig speechConfig = SpeechConfig.fromSubscription(speechKey, speechRegion);
-                speechConfig.setSpeechRecognitionLanguage("en-US");
-
-                // 4. Create audio config from file
-                AudioConfig audioConfig = AudioConfig.fromWavFileInput(tempAudioFile.getAbsolutePath());
-
-                // 5. Create pronunciation assessment config
-                PronunciationAssessmentConfig pronConfig = new PronunciationAssessmentConfig(
-                        request.getReferenceText(),
-                        mapGradingSystem(request.getGradingSystem()),
-                        mapGranularity(request.getGranularity()),
-                        request.getEnableMiscue()
-                );
-
-                if (request.getEnableProsody()) {
-                    pronConfig.enableProsodyAssessment();
-                }
-
-                // 6. Create recognizer
-                SpeechRecognizer recognizer = new SpeechRecognizer(speechConfig, audioConfig);
-                pronConfig.applyTo(recognizer);
-
-                // 7. Perform recognition
-                SpeechRecognitionResult result = recognizer.recognizeOnceAsync().get();
-
-                // 8. Process results
-                if (result.getReason() == ResultReason.RecognizedSpeech) {
-                    PronunciationAssessmentResponse response = processRecognitionResult(
-                            result,
-                            request.getReferenceText(),
-                            request.getEnableMiscue()
-                    );
-
-                    log.info("[{}] Pronunciation assessment completed. Score: {}",
-                            traceId, response.getPronunciationScore());
-
-                    return response;
-
-                } else if (result.getReason() == ResultReason.NoMatch) {
-                    log.error("[{}] No speech could be recognized", traceId);
-                    throw new ApiException("No speech could be recognized from the audio file",
-                            HttpStatus.BAD_REQUEST.value());
-
-                } else if (result.getReason() == ResultReason.Canceled) {
-                    CancellationDetails cancellation = CancellationDetails.fromResult(result);
-                    log.error("[{}] Speech recognition canceled. Reason: {}, Error: {}",
-                            traceId, cancellation.getReason(), cancellation.getErrorDetails());
-                    throw new ApiException("Speech recognition failed: " + cancellation.getErrorDetails(),
-                            HttpStatus.INTERNAL_SERVER_ERROR.value());
-                }
-
-                throw new ApiException("Unexpected recognition result",
-                        HttpStatus.INTERNAL_SERVER_ERROR.value());
-
-            } finally {
-                // Cleanup temp file
-                if (tempAudioFile.exists()) {
-                    tempAudioFile.delete();
-                }
-            }
-
-        } catch (ApiException e) {
-            throw e;
-        } catch (Exception e) {
-            log.error("[{}] Pronunciation assessment failed: {}", traceId, e.getMessage(), e);
-            throw new ApiException("Failed to assess pronunciation: " + e.getMessage(),
-                    HttpStatus.INTERNAL_SERVER_ERROR.value());
-        }
-    }
-
-    /**
-     * Validate audio file format and size
-     */
-    private void validateAudioFile(MultipartFile audioFile) {
-        // Check file size (max 10MB)
-        long maxSize = 50 * 1024 * 1024; // 10MB
-        if (audioFile.getSize() > maxSize) {
-            throw new ApiException("Audio file size exceeds 10MB limit", HttpStatus.BAD_REQUEST.value());
-        }
-
-        // Check file format (WAV only for Speech SDK)
-        String filename = audioFile.getOriginalFilename();
-        if (filename == null || !filename.toLowerCase().endsWith(".wav")) {
-            throw new ApiException("Only WAV audio format is supported", HttpStatus.BAD_REQUEST.value());
-        }
-    }
-
-    /**
-     * Save uploaded file to temp directory
-     */
-    private File saveTempAudioFile(MultipartFile audioFile) throws IOException {
-        String tempDir = System.getProperty("java.io.tmpdir");
-        String filename = "pronunciation_" + UUID.randomUUID() + ".wav";
-        File tempFile = new File(tempDir, filename);
-
-        try (FileOutputStream fos = new FileOutputStream(tempFile)) {
-            fos.write(audioFile.getBytes());
-        }
-
-        log.debug("Saved temp audio file: {}", tempFile.getAbsolutePath());
-        return tempFile;
-    }
-
-    /**
-     * Map grading system string to enum
-     */
-    private PronunciationAssessmentGradingSystem mapGradingSystem(String gradingSystem) {
-        if ("FivePoint".equalsIgnoreCase(gradingSystem)) {
-            return PronunciationAssessmentGradingSystem.FivePoint;
-        }
-        return PronunciationAssessmentGradingSystem.HundredMark;
-    }
-
-    /**
-     * Map granularity string to enum
-     */
-    private PronunciationAssessmentGranularity mapGranularity(String granularity) {
-        switch (granularity.toLowerCase()) {
-            case "word":
-                return PronunciationAssessmentGranularity.Word;
-            case "fulltext":
-                return PronunciationAssessmentGranularity.FullText;
-            default:
-                return PronunciationAssessmentGranularity.Phoneme;
-        }
-    }
-
-    /**
-     * Process recognition result and extract scores
-     */
-    private PronunciationAssessmentResponse processRecognitionResult(
-            SpeechRecognitionResult result,
-            String referenceText,
-            boolean enableMiscue) throws Exception {
-
-        String recognizedText = result.getText();
-
-        // Get pronunciation assessment result
-        PronunciationAssessmentResult pronResult = PronunciationAssessmentResult.fromResult(result);
-
-        // Extract overall scores
-        double accuracyScore = pronResult.getAccuracyScore();
-        double fluencyScore = pronResult.getFluencyScore();
-        double completenessScore = pronResult.getCompletenessScore();
-        double pronunciationScore = pronResult.getPronunciationScore();
-        Double prosodyScore = null;
-
-        try {
-            prosodyScore = pronResult.getProsodyScore();
-        } catch (Exception e) {
-            // Prosody might not be available
-            log.debug("Prosody score not available");
-        }
-
-        // Parse JSON for word-level details
-        String jsonResult = result.getProperties().getProperty(PropertyId.SpeechServiceResponse_JsonResult);
-        List<PronunciationAssessmentResponse.WordAssessment> wordAssessments =
-                parseWordAssessments(jsonResult, enableMiscue, referenceText);
-
-        // Generate feedback
-        String feedback = generateFeedback(
-                pronunciationScore,
-                accuracyScore,
-                fluencyScore,
-                completenessScore,
-                prosodyScore,
-                wordAssessments
-        );
-
-        return PronunciationAssessmentResponse.builder()
-                .pronunciationScore(pronunciationScore)
-                .accuracyScore(accuracyScore)
-                .fluencyScore(fluencyScore)
-                .completenessScore(completenessScore)
-                .prosodyScore(prosodyScore)
-                .recognizedText(recognizedText)
-                .referenceText(referenceText)
-                .words(wordAssessments)
-                .feedback(feedback)
-                .build();
-    }
-
-    /**
-     * Parse word-level assessment from JSON response
-     */
-    private List<PronunciationAssessmentResponse.WordAssessment> parseWordAssessments(
-            String jsonResult,
-            boolean enableMiscue,
-            String referenceText) {
-
-        List<PronunciationAssessmentResponse.WordAssessment> wordAssessments = new ArrayList<>();
-
-        try {
-            JsonNode rootNode = objectMapper.readTree(jsonResult);
-            JsonNode nBestArray = rootNode.get("NBest");
-
-            if (nBestArray != null && nBestArray.isArray() && nBestArray.size() > 0) {
-                JsonNode nBestItem = nBestArray.get(0);
-                JsonNode wordsArray = nBestItem.get("Words");
-
-                if (wordsArray != null && wordsArray.isArray()) {
-                    int position = 0;
-                    for (JsonNode wordNode : wordsArray) {
-                        String word = wordNode.get("Word").asText();
-                        Long duration = wordNode.has("Duration") ? wordNode.get("Duration").asLong() : null;
-
-                        JsonNode pronAssessment = wordNode.get("PronunciationAssessment");
-                        double wordAccuracy = pronAssessment.get("AccuracyScore").asDouble();
-                        String errorType = pronAssessment.get("ErrorType").asText();
-
-                        wordAssessments.add(
-                                PronunciationAssessmentResponse.WordAssessment.builder()
-                                        .word(word)
-                                        .accuracyScore(wordAccuracy)
-                                        .errorType(errorType)
-                                        .position(position++)
-                                        .duration(duration)
-                                        .build()
-                        );
-                    }
-                }
-            }
-
-            // If miscue detection enabled, compare with reference text
-            if (enableMiscue && !wordAssessments.isEmpty()) {
-                wordAssessments = detectMiscues(wordAssessments, referenceText);
-            }
-
-        } catch (Exception e) {
-            log.error("Error parsing word assessments: {}", e.getMessage(), e);
-        }
-
-        return wordAssessments;
-    }
-
-    /**
-     * Detect omissions and insertions by comparing with reference text
-     */
-    private List<PronunciationAssessmentResponse.WordAssessment> detectMiscues(
-            List<PronunciationAssessmentResponse.WordAssessment> recognizedWords,
-            String referenceText) {
-
-        // Parse reference words
-        String[] refWords = referenceText.toLowerCase().split("\\s+");
-        List<String> refWordsList = new ArrayList<>();
-        for (String word : refWords) {
-            // Remove punctuation
-            word = word.replaceAll("^\\p{Punct}+|\\p{Punct}+$", "");
-            if (!word.isEmpty()) {
-                refWordsList.add(word);
-            }
-        }
-
-        // Extract recognized word strings
-        List<String> recWordsList = recognizedWords.stream()
-                .map(w -> w.getWord().toLowerCase().replaceAll("^\\p{Punct}+|\\p{Punct}+$", ""))
-                .collect(Collectors.toList());
-
-        // Compare and mark omissions/insertions (simplified diff algorithm)
-        List<PronunciationAssessmentResponse.WordAssessment> finalWords = new ArrayList<>();
-
-        int refIndex = 0;
-        int recIndex = 0;
-
-        while (refIndex < refWordsList.size() || recIndex < recWordsList.size()) {
-            if (refIndex >= refWordsList.size()) {
-                // Extra recognized words (insertions)
-                PronunciationAssessmentResponse.WordAssessment word = recognizedWords.get(recIndex);
-                word.setErrorType("Insertion");
-                finalWords.add(word);
-                recIndex++;
-            } else if (recIndex >= recWordsList.size()) {
-                // Missing words (omissions)
-                finalWords.add(
-                        PronunciationAssessmentResponse.WordAssessment.builder()
-                                .word(refWordsList.get(refIndex))
-                                .accuracyScore(0.0)
-                                .errorType("Omission")
-                                .position(finalWords.size())
-                                .build()
-                );
-                refIndex++;
-            } else if (refWordsList.get(refIndex).equals(recWordsList.get(recIndex))) {
-                // Words match
-                finalWords.add(recognizedWords.get(recIndex));
-                refIndex++;
-                recIndex++;
-            } else {
-                // Mismatch - check if it's omission or insertion
-                // (simplified logic - could use more sophisticated diff algorithm)
-                if (recIndex + 1 < recWordsList.size() &&
-                        refWordsList.get(refIndex).equals(recWordsList.get(recIndex + 1))) {
-                    // Likely insertion
-                    PronunciationAssessmentResponse.WordAssessment word = recognizedWords.get(recIndex);
-                    word.setErrorType("Insertion");
-                    finalWords.add(word);
-                    recIndex++;
-                } else {
-                    // Likely omission
-                    finalWords.add(
-                            PronunciationAssessmentResponse.WordAssessment.builder()
-                                    .word(refWordsList.get(refIndex))
-                                    .accuracyScore(0.0)
-                                    .errorType("Omission")
-                                    .position(finalWords.size())
-                                    .build()
-                    );
-                    refIndex++;
-                }
-            }
-        }
-
-        return finalWords;
-    }
-
-    /**
-     * Generate Vietnamese feedback based on scores
-     */
-    private String generateFeedback(
-            double pronunciationScore,
-            double accuracyScore,
-            double fluencyScore,
-            double completenessScore,
-            Double prosodyScore,
-            List<PronunciationAssessmentResponse.WordAssessment> words) {
-
-        StringBuilder feedback = new StringBuilder();
-
-        // Overall assessment
-        feedback.append("📊 **Đánh giá tổng quan:**\n");
-        feedback.append(String.format("- Điểm phát âm tổng thể: **%.1f/100**\n", pronunciationScore));
-
-        if (pronunciationScore >= 80) {
-            feedback.append("✅ Xuất sắc! Phát âm của bạn rất tốt.\n\n");
-        } else if (pronunciationScore >= 60) {
-            feedback.append("👍 Tốt! Phát âm của bạn ở mức khá, cần cải thiện thêm một số điểm.\n\n");
-        } else if (pronunciationScore >= 40) {
-            feedback.append("📝 Trung bình. Bạn cần luyện tập thêm để cải thiện phát âm.\n\n");
-        } else {
-            feedback.append("💪 Cần cố gắng hơn. Hãy luyện tập thường xuyên để cải thiện phát âm.\n\n");
-        }
-
-        // Detailed scores
-        feedback.append("📈 **Chi tiết điểm số:**\n");
-        feedback.append(String.format("- Độ chính xác (Accuracy): %.1f/100\n", accuracyScore));
-        feedback.append(String.format("- Độ trôi chảy (Fluency): %.1f/100\n", fluencyScore));
-        feedback.append(String.format("- Độ hoàn chỉnh (Completeness): %.1f/100\n", completenessScore));
-        if (prosodyScore != null) {
-            feedback.append(String.format("- Ngữ điệu (Prosody): %.1f/100\n", prosodyScore));
-        }
-        feedback.append("\n");
-
-        // Word-level errors
-        long errorCount = words.stream()
-                .filter(w -> !"None".equals(w.getErrorType()))
-                .count();
-
-        if (errorCount > 0) {
-            feedback.append(String.format("⚠️ **Lỗi phát hiện được:** %d từ\n", errorCount));
-
-            long mispronunciations = words.stream()
-                    .filter(w -> "Mispronunciation".equals(w.getErrorType()))
-                    .count();
-            long omissions = words.stream()
-                    .filter(w -> "Omission".equals(w.getErrorType()))
-                    .count();
-            long insertions = words.stream()
-                    .filter(w -> "Insertion".equals(w.getErrorType()))
-                    .count();
-
-            if (mispronunciations > 0) {
-                feedback.append(String.format("- Phát âm sai: %d từ\n", mispronunciations));
-            }
-            if (omissions > 0) {
-                feedback.append(String.format("- Thiếu: %d từ\n", omissions));
-            }
-            if (insertions > 0) {
-                feedback.append(String.format("- Thừa: %d từ\n", insertions));
-            }
-            feedback.append("\n");
-        }
-
-        // Recommendations
-        feedback.append("💡 **Gợi ý cải thiện:**\n");
-        if (accuracyScore < 70) {
-            feedback.append("- Tập trung luyện phát âm các âm chuẩn xác hơn\n");
-        }
-        if (fluencyScore < 70) {
-            feedback.append("- Luyện nói trôi chảy hơn, giảm ngập ngừng\n");
-        }
-        if (completenessScore < 70) {
-            feedback.append("- Đọc đầy đủ tất cả các từ trong câu\n");
-        }
-        if (prosodyScore != null && prosodyScore < 70) {
-            feedback.append("- Chú ý đến ngữ điệu, trọng âm và nhịp điệu\n");
-        }
-
-        return feedback.toString();
-    }
 
     @Override
     public TranslationResponse translate(String text) {
@@ -3128,5 +2535,6 @@ public class OpenAiServiceImpl implements OpenAiService {
             throw new ApiException(Const.TRANSLATOR.TRANSLATION_FAILED, HttpStatus.INTERNAL_SERVER_ERROR.value());
         }
     }
+
 }
 
