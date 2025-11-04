@@ -10,10 +10,12 @@ import com.learning.progress.entity.ChallengeSection;
 import com.learning.progress.entity.DailyChallenge;
 import com.learning.progress.entity.Question;
 import com.learning.progress.exception.ApiException;
+import com.learning.progress.job.QuartzJobTriggerService;
 import com.learning.progress.mapper.ChallengeSectionMapper;
 import com.learning.progress.repository.ChallengeSectionRepository;
 import com.learning.progress.repository.DailyChallengeRepository;
 import com.learning.progress.repository.QuestionRepository;
+import com.learning.progress.repository.SubmissionDailyChallengeRepository;
 import com.learning.progress.service.ChallengeSectionService;
 import com.learning.progress.service.QuestionService;
 import com.learning.progress.util.AppValidator;
@@ -48,6 +50,10 @@ public class ChallengeSectionServiceImpl implements ChallengeSectionService {
     @Autowired private Validator validator;
     @Autowired private QuestionRepository questionRepository;
     @Autowired private CacheService cacheService;
+    @Autowired
+    private SubmissionDailyChallengeRepository submissionDailyChallengeRepository;
+    @Autowired
+    private QuartzJobTriggerService quartzJobTriggerService;
 
     // =====================================================================
     // UPDATE SCORE
@@ -90,6 +96,14 @@ public class ChallengeSectionServiceImpl implements ChallengeSectionService {
         DailyChallenge challenge = validateChallengeExists(challengeId);
         long tLoadChallenge = System.currentTimeMillis() - tLoadChallengeStart;
 
+        // Check if the challenge is already published or higher
+        if (challenge.getChallengeStatus().isPublishedOrHigher()) {
+            log.info("Challenge is in PUBLISHED or higher status. Only updates are allowed.");
+            if (dto.getSection().getId() == null) {
+                throw new ApiException("Cannot create a new section for a published challenge.", HttpStatus.BAD_REQUEST.value());
+            }
+        }
+
         long tAccessStart = System.currentTimeMillis();
         validateUserAccessToClass(challenge.getClassLesson().getClassChapter().getClazz().getId());
         appValidator.validateEnumValue(ResourceType.class, dto.getSection().getResourceType());
@@ -106,6 +120,20 @@ public class ChallengeSectionServiceImpl implements ChallengeSectionService {
         long tCacheClearStart = System.currentTimeMillis();
         cacheService.clearCacheForSection(section.getId(), challengeId);
         long tCacheClear = System.currentTimeMillis() - tCacheClearStart;
+
+        // Trigger auto-grading if the challenge is published or higher and questions were updated
+        if (challenge.getChallengeStatus().isPublishedOrHigher()) {
+            log.info("Checking if questions were updated to trigger auto-grading.");
+            boolean hasUpdates = questionService.hasUpdates(dto.getQuestions(), section.getId());
+            if (hasUpdates) {
+                log.info("Questions were updated. Triggering auto-grading for submissions.");
+                List<Long> submissionIds = submissionDailyChallengeRepository
+                        .findIdsByChallengeIdAndDeletedAtIsNull(challengeId);
+                submissionIds.forEach(submissionId -> quartzJobTriggerService.triggerAutoGrade(submissionId));
+            } else {
+                log.info("No updates detected in questions. Skipping auto-grading.");
+            }
+        }
 
         long total = System.currentTimeMillis() - tStart;
         log.info("saveSection durations(ms) validate={}, loadChallenge={}, accessChecks={}, saveSection={}, saveQuestions={}, cacheClear={}, total={}",
@@ -168,15 +196,6 @@ public class ChallengeSectionServiceImpl implements ChallengeSectionService {
 
         log.info("Bulk inserted {} sections with questions", results.size());
         return results;
-    }
-
-    // Helper: tìm DTO gốc từ entity đã save
-    private SectionWithQuestionsDto findOriginalDto(Map<SectionWithQuestionsDto, ChallengeSection> map, ChallengeSection entity) {
-        return map.entrySet().stream()
-                .filter(e -> e.getValue() == entity)
-                .map(Map.Entry::getKey)
-                .findFirst()
-                .orElse(null);
     }
 
     // =====================================================================
