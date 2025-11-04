@@ -30,7 +30,6 @@ import java.time.OffsetDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
-import java.util.stream.Stream;
 
 @Service
 @Slf4j
@@ -192,7 +191,7 @@ public class QuestionServiceImpl implements QuestionService {
         Question question = questionRepository.findByIdAndDeletedAtIsNull(questionId)
                 .orElseThrow(() -> new ApiException(Const.QUESTION.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
-        question.setScore(BigDecimal.valueOf(score));
+        question.setWeight(BigDecimal.valueOf(score));
         questionRepository.save(question);
 
         Long sectionId = question.getSection().getId();
@@ -262,7 +261,7 @@ public class QuestionServiceImpl implements QuestionService {
                 Question q = new Question();
                 q.setSection(section);
                 q.setQuestionText(dto.getQuestionText());
-                q.setScore(BigDecimal.valueOf(dto.getScore()));
+                q.setWeight(BigDecimal.valueOf(dto.getWeight()));
                 q.setQuestionType(QuestionType.valueOf(dto.getQuestionType()));
                 q.setOrderNumber(order);
                 q.setQuestionContentJson(JsonUtil.objectToMap(dto.getContent()));
@@ -338,7 +337,7 @@ public class QuestionServiceImpl implements QuestionService {
         boolean hasAdd = nonDeletedRequests.stream().anyMatch(dto -> dto.getId() == null);
         boolean hasDelete = deleteRequests.stream().anyMatch(QuestionDto::isToBeDeleted);
 
-        if ((hasAdd || hasDelete) && section.getChallenge().getChallengeStatus() == ChallengeStatus.PUBLISHED) {
+        if ((hasAdd || hasDelete) && section.getChallenge().getChallengeStatus() != ChallengeStatus.DRAFT) {
             throw new ApiException(
                     "Challenge is PUBLISH. Cannot add or delete questions.",
                     HttpStatus.BAD_REQUEST.value()
@@ -444,7 +443,7 @@ public class QuestionServiceImpl implements QuestionService {
                     .filter(qq -> qq.getDeletedAt() == null)
                     .orElseThrow(() -> new ApiException("Question not found: " + dto.getId(), HttpStatus.NOT_FOUND.value()));
             q.setQuestionText(dto.getQuestionText());
-            q.setScore(BigDecimal.valueOf(dto.getScore()));
+            q.setWeight(BigDecimal.valueOf(dto.getWeight()));
             q.setQuestionType(QuestionType.valueOf(dto.getQuestionType()));
             q.setOrderNumber(dto.getOrderNumber());
             q.setQuestionContentJson(JsonUtil.objectToMap(dto.getContent()));
@@ -456,7 +455,7 @@ public class QuestionServiceImpl implements QuestionService {
             Question q = new Question();
             q.setSection(section);
             q.setQuestionText(dto.getQuestionText());
-            q.setScore(BigDecimal.valueOf(dto.getScore()));
+            q.setWeight(BigDecimal.valueOf(dto.getWeight()));
             q.setQuestionType(QuestionType.valueOf(dto.getQuestionType()));
             q.setOrderNumber(dto.getOrderNumber());
             q.setQuestionContentJson(JsonUtil.objectToMap(dto.getContent()));
@@ -465,4 +464,59 @@ public class QuestionServiceImpl implements QuestionService {
 
         return result;
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public boolean hasUpdates(List<QuestionDto> dtos, Long sectionId) {
+        log.debug("Checking for updates in questions for sectionId: {}", sectionId);
+
+        // Load existing questions for the section
+        List<Question> existingQuestions = questionRepository
+                .findBySectionIdAndDeletedAtIsNullOrderByOrderNumberAsc(sectionId);
+
+        // Map existing questions by ID for comparison
+        Map<Long, Question> existingMap = existingQuestions.stream()
+                .collect(Collectors.toMap(Question::getId, q -> q));
+
+        for (QuestionDto dto : dtos) {
+            if (dto.getId() == null) {
+                // New question detected
+                log.debug("New question detected: {}", dto);
+                return true;
+            }
+
+            Question existing = existingMap.get(dto.getId());
+            if (existing == null) {
+                // Question not found in existing data (deleted or invalid)
+                log.debug("Question not found in existing data: {}", dto);
+                return true;
+            }
+
+            // Compare fields for updates
+            if (!Objects.equals(existing.getQuestionText(), dto.getQuestionText())
+                    || !Objects.equals(existing.getWeight(), BigDecimal.valueOf(dto.getWeight()))
+                    || !Objects.equals(existing.getQuestionType().name(), dto.getQuestionType())
+                    || !Objects.equals(existing.getOrderNumber(), dto.getOrderNumber())
+                    || !Objects.equals(existing.getQuestionContentJson(), JsonUtil.objectToMap(dto.getContent()))) {
+                log.debug("Question updated: {}", dto);
+                return true;
+            }
+        }
+
+        // Check for deleted questions
+        Set<Long> dtoIds = dtos.stream()
+                .map(QuestionDto::getId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        for (Question existing : existingQuestions) {
+            if (!dtoIds.contains(existing.getId())) {
+                log.debug("Question deleted: {}", existing);
+                return true;
+            }
+        }
+
+        log.debug("No updates detected for sectionId: {}", sectionId);
+        return false;
+    }
 }
+

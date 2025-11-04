@@ -1070,7 +1070,7 @@ public class DataUtil {
     private static final String[] CHARLIST_UNICODE = {"à", "á", "ả", "ã", "ạ", "â", "ầ", "ấ", "ẩ", "ẫ", "ậ", "ă", "ằ", "ắ", "ẳ", "ẵ", "ặ",
             "è", "é", "ẻ", "ẽ", "ẹ", "ê", "ề", "ế", "ể", "ễ", "ệ",
             "ì", "í", "ỉ", "ĩ", "ị",
-            "ò", "ó", "ỏ", "õ", "ọ", "ô", "ồ", "ố", "ổ", "ỗ", "ộ", "ơ", "ờ", "ớ", "ở", "ỡ", "ợ",
+            "ò", "ó", "ỏ", "õ", "ọ", "ô", "ồ", "ố", "ổ", "ỗ", "ộ", "ơ", "ờ", "ớ", "ở", "ỡ", "ợ",
             "ù", "ú", "ủ", "ũ", "ụ", "ư", "ừ", "ứ", "ử", "ữ", "ự",
             "ỳ", "ý", "ỷ", "ỹ", "ỵ",
             "À", "Á", "Ả", "Ã", "Ạ", "Â", "Ầ", "Ấ", "Ẩ", "Ẫ", "Ậ", "Ă", "Ằ", "Ắ", "Ẳ", "Ẵ", "Ặ",
@@ -1078,6 +1078,7 @@ public class DataUtil {
             "Ì", "Í", "Ỉ", "Ĩ", "Ị",
             "Ò", "Ó", "Ỏ", "Õ", "Ọ", "Ô", "Ồ", "Ố", "Ổ", "Ỗ", "Ộ", "Ơ", "Ờ", "Ớ", "Ở", "Ỡ", "Ợ",
             "Ù", "Ú", "Ủ", "Ũ", "Ụ", "Ư", "Ừ", "Ứ", "Ử", "Ữ", "Ự", "Ỳ", "Ý", "Ỷ", "Ỹ", "Ỵ"};
+
 
     private static final String[] CHARLIST_UF8 = {"à", "á", "ả", "ã", "ạ", "â", "ầ", "ấ", "ẩ", "ẫ", "ậ", "ă", "ằ", "ắ", "ẳ", "ẵ", "ặ",
             "è", "é", "ẻ", "ẽ", "ẹ", "ê", "ề", "ế", "ể", "ễ", "ệ",
@@ -2133,4 +2134,18 @@ public class DataUtil {
         }
         return String.format("%.2f", number);
     }
+
+    /**
+     * Compute final score on a 10-point scale based on achieved total weight and max possible total weight.
+     * Returns 0.0 when maxPossibleWeight is null/zero or when achievedWeight is null.
+     * Result rounded to 2 decimal places.
+     */
+    public static Double getFinalScore(Double achievedWeight, Double maxPossibleWeight) {
+        if (achievedWeight == null || maxPossibleWeight == null || maxPossibleWeight == 0.0) {
+            return 0.0;
+        }
+        double raw = (achievedWeight / maxPossibleWeight) * 10.0;
+        return round(raw, 2);
+    }
+
 }

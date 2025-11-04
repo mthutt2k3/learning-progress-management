@@ -449,45 +449,6 @@ public class ClassStudentServiceImpl implements ClassStudentService {
         );
     }
 
-
-    @Override
-    public StudentPerformanceReport getStudentPerformanceReport(Long classId, Long userId) {
-        ClassStudent classStudent = classStudentRepository.findByClazzIdAndUserId(classId, userId)
-                .orElseThrow(() -> new ApiException(Const.CLASS_STUDENT.STUDENT_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
-
-        List<Object[]> performanceData = submissionRepository.getStudentPerformance(classId, userId);
-
-        StudentPerformanceReport report = new StudentPerformanceReport();
-        report.setUserId(userId);
-        report.setClassId(classId);
-        report.setStudentName(classStudent.getUser().getFullName());
-
-        for (Object[] data : performanceData) {
-            report.addPerformanceMetric((Long) data[0], (Double) data[1], (LocalDateTime) data[2]);
-        }
-
-        return report;
-    }
-
-    @Override
-    public StudentProgressOverview getStudentProgressOverview(Long classId, Long userId) {
-        ClassStudent classStudent = classStudentRepository.findByClazzIdAndUserId(classId, userId)
-                .orElseThrow(() -> new ApiException(Const.CLASS_STUDENT.STUDENT_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
-
-        StudentProgressOverview overview = new StudentProgressOverview();
-        overview.setUserId(userId);
-        overview.setClassId(classId);
-        overview.setStudentName(classStudent.getUser().getFullName());
-
-        List<Object[]> progressData = submissionRepository.getStudentProgress(classId, userId);
-        overview.setTotalChallenges(progressData.size());
-        overview.setCompletedChallenges((int) progressData.stream()
-                .filter(data -> "COMPLETED".equals(data[1]))
-                .count());
-
-        return overview;
-    }
-
     @Override
     public byte[] generateStudentImportTemplate() {
         return fileService.generateStudentToClassImportTemplate();

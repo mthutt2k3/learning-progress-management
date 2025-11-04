@@ -37,17 +37,6 @@ public class SubmissionDailyChallenge extends BaseEntity{
     @JoinColumn(name = "challenge_id", nullable = false)
     private DailyChallenge challenge;
 
-    @ColumnDefault("CURRENT_TIMESTAMP")
-    @Column(name = "submitted_at")
-    private OffsetDateTime submittedAt;
-
-    @ColumnDefault("false")
-    @Column(name = "auto_submitted")
-    private Boolean autoSubmitted;
-
-    @Column(name = "plagiarism_score")
-    private Double plagiarismScore;
-
     @Column(name = "submission_logs_json")
     @JdbcTypeCode(SqlTypes.JSON)
     private String submissionLogsJson;
@@ -58,6 +47,13 @@ public class SubmissionDailyChallenge extends BaseEntity{
 
     @Column(name = "expired_at")
     private OffsetDateTime expiredAt;
+
+    @Column(name = "actual_start_at")
+    private OffsetDateTime actualStartAt;
+
+    @ColumnDefault("CURRENT_TIMESTAMP")
+    @Column(name = "submitted_at")
+    private OffsetDateTime submittedAt;
 
     @ColumnDefault("false")
     @Column(name = "is_late", nullable = false)

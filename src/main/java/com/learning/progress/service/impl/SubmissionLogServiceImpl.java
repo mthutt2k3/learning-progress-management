@@ -1,5 +1,6 @@
 package com.learning.progress.service.impl;
 
+import com.learning.progress.cache.CacheService;
 import com.learning.progress.dto.submission.AppendSubmissionLogRequest;
 import com.learning.progress.entity.SubmissionDailyChallenge;
 import com.learning.progress.exception.ApiException;
@@ -25,6 +26,7 @@ public class SubmissionLogServiceImpl implements SubmissionLogService {
 
     private final SubmissionDailyChallengeRepository submissionDailyChallengeRepository;
     private final MapUtil jsonMapUtil;
+    private final CacheService cacheService;
 
     @Override
     @Transactional
@@ -120,6 +122,7 @@ public class SubmissionLogServiceImpl implements SubmissionLogService {
 
             submission.setSubmissionLogsJson(updatedJson);
             submissionDailyChallengeRepository.save(submission);
+            cacheService.clearSubmissionCache(userId, submissionId);
 
             log.debug("Appended {} log events to submission {}", newLogs.size(), submissionId);
 

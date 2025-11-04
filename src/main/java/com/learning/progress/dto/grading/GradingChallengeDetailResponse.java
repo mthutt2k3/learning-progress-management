@@ -1,17 +1,18 @@
-// dto/grading/SubmissionGradingResultResponse.java
 package com.learning.progress.dto.grading;
 
 import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class SubmissionGradingResultResponse {
-    private Double totalScore;
-    private Double maxPossibleScore;
-    private Double scorePercentage;
+@Builder
+public class GradingChallengeDetailResponse {
+    private Double totalWeight;
+    private Double maxPossibleWeight;
+    private Double finalScore;
 
     private Integer totalQuestions;
     private Integer correctAnswers;
@@ -20,6 +21,5 @@ public class SubmissionGradingResultResponse {
     private Integer empty;
 
     // Chỉ overall, không chi tiết từng câu
-    private String teacherFeedback;  // null nếu auto-grade
-    private String aiSummary;        // null nếu manual-grade
+    private String teacherFeedback;
 }

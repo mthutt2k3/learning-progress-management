@@ -136,4 +136,18 @@ public class OpenAiController {
         TranslationResponse response = openAiService.translate(request.getText());
         return ResponseEntity.ok(DataResponse.success(response, Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL));
     }
+
+    @PostMapping("/grade-writing")
+    @Operation(summary = "Grade student's writing submission",
+            description = "AI grades writing based on lesson content, level, and question requirements")
+    public ResponseEntity<DataResponse<GradingWritingResponse>> gradeWriting(
+            @Valid @RequestBody GradingWritingRequest request) {
+
+        GradingWritingResponse result = openAiService.gradeWriting(request);
+
+        return new ResponseEntity<>(
+                DataResponse.success(result, Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL),
+                HttpStatus.OK
+        );
+    }
 }

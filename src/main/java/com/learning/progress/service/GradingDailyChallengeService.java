@@ -1,12 +1,21 @@
 package com.learning.progress.service;
 
-import com.learning.progress.dto.grading.ManualGradingRequest;
-import com.learning.progress.dto.grading.SubmissionGradingResultResponse;
-import com.learning.progress.dto.submission.SubmissionResultResponse;
+import com.learning.progress.dto.grading.GradingChallengeDetailResponse;
+import com.learning.progress.dto.grading.GradeSummaryRequest;
+import com.learning.progress.dto.grading.GradeQuestionRequest;
+import com.learning.progress.dto.grading.GradingQuestionDetailResponse;
 
 public interface GradingDailyChallengeService {
-    void gradeSubmissionManually(Long submissionId, ManualGradingRequest request);
+
     void autoGradeSubmission(Long submissionId);
 
-    SubmissionGradingResultResponse getGradingResult(Long submissionId);
+    GradingChallengeDetailResponse getChallengeGradingDetail(Long submissionId);
+
+    void gradeSubmissionChallenge(Long submissionId, GradeSummaryRequest request);
+
+    GradingQuestionDetailResponse getQuestionGradingDetail(Long submissionQuestionId);
+
+    void gradeSubmissionQuestion(Long submissionQuestionId, GradeQuestionRequest request);
+
+
 }

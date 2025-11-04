@@ -8,6 +8,7 @@ import com.learning.progress.dto.challenge.section.*;
 import com.learning.progress.entity.*;
 import com.learning.progress.exception.ApiException;
 import com.learning.progress.repository.DailyChallengeRepository;
+import com.learning.progress.repository.SubmissionQuestionRepository;
 import com.learning.progress.service.OpenAiService;
 import com.learning.progress.util.FileContentExtractor;
 import com.learning.progress.util.TraceUtil;
@@ -17,6 +18,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.hibernate.Hibernate;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestClientException;
@@ -25,6 +27,7 @@ import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.util.UriComponentsBuilder;
 
 import java.io.IOException;
+import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.regex.Matcher;
@@ -37,6 +40,7 @@ public class OpenAiServiceImpl implements OpenAiService {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final DailyChallengeRepository dailyChallengeRepository;
+    private final SubmissionQuestionRepository submissionQuestionRepository;
 
     private ExecutorService executorService;
 
@@ -65,19 +69,36 @@ public class OpenAiServiceImpl implements OpenAiService {
     @Value("${azure.translator.region}")
     private String translatorRegion;
 
-    private final RestTemplate restTemplate = new RestTemplate();
+    // Changed: create RestTemplate in init() so we can configure timeouts and reuse it
+    private RestTemplate restTemplate;
 
-    private static final String API_VERSION = "2025-01-01-preview";
+    private static final String API_VERSION = "2025-04-01-preview";
     private static final Pattern POSITION_PATTERN = Pattern.compile("\\[\\[pos_([a-z0-9]+)\\]\\]");
 
-    public OpenAiServiceImpl(DailyChallengeRepository dailyChallengeRepository) {
+    // Centralized system role reused in chat requests
+    private static final String SYSTEM_ROLE_JSON_INSTRUCTION =
+            "You are an expert English teacher. Return ONLY valid JSON (no markdown, no comments, no extra text). " +
+            "Do NOT include trailing commas or non-standard JSON syntax.";
+
+    public OpenAiServiceImpl(DailyChallengeRepository dailyChallengeRepository, SubmissionQuestionRepository submissionQuestionRepository) {
         this.dailyChallengeRepository = dailyChallengeRepository;
+        this.submissionQuestionRepository = submissionQuestionRepository;
     }
 
     @PostConstruct
     public void init() {
-        this.executorService = Executors.newFixedThreadPool(threadPoolSize);
+        this.executorService = Executors.newFixedThreadPool(Math.max(1, threadPoolSize));
         log.info("Initialized thread pool with size: {}", threadPoolSize);
+
+        // Configure RestTemplate with sensible timeouts to avoid long hangs
+        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
+        int connectTimeoutMs = 5000;
+        int readTimeoutMs = 300000; // 5 minutes for long AI calls
+        requestFactory.setConnectTimeout(connectTimeoutMs);
+        requestFactory.setReadTimeout(readTimeoutMs);
+
+        this.restTemplate = new RestTemplate(requestFactory);
+        log.info("Initialized RestTemplate with connectTimeout={}ms readTimeout={}ms", connectTimeoutMs, readTimeoutMs);
     }
 
     @PreDestroy
@@ -114,7 +135,7 @@ public class OpenAiServiceImpl implements OpenAiService {
 
         log.info("Starting OPTIMIZED GV question generation for challengeId: {}", request.getChallengeId());
 
-        DailyChallenge challenge = dailyChallengeRepository.findByIdAndDeletedAtIsNull(request.getChallengeId())
+        DailyChallenge challenge = dailyChallengeRepository.findByIdWithFullHierarchy(request.getChallengeId())
                 .orElseThrow(() -> {
                     log.error("DailyChallenge not found: {}", request.getChallengeId());
                     return new ApiException(Const.CHALLENGE.NOT_FOUND, HttpStatus.NOT_FOUND.value());
@@ -379,6 +400,7 @@ public class OpenAiServiceImpl implements OpenAiService {
             // Navigate through the entity graph and force initialization
             if (challenge.getClassLesson().getClassChapter() != null) {
                 Hibernate.initialize(challenge.getClassLesson().getClassChapter());
+                context.classChapterName = challenge.getClassLesson().getClassChapter().getClassChapterName();
 
                 if (challenge.getClassLesson().getClassChapter().getClazz() != null) {
                     Hibernate.initialize(challenge.getClassLesson().getClassChapter().getClazz());
@@ -400,6 +422,9 @@ public class OpenAiServiceImpl implements OpenAiService {
         if (context.classLessonContent == null) {
             context.classLessonContent = "No lesson content available";
         }
+        if (context.classChapterName == null) {
+            context.classChapterName = "No chapter name available";
+        }
         if (context.studentLevel == null) {
             context.studentLevel = "Intermediate";
         }
@@ -416,6 +441,7 @@ public class OpenAiServiceImpl implements OpenAiService {
     private static class ChallengeContext {
         String classLessonContent;
         String studentLevel;
+        String classChapterName;
     }
 
     /**
@@ -632,74 +658,98 @@ public class OpenAiServiceImpl implements OpenAiService {
      */
     private String getLevelInstructions(String level) {
         switch (level.toLowerCase()) {
-            case "beginner":
-            case "elementary":
-            case "basic":
+            case "little explorers":
+            case "little-explorers":
+            case "explorers":
                 return """
-                📊 STUDENT LEVEL: BEGINNER (A1-A2)
-                - Use simple, common vocabulary (500-1000 most frequent words)
-                - Use present simple, present continuous, simple past tenses primarily
-                - Short sentences (8-12 words average)
-                - Clear, straightforward grammar structures
-                - Avoid idioms, phrasal verbs, or complex expressions
-                - Focus on everyday topics: family, food, daily routines, hobbies
-                """;
+            📊 STUDENT LEVEL: LITTLE EXPLORERS (Pre-A1)
+            - For very young learners (ages 6–8)
+            - Use very simple vocabulary (animals, colors, toys, food, family)
+            - Use only basic sentence patterns: "This is a cat.", "I like apples."
+            - Focus on listening and recognizing familiar words
+            - Grammar: be (am/is/are), have got, simple plurals, basic questions
+            - Avoid long or abstract sentences
+            - Use clear contexts with pictures or daily-life examples
+            """;
 
-            case "pre-intermediate":
+            case "starters":
                 return """
-                📊 STUDENT LEVEL: PRE-INTERMEDIATE (A2-B1)
-                - Expand vocabulary to 1500-2000 words
-                - Introduce past continuous, present perfect, future forms
-                - Medium-length sentences (10-15 words average)
-                - Basic conjunctions and linking words (because, although, when)
-                - Simple phrasal verbs and common expressions
-                - Topics: travel, shopping, health, work, education
-                """;
+            📊 STUDENT LEVEL: STARTERS (Cambridge Pre-A1)
+            - For children around ages 7–9
+            - Vocabulary range: 300–500 common words
+            - Grammar: be/have/do, simple present, can/can’t
+            - Sentence length: 5–8 words
+            - Focus on daily topics: school, home, clothes, animals, food
+            - Clear, concrete contexts with simple sentences
+            - Avoid complex tenses or idioms
+            """;
 
-            case "intermediate":
+            case "movers":
                 return """
-                📊 STUDENT LEVEL: INTERMEDIATE (B1-B2)
-                - Vocabulary range of 2500-3500 words
-                - All major tenses including conditionals, passive voice
-                - Varied sentence structures (12-18 words average)
-                - Common idioms and phrasal verbs
-                - More abstract topics: environment, technology, culture, opinions
-                - Require inference and deeper comprehension
-                """;
+            📊 STUDENT LEVEL: MOVERS (Cambridge A1)
+            - For learners ages 8–11
+            - Vocabulary: 600–800 words
+            - Grammar: present simple, present continuous, past simple of be/have/go
+            - Sentences: 8–12 words, basic conjunctions (and, but, because)
+            - Topics: hobbies, weather, holidays, daily activities
+            - Include basic question and answer forms
+            - Encourage short reading and listening comprehension
+            """;
 
-            case "upper-intermediate":
-            case "upper intermediate":
+            case "flyers":
                 return """
-                📊 STUDENT LEVEL: UPPER-INTERMEDIATE (B2-C1)
-                - Rich vocabulary (4000-5000 words) including less common terms
-                - All advanced grammar: mixed conditionals, subjunctive, reported speech
-                - Complex sentence structures with multiple clauses
-                - Idiomatic expressions, colloquialisms, nuanced meanings
-                - Abstract and specialized topics: philosophy, science, business, social issues
-                - Require critical thinking and analysis
-                """;
+            📊 STUDENT LEVEL: FLYERS (Cambridge A2)
+            - For learners ages 9–12
+            - Vocabulary: 1000–1200 words
+            - Grammar: all present tenses, simple past, future with will/going to
+            - Sentences: 10–15 words, include comparatives and superlatives
+            - Topics: travel, family, school life, sports, animals
+            - Introduce short descriptive texts or stories
+            - Begin using connectors (before, after, when)
+            """;
 
-            case "advanced":
-            case "proficient":
+            case "a2":
+            case "ket":
+            case "a2/ket":
                 return """
-                📊 STUDENT LEVEL: ADVANCED (C1-C2)
-                - Extensive vocabulary (6000+ words) including specialized terminology
-                - Sophisticated grammar with subtle distinctions
-                - Complex, varied sentence structures
-                - Advanced idioms, metaphors, literary devices
-                - Challenging topics requiring deep analysis and evaluation
-                - Native-like comprehension and expression expected
-                """;
+            📊 STUDENT LEVEL: A2 / KET
+            - Vocabulary: about 1500 words
+            - Grammar: present, past, future tenses; modals (can, must, should)
+            - Sentence length: 12–18 words
+            - Use common phrasal verbs and prepositions
+            - Topics: daily routines, travel, technology, school, work
+            - Focus on understanding short texts and dialogues
+            - Encourage expressing simple opinions and experiences
+            """;
+
+            case "b1":
+            case "pet":
+            case "b1/pet":
+                return """
+            📊 STUDENT LEVEL: B1 / PET
+            - Vocabulary: 2000–3000 words
+            - Grammar: all main tenses, basic conditionals, passive voice
+            - Sentences: 15–20 words, with linking words (although, because, so)
+            - Include phrasal verbs and common idioms
+            - Topics: environment, health, culture, relationships, education
+            - Require some inference and opinion-based understanding
+            - Students can describe experiences and justify opinions
+            """;
 
             default:
                 return """
-                📊 STUDENT LEVEL: INTERMEDIATE (B1-B2) - DEFAULT
-                - Balanced vocabulary and grammar complexity
-                - Clear but not overly simplified language
-                - Topics suitable for general English learners
-                """;
+            📊  STUDENT LEVEL: B1 / PET
+            - Vocabulary: 2000–3000 words
+            - Grammar: all main tenses, basic conditionals, passive voice
+            - Sentences: 15–20 words, with linking words (although, because, so)
+            - Include phrasal verbs and common idioms
+            - Topics: environment, health, culture, relationships, education
+            - Require some inference and opinion-based understanding
+            - Students can describe experiences and justify opinions
+            """;
         }
     }
+
 
     private String buildBatchGVQuestionPrompt(
             ChallengeContext context,
@@ -710,13 +760,27 @@ public class OpenAiServiceImpl implements OpenAiService {
 
         StringBuilder prompt = new StringBuilder();
 
+        // ====================== THÊM SYSTEM ROLE MỚI ======================
+        prompt.append("You are an experienced English teacher working at a reputable English language center for students aged 6 to 18.\n");
+        prompt.append("You are responsible for creating professional, age-appropriate, lesson-aligned English test questions for different proficiency levels (Little Explorers → Advanced).\n\n");
+        prompt.append("Always analyze the lesson content and chapter topic carefully before writing questions.\n");
+        prompt.append("Your questions must directly test the grammar, vocabulary, and language skills actually taught in the current lesson, not random English knowledge.\n\n");
+        prompt.append("If no lesson content or chapter name is provided, you must ignore it — do not create unrelated questions.\n\n");
+        prompt.append("Each question must:\n");
+        prompt.append("- Match the student’s level (for example, \"Little Explorers\" = young learners beginner level).\n");
+        prompt.append("- Be written in natural, clear, age-appropriate English.\n");
+        prompt.append("- Have plausible distractors and one clear correct answer.\n");
+        prompt.append("- Follow the Vietnamese National High School (THPT Quốc Gia) style for clarity and fairness.\n");
+        prompt.append("- When generating drag-and-drop questions, strictly follow the JSON format and placeholder rules provided by the user.\n\n");
+        // ====================================================================
+
         String studentLevel = determineStudentLevel(context, userDescription);
         String levelInstructions = getLevelInstructions(studentLevel);
 
-        prompt.append("You are an expert English test creator for Vietnamese National High School Examination (THPT Quốc Gia).\n");
+//        prompt.append("You are an expert English test creator for Vietnamese National High School Examination (THPT Quốc Gia).\n");
         prompt.append("Create PROFESSIONAL, ACADEMIC-STANDARD questions that test real English proficiency.\n\n");
 
-        prompt.append("🎓 EXAM STANDARDS - VIETNAMESE NATIONAL HIGH SCHOOL EXAM FORMAT:\n");
+        prompt.append("EXAM STANDARDS - VIETNAMESE NATIONAL HIGH SCHOOL EXAM FORMAT:\n");
         prompt.append("- Questions MUST be clear, unambiguous, and professionally written\n");
         prompt.append("- Test REAL language skills, not trick questions or rote memorization\n");
         prompt.append("- Use NATURAL, AUTHENTIC English that native speakers would use\n");
@@ -725,14 +789,15 @@ public class OpenAiServiceImpl implements OpenAiService {
         prompt.append("- Progressive difficulty: start easier, gradually increase complexity\n");
         prompt.append("- Contextual questions preferred over isolated grammar drills\n\n");
 
-        // ✨ Level instructions
+        // Level instructions
         prompt.append(levelInstructions).append("\n");
 
-        // 📚 Lesson content
-        prompt.append("📚 LESSON CONTENT (Extract key teaching points from this):\n");
+        // Lesson content
+        prompt.append("LESSON CONTENT (Extract key teaching points from this):\n");
         prompt.append(context.classLessonContent).append("\n\n");
+        prompt.append(context.classChapterName).append("\n\n");
 
-        prompt.append("⚠️ LESSON ALIGNMENT RULES:\n");
+        prompt.append("LESSON ALIGNMENT RULES:\n");
         prompt.append("- Extract the MAIN grammar/vocabulary points being taught in the lesson\n");
         prompt.append("- Create questions that TEST UNDERSTANDING of these points\n");
         prompt.append("- Use vocabulary and topics from the lesson, but in NEW contexts/situations\n");
@@ -740,20 +805,20 @@ public class OpenAiServiceImpl implements OpenAiService {
         prompt.append("- Example: If lesson teaches 'present perfect', create questions that require students to\n");
         prompt.append("  distinguish between present perfect and other tenses in realistic contexts\n\n");
 
-        // 🔥 User requirements
+        // User requirements
         if (userDescription != null && !userDescription.isBlank()) {
-            prompt.append("🔥 ADDITIONAL REQUIREMENTS:\n");
+            prompt.append("ADDITIONAL REQUIREMENTS:\n");
             prompt.append(userDescription).append("\n");
             prompt.append("Apply these requirements while maintaining exam-standard quality.\n\n");
         }
 
-        prompt.append("📝 TASK:\n");
+        prompt.append("TASK:\n");
         prompt.append("Generate EXACTLY ").append(numberOfQuestions).append(" HIGH-QUALITY ").append(questionType).append(" questions\n");
         prompt.append("Level: ").append(studentLevel).append("\n\n");
 
         // Special instructions based on question type
         if ("MULTIPLE_CHOICE".equals(questionType)) {
-            prompt.append("📋 MULTIPLE CHOICE - THPT QG STANDARD:\n");
+            prompt.append("MULTIPLE CHOICE - THPT QG STANDARD:\n");
             prompt.append("Structure: [Situation/Context (optional)] + Question stem + 4 options (A, B, C, D)\n\n");
             prompt.append("Example Format:\n");
             prompt.append("Maria has been learning English _____ she was ten years old.\n");
@@ -768,7 +833,7 @@ public class OpenAiServiceImpl implements OpenAiService {
             prompt.append("- For grammar: distractors should be other forms/tenses that students might confuse\n");
             prompt.append("- For vocabulary: distractors should be semantically related or collocational alternatives\n\n");
         } else if ("FILL_IN_THE_BLANK".equals(questionType)) {
-            prompt.append("📋 FILL IN THE BLANK - THPT QG STANDARD:\n");
+            prompt.append("FILL IN THE BLANK - THPT QG STANDARD:\n");
             prompt.append("Use natural English sentences with blanks testing specific points.\n");
             prompt.append("Format: \"She [[pos_a1b2c3]](go) to school every day.\"\n\n");
             prompt.append("Example:\n");
@@ -780,50 +845,50 @@ public class OpenAiServiceImpl implements OpenAiService {
             prompt.append("- Avoid ambiguous sentences with multiple possible answers\n");
             prompt.append("- Hint in parentheses should guide but not give away the answer\n\n");
         } else if ("REARRANGE".equals(questionType)) {
-            prompt.append("📋 REARRANGE - THPT QG STANDARD:\n");
-            prompt.append("⚠️ CRITICAL: Create COMPLETE, MEANINGFUL sentences\n\n");
+            prompt.append("REARRANGE - THPT QG STANDARD:\n");
+            prompt.append("CRITICAL: Create COMPLETE, MEANINGFUL sentences\n\n");
             prompt.append("REQUIREMENTS:\n");
-            prompt.append("✓ Must be a FULL sentence with complete meaning\n");
-            prompt.append("✓ Include subject + verb + complete thought\n");
-            prompt.append("✓ Use 5-8 words/phrases for optimal challenge\n");
-            prompt.append("✓ When arranged correctly = grammatically perfect sentence\n\n");
+            prompt.append("Must be a FULL sentence with complete meaning\n");
+            prompt.append("Include subject + verb + complete thought\n");
+            prompt.append("Use 5-8 words/phrases for optimal challenge\n");
+            prompt.append("When arranged correctly = grammatically perfect sentence\n\n");
             prompt.append("EXAMPLES OF COMPLETE SENTENCES:\n");
-            prompt.append("✅ \"She has been studying English recently\" (6 words)\n");
-            prompt.append("✅ \"My brother plays football every weekend\" (5 words)\n");
-            prompt.append("✅ \"The teacher explained the lesson very clearly\" (6 words)\n");
-            prompt.append("✅ \"If I had known, I would have helped\" (7 words)\n\n");
+            prompt.append("\"She has been studying English recently\" (6 words)\n");
+            prompt.append("\"My brother plays football every weekend\" (5 words)\n");
+            prompt.append("\"The teacher explained the lesson very clearly\" (6 words)\n");
+            prompt.append("\"If I had known, I would have helped\" (7 words)\n\n");
             prompt.append("AVOID INCOMPLETE SENTENCES:\n");
-            prompt.append("❌ \"The teacher the explains\" (missing object)\n");
-            prompt.append("❌ \"Students are learning new\" (incomplete thought)\n");
-            prompt.append("❌ \"Because he was late\" (fragment, not complete)\n");
-            prompt.append("❌ \"She is\" (too short, incomplete)\n\n");
+            prompt.append("\"The teacher the explains\" (missing object)\n");
+            prompt.append("\"Students are learning new\" (incomplete thought)\n");
+            prompt.append("\"Because he was late\" (fragment, not complete)\n");
+            prompt.append("\"She is\" (too short, incomplete)\n\n");
             prompt.append("Before finalizing: Ask yourself \"Is this a complete sentence I could say in conversation?\"\n");
             prompt.append("If NO, add missing words to make it complete!\n\n");
         }
 
-        prompt.append("🎯 QUALITY CHECKLIST (VERIFY EACH QUESTION):\n");
-        prompt.append("✓ Clear and unambiguous question stem\n");
-        prompt.append("✓ Tests a specific language point from the lesson\n");
-        prompt.append("✓ Uses natural, authentic English\n");
-        prompt.append("✓ One clearly correct answer\n");
-        prompt.append("✓ Plausible distractors (for multiple choice)\n");
-        prompt.append("✓ Appropriate difficulty for level: ").append(studentLevel).append("\n");
-        prompt.append("✓ No cultural bias or obscure references\n");
-        prompt.append("✓ Professional formatting and language\n\n");
+        prompt.append("QUALITY CHECKLIST (VERIFY EACH QUESTION):\n");
+        prompt.append("Clear and unambiguous question stem\n");
+        prompt.append("Tests a specific language point from the lesson\n");
+        prompt.append("Uses natural, authentic English\n");
+        prompt.append("One clearly correct answer\n");
+        prompt.append("Plausible distractors (for multiple choice)\n");
+        prompt.append("Appropriate difficulty for level: ").append(studentLevel).append("\n");
+        prompt.append("No cultural bias or obscure references\n");
+        prompt.append("Professional formatting and language\n\n");
 
         appendJSONFormat(prompt, questionType);
         appendQuestionTypeRules(prompt, questionType);
 
-        prompt.append("\n🚫 AVOID THESE COMMON MISTAKES:\n");
-        prompt.append("✗ Questions with multiple correct answers\n");
-        prompt.append("✗ Obviously wrong distractors (e.g., wrong word class)\n");
-        prompt.append("✗ Unnatural or awkward English\n");
-        prompt.append("✗ Questions testing obscure vocabulary not in lesson\n");
-        prompt.append("✗ Trick questions designed to confuse rather than test understanding\n");
-        prompt.append("✗ Copying exact sentences from lesson without adaptation\n");
-        prompt.append("✗ Grammar exercises without context\n\n");
+        prompt.append("\nAVOID THESE COMMON MISTAKES:\n");
+        prompt.append("Questions with multiple correct answers\n");
+        prompt.append("Obviously wrong distractors (e.g., wrong word class)\n");
+        prompt.append("Unnatural or awkward English\n");
+        prompt.append("Questions testing obscure vocabulary not in lesson\n");
+        prompt.append("Trick questions designed to confuse rather than test understanding\n");
+        prompt.append("Copying exact sentences from lesson without adaptation\n");
+        prompt.append("Grammar exercises without context\n\n");
 
-        prompt.append("🔥 CRITICAL REQUIREMENTS:\n");
+        prompt.append("CRITICAL REQUIREMENTS:\n");
         prompt.append("1. Return ONLY valid JSON - no markdown, no comments, no explanations\n");
         prompt.append("2. Generate EXACTLY ").append(numberOfQuestions).append(" questions\n");
         prompt.append("3. Each question MUST meet THPT QG professional standards\n");
@@ -835,12 +900,12 @@ public class OpenAiServiceImpl implements OpenAiService {
         prompt.append("9. For FILL_IN_THE_BLANK: Use format \"text [[pos_xxxxx]](hint) text\"\n");
         prompt.append("10. Double-check: one correct answer, three good distractors\n");
         if ("REARRANGE".equals(questionType)) {
-            prompt.append("11. ⚠️ FOR REARRANGE: VERIFY SENTENCE IS COMPLETE!\n");
+            prompt.append("11. FOR REARRANGE: VERIFY SENTENCE IS COMPLETE!\n");
             prompt.append("    - Count words: minimum 5, optimal 5-8\n");
             prompt.append("    - Check: Has subject? Has verb? Complete thought?\n");
             prompt.append("    - Read aloud: Does it make complete sense?\n");
-            prompt.append("    - Example COMPLETE: \"She has been studying English recently\" ✅\n");
-            prompt.append("    - Example INCOMPLETE: \"The teacher the explains\" ❌\n");
+            prompt.append("    - Example COMPLETE: \"She has been studying English recently\" \n");
+            prompt.append("    - Example INCOMPLETE: \"The teacher the explains\" \n");
         }
         prompt.append("\n\n");
 
@@ -860,13 +925,27 @@ public class OpenAiServiceImpl implements OpenAiService {
 
         StringBuilder prompt = new StringBuilder();
 
+        // ====================== THÊM SYSTEM ROLE MỚI ======================
+        prompt.append("You are an experienced English teacher working at a reputable English language center for students aged 6 to 18.\n");
+        prompt.append("You are responsible for creating professional, age-appropriate, lesson-aligned English test questions for different proficiency levels (Little Explorers → Advanced).\n\n");
+        prompt.append("Always analyze the lesson content and chapter topic carefully before writing questions.\n");
+        prompt.append("Your questions must directly test the grammar, vocabulary, and language skills actually taught in the current lesson, not random English knowledge.\n\n");
+        prompt.append("If no lesson content or chapter name is provided, you must ignore it — do not create unrelated questions.\n\n");
+        prompt.append("Each question must:\n");
+        prompt.append("- Match the student’s level (for example, \"Little Explorers\" = young learners beginner level).\n");
+        prompt.append("- Be written in natural, clear, age-appropriate English.\n");
+        prompt.append("- Have plausible distractors and one clear correct answer.\n");
+        prompt.append("- Follow the Vietnamese National High School (THPT Quốc Gia) style for clarity and fairness.\n");
+        prompt.append("- When generating drag-and-drop questions, strictly follow the JSON format and placeholder rules provided by the user.\n\n");
+        // ====================================================================
+
         String studentLevel = determineStudentLevel(context, userDescription);
         String levelInstructions = getLevelInstructions(studentLevel);
 
-        prompt.append("You are an expert English test creator for Vietnamese National High School Examination (THPT Quốc Gia).\n");
+//        prompt.append("You are an expert English test creator for Vietnamese National High School Examination (THPT Quốc Gia).\n");
         prompt.append("Create PROFESSIONAL reading comprehension questions that test genuine understanding.\n\n");
 
-        prompt.append("🎓 THPT QG READING COMPREHENSION STANDARDS:\n");
+        prompt.append("THPT QG READING COMPREHENSION STANDARDS:\n");
         prompt.append("- Questions test DIFFERENT comprehension skills (main idea, detail, inference, vocabulary)\n");
         prompt.append("- Each question has ONE clearly correct answer based on the passage\n");
         prompt.append("- Distractors are plausible but definitively wrong\n");
@@ -875,29 +954,29 @@ public class OpenAiServiceImpl implements OpenAiService {
         prompt.append("- Progressive difficulty from easier to more challenging\n");
         prompt.append("- Professional, academic language\n\n");
 
-        prompt.append("📚 CHALLENGE TYPE: ").append(dailyChallengeType).append("\n");
+        prompt.append("CHALLENGE TYPE: ").append(dailyChallengeType).append("\n");
         appendDCTypeInstructions(prompt, dailyChallengeType);
 
-        // ✨ Level instructions
+        // Level instructions
         prompt.append("\n").append(levelInstructions).append("\n");
 
-        prompt.append("📖 PASSAGE TO CREATE QUESTIONS FROM:\n");
+        prompt.append("PASSAGE TO CREATE QUESTIONS FROM:\n");
         prompt.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
         prompt.append(section.getSectionsContent()).append("\n");
         prompt.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n");
 
         // User requirements
         if (userDescription != null && !userDescription.isBlank()) {
-            prompt.append("🔥 ADDITIONAL REQUIREMENTS:\n");
+            prompt.append("ADDITIONAL REQUIREMENTS:\n");
             prompt.append(userDescription).append("\n");
             prompt.append("Apply while maintaining THPT QG standards.\n\n");
         }
 
-        prompt.append("📝 TASK:\n");
+        prompt.append("TASK:\n");
         prompt.append("Generate EXACTLY ").append(numberOfQuestions).append(" ").append(questionType).append(" questions about the passage\n");
         prompt.append("Level: ").append(studentLevel).append("\n\n");
 
-        prompt.append("🎯 QUESTION TYPE DISTRIBUTION (Follow this breakdown):\n");
+        prompt.append("QUESTION TYPE DISTRIBUTION (Follow this breakdown):\n");
         if (numberOfQuestions >= 5) {
             prompt.append("- 1-2 questions: Main idea / Purpose (What is the passage mainly about?)\n");
             prompt.append("- 2-3 questions: Specific details (According to the passage... / The author mentions...)\n");
@@ -909,7 +988,7 @@ public class OpenAiServiceImpl implements OpenAiService {
         prompt.append("\n");
 
         if ("MULTIPLE_CHOICE".equals(questionType)) {
-            prompt.append("📋 READING COMPREHENSION MC - THPT QG FORMAT:\n\n");
+            prompt.append("READING COMPREHENSION MC - THPT QG FORMAT:\n\n");
             prompt.append("Example 1 (Main Idea):\n");
             prompt.append("What is the main idea of the passage?\n");
             prompt.append("A. [Too specific - only one detail]\n");
@@ -939,31 +1018,31 @@ public class OpenAiServiceImpl implements OpenAiService {
             prompt.append("D. beautiful\n\n");
 
             prompt.append("DISTRACTOR PRINCIPLES FOR READING:\n");
-            prompt.append("✓ Use information from passage but in wrong context\n");
-            prompt.append("✓ Use extreme language (always, never) for false options\n");
-            prompt.append("✓ Use partial truths (statement is partly true but incomplete)\n");
-            prompt.append("✓ Reference content from different paragraph/section\n");
-            prompt.append("✓ Make plausible if reader didn't read carefully\n\n");
+            prompt.append("Use information from passage but in wrong context\n");
+            prompt.append("Use extreme language (always, never) for false options\n");
+            prompt.append("Use partial truths (statement is partly true but incomplete)\n");
+            prompt.append("Reference content from different paragraph/section\n");
+            prompt.append("Make plausible if reader didn't read carefully\n\n");
         } else if ("REARRANGE".equals(questionType)) {
-            prompt.append("📋 REARRANGE - READING-BASED:\n");
-            prompt.append("⚠️ CRITICAL: Create COMPLETE, MEANINGFUL sentences from passage vocabulary\n\n");
+            prompt.append("REARRANGE - READING-BASED:\n");
+            prompt.append("CRITICAL: Create COMPLETE, MEANINGFUL sentences from passage vocabulary\n\n");
             prompt.append("REQUIREMENTS:\n");
-            prompt.append("✓ Must be a FULL sentence with complete meaning\n");
-            prompt.append("✓ Use vocabulary and structures from the passage\n");
-            prompt.append("✓ Include subject + verb + complete thought\n");
-            prompt.append("✓ Use 5-8 words/phrases for optimal challenge\n");
-            prompt.append("✓ Test understanding of passage content through sentence construction\n\n");
+            prompt.append("Must be a FULL sentence with complete meaning\n");
+            prompt.append("Use vocabulary and structures from the passage\n");
+            prompt.append("Include subject + verb + complete thought\n");
+            prompt.append("Use 5-8 words/phrases for optimal challenge\n");
+            prompt.append("Test understanding of passage content through sentence construction\n\n");
             prompt.append("EXAMPLES:\n");
-            prompt.append("✅ \"The author argues that climate change is urgent\" (7 words)\n");
-            prompt.append("✅ \"Scientists have discovered a new treatment method\" (6 words)\n");
-            prompt.append("✅ \"Many students prefer online learning nowadays\" (5 words)\n\n");
+            prompt.append("\"The author argues that climate change is urgent\" (7 words)\n");
+            prompt.append("\"Scientists have discovered a new treatment method\" (6 words)\n");
+            prompt.append("\"Many students prefer online learning nowadays\" (5 words)\n\n");
             prompt.append("AVOID:\n");
-            prompt.append("❌ \"The passage the mentions\" (incomplete)\n");
-            prompt.append("❌ \"According to author\" (missing verb and object)\n");
-            prompt.append("❌ \"Was very important\" (missing subject)\n\n");
+            prompt.append("\"The passage the mentions\" (incomplete)\n");
+            prompt.append("\"According to author\" (missing verb and object)\n");
+            prompt.append("\"Was very important\" (missing subject)\n\n");
         }
 
-        prompt.append("⚠️ CRITICAL RULES FOR PASSAGE-BASED QUESTIONS:\n");
+        prompt.append("CRITICAL RULES FOR PASSAGE-BASED QUESTIONS:\n");
         prompt.append("1. ALL answers must be FINDABLE in the passage\n");
         prompt.append("2. Do NOT require outside knowledge not in the passage\n");
         prompt.append("3. Quote or paraphrase from passage when appropriate\n");
@@ -973,27 +1052,27 @@ public class OpenAiServiceImpl implements OpenAiService {
         prompt.append("7. Questions should encourage full reading, not just skimming\n");
         prompt.append("8. Use passage vocabulary in questions naturally\n\n");
 
-        prompt.append("🎯 QUALITY CHECKLIST:\n");
-        prompt.append("✓ Question clearly worded and unambiguous\n");
-        prompt.append("✓ Answer is definitively in the passage\n");
-        prompt.append("✓ Three plausible but wrong distractors\n");
-        prompt.append("✓ Tests comprehension, not memory tricks\n");
-        prompt.append("✓ Appropriate difficulty for level: ").append(studentLevel).append("\n");
-        prompt.append("✓ Professional, academic language\n");
-        prompt.append("✓ Different question type (main idea/detail/inference/vocab)\n\n");
+        prompt.append("QUALITY CHECKLIST:\n");
+        prompt.append("Question clearly worded and unambiguous\n");
+        prompt.append("Answer is definitively in the passage\n");
+        prompt.append("Three plausible but wrong distractors\n");
+        prompt.append("Tests comprehension, not memory tricks\n");
+        prompt.append("Appropriate difficulty for level: ").append(studentLevel).append("\n");
+        prompt.append("Professional, academic language\n");
+        prompt.append("Different question type (main idea/detail/inference/vocab)\n\n");
 
         appendJSONFormat(prompt, questionType);
         appendQuestionTypeRules(prompt, questionType);
 
-        prompt.append("\n🚫 AVOID:\n");
-        prompt.append("✗ Questions answerable without reading passage\n");
-        prompt.append("✗ Questions requiring outside knowledge\n");
-        prompt.append("✗ Multiple questions about the same detail\n");
-        prompt.append("✗ Answers based on common sense rather than passage\n");
-        prompt.append("✗ Trick questions with multiple valid interpretations\n");
-        prompt.append("✗ Copying exact phrases from passage in distractors\n\n");
+        prompt.append("\nAVOID:\n");
+        prompt.append("Questions answerable without reading passage\n");
+        prompt.append("Questions requiring outside knowledge\n");
+        prompt.append("Multiple questions about the same detail\n");
+        prompt.append("Answers based on common sense rather than passage\n");
+        prompt.append("Trick questions with multiple valid interpretations\n");
+        prompt.append("Copying exact phrases from passage in distractors\n\n");
 
-        prompt.append("🔥 CRITICAL REQUIREMENTS:\n");
+        prompt.append("CRITICAL REQUIREMENTS:\n");
         prompt.append("1. Return ONLY valid JSON - no markdown, no comments\n");
         prompt.append("2. Generate EXACTLY ").append(numberOfQuestions).append(" questions\n");
         prompt.append("3. ALL questions answerable from passage ONLY\n");
@@ -1005,11 +1084,10 @@ public class OpenAiServiceImpl implements OpenAiService {
         prompt.append("9. Progressive difficulty\n");
         prompt.append("10. Test genuine understanding\n");
         if ("REARRANGE".equals(questionType)) {
-            prompt.append("11. ⚠️ FOR REARRANGE: VERIFY SENTENCE IS COMPLETE!\n");
+            prompt.append("11. FOR REARRANGE: VERIFY SENTENCE IS COMPLETE!\n");
             prompt.append("    - Minimum 5 words, optimal 5-8 words\n");
             prompt.append("    - Must have: subject + verb + complete meaning\n");
             prompt.append("    - Test yourself: \"Can this stand alone as a sentence?\"\n");
-            prompt.append("    - Use vocabulary from the passage\n");
         }
         prompt.append("\n\n");
 
@@ -1505,20 +1583,16 @@ public class OpenAiServiceImpl implements OpenAiService {
     @Override
     public String callOpenAI(String prompt) {
         String url = UriComponentsBuilder
-                .fromHttpUrl(endpoint + "/openai/deployments/gpt-4o-mini/chat/completions")
+                .fromHttpUrl(endpoint + "/openai/deployments/gpt-5-mini/chat/completions")
                 .queryParam("api-version", API_VERSION)
                 .toUriString();
 
-        RestTemplate restTemplate = new RestTemplate();
-
         Map<String, Object> requestBody = Map.of(
                 "messages", new Object[]{
-                        Map.of("role", "system", "content", "You are an expert English teacher. You MUST return ONLY valid JSON without any markdown formatting, code blocks, comments, or explanations. The JSON must be parseable directly. Do NOT include trailing commas or any non-standard JSON syntax."),
+                        Map.of("role", "system", "content", SYSTEM_ROLE_JSON_INSTRUCTION),
                         Map.of("role", "user", "content", prompt)
                 },
-                "max_tokens", 4000,
-                "temperature", 0.7,
-                "top_p", 0.9
+                "max_completion_tokens", 16000
         );
 
         HttpHeaders headers = new HttpHeaders();
@@ -1539,12 +1613,12 @@ public class OpenAiServiceImpl implements OpenAiService {
                     // Clean the response
                     content = cleanJsonResponse(content);
 
-                    log.debug("OpenAI response (cleaned): {}", content);
+                    log.debug("OpenAI response (cleaned, first 1000 chars): {}", content.length() > 1000 ? content.substring(0, 1000) : content);
                     return content;
                 }
             }
         } catch (Exception e) {
-            log.error("Error calling OpenAI", e);
+            log.error("Error calling OpenAI: {}", e.getMessage(), e);
             throw new RuntimeException("Failed to call OpenAI: " + e.getMessage(), e);
         }
 
@@ -1552,38 +1626,42 @@ public class OpenAiServiceImpl implements OpenAiService {
     }
 
     /**
-     * ✅ NEW: Comprehensive JSON cleaning to handle various malformed responses
+     * Robust JSON cleaning:
+     * - Strip code fences and common assistant commentary
+     * - Remove JavaScript-style comments
+     * - Remove trailing commas
+     * - Try to fix common quote problems
      */
     private String cleanJsonResponse(String content) {
-        if (content == null) {
-            return "";
+        if (content == null) return "";
+
+        String s = content.trim();
+
+        // Remove code fences
+        s = s.replaceAll("(?s)^```(?:json)?\\s*", "");
+        s = s.replaceAll("(?s)\\s*```\\s*$", "");
+
+        // Remove leading / trailing assistant annotations like "Here's the JSON:"
+        s = s.replaceFirst("(?i)^\\s*here('?s)?\\s*the\\s*json[:\\s]*", "");
+        s = s.replaceFirst("(?i)^\\s*response[:\\s]*", "");
+
+        // Strip single-line and multi-line comments
+        s = s.replaceAll("(?m)//.*?$", "");
+        s = s.replaceAll("(?s)/\\*.*?\\*/", "");
+
+        // Replace common trailing commas
+        s = s.replaceAll(",\\s*}", "}");
+        s = s.replaceAll(",\\s*\\]", "]");
+
+        // Normalize smart quotes to straight quotes
+        s = s.replace("“", "\"").replace("”", "\"").replace("‘", "'").replace("’", "'");
+
+        // If string starts and ends with a quoted JSON string (e.g., wrapped JSON), try to unquote
+        if ((s.startsWith("\"{") && s.endsWith("}\"")) || (s.startsWith("'{" ) && s.endsWith("}'"))) {
+            s = s.substring(1, s.length() - 1).replace("\\\"", "\"");
         }
 
-        content = content.trim();
-
-        // Remove markdown code blocks
-        if (content.startsWith("```json")) {
-            content = content.substring(7);
-        } else if (content.startsWith("```")) {
-            content = content.substring(3);
-        }
-
-        if (content.endsWith("```")) {
-            content = content.substring(0, content.length() - 3);
-        }
-
-        content = content.trim();
-
-        content = content.replaceAll("//.*?\\n", "\n"); // Single-line comments
-        content = content.replaceAll("/\\*.*?\\*/", ""); // Multi-line comments
-
-        content = content.replaceAll(",\\s*}", "}");
-        content = content.replaceAll(",\\s*]", "]");
-
-        content = content.replace("'", "'");
-        content = content.replace("'", "'");
-
-        return content.trim();
+        return s.trim();
     }
 
     private QuestionDto parseQuestion(JsonNode questionNode, int index, String expectedType) {
@@ -1599,7 +1677,7 @@ public class OpenAiServiceImpl implements OpenAiService {
         question.setOrderNumber(orderNode != null ? orderNode.asInt() : index);
 
         JsonNode scoreNode = questionNode.get("score");
-        question.setScore(scoreNode != null ? scoreNode.asDouble() : 1.0);
+        question.setWeight(scoreNode != null ? scoreNode.asDouble() : 1.0);
 
         JsonNode typeNode = questionNode.get("questionType");
         question.setQuestionType(typeNode != null ? typeNode.asText() : expectedType);
@@ -1924,7 +2002,7 @@ public class OpenAiServiceImpl implements OpenAiService {
         prompt.append("   - Has multiple options (A, B, C, D or 1, 2, 3, 4)\n");
         prompt.append("   - One option marked as correct (✓, *, correct, answer, etc.)\n");
         prompt.append("   - positionId: null for all options\n");
-        prompt.append("   Example: \"1. Question? A. option1 B. option2 ✓ C. option3\"\n\n");
+        prompt.append("   - Example: \"1. Question? A. option1 B. option2 ✓ C. option3\"\n\n");
 
         prompt.append("2. TRUE_OR_FALSE:\n");
         prompt.append("   - Question asks True or False\n");
@@ -2163,6 +2241,217 @@ public class OpenAiServiceImpl implements OpenAiService {
         return sections;
     }
 
+    // Thêm vào OpenAiServiceImpl.java
+
+    @Override
+    @Transactional(readOnly = true)
+    public GradingWritingResponse gradeWriting(GradingWritingRequest request) {
+        log.info("Starting AI grading for submissionQuestionId: {}", request.getSubmissionQuestionId());
+
+        // 1. Load submission question
+        SubmissionQuestion submissionQuestion = submissionQuestionRepository
+                .findById(request.getSubmissionQuestionId())
+                .orElseThrow(() -> new ApiException("Submission question not found", HttpStatus.NOT_FOUND.value()));
+
+        // 2. Extract student's writing from submission_content_json
+        String studentWriting = extractWritingFromSubmission(submissionQuestion.getSubmissionContentJson());
+
+        if (studentWriting == null || studentWriting.trim().isEmpty()) {
+            throw new ApiException("No writing content found in submission", HttpStatus.BAD_REQUEST.value());
+        }
+
+        // 3. Load question and challenge context
+        Question question = submissionQuestion.getQuestion();
+        ChallengeSection section = question.getSection();
+        DailyChallenge challenge = section.getChallenge();
+
+        // Eager load context
+        ChallengeContext context = eagerLoadChallengeContext(challenge);
+
+        // 4. Build grading prompt
+        String prompt = buildWritingGradingPrompt(
+                context,
+                question.getQuestionText(),
+                studentWriting
+        );
+
+        // 5. Call OpenAI
+        String aiResponse = callOpenAI(prompt);
+
+        // 6. Parse response (validate comments against actual student text)
+        GradingWritingResponse result = parseGradingResponse(aiResponse, studentWriting);
+
+        log.info("Successfully graded writing. Overall score: {}", result.getSuggestedScore());
+
+        return result;
+    }
+
+    // Helper method: Extract writing text from JSON
+    private String extractWritingFromSubmission(Map<String, Object> submissionContentJson) {
+        try {
+            Object dataObj = submissionContentJson.get("data");
+            if (dataObj instanceof List<?> dataList && !dataList.isEmpty()) {
+                Object firstItem = dataList.get(0);
+                if (firstItem instanceof Map<?, ?> firstMap) {
+                    Object value = firstMap.get("value");
+                    return value != null ? value.toString() : null;
+                }
+            }
+            return null;
+        } catch (Exception e) {
+            log.error("Failed to extract writing: {}", e.getMessage());
+            throw new RuntimeException("Invalid submission content format", e);
+        }
+    }
+
+    // Build grading prompt
+    private String buildWritingGradingPrompt(
+            ChallengeContext context,
+            String questionText,
+            String studentWriting) {
+
+        StringBuilder prompt = new StringBuilder();
+
+        // System role ensures JSON-only responses and basic restrictions
+        prompt.append(SYSTEM_ROLE_JSON_INSTRUCTION).append("\n\n");
+
+        // Enforce Vietnamese for feedback content (values) while preserving JSON keys (English)
+        prompt.append("IMPORTANT: All human-readable feedback content (the values of ")
+                .append("`overallFeedback`, each comment's `commentText` and `correction`) ")
+                .append("MUST be written in Vietnamese. Do NOT translate or change JSON field names (they must remain in English). ")
+                .append("Return ONLY valid JSON, no markdown, no explanations, no extra text.\n\n");
+
+        prompt.append("You are an experienced English writing teacher. Provide focused, high-value feedback only.\n\n");
+
+        prompt.append("Context: Chapter: ").append(context.classChapterName)
+                .append(" | Level: ").append(context.studentLevel).append("\n\n");
+
+        prompt.append("TASK: Read the writing below and produce a JSON object containing:\n");
+        prompt.append(" - overallFeedback: 100-200 words in Vietnamese summarizing strengths, key weaknesses, and a 2-3 step study plan.\n");
+        prompt.append(" - suggestedScore: numeric (0.0 - 10.0).\n");
+        prompt.append(" - comments: 7-12 items, prioritized by impact on communication. Each comment must include:\n");
+        prompt.append("     startIndex (0-based char index), endIndex (exclusive),\n");
+        prompt.append("     commentText (15-80 characters, in Vietnamese),\n");
+        prompt.append("     severity (one of: error|warning|suggestion),\n");
+        prompt.append("     category (one of: grammar|vocabulary|cohesion|task|other),\n");
+        prompt.append("     correction (concise suggested correction or rephrase, in Vietnamese).\n\n");
+
+        prompt.append("GUIDELINES:\n");
+        prompt.append("- Prioritize meaning-impacting issues (unclear sentences, wrong tense affecting meaning, wrong word choice, omitted information).\n");
+        prompt.append("- Avoid trivial punctuation/capitalization comments unless frequent or harming readability.\n");
+        prompt.append("- Provide a one-line correction or alternative phrasing for each comment (in Vietnamese).\n");
+        prompt.append("- Indices must be 0-based character positions matching the STUDENT'S WRITING section below.\n");
+        prompt.append("- Maintain neutral, constructive tone.\n\n");
+
+        prompt.append("WRITING TASK:\n").append(questionText).append("\n\n");
+        prompt.append("STUDENT'S WRITING:\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+        prompt.append(studentWriting).append("\n");
+        prompt.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n");
+
+        prompt.append("OUTPUT (exact JSON only, no extra text). Note: ALL textual values must be in Vietnamese:\n");
+        prompt.append("{\n");
+        prompt.append("  \"overallFeedback\": \"Tóm tắt ngắn gọn bằng tiếng Việt: ...\",\n");
+        prompt.append("  \"suggestedScore\": 7.5,\n");
+        prompt.append("  \"comments\": [\n");
+        prompt.append("    {\n");
+        prompt.append("      \"startIndex\": 0,\n");
+        prompt.append("      \"endIndex\": 5,\n");
+        prompt.append("      \"commentText\": \"Nhận xét ngắn (tiếng Việt, 15-80 ký tự)\",\n");
+        prompt.append("      \"severity\": \"error\",\n");
+        prompt.append("      \"category\": \"grammar\",\n");
+        prompt.append("      \"correction\": \"Sửa ngắn gọn bằng tiếng Việt\"\n");
+        prompt.append("    }\n");
+        prompt.append("  ]\n");
+        prompt.append("}\n");
+
+        return prompt.toString();
+    }
+
+
+    // Improved parsing: validate indices, filter trivial comments, prioritize by severity, keep 7-12 best
+    private GradingWritingResponse parseGradingResponse(String jsonResponse, String studentWriting) {
+        try {
+            String cleaned = cleanJsonResponse(jsonResponse);
+            JsonNode root = objectMapper.readTree(cleaned);
+
+            String overallFeedback = root.hasNonNull("overallFeedback") ? root.get("overallFeedback").asText().trim() : "";
+            double suggestedScore = 0.0;
+            if (root.hasNonNull("suggestedScore")) {
+                suggestedScore = root.get("suggestedScore").asDouble(0.0);
+            }
+            // clamp
+            if (Double.isNaN(suggestedScore) || suggestedScore < 0) suggestedScore = 0.0;
+            if (suggestedScore > 10) suggestedScore = 10.0;
+
+            List<WritingComment> comments = new ArrayList<>();
+            JsonNode commentsNode = root.get("comments");
+            int textLength = studentWriting != null ? studentWriting.length() : 0;
+
+            if (commentsNode != null && commentsNode.isArray()) {
+                for (JsonNode commentNode : commentsNode) {
+                    try {
+                        if (!commentNode.hasNonNull("startIndex") || !commentNode.hasNonNull("endIndex")) continue;
+                        int start = commentNode.get("startIndex").asInt(-1);
+                        int end = commentNode.get("endIndex").asInt(-1);
+                        if (start < 0 || end <= start || start >= textLength) continue;
+                        if (end > textLength) end = textLength;
+
+                        String commentText = commentNode.hasNonNull("commentText") ? commentNode.get("commentText").asText().trim() : "";
+                        if (commentText.isEmpty()) continue;
+
+                        // Avoid trivial short comments
+                        String lower = commentText.toLowerCase();
+                        if (commentText.length() < 12 && !lower.contains("error") && !lower.contains("use") && !lower.contains("replace")) {
+                            continue;
+                        }
+
+                        String severity = commentNode.hasNonNull("severity") ? commentNode.get("severity").asText().toLowerCase() : "suggestion";
+                        String category = commentNode.hasNonNull("category") ? commentNode.get("category").asText().toLowerCase() : "other";
+                        String correction = commentNode.hasNonNull("correction") ? commentNode.get("correction").asText() : "";
+
+                        // Build id + timestamp
+                        String id = "fb-" + UUID.randomUUID();
+                        String isoTs = Instant.now().toString();
+
+                        WritingComment wc = WritingComment.builder()
+                                .id(id)
+                                .comment(commentText)
+                                .startIndex(start)
+                                .endIndex(end)
+                                .timestamp(isoTs)
+                                .build();
+
+                        // attach additional info via comment string if model didn't provide fields (keeps compatibility)
+                        comments.add(wc);
+
+                    } catch (Exception ex) {
+                        log.debug("Skipping malformed comment node: {}", ex.getMessage());
+                    }
+                }
+            }
+
+            // Prioritize comments: we don't have explicit severity stored on WritingComment, but we keep order returned by AI.
+            // Keep between 7 and 12 comments, prefer earlier ones (AI asked to prioritize)
+            int minKeep = 7;
+            int maxKeep = 12;
+            if (comments.size() < minKeep) {
+                // if AI returned fewer, keep all
+            } else if (comments.size() > maxKeep) {
+                comments = comments.subList(0, maxKeep);
+            }
+
+            return GradingWritingResponse.builder()
+                    .overallFeedback(overallFeedback)
+                    .suggestedScore(suggestedScore)
+                    .comments(comments)
+                    .build();
+
+        } catch (Exception e) {
+            log.error("Failed to parse grading response: {}", e.getMessage(), e);
+            throw new RuntimeException("Failed to parse AI grading response: " + e.getMessage(), e);
+        }
+    }
+
     @Override
     public TranslationResponse translate(String text) {
         String traceId = TraceUtil.getTraceId();
@@ -2238,3 +2527,4 @@ public class OpenAiServiceImpl implements OpenAiService {
         }
     }
 }
+

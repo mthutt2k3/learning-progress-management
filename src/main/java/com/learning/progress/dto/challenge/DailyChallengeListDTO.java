@@ -16,6 +16,7 @@ public class DailyChallengeListDTO {
     private String classLessonName;
     private String classLessonContent;
     private Integer orderNumber;
+    private Long totalStudents;
     private List<DailyChallengeInLessonDTO> dailyChallenges;
 
     @Getter
@@ -34,5 +35,8 @@ public class DailyChallengeListDTO {
         private OffsetDateTime startDate;
 
         private OffsetDateTime endDate;
+
+        private Long submittedCount;
+
     }
 }

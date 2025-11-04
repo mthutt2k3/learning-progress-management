@@ -4,6 +4,7 @@ import com.learning.progress.common.SubmissionStatus;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.time.Duration;
 import java.time.OffsetDateTime;
 
 @Getter
@@ -13,11 +14,16 @@ public class StudentSubmissionDTO {
     private Long studentId;
     private String studentName; // Full name or email of the student
     private SubmissionStatus submissionStatus;
+    private OffsetDateTime startDate; // submission.startedAt
+    private OffsetDateTime endDate; // submission.expiredAt (alias)
+    private OffsetDateTime actualStartAt;
     private OffsetDateTime submittedAt;
-    private OffsetDateTime expiredAt;
+    private Duration actualDuration;
     private boolean isLate;
-    private Boolean autoSubmitted;
-    private Double plagiarismScore; // Nullable
-    private Double totalScore; // Total score for the submission
+
+    private Double totalWeight;
+    private Double maxPossibleWeight;
+    private Double finalScore;
+
     private String overallFeedback;
 }

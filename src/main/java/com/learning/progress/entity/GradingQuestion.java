@@ -6,14 +6,10 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.experimental.SuperBuilder;
-import org.hibernate.annotations.ColumnDefault;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.annotations.OnDelete;
 import org.hibernate.annotations.OnDeleteAction;
 import org.hibernate.type.SqlTypes;
-
-import java.time.OffsetDateTime;
-import java.util.Map;
 
 @SuperBuilder
 @NoArgsConstructor
@@ -38,14 +34,11 @@ public class GradingQuestion extends BaseEntity{
     @JoinColumn(name = "grader_id")
     private User grader;
 
-    @Column(name = "score")
-    private Double score;
+    @Column(name = "received_weight")
+    private Double receivedWeight;
 
     @Column(name = "feedback", length = Integer.MAX_VALUE)
     private String feedback;
-
-    @Column(name = "ai_suggested_feedback", length = Integer.MAX_VALUE)
-    private String aiSuggestedFeedback;
 
     @Column(name = "highlight_comments_json")
     @JdbcTypeCode(SqlTypes.JSON)
