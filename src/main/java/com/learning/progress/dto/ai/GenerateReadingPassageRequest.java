@@ -19,4 +19,8 @@ public class GenerateReadingPassageRequest {
     private Integer numberOfParagraphs;
 
     private String description;
+
+    @Min(value = 6, message = "Age must be at least 6")
+    @Max(value = 18, message = "Age must be at most 18")
+    private Integer age;
 }

@@ -142,6 +142,9 @@ azure:
     endpoint: ${TRANSLATOR_ENDPOINT}
     key: ${TRANSLATOR_API_KEY}
     region: southeastasia
+  speech:
+    key: ${AZURE_SPEECH_KEY}
+    region: southeastasia
 
 app:
   challenge:

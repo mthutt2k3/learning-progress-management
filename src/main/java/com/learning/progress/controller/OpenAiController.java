@@ -4,6 +4,7 @@ import com.learning.progress.common.Const;
 import com.learning.progress.dto.DataResponse;
 import com.learning.progress.dto.ai.*;
 import com.learning.progress.dto.challenge.section.SectionWithQuestionsDto;
+import com.learning.progress.service.AiFeedbackService;
 import com.learning.progress.service.OpenAiService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -22,23 +23,12 @@ public class OpenAiController {
 
     private final OpenAiService openAiService;
 
-    public OpenAiController(OpenAiService openAiService) {
+    private final AiFeedbackService aiFeedbackService;
+
+    public OpenAiController(OpenAiService openAiService,AiFeedbackService aiFeedbackService) {
         this.openAiService = openAiService;
+        this.aiFeedbackService = aiFeedbackService;
     }
-
-//    @GetMapping("/chat")
-//    public String chat(@RequestParam String message) {
-//        return openAiService.getChatCompletion(message);
-//    }
-
-//    @PostMapping("/generate-question")
-//    public ResponseEntity<DataResponse<List<SectionWithQuestionsDto>>> generateExercise(
-//            @Valid @RequestBody ExerciseGenerationRequest request) {
-//        return new ResponseEntity<>(
-//                DataResponse.success(openAiService.generateExercise(request), Const.RESULT_MESSAGE_CODE.CREATE_SUCCESSFUL),
-//                HttpStatus.OK
-//        );
-//    }
 
     @PostMapping("/generate-reading-passage")
     @Operation(summary = "Generate reading passage",
@@ -143,7 +133,33 @@ public class OpenAiController {
     public ResponseEntity<DataResponse<GradingWritingResponse>> gradeWriting(
             @Valid @RequestBody GradingWritingRequest request) {
 
-        GradingWritingResponse result = openAiService.gradeWriting(request);
+        GradingWritingResponse result = aiFeedbackService.gradeWriting(request);
+
+        return new ResponseEntity<>(
+                DataResponse.success(result, Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL),
+                HttpStatus.OK
+        );
+    }
+
+    @PostMapping("/pronunciation-assessment")
+    @Operation(summary = "Assess pronunciation from audio file",
+            description = "Upload audio file and get pronunciation assessment with scores for accuracy, fluency, prosody")
+    public ResponseEntity<DataResponse<PronunciationAssessmentResponse>> assessPronunciation(
+            @RequestParam(value = "audioUrl", required = false) String audioUrl,
+            @RequestParam(value = "referenceText", required = false) String referenceText,
+            @RequestParam(value = "age", required = false) Integer age){
+
+        PronunciationAssessmentRequest request = PronunciationAssessmentRequest.builder()
+                .audioUrl(audioUrl)
+                .referenceText(referenceText)
+                .age(age)
+                .enableMiscue(true)
+                .enableProsody(true)
+                .gradingSystem("HundredMark")
+                .granularity("Phoneme")
+                .build();
+
+        PronunciationAssessmentResponse result = aiFeedbackService.assessPronunciation(request);
 
         return new ResponseEntity<>(
                 DataResponse.success(result, Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL),
