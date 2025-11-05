@@ -25,9 +25,7 @@ import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.util.UriComponentsBuilder;
-
-import java.io.IOException;
-import java.time.Instant;
+import java.io.*;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.regex.Matcher;
@@ -40,7 +38,6 @@ public class OpenAiServiceImpl implements OpenAiService {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final DailyChallengeRepository dailyChallengeRepository;
-    private final SubmissionQuestionRepository submissionQuestionRepository;
 
     private ExecutorService executorService;
 
@@ -80,9 +77,8 @@ public class OpenAiServiceImpl implements OpenAiService {
             "You are an expert English teacher. Return ONLY valid JSON (no markdown, no comments, no extra text). " +
             "Do NOT include trailing commas or non-standard JSON syntax.";
 
-    public OpenAiServiceImpl(DailyChallengeRepository dailyChallengeRepository, SubmissionQuestionRepository submissionQuestionRepository) {
+    public OpenAiServiceImpl(DailyChallengeRepository dailyChallengeRepository) {
         this.dailyChallengeRepository = dailyChallengeRepository;
-        this.submissionQuestionRepository = submissionQuestionRepository;
     }
 
     @PostConstruct
@@ -163,7 +159,8 @@ public class OpenAiServiceImpl implements OpenAiService {
                         questionType,
                         request.getDescription(),
                         contextInfo,
-                        sectionOrder++
+                        sectionOrder++,
+                        request.getAge()
                 ));
             }
         }
@@ -315,7 +312,8 @@ public class OpenAiServiceImpl implements OpenAiService {
                                 request.getDescription(),
                                 contextInfo,
                                 dailyChallengeType,
-                                questionOrder++
+                                questionOrder++,
+                                request.getAge()
                         ));
                     }
                 }
@@ -390,7 +388,7 @@ public class OpenAiServiceImpl implements OpenAiService {
     /**
      * ✅ NEW: Eager load all lazy relationships to prevent LazyInitializationException in async threads
      */
-    private ChallengeContext eagerLoadChallengeContext(DailyChallenge challenge) {
+    public ChallengeContext eagerLoadChallengeContext(DailyChallenge challenge) {
         ChallengeContext context = new ChallengeContext();
 
         // Load lesson content
@@ -438,7 +436,7 @@ public class OpenAiServiceImpl implements OpenAiService {
     /**
      * ✅ NEW: Immutable context object containing all needed data (no lazy proxies)
      */
-    private static class ChallengeContext {
+    public static class ChallengeContext {
         String classLessonContent;
         String studentLevel;
         String classChapterName;
@@ -465,7 +463,8 @@ public class OpenAiServiceImpl implements OpenAiService {
                         firstTask.questionType,
                         firstTask.userDescription,
                         firstTask.contextInfo,
-                        batch.size()
+                        batch.size(),
+                        firstTask.age
                 );
 
                 String aiResponse = callOpenAI(prompt);
@@ -526,7 +525,8 @@ public class OpenAiServiceImpl implements OpenAiService {
                         batch.size(),
                         firstTask.userDescription,
                         firstTask.contextInfo,
-                        firstTask.dailyChallengeType
+                        firstTask.dailyChallengeType,
+                        firstTask.age
                 );
 
                 String aiResponse = callOpenAI(prompt);
@@ -580,14 +580,16 @@ public class OpenAiServiceImpl implements OpenAiService {
         String userDescription;
         String contextInfo;
         int sectionOrder;
+        Integer age;
 
         QuestionGenerationTask(ChallengeContext context, String questionType,
-                               String userDescription, String contextInfo, int sectionOrder) {
+                               String userDescription, String contextInfo, int sectionOrder, Integer age) {
             this.context = context;
             this.questionType = questionType;
             this.userDescription = userDescription;
             this.contextInfo = contextInfo;
             this.sectionOrder = sectionOrder;
+            this.age = age;
         }
     }
 
@@ -599,10 +601,12 @@ public class OpenAiServiceImpl implements OpenAiService {
         String contextInfo;
         String dailyChallengeType;
         int orderNumber;
+        Integer age;
 
         ContentBasedQuestionTask(ChallengeContext context, SectionDto section,
                                  String questionType, String userDescription,
-                                 String contextInfo, String dailyChallengeType, int orderNumber) {
+                                 String contextInfo, String dailyChallengeType, int orderNumber,
+                                 Integer age) {
             this.context = context;
             this.section = section;
             this.questionType = questionType;
@@ -610,6 +614,7 @@ public class OpenAiServiceImpl implements OpenAiService {
             this.contextInfo = contextInfo;
             this.dailyChallengeType = dailyChallengeType;
             this.orderNumber = orderNumber;
+            this.age = age;
         }
     }
 
@@ -624,129 +629,293 @@ public class OpenAiServiceImpl implements OpenAiService {
         }
     }
 
-    /**
-     * ✨ UPDATED: Determine student level from context and user description
-     */
-    private String determineStudentLevel(ChallengeContext context, String userDescription) {
-        // Default level from context
-        String systemLevel = context.studentLevel;
-
-        // Check if user specified level in description
-        if (userDescription != null && !userDescription.isBlank()) {
-            String descLower = userDescription.toLowerCase();
-
-            // Priority: User's explicit level specification
-            if (descLower.contains("beginner") || descLower.contains("basic") || descLower.contains("elementary")) {
-                return "Beginner";
-            } else if (descLower.contains("pre-intermediate") || descLower.contains("pre intermediate")) {
-                return "Pre-Intermediate";
-            } else if (descLower.contains("intermediate") && !descLower.contains("pre") && !descLower.contains("upper")) {
-                return "Intermediate";
-            } else if (descLower.contains("upper-intermediate") || descLower.contains("upper intermediate")) {
-                return "Upper-Intermediate";
-            } else if (descLower.contains("advanced") || descLower.contains("proficient")) {
-                return "Advanced";
-            }
+    public String getAgeBasedLevelInstructions(Integer age) {
+        if (age == null) {
+            age = 12; // default to middle level
         }
 
-        // Use system level if no user override
-        return systemLevel;
-    }
+        if (age >= 6 && age <= 8) {
+            // 6-8 tuổi: Pre-A1 Level (Little Explorers)
+            return """
+        📊 STUDENT AGE: 6-8 YEARS OLD (Pre-A1 / Little Explorers Level)
+        
+        🎯 COGNITIVE & LANGUAGE DEVELOPMENT:
+        - Attention span: 5-10 minutes
+        - Concrete thinking, need visual/physical examples
+        - Learning through play, songs, and repetition
+        - Beginning literacy in native language
+        
+        📚 VOCABULARY & TOPICS:
+        - Range: 100-300 common words
+        - Topics: family, animals, colors, numbers 1-20, toys, food, body parts, classroom objects
+        - Use only high-frequency everyday words
+        - Examples: cat, dog, red, blue, apple, mom, dad, one, two, happy, sad
+        
+        ✍️ GRAMMAR & STRUCTURES:
+        - Present simple: "I am happy", "This is a cat"
+        - Have got: "I have got a toy"
+        - Basic plurals: cat → cats
+        - Simple questions: "What is this?", "How old are you?"
+        - Imperatives: "Stand up", "Sit down"
+        - DO NOT use: past tense, future tense, continuous forms, conditionals
+        
+        📝 SENTENCE COMPLEXITY:
+        - Length: 3-5 words maximum
+        - Structure: Subject + Verb + Object/Complement
+        - Examples: "I like apples.", "This is my dog.", "She is happy."
+        - Avoid complex or embedded clauses
+        
+        🎨 CONTENT REQUIREMENTS:
+        - Very short texts (20-50 words for reading)
+        - Use simple, clear images or context
+        - Lots of repetition and patterns
+        - Fun, engaging, game-like activities
+        - Clear instructions with visual cues
+        
+        ❌ AVOID:
+        - Abstract concepts
+        - Long sentences or paragraphs
+        - Complex grammar or vocabulary
+        - Topics outside daily life experience
+        """;
 
-    /**
-     * ✨ NEW: Get level-specific instructions for AI
-     */
-    private String getLevelInstructions(String level) {
-        switch (level.toLowerCase()) {
-            case "little explorers":
-            case "little-explorers":
-            case "explorers":
-                return """
-            📊 STUDENT LEVEL: LITTLE EXPLORERS (Pre-A1)
-            - For very young learners (ages 6–8)
-            - Use very simple vocabulary (animals, colors, toys, food, family)
-            - Use only basic sentence patterns: "This is a cat.", "I like apples."
-            - Focus on listening and recognizing familiar words
-            - Grammar: be (am/is/are), have got, simple plurals, basic questions
-            - Avoid long or abstract sentences
-            - Use clear contexts with pictures or daily-life examples
-            """;
+        } else if (age >= 9 && age <= 10) {
+            // 9-10 tuổi: A1 Level (Starters)
+            return """
+        📊 STUDENT AGE: 9-10 YEARS OLD (A1 / Cambridge Starters Level)
+        
+        🎯 COGNITIVE & LANGUAGE DEVELOPMENT:
+        - Attention span: 10-15 minutes
+        - Developing abstract thinking
+        - Can follow simple multi-step instructions
+        - Improving reading and writing skills
+        
+        📚 VOCABULARY & TOPICS:
+        - Range: 300-500 words
+        - Topics: school, home, hobbies, weather, clothes, sports, daily routines
+        - Common adjectives: big, small, new, old, fast, slow
+        - Basic prepositions: in, on, under, next to
+        - Examples: pencil, notebook, sunny, rainy, shirt, pants, football, breakfast
+        
+        ✍️ GRAMMAR & STRUCTURES:
+        - Present simple: "I go to school every day"
+        - Present continuous: "She is playing now"
+        - Can/can't: "I can swim"
+        - There is/are: "There is a book on the table"
+        - Possessive adjectives: my, your, his, her
+        - Simple past (be/have/go only): "I was happy", "She had a toy"
+        - DO NOT use: perfect tenses, passive voice, complex conditionals
+        
+        📝 SENTENCE COMPLEXITY:
+        - Length: 5-8 words
+        - Can use simple conjunctions: and, but
+        - Examples: "I like apples and oranges.", "My brother plays football, but I like swimming."
+        
+        🎨 CONTENT REQUIREMENTS:
+        - Short texts (50-100 words for reading)
+        - Clear context and simple storylines
+        - Familiar, concrete situations
+        - Picture support helpful
+        - Mix of recognition and production tasks
+        
+        ❌ AVOID:
+        - Idioms and phrasal verbs
+        - Complex time expressions
+        - Formal or academic language
+        """;
 
-            case "starters":
-                return """
-            📊 STUDENT LEVEL: STARTERS (Cambridge Pre-A1)
-            - For children around ages 7–9
-            - Vocabulary range: 300–500 common words
-            - Grammar: be/have/do, simple present, can/can’t
-            - Sentence length: 5–8 words
-            - Focus on daily topics: school, home, clothes, animals, food
-            - Clear, concrete contexts with simple sentences
-            - Avoid complex tenses or idioms
-            """;
+        } else if (age >= 11 && age <= 12) {
+            // 11-12 tuổi: A1-A2 Level (Movers/Flyers)
+            return """
+        📊 STUDENT AGE: 11-12 YEARS OLD (A1-A2 / Cambridge Movers-Flyers Level)
+        
+        🎯 COGNITIVE & LANGUAGE DEVELOPMENT:
+        - Attention span: 15-20 minutes
+        - Can think abstractly and hypothetically
+        - Developing critical thinking skills
+        - Can self-correct and monitor language use
+        
+        📚 VOCABULARY & TOPICS:
+        - Range: 600-1000 words
+        - Topics: travel, technology, environment, health, friendship, school subjects
+        - Descriptive adjectives: beautiful, expensive, dangerous, important
+        - Common phrasal verbs: get up, turn on, take off
+        - Connectors: because, so, when, before, after
+        
+        ✍️ GRAMMAR & STRUCTURES:
+        - All present tenses: simple, continuous, perfect (basic)
+        - Past simple: regular and common irregular verbs
+        - Future: will, going to
+        - Comparatives and superlatives
+        - Basic modals: must, should, could, might
+        - Some/any, much/many, a lot of
+        - DO NOT use: passive voice extensively, complex conditionals (2nd/3rd)
+        
+        📝 SENTENCE COMPLEXITY:
+        - Length: 8-12 words
+        - Can use multiple clauses with connectors
+        - Examples: "I went to the park because it was sunny.", "If it rains tomorrow, we will stay at home."
+        
+        🎨 CONTENT REQUIREMENTS:
+        - Medium texts (100-200 words for reading)
+        - Simple narratives and descriptions
+        - Personal experiences and opinions
+        - Can follow short dialogues
+        - Tasks require basic inference
+        
+        ❌ AVOID:
+        - Advanced idioms
+        - Complex academic vocabulary
+        - Highly formal or literary language
+        """;
 
-            case "movers":
-                return """
-            📊 STUDENT LEVEL: MOVERS (Cambridge A1)
-            - For learners ages 8–11
-            - Vocabulary: 600–800 words
-            - Grammar: present simple, present continuous, past simple of be/have/go
-            - Sentences: 8–12 words, basic conjunctions (and, but, because)
-            - Topics: hobbies, weather, holidays, daily activities
-            - Include basic question and answer forms
-            - Encourage short reading and listening comprehension
-            """;
+        } else if (age >= 13 && age <= 14) {
+            // 13-14 tuổi: A2-B1 Level (KET/PET)
+            return """
+        📊 STUDENT AGE: 13-14 YEARS OLD (A2-B1 / KET-PET Level)
+        
+        🎯 COGNITIVE & LANGUAGE DEVELOPMENT:
+        - Attention span: 20-30 minutes
+        - Abstract thinking well developed
+        - Can analyze, synthesize, and evaluate
+        - Developing personal opinions and arguments
+        - Can monitor and self-correct effectively
+        
+        📚 VOCABULARY & TOPICS:
+        - Range: 1500-2500 words
+        - Topics: education, careers, social issues, culture, media, science (basic)
+        - Academic vocabulary: analyze, describe, explain, compare
+        - Phrasal verbs: look after, find out, give up, carry on
+        - Collocations: make a decision, take an exam, do homework
+        
+        ✍️ GRAMMAR & STRUCTURES:
+        - All tenses including perfect continuous
+        - Passive voice: present and past simple
+        - First and second conditionals
+        - Reported speech (basic)
+        - Relative clauses: who, which, that
+        - Modals for deduction: must be, might be, can't be
+        - Used to, be/get used to
+        
+        📝 SENTENCE COMPLEXITY:
+        - Length: 12-18 words
+        - Multiple clauses and complex sentences
+        - Linking words: although, however, therefore, in addition
+        - Examples: "Although it was raining heavily, we decided to go to the beach because we had already made plans."
+        
+        🎨 CONTENT REQUIREMENTS:
+        - Longer texts (200-350 words for reading)
+        - Can follow arguments and explanations
+        - Express and justify opinions
+        - Understand main ideas and specific details
+        - Tasks require inference and interpretation
+        
+        ❌ AVOID:
+        - Highly specialized technical vocabulary
+        - Complex literary devices
+        - Very advanced idiomatic expressions
+        """;
 
-            case "flyers":
-                return """
-            📊 STUDENT LEVEL: FLYERS (Cambridge A2)
-            - For learners ages 9–12
-            - Vocabulary: 1000–1200 words
-            - Grammar: all present tenses, simple past, future with will/going to
-            - Sentences: 10–15 words, include comparatives and superlatives
-            - Topics: travel, family, school life, sports, animals
-            - Introduce short descriptive texts or stories
-            - Begin using connectors (before, after, when)
-            """;
+        } else if (age >= 15 && age <= 16) {
+            // 15-16 tuổi: B1-B2 Level (PET/FCE)
+            return """
+        📊 STUDENT AGE: 15-16 YEARS OLD (B1-B2 / PET-FCE Level)
+        
+        🎯 COGNITIVE & LANGUAGE DEVELOPMENT:
+        - Attention span: 30-45 minutes
+        - Fully developed abstract and critical thinking
+        - Can engage in complex discussions and debates
+        - Developing academic skills and exam techniques
+        - Can produce well-structured extended texts
+        
+        📚 VOCABULARY & TOPICS:
+        - Range: 2500-4000 words
+        - Topics: global issues, economics, politics, psychology, literature, advanced science
+        - Academic vocabulary: investigate, demonstrate, hypothesis, significant, crucial
+        - Advanced phrasal verbs: come across, put up with, run out of
+        - Idiomatic expressions: piece of cake, hit the nail on the head
+        - Formal and informal register distinction
+        
+        ✍️ GRAMMAR & STRUCTURES:
+        - All tenses including future perfect
+        - Passive voice: all forms
+        - All conditionals including third conditional and mixed
+        - Advanced modals: ought to, would rather, had better
+        - Reported speech: all forms including questions and commands
+        - Wish/if only structures
+        - Inversion for emphasis
+        
+        📝 SENTENCE COMPLEXITY:
+        - Length: 15-25 words
+        - Complex and compound-complex sentences
+        - Advanced linking: despite, whereas, nevertheless, consequently
+        - Examples: "Despite having studied for weeks, she found the exam challenging, particularly the section on grammar, which required not only knowledge but also quick thinking."
+        
+        🎨 CONTENT REQUIREMENTS:
+        - Extended texts (350-600 words for reading)
+        - Complex arguments and abstract ideas
+        - Multiple perspectives and nuances
+        - Inference, implication, and author's attitude
+        - Sophisticated task types
+        - Can understand implicit meaning
+        
+        ❌ AVOID:
+        - Extremely specialized jargon
+        - Archaic or very literary language (unless teaching literature)
+        """;
 
-            case "a2":
-            case "ket":
-            case "a2/ket":
-                return """
-            📊 STUDENT LEVEL: A2 / KET
-            - Vocabulary: about 1500 words
-            - Grammar: present, past, future tenses; modals (can, must, should)
-            - Sentence length: 12–18 words
-            - Use common phrasal verbs and prepositions
-            - Topics: daily routines, travel, technology, school, work
-            - Focus on understanding short texts and dialogues
-            - Encourage expressing simple opinions and experiences
-            """;
+        } else if (age >= 17 && age <= 18) {
+            // 17-18 tuổi: B2-C1 Level (FCE/CAE)
+            return """
+        📊 STUDENT AGE: 17-18 YEARS OLD (B2-C1 / FCE-CAE Level)
+        
+        🎯 COGNITIVE & LANGUAGE DEVELOPMENT:
+        - Attention span: 45-60 minutes+
+        - Mature critical and analytical thinking
+        - Can handle university-level academic content
+        - Sophisticated argumentation and reasoning skills
+        - Near-native discourse management
+        
+        📚 VOCABULARY & TOPICS:
+        - Range: 4000-6000+ words
+        - Topics: any academic or professional topic, complex social issues, philosophy, advanced sciences
+        - Advanced academic vocabulary: methodology, paradigm, correlation, implicit
+        - Sophisticated collocations: reach a consensus, pose a threat, exert influence
+        - Full range of idioms and expressions
+        - Nuanced vocabulary: distinctions between similar words
+        
+        ✍️ GRAMMAR & STRUCTURES:
+        - All grammar structures including advanced/rare forms
+        - Complex passive constructions
+        - Advanced participle clauses
+        - Cleft sentences for emphasis
+        - Subjunctive mood
+        - Advanced modal combinations
+        - Sophisticated discourse markers
+        
+        📝 SENTENCE COMPLEXITY:
+        - Length: 20-30+ words
+        - Highly complex sentence structures
+        - Sophisticated cohesion and coherence
+        - Examples: "Having extensively researched the implications of climate change on marine ecosystems, scientists have concluded that, unless immediate action is taken, irreversible damage will occur, potentially affecting not only biodiversity but also human livelihoods."
+        
+        🎨 CONTENT REQUIREMENTS:
+        - Long, complex texts (600-1000+ words)
+        - Abstract and theoretical concepts
+        - Subtle distinctions and implications
+        - Evaluation of complex arguments
+        - Understanding of text organization and purpose
+        - Can appreciate stylistic devices
+        
+        ✅ CAN INCLUDE:
+        - Academic writing conventions
+        - Critical analysis and evaluation
+        - Complex rhetorical devices
+        - Sophisticated register management
+        """;
 
-            case "b1":
-            case "pet":
-            case "b1/pet":
-                return """
-            📊 STUDENT LEVEL: B1 / PET
-            - Vocabulary: 2000–3000 words
-            - Grammar: all main tenses, basic conditionals, passive voice
-            - Sentences: 15–20 words, with linking words (although, because, so)
-            - Include phrasal verbs and common idioms
-            - Topics: environment, health, culture, relationships, education
-            - Require some inference and opinion-based understanding
-            - Students can describe experiences and justify opinions
-            """;
-
-            default:
-                return """
-            📊  STUDENT LEVEL: B1 / PET
-            - Vocabulary: 2000–3000 words
-            - Grammar: all main tenses, basic conditionals, passive voice
-            - Sentences: 15–20 words, with linking words (although, because, so)
-            - Include phrasal verbs and common idioms
-            - Topics: environment, health, culture, relationships, education
-            - Require some inference and opinion-based understanding
-            - Students can describe experiences and justify opinions
-            """;
+        }else {
+            return getAgeBasedLevelInstructions(12);
         }
     }
 
@@ -756,12 +925,21 @@ public class OpenAiServiceImpl implements OpenAiService {
             String questionType,
             String userDescription,
             String contextInfo,
-            int numberOfQuestions) {
+            int numberOfQuestions,
+            Integer age) {
 
         StringBuilder prompt = new StringBuilder();
 
         // ====================== THÊM SYSTEM ROLE MỚI ======================
         prompt.append("You are an experienced English teacher working at a reputable English language center for students aged 6 to 18.\n");
+
+        String ageInstructions = getAgeBasedLevelInstructions(age);
+        prompt.append(ageInstructions).append("\n\n");
+
+        String studentLevel = context.studentLevel;
+        prompt.append("📌 CURRENT STUDENT: Age ").append(age != null ? age : "not specified")
+                .append(" | Level: ").append(studentLevel).append("\n\n");
+
         prompt.append("You are responsible for creating professional, age-appropriate, lesson-aligned English test questions for different proficiency levels (Little Explorers → Advanced).\n\n");
         prompt.append("Always analyze the lesson content and chapter topic carefully before writing questions.\n");
         prompt.append("Your questions must directly test the grammar, vocabulary, and language skills actually taught in the current lesson, not random English knowledge.\n\n");
@@ -772,12 +950,6 @@ public class OpenAiServiceImpl implements OpenAiService {
         prompt.append("- Have plausible distractors and one clear correct answer.\n");
         prompt.append("- Follow the Vietnamese National High School (THPT Quốc Gia) style for clarity and fairness.\n");
         prompt.append("- When generating drag-and-drop questions, strictly follow the JSON format and placeholder rules provided by the user.\n\n");
-        // ====================================================================
-
-        String studentLevel = determineStudentLevel(context, userDescription);
-        String levelInstructions = getLevelInstructions(studentLevel);
-
-//        prompt.append("You are an expert English test creator for Vietnamese National High School Examination (THPT Quốc Gia).\n");
         prompt.append("Create PROFESSIONAL, ACADEMIC-STANDARD questions that test real English proficiency.\n\n");
 
         prompt.append("EXAM STANDARDS - VIETNAMESE NATIONAL HIGH SCHOOL EXAM FORMAT:\n");
@@ -788,9 +960,6 @@ public class OpenAiServiceImpl implements OpenAiService {
         prompt.append("- Each question should have a clear linguistic focus (grammar point, vocabulary, collocation)\n");
         prompt.append("- Progressive difficulty: start easier, gradually increase complexity\n");
         prompt.append("- Contextual questions preferred over isolated grammar drills\n\n");
-
-        // Level instructions
-        prompt.append(levelInstructions).append("\n");
 
         // Lesson content
         prompt.append("LESSON CONTENT (Extract key teaching points from this):\n");
@@ -921,12 +1090,21 @@ public class OpenAiServiceImpl implements OpenAiService {
             int numberOfQuestions,
             String userDescription,
             String contextInfo,
-            String dailyChallengeType) {
+            String dailyChallengeType,
+            Integer age) {
 
         StringBuilder prompt = new StringBuilder();
 
         // ====================== THÊM SYSTEM ROLE MỚI ======================
         prompt.append("You are an experienced English teacher working at a reputable English language center for students aged 6 to 18.\n");
+
+        String ageInstructions = getAgeBasedLevelInstructions(age);
+        prompt.append(ageInstructions).append("\n\n");
+
+        String studentLevel = context.studentLevel;
+        prompt.append("📌 CURRENT STUDENT: Age ").append(age != null ? age : "not specified")
+                .append(" | Level: ").append(studentLevel).append("\n\n");
+
         prompt.append("You are responsible for creating professional, age-appropriate, lesson-aligned English test questions for different proficiency levels (Little Explorers → Advanced).\n\n");
         prompt.append("Always analyze the lesson content and chapter topic carefully before writing questions.\n");
         prompt.append("Your questions must directly test the grammar, vocabulary, and language skills actually taught in the current lesson, not random English knowledge.\n\n");
@@ -937,12 +1115,6 @@ public class OpenAiServiceImpl implements OpenAiService {
         prompt.append("- Have plausible distractors and one clear correct answer.\n");
         prompt.append("- Follow the Vietnamese National High School (THPT Quốc Gia) style for clarity and fairness.\n");
         prompt.append("- When generating drag-and-drop questions, strictly follow the JSON format and placeholder rules provided by the user.\n\n");
-        // ====================================================================
-
-        String studentLevel = determineStudentLevel(context, userDescription);
-        String levelInstructions = getLevelInstructions(studentLevel);
-
-//        prompt.append("You are an expert English test creator for Vietnamese National High School Examination (THPT Quốc Gia).\n");
         prompt.append("Create PROFESSIONAL reading comprehension questions that test genuine understanding.\n\n");
 
         prompt.append("THPT QG READING COMPREHENSION STANDARDS:\n");
@@ -956,9 +1128,6 @@ public class OpenAiServiceImpl implements OpenAiService {
 
         prompt.append("CHALLENGE TYPE: ").append(dailyChallengeType).append("\n");
         appendDCTypeInstructions(prompt, dailyChallengeType);
-
-        // Level instructions
-        prompt.append("\n").append(levelInstructions).append("\n");
 
         prompt.append("PASSAGE TO CREATE QUESTIONS FROM:\n");
         prompt.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
@@ -1582,6 +1751,7 @@ public class OpenAiServiceImpl implements OpenAiService {
 
     @Override
     public String callOpenAI(String prompt) {
+        log.info("OpenAI start response");
         String url = UriComponentsBuilder
                 .fromHttpUrl(endpoint + "/openai/deployments/gpt-5-mini/chat/completions")
                 .queryParam("api-version", API_VERSION)
@@ -1625,6 +1795,51 @@ public class OpenAiServiceImpl implements OpenAiService {
         throw new RuntimeException("No response from OpenAI");
     }
 
+    public String callOpenAIForFeedback(String prompt) {
+        log.info("OpenAI start feedback response");
+        String url = UriComponentsBuilder
+                .fromHttpUrl(endpoint + "/openai/deployments/gpt-5-mini/chat/completions")
+                .queryParam("api-version", API_VERSION)
+                .toUriString();
+
+        Map<String, Object> requestBody = Map.of(
+                "messages", new Object[]{
+                        Map.of("role", "system", "content", "You are an expert English teacher."),
+                        Map.of("role", "user", "content", prompt)
+                },
+                "max_completion_tokens", 16000
+        );
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.set("api-key", apiKey);
+
+        HttpEntity<Map<String, Object>> requestEntity = new HttpEntity<>(requestBody, headers);
+
+        try {
+            ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.POST, requestEntity, Map.class);
+
+            if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
+                var choices = (List<Map<String, Object>>) response.getBody().get("choices");
+                if (choices != null && !choices.isEmpty()) {
+                    Map<String, Object> message = (Map<String, Object>) choices.get(0).get("message");
+                    String content = (String) message.get("content");
+
+                    // Clean the response
+                    content = cleanJsonResponse(content);
+
+                    log.debug("OpenAI response (cleaned, first 1000 chars): {}", content.length() > 1000 ? content.substring(0, 1000) : content);
+                    return content;
+                }
+            }
+        } catch (Exception e) {
+            log.error("Error calling OpenAI: {}", e.getMessage(), e);
+            throw new RuntimeException("Failed to call OpenAI: " + e.getMessage(), e);
+        }
+
+        throw new RuntimeException("No response from OpenAI");
+    }
+
     /**
      * Robust JSON cleaning:
      * - Strip code fences and common assistant commentary
@@ -1632,7 +1847,7 @@ public class OpenAiServiceImpl implements OpenAiService {
      * - Remove trailing commas
      * - Try to fix common quote problems
      */
-    private String cleanJsonResponse(String content) {
+    public String cleanJsonResponse(String content) {
         if (content == null) return "";
 
         String s = content.trim();
@@ -1861,7 +2076,8 @@ public class OpenAiServiceImpl implements OpenAiService {
                 wordsPerParagraph,
                 request.getDescription(),
                 "",
-                context.studentLevel
+                context.studentLevel,
+                request.getAge()
         );
 
         String aiResponse = callOpenAI(prompt);
@@ -1878,15 +2094,18 @@ public class OpenAiServiceImpl implements OpenAiService {
             int wordsPerParagraph,
             String description,
             String contextInfo,
-            String level) {
+            String level,
+            Integer age) {
 
         StringBuilder prompt = new StringBuilder();
 
-        String levelInstructions = getLevelInstructions(level);
-
         prompt.append("You are an expert English teacher creating reading passages.\n\n");
 
-        prompt.append(levelInstructions).append("\n");
+        String ageInstructions = getAgeBasedLevelInstructions(age);
+        prompt.append(ageInstructions).append("\n\n");
+
+        prompt.append("📌 CURRENT STUDENT: Age ").append(age != null ? age : "not specified")
+                .append(" | Level: ").append(level).append("\n\n");
 
         if (description != null && !description.isBlank()) {
             prompt.append("🔥 USER REQUIREMENTS (ABSOLUTE PRIORITY) 🔥\n");
@@ -2241,216 +2460,6 @@ public class OpenAiServiceImpl implements OpenAiService {
         return sections;
     }
 
-    // Thêm vào OpenAiServiceImpl.java
-
-    @Override
-    @Transactional(readOnly = true)
-    public GradingWritingResponse gradeWriting(GradingWritingRequest request) {
-        log.info("Starting AI grading for submissionQuestionId: {}", request.getSubmissionQuestionId());
-
-        // 1. Load submission question
-        SubmissionQuestion submissionQuestion = submissionQuestionRepository
-                .findById(request.getSubmissionQuestionId())
-                .orElseThrow(() -> new ApiException("Submission question not found", HttpStatus.NOT_FOUND.value()));
-
-        // 2. Extract student's writing from submission_content_json
-        String studentWriting = extractWritingFromSubmission(submissionQuestion.getSubmissionContentJson());
-
-        if (studentWriting == null || studentWriting.trim().isEmpty()) {
-            throw new ApiException("No writing content found in submission", HttpStatus.BAD_REQUEST.value());
-        }
-
-        // 3. Load question and challenge context
-        Question question = submissionQuestion.getQuestion();
-        ChallengeSection section = question.getSection();
-        DailyChallenge challenge = section.getChallenge();
-
-        // Eager load context
-        ChallengeContext context = eagerLoadChallengeContext(challenge);
-
-        // 4. Build grading prompt
-        String prompt = buildWritingGradingPrompt(
-                context,
-                question.getQuestionText(),
-                studentWriting
-        );
-
-        // 5. Call OpenAI
-        String aiResponse = callOpenAI(prompt);
-
-        // 6. Parse response (validate comments against actual student text)
-        GradingWritingResponse result = parseGradingResponse(aiResponse, studentWriting);
-
-        log.info("Successfully graded writing. Overall score: {}", result.getSuggestedScore());
-
-        return result;
-    }
-
-    // Helper method: Extract writing text from JSON
-    private String extractWritingFromSubmission(Map<String, Object> submissionContentJson) {
-        try {
-            Object dataObj = submissionContentJson.get("data");
-            if (dataObj instanceof List<?> dataList && !dataList.isEmpty()) {
-                Object firstItem = dataList.get(0);
-                if (firstItem instanceof Map<?, ?> firstMap) {
-                    Object value = firstMap.get("value");
-                    return value != null ? value.toString() : null;
-                }
-            }
-            return null;
-        } catch (Exception e) {
-            log.error("Failed to extract writing: {}", e.getMessage());
-            throw new RuntimeException("Invalid submission content format", e);
-        }
-    }
-
-    // Build grading prompt
-    private String buildWritingGradingPrompt(
-            ChallengeContext context,
-            String questionText,
-            String studentWriting) {
-
-        StringBuilder prompt = new StringBuilder();
-
-        // System role ensures JSON-only responses and basic restrictions
-        prompt.append(SYSTEM_ROLE_JSON_INSTRUCTION).append("\n\n");
-
-        // Enforce Vietnamese for feedback content (values) while preserving JSON keys (English)
-        prompt.append("IMPORTANT: All human-readable feedback content (the values of ")
-                .append("`overallFeedback`, each comment's `commentText` and `correction`) ")
-                .append("MUST be written in Vietnamese. Do NOT translate or change JSON field names (they must remain in English). ")
-                .append("Return ONLY valid JSON, no markdown, no explanations, no extra text.\n\n");
-
-        prompt.append("You are an experienced English writing teacher. Provide focused, high-value feedback only.\n\n");
-
-        prompt.append("Context: Chapter: ").append(context.classChapterName)
-                .append(" | Level: ").append(context.studentLevel).append("\n\n");
-
-        prompt.append("TASK: Read the writing below and produce a JSON object containing:\n");
-        prompt.append(" - overallFeedback: 100-200 words in Vietnamese summarizing strengths, key weaknesses, and a 2-3 step study plan.\n");
-        prompt.append(" - suggestedScore: numeric (0.0 - 10.0).\n");
-        prompt.append(" - comments: 7-12 items, prioritized by impact on communication. Each comment must include:\n");
-        prompt.append("     startIndex (0-based char index), endIndex (exclusive),\n");
-        prompt.append("     commentText (15-80 characters, in Vietnamese),\n");
-        prompt.append("     severity (one of: error|warning|suggestion),\n");
-        prompt.append("     category (one of: grammar|vocabulary|cohesion|task|other),\n");
-        prompt.append("     correction (concise suggested correction or rephrase, in Vietnamese).\n\n");
-
-        prompt.append("GUIDELINES:\n");
-        prompt.append("- Prioritize meaning-impacting issues (unclear sentences, wrong tense affecting meaning, wrong word choice, omitted information).\n");
-        prompt.append("- Avoid trivial punctuation/capitalization comments unless frequent or harming readability.\n");
-        prompt.append("- Provide a one-line correction or alternative phrasing for each comment (in Vietnamese).\n");
-        prompt.append("- Indices must be 0-based character positions matching the STUDENT'S WRITING section below.\n");
-        prompt.append("- Maintain neutral, constructive tone.\n\n");
-
-        prompt.append("WRITING TASK:\n").append(questionText).append("\n\n");
-        prompt.append("STUDENT'S WRITING:\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
-        prompt.append(studentWriting).append("\n");
-        prompt.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n");
-
-        prompt.append("OUTPUT (exact JSON only, no extra text). Note: ALL textual values must be in Vietnamese:\n");
-        prompt.append("{\n");
-        prompt.append("  \"overallFeedback\": \"Tóm tắt ngắn gọn bằng tiếng Việt: ...\",\n");
-        prompt.append("  \"suggestedScore\": 7.5,\n");
-        prompt.append("  \"comments\": [\n");
-        prompt.append("    {\n");
-        prompt.append("      \"startIndex\": 0,\n");
-        prompt.append("      \"endIndex\": 5,\n");
-        prompt.append("      \"commentText\": \"Nhận xét ngắn (tiếng Việt, 15-80 ký tự)\",\n");
-        prompt.append("      \"severity\": \"error\",\n");
-        prompt.append("      \"category\": \"grammar\",\n");
-        prompt.append("      \"correction\": \"Sửa ngắn gọn bằng tiếng Việt\"\n");
-        prompt.append("    }\n");
-        prompt.append("  ]\n");
-        prompt.append("}\n");
-
-        return prompt.toString();
-    }
-
-
-    // Improved parsing: validate indices, filter trivial comments, prioritize by severity, keep 7-12 best
-    private GradingWritingResponse parseGradingResponse(String jsonResponse, String studentWriting) {
-        try {
-            String cleaned = cleanJsonResponse(jsonResponse);
-            JsonNode root = objectMapper.readTree(cleaned);
-
-            String overallFeedback = root.hasNonNull("overallFeedback") ? root.get("overallFeedback").asText().trim() : "";
-            double suggestedScore = 0.0;
-            if (root.hasNonNull("suggestedScore")) {
-                suggestedScore = root.get("suggestedScore").asDouble(0.0);
-            }
-            // clamp
-            if (Double.isNaN(suggestedScore) || suggestedScore < 0) suggestedScore = 0.0;
-            if (suggestedScore > 10) suggestedScore = 10.0;
-
-            List<WritingComment> comments = new ArrayList<>();
-            JsonNode commentsNode = root.get("comments");
-            int textLength = studentWriting != null ? studentWriting.length() : 0;
-
-            if (commentsNode != null && commentsNode.isArray()) {
-                for (JsonNode commentNode : commentsNode) {
-                    try {
-                        if (!commentNode.hasNonNull("startIndex") || !commentNode.hasNonNull("endIndex")) continue;
-                        int start = commentNode.get("startIndex").asInt(-1);
-                        int end = commentNode.get("endIndex").asInt(-1);
-                        if (start < 0 || end <= start || start >= textLength) continue;
-                        if (end > textLength) end = textLength;
-
-                        String commentText = commentNode.hasNonNull("commentText") ? commentNode.get("commentText").asText().trim() : "";
-                        if (commentText.isEmpty()) continue;
-
-                        // Avoid trivial short comments
-                        String lower = commentText.toLowerCase();
-                        if (commentText.length() < 12 && !lower.contains("error") && !lower.contains("use") && !lower.contains("replace")) {
-                            continue;
-                        }
-
-                        String severity = commentNode.hasNonNull("severity") ? commentNode.get("severity").asText().toLowerCase() : "suggestion";
-                        String category = commentNode.hasNonNull("category") ? commentNode.get("category").asText().toLowerCase() : "other";
-                        String correction = commentNode.hasNonNull("correction") ? commentNode.get("correction").asText() : "";
-
-                        // Build id + timestamp
-                        String id = "fb-" + UUID.randomUUID();
-                        String isoTs = Instant.now().toString();
-
-                        WritingComment wc = WritingComment.builder()
-                                .id(id)
-                                .comment(commentText)
-                                .startIndex(start)
-                                .endIndex(end)
-                                .timestamp(isoTs)
-                                .build();
-
-                        // attach additional info via comment string if model didn't provide fields (keeps compatibility)
-                        comments.add(wc);
-
-                    } catch (Exception ex) {
-                        log.debug("Skipping malformed comment node: {}", ex.getMessage());
-                    }
-                }
-            }
-
-            // Prioritize comments: we don't have explicit severity stored on WritingComment, but we keep order returned by AI.
-            // Keep between 7 and 12 comments, prefer earlier ones (AI asked to prioritize)
-            int minKeep = 7;
-            int maxKeep = 12;
-            if (comments.size() < minKeep) {
-                // if AI returned fewer, keep all
-            } else if (comments.size() > maxKeep) {
-                comments = comments.subList(0, maxKeep);
-            }
-
-            return GradingWritingResponse.builder()
-                    .overallFeedback(overallFeedback)
-                    .suggestedScore(suggestedScore)
-                    .comments(comments)
-                    .build();
-
-        } catch (Exception e) {
-            log.error("Failed to parse grading response: {}", e.getMessage(), e);
-            throw new RuntimeException("Failed to parse AI grading response: " + e.getMessage(), e);
-        }
-    }
 
     @Override
     public TranslationResponse translate(String text) {
@@ -2526,5 +2535,6 @@ public class OpenAiServiceImpl implements OpenAiService {
             throw new ApiException(Const.TRANSLATOR.TRANSLATION_FAILED, HttpStatus.INTERNAL_SERVER_ERROR.value());
         }
     }
+
 }
 

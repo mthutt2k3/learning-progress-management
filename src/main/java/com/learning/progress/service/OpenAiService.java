@@ -27,5 +27,4 @@ public interface OpenAiService {
 
     TranslationResponse translate(String text);
 
-    GradingWritingResponse gradeWriting(GradingWritingRequest request);
 }
