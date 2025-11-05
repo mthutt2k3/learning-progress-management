@@ -415,4 +415,7 @@ public class Const {
         public static final String TRANSLATION_FAILED = "Unable to translate the text. Please try again later.";
     }
 
+    public static final class NOTIFICATION {
+        public static final String NOT_FOUND_OR_NOT_OWNER = "";
+    }
 }
