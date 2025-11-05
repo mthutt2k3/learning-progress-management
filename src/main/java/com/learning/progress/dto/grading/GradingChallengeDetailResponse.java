@@ -10,6 +10,8 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @Builder
 public class GradingChallengeDetailResponse {
+    private Long gradingChallengeId;
+
     private Double totalWeight;
     private Double maxPossibleWeight;
     private Double finalScore;

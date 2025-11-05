@@ -109,6 +109,7 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
         String teacherFeedback = grading.getOverallFeedback();
 
         return GradingChallengeDetailResponse.builder()
+                .gradingChallengeId(grading.getId())
                 .totalWeight(achievedSum)
                 .maxPossibleWeight(maxPossibleScore)
                 .finalScore(finalScoreOn10)

@@ -21,6 +21,8 @@ public interface DailyChallengeMapper {
 
     DailyChallengeResponse.ClassLessonInfo mapToClassLessonInfo(ClassLesson classLesson);
 
+    DailyChallengeListDTO.DailyChallengeInLessonDTO dailyChallengeToDailyChallengeInLessonDTO(DailyChallenge dailyChallenge);
+
     DailyChallengeListDTO toLessonWithChallengesDTO(ClassLesson classLesson, long totalStudents);
 
 }
