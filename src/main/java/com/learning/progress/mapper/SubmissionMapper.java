@@ -4,6 +4,7 @@ import com.learning.progress.common.ChallengeStatus;
 import com.learning.progress.dto.challenge.DailyChallengeListDTO;
 import com.learning.progress.dto.challenge.StudentChallengeListDTO;
 import com.learning.progress.dto.submission.SaveSubmissionRequest;
+import com.learning.progress.dto.submission.StudentSubmissionDTO;
 import com.learning.progress.entity.ClassLesson;
 import com.learning.progress.entity.DailyChallenge;
 import com.learning.progress.entity.GradingDailyChallenge;
@@ -17,30 +18,25 @@ import java.util.List;
 
 @Mapper(
         componentModel = "spring",
-        unmappedTargetPolicy = ReportingPolicy.IGNORE
+        unmappedTargetPolicy = ReportingPolicy.IGNORE,
+        imports = {Duration.class}
 )
-public abstract class SubmissionMapper {
+public interface SubmissionMapper {
 
-    public abstract SubmissionDailyChallenge mapToEntity(SaveSubmissionRequest request);
-
-    @Named("mapDailyChallenges")
-    protected List<DailyChallengeListDTO.DailyChallengeInLessonDTO> mapDailyChallenges(List<DailyChallenge> dailyChallenges) {
-        List<DailyChallengeListDTO.DailyChallengeInLessonDTO> result = new ArrayList<>();
-
-        for (DailyChallenge challenge : dailyChallenges) {
-            DailyChallengeListDTO.DailyChallengeInLessonDTO dto = new DailyChallengeListDTO.DailyChallengeInLessonDTO();
-            dto.setId(challenge.getId());
-            dto.setChallengeName(challenge.getChallengeName());
-            dto.setChallengeType(challenge.getChallengeType());
-            dto.setChallengeStatus(challenge.getChallengeStatus());
-            dto.setStartDate(challenge.getStartDate());
-            dto.setEndDate(challenge.getEndDate());
-
-            result.add(dto);
-        }
-
-        return result;
-    }
-
+    @Mappings({
+            @Mapping(target = "submissionId", source = "submission.id"),
+            @Mapping(target = "studentId", source = "submission.user.id"),
+            @Mapping(target = "studentName", expression = "java(submission.getUser() != null ? (submission.getUser().getFullName() != null ? submission.getUser().getFullName() : submission.getUser().getEmail()) : null)"),
+            @Mapping(target = "startDate", source = "submission.startedAt"),
+            @Mapping(target = "endDate", source = "submission.expiredAt"),
+            @Mapping(target = "actualDuration", expression = "java(submission.getActualStartAt() != null && submission.getSubmittedAt() != null ? Duration.between(submission.getActualStartAt(), submission.getSubmittedAt()) : null)"),
+    })
+    StudentSubmissionDTO toStudentSubmissionDTO(
+            SubmissionDailyChallenge submission,
+            GradingDailyChallenge grading,
+            Double totalWeight,
+            Double maxPossibleWeight,
+            Double finalScore
+    );
 
 }

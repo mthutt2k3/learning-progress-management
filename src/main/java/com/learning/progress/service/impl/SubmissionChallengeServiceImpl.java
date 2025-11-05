@@ -3,10 +3,13 @@ package com.learning.progress.service.impl;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.learning.progress.common.*;
 import com.learning.progress.dto.DataResponse;
+import com.learning.progress.dto.challenge.DailyChallengeListDTO;
 import com.learning.progress.dto.challenge.StudentChallengeListDTO;
 import com.learning.progress.dto.submission.StudentSubmissionDTO;
 import com.learning.progress.entity.*;
 import com.learning.progress.exception.ApiException;
+import com.learning.progress.mapper.DailyChallengeMapper;
+import com.learning.progress.mapper.SubmissionMapper;
 import com.learning.progress.repository.*;
 import com.learning.progress.cache.CacheService;
 import com.learning.progress.service.SubmissionChallengeService;
@@ -56,6 +59,10 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
     private CacheService cacheService;
     @Autowired
     private QuestionRepository questionRepository;
+    @Autowired
+    private DailyChallengeMapper dailyChallengeMapper;
+    @Autowired
+    private SubmissionMapper submissionMapper;
 
     @Override
     @Async("taskExecutor")
@@ -204,22 +211,21 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
                                 finalScore = DataUtil.getFinalScore(totalWeight, maxPossibleWeight);
                             }
                         }
+                        DailyChallengeListDTO.DailyChallengeInLessonDTO challengeDTO = dailyChallengeMapper.dailyChallengeToDailyChallengeInLessonDTO(ch);
+
+                        // Use mapper to build studentSubmissionDTO with computed totals / grading
+                        GradingDailyChallenge gradingForSubmission = (s != null) ? gradingBySubmissionId.get(s.getId()) : null;
+                        StudentSubmissionDTO studentSubmissionDTO = submissionMapper.toStudentSubmissionDTO(
+                                s,
+                                gradingForSubmission,
+                                totalWeight,
+                                maxPossibleWeight,
+                                finalScore
+                        );
 
                         StudentChallengeListDTO.StudentChallengeDTO dto = StudentChallengeListDTO.StudentChallengeDTO.builder()
-                                .id(ch.getId())
-                                .challengeName(ch.getChallengeName())
-                                .challengeType(ch.getChallengeType())
-                                .challengeStatus(ch.getChallengeStatus())
-                                .submissionChallengeId(submissionChallengeId)
-                                .startDate(startDate)
-                                .endDate(endDate)
-                                .submissionStatus(submissionStatus)
-                                .isLate(isLate != null ? isLate : false)
-                                .actualDuration(actualDuration)
-                                .submittedAt(submittedAt)
-                                .totalWeight(totalWeight)
-                                .finalScore(finalScore)
-                                .maxPossibleWeight(maxPossibleWeight)
+                                .dailyChallenge(challengeDTO)
+                                .studentSubmission(studentSubmissionDTO)
                                 .build();
                         dtoChallenges.add(dto);
                     }

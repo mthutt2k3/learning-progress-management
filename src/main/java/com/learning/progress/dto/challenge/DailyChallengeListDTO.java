@@ -32,6 +32,14 @@ public class DailyChallengeListDTO {
 
         private ChallengeMethod challengeMethod;
 
+        private Integer durationMinutes;
+
+        private Boolean hasAntiCheat;
+
+        private Boolean shuffleQuestion;
+
+        private Boolean translateOnScreen;
+
         private OffsetDateTime startDate;
 
         private OffsetDateTime endDate;

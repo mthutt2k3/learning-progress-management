@@ -3,6 +3,8 @@ package com.learning.progress.dto.challenge;
 import com.learning.progress.common.ChallengeStatus;
 import com.learning.progress.common.ChallengeType;
 import com.learning.progress.common.SubmissionStatus;
+import com.learning.progress.dto.grading.GradingChallengeDetailResponse;
+import com.learning.progress.dto.submission.StudentSubmissionDTO;
 import lombok.*;
 
 import java.time.Duration;
@@ -27,20 +29,8 @@ public class StudentChallengeListDTO {
     @NoArgsConstructor
     @Builder
     public static class StudentChallengeDTO {
-        private Long id;
-        private String challengeName;
-        private ChallengeType challengeType;
-        private ChallengeStatus challengeStatus;
-        private Long submissionChallengeId; // Từ SubmissionDailyChallenge.startedAt
-        private OffsetDateTime startDate; // Từ SubmissionDailyChallenge.startedAt
-        private OffsetDateTime endDate; // Từ SubmissionDailyChallenge.expiredAt
-        private SubmissionStatus submissionStatus; // Từ SubmissionDailyChallenge
-        private boolean isLate; // Từ SubmissionDailyChallenge
-        private Duration actualDuration;
-        private OffsetDateTime submittedAt; // Từ SubmissionDailyChallenge
+        private DailyChallengeListDTO.DailyChallengeInLessonDTO dailyChallenge;
+        private StudentSubmissionDTO studentSubmission;
 
-        private Double maxPossibleWeight; // total question weight for the challenge
-        private Double totalWeight; // Từ GradingDailyChallenges
-        private Double finalScore; // final score on scale 10
     }
 }
