@@ -2,11 +2,7 @@ package com.learning.progress.cache;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.learning.progress.common.Const;
-import com.learning.progress.controller.*;
-import com.learning.progress.service.impl.*;
 import lombok.extern.slf4j.Slf4j;
-import org.slf4j.MDC;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
@@ -25,11 +21,8 @@ public class CacheService {
     public static final long SUBMISSION_RESULT_TTL_MINUTES = 10;
 
     // Key Prefixes
-    public static final String SECTION_KEY_PREFIX = "section:";
     public static final String SECTIONS_CHALLENGE_KEY_PREFIX = "sections:challenge:";
     public static final String SECTIONS_PUBLIC_CHALLENGE_KEY_PREFIX = "sections:public:challenge:";
-    public static final String QUESTION_KEY_PREFIX = "question:";
-    public static final String QUESTIONS_SECTION_KEY_PREFIX = "questions:section:";
     public static final String SUBMISSIONS_CHALLENGE_KEY_PREFIX = "submissions:challenge:";
     public static final String SUBMISSION_RESULT_KEY_PREFIX = "submission:result:user:";
 
@@ -127,19 +120,6 @@ public class CacheService {
         return String.format("%s%d:page:%d:size:%d:text:%s", SECTIONS_PUBLIC_CHALLENGE_KEY_PREFIX, challengeId, page, size, normalizedText);
     }
 
-    public String buildSectionCacheKey(Long sectionId) {
-        return SECTION_KEY_PREFIX + sectionId;
-    }
-
-    // QUESTION
-    public String buildQuestionCacheKey(Long questionId) {
-        return QUESTION_KEY_PREFIX + questionId;
-    }
-
-    public String buildQuestionsBySectionCacheKey(Long sectionId) {
-        return QUESTIONS_SECTION_KEY_PREFIX + sectionId;
-    }
-
     // SUBMISSION
     public String buildSubmissionsByChallengeCacheKey(Long challengeId, int page, int size, String text, String sortBy, String sortDir) {
         String normalizedText = text != null ? text.trim() : "";
@@ -166,23 +146,11 @@ public class CacheService {
         log.debug("Cleared all level list caches");
     }
 
-    public void clearCacheForSection(Long sectionId, Long challengeId) {
-        if (sectionId != null) {
-            delete(SECTION_KEY_PREFIX + sectionId);
-            delete(QUESTIONS_SECTION_KEY_PREFIX + sectionId);
-        }
-        if (challengeId != null) {
-            deletePattern(SECTIONS_CHALLENGE_KEY_PREFIX + challengeId + ":*");
-            deletePattern(SECTIONS_PUBLIC_CHALLENGE_KEY_PREFIX + challengeId + ":*");
-        }
-        log.debug("Cleared cache for sectionId: {}, challengeId: {}", sectionId, challengeId);
-    }
-
-    public void clearCacheForQuestion(Long questionId, Long sectionId, Long challengeId) {
-        if (questionId != null) {
-            delete(QUESTION_KEY_PREFIX + questionId);
-        }
-        clearCacheForSection(sectionId, challengeId);
+    public void clearCacheForChallenge(Long challengeId) {
+        deletePattern(SECTIONS_CHALLENGE_KEY_PREFIX + challengeId + ":*");
+        deletePattern(SECTIONS_PUBLIC_CHALLENGE_KEY_PREFIX + challengeId + ":*");
+        deletePattern(SUBMISSIONS_CHALLENGE_KEY_PREFIX + challengeId + ":*");
+        log.debug("Cleared cache for challengeId: {}", challengeId);
     }
 
     public void clearSubmissionsCacheForChallenge(Long challengeId) {
