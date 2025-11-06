@@ -3,10 +3,13 @@ package com.learning.progress.config;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.learning.progress.messaging.RedisListener;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.listener.PatternTopic;
+import org.springframework.data.redis.listener.RedisMessageListenerContainer;
 import org.springframework.data.redis.serializer.Jackson2JsonRedisSerializer;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
 
@@ -20,6 +23,7 @@ public class RedisConfig {
         mapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS); // Lưu ngày giờ dưới dạng chuỗi ISO
         return mapper;
     }
+
 
     @Bean
     public RedisTemplate<String, Object> redisTemplate(RedisConnectionFactory connectionFactory, ObjectMapper objectMapper) {
@@ -35,5 +39,13 @@ public class RedisConfig {
         template.setHashValueSerializer(serializer);
         template.afterPropertiesSet();
         return template;
+    }
+    @Bean
+    public RedisMessageListenerContainer container(
+            RedisConnectionFactory factory, RedisListener listener) {
+        RedisMessageListenerContainer c = new RedisMessageListenerContainer();
+        c.setConnectionFactory(factory);
+        c.addMessageListener(listener, new PatternTopic("lpms:notification:*"));
+        return c;
     }
 }

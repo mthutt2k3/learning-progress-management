@@ -3,6 +3,11 @@ package com.learning.progress.common;
 import java.util.regex.Pattern;
 
 public class Const {
+    public static class SSE {
+        public static final String EVENT_CONNECT = "connect";
+        public static final String EVENT_NOTIFICATION = "notification";
+        public static final String EVENT_PING = "ping";
+    }
     public static class VALIDATE_INPUT {
         public static final String regexEmail =
                 "^(?=.{6,254}$)(?=.{1,64}@)[A-Za-z0-9._%+-]+@" +
@@ -415,4 +420,7 @@ public class Const {
         public static final String TRANSLATION_FAILED = "Unable to translate the text. Please try again later.";
     }
 
+    public static final class NOTIFICATION {
+        public static final String NOT_FOUND_OR_NOT_OWNER = "";
+    }
 }
