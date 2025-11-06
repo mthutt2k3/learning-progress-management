@@ -1,6 +1,5 @@
 package com.learning.progress.service.impl;
 
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.learning.progress.common.ChallengeStatus;
 import com.learning.progress.common.Const;
 import com.learning.progress.common.QuestionType;
@@ -46,56 +45,6 @@ public class QuestionServiceImpl implements QuestionService {
     @Value("${app.challenge.max-questions-per-challenge:100}")
     private int maxQuestionsPerChallenge;
     // =====================================================================
-    // READ: CÓ CACHE (chỉ cache DATA)
-    // =====================================================================
-
-    @Override
-    public QuestionDto getQuestion(Long id) {
-        log.debug("Getting question with ID: {}", id);
-
-        String cacheKey = cacheService.buildQuestionCacheKey(id);
-        QuestionDto cached = cacheService.getCachedObject(cacheKey, new TypeReference<>() {});
-
-        if (cached != null) {
-            log.debug("Cache HIT for question: {}", id);
-            return cached;
-        }
-
-        Question question = questionRepository.findByIdAndDeletedAtIsNull(id)
-                .orElseThrow(() -> new ApiException(Const.QUESTION.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
-
-        QuestionDto result = questionMapper.toQuestionDto(question);
-        cacheService.cacheObject(cacheKey, result, CacheService.QUESTION_TTL_MINUTES);
-
-        log.debug("Cache stored for question: {}", id);
-        return result;
-    }
-
-    @Override
-    public List<QuestionDto> getQuestionsBySection(Long sectionId) {
-        log.debug("Getting questions for sectionId: {}", sectionId);
-
-        String cacheKey = cacheService.buildQuestionsBySectionCacheKey(sectionId);
-        List<QuestionDto> cached = cacheService.getCachedObject(cacheKey, new TypeReference<>() {});
-
-        if (cached != null) {
-            log.debug("Cache HIT for questions by section: {}", sectionId);
-            return cached;
-        }
-
-        sectionRepository.findByIdAndDeletedAtIsNull(sectionId)
-                .orElseThrow(() -> new ApiException(Const.SECTION.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
-
-        List<Question> questions = questionRepository.findBySectionIdAndDeletedAtIsNull(sectionId);
-        List<QuestionDto> result = questionMapper.toQuestionDtos(questions);
-
-        cacheService.cacheObject(cacheKey, result, CacheService.QUESTION_TTL_MINUTES);
-        log.debug("Cache stored for questions by sectionId: {}", sectionId);
-
-        return result;
-    }
-
-    // =====================================================================
     // WRITE: XÓA CACHE NGAY LẬP TỨC
     // =====================================================================
 
@@ -133,17 +82,7 @@ public class QuestionServiceImpl implements QuestionService {
 
         List<QuestionDto> result = processQuestions(deleteRequests, nonDeletedRequests, section);
 
-        cacheService.clearCacheForSection(sectionId, challengeId);
-
-        deleteRequests.stream()
-                .map(QuestionDto::getId)
-                .filter(Objects::nonNull)
-                .forEach(qid -> cacheService.clearCacheForQuestion(qid, sectionId, challengeId));
-
-        nonDeletedRequests.stream()
-                .map(QuestionDto::getId)
-                .filter(Objects::nonNull)
-                .forEach(qid -> cacheService.clearCacheForQuestion(qid, sectionId, challengeId));
+        cacheService.clearCacheForChallenge(challengeId);
 
         log.info("Successfully processed {} questions ({} deleted, {} created/updated) for sectionId: {}",
                 dtos.size(), deleteRequests.size(), nonDeletedRequests.size(), sectionId);
@@ -174,12 +113,6 @@ public class QuestionServiceImpl implements QuestionService {
         });
         questionRepository.saveAll(questions);
 
-        questions.forEach(q -> {
-            Long sectionId = q.getSection().getId();
-            Long challengeId = q.getSection().getChallenge().getId();
-            cacheService.clearCacheForQuestion(q.getId(), sectionId, challengeId);
-        });
-
         log.info("Successfully soft deleted {} questions", questions.size());
     }
 
@@ -193,10 +126,6 @@ public class QuestionServiceImpl implements QuestionService {
 
         question.setWeight(BigDecimal.valueOf(score));
         questionRepository.save(question);
-
-        Long sectionId = question.getSection().getId();
-        Long challengeId = question.getSection().getChallenge().getId();
-        cacheService.clearCacheForQuestion(questionId, sectionId, challengeId);
 
         log.info("Updated score for question ID {} to {}", questionId, score);
     }
@@ -288,7 +217,7 @@ public class QuestionServiceImpl implements QuestionService {
         }
 
         // === 5. Clear cache once ===
-        cacheService.clearCacheForSection(null, challengeId);
+        cacheService.clearCacheForChallenge(challengeId);
 
         log.info("Bulk inserted {} questions across {} sections", savedQuestions.size(), result.size());
         return result;

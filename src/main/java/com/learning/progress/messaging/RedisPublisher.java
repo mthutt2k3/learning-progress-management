@@ -21,11 +21,20 @@ public class RedisPublisher {
      */
     public void publishToUser(Long userId, Object payload) {
         String channel = channelProps.getUser().replace("{userId}", userId.toString());
+        String payloadJson = null;
         try {
-            redisTemplate.convertAndSend(channel, payload);
-            log.info("Published to user {}: {}", userId, JsonUtil.objectToJson(payload));
+            payloadJson = JsonUtil.objectToJson(payload);
         } catch (Exception e) {
-            log.error("Redis publish failed for user {}: {}", userId, e.getMessage());
+            // best-effort serialization for logging
+            log.debug("Failed to serialize payload for logging, payload class={}", payload != null ? payload.getClass().getName() : "null", e);
+        }
+
+        try {
+            log.debug("Publishing to Redis channel={} payloadJson={}", channel, payloadJson);
+            redisTemplate.convertAndSend(channel, payload);
+            log.info("Published notification to channel={} payload={}", channel, payloadJson != null ? payloadJson : payload);
+        } catch (Exception e) {
+            log.error("Redis publish failed for user {} on channel {}. payload={}", userId, channel, payloadJson != null ? payloadJson : payload, e);
         }
     }
 }

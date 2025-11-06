@@ -14,6 +14,7 @@ import com.learning.progress.service.NotificationService;
 import com.learning.progress.util.AppValidator;
 import com.learning.progress.util.JwtUtil;
 import com.learning.progress.util.TraceUtil;
+import com.learning.progress.util.JsonUtil;
 import jakarta.transaction.Transactional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -23,7 +24,6 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
-import org.springframework.jmx.export.notification.NotificationPublisher;
 import org.springframework.stereotype.Service;
 
 import java.time.OffsetDateTime;
@@ -101,7 +101,9 @@ public class NotificationServiceImpl implements NotificationService {
     @Override
     public Long countUnreadNotifications(Long userId) {
         String traceId = TraceUtil.getTraceId();
-        long count = notificationRepository.countByReceiverIdAndIsReadFalseAndDeletedAtIsNull(userId);
+        User user = userRepository.findByIdAndDeletedAtIsNull(userId)
+                .orElseThrow(() -> new ApiException(Const.USER.NOT_FOUND, HttpStatus.BAD_REQUEST.value()));
+        long count = notificationRepository.countByReceiverAndIsReadFalseAndDeletedAtIsNull(user);
         log.info("[{}] Unread count for userId {}: {}", traceId, userId, count);
         return count;
     }
@@ -114,11 +116,11 @@ public class NotificationServiceImpl implements NotificationService {
     public void markAsRead(Long notificationId, Long userId) {
         String traceId = TraceUtil.getTraceId();
         log.info("[{}] Marking notification {} as read for userId: {}", traceId, notificationId, userId);
+        Notification notification = notificationRepository.findByIdAndDeletedAtIsNull(notificationId)
+                .orElseThrow(() -> new ApiException(Const.NOTIFICATION.NOT_FOUND_OR_NOT_OWNER, HttpStatus.NOT_FOUND.value()));
 
-        int updated = notificationRepository.markAsRead(notificationId, userId);
-        if (updated == 0) {
-            throw new ApiException(Const.NOTIFICATION.NOT_FOUND_OR_NOT_OWNER, HttpStatus.NOT_FOUND.value());
-        }
+        notification.setIsRead(true);
+        notificationRepository.save(notification);
         log.info("[{}] Notification {} marked as read", traceId, notificationId);
     }
 
@@ -129,9 +131,17 @@ public class NotificationServiceImpl implements NotificationService {
     @Transactional
     public void markAllAsRead(Long userId) {
         String traceId = TraceUtil.getTraceId();
+        List<Notification> unreadNotifications = notificationRepository.findByReceiverIdAndIsReadFalseAndDeletedAtIsNull(userId, Pageable.unpaged()).getContent();
+        if (unreadNotifications.isEmpty()) {
+            log.info("[{}] No unread notifications to mark as read for userId: {}", traceId, userId);
+            return;
+        }
+        for(Notification notification : unreadNotifications) {
+            notification.setIsRead(true);
+        }
+        notificationRepository.saveAll(unreadNotifications);
         log.info("[{}] Marking all notifications as read for userId: {}", traceId, userId);
-        notificationRepository.markAllAsRead(userId);
-        log.info("[{}] All notifications marked as read", traceId);
+        log.info("[{}] All notifications marked as read: {}", traceId, unreadNotifications.stream().map(Notification::getId).collect(Collectors.toList()));
     }
 
     /**
@@ -141,14 +151,14 @@ public class NotificationServiceImpl implements NotificationService {
     @Transactional
     public void softDelete(Long notificationId, Long userId) {
         String traceId = TraceUtil.getTraceId();
-        log.info("[{}] Soft deleting notification {} for userId: {}", traceId, notificationId, userId);
-
         String deletedBy = jwtUtil.extractEmailPrefixFromCurrentRequest();
-        int updated = notificationRepository.softDelete(notificationId, userId, deletedBy);
 
-        if (updated == 0) {
-            throw new ApiException(Const.NOTIFICATION.NOT_FOUND_OR_NOT_OWNER, HttpStatus.NOT_FOUND.value());
-        }
+        log.info("[{}] Soft deleting notification {} for userId: {}", traceId, notificationId, userId);
+        Notification notification = notificationRepository.findByIdAndDeletedAtIsNull(notificationId)
+                .orElseThrow(() -> new ApiException(Const.NOTIFICATION.NOT_FOUND_OR_NOT_OWNER, HttpStatus.NOT_FOUND.value()));
+        notification.setDeletedAt(OffsetDateTime.now());
+        notification.setDeletedBy(deletedBy);
+        notificationRepository.save(notification);
         log.info("[{}] Notification {} soft deleted", traceId, notificationId);
     }
 
@@ -184,12 +194,30 @@ public class NotificationServiceImpl implements NotificationService {
                 .createdBy(createdBy)
                 .createdAt(OffsetDateTime.now())
                 .build();
-        NotificationDTO dto = notificationMapper.toDTO(notification);
-        notification = notificationRepository.save(notification);
-        // ✅ Publish Redis — các instance khác sẽ push SSE
-        redisPublisher.publishToUser(receiver.getId(), dto);
-        log.info("[{}] Notification created with ID: {}", traceId, notification.getId());
 
-        return dto;
+        NotificationDTO dto = notificationMapper.toDTO(notification);
+
+        // Log payload about to be persisted/published
+        String payloadJson = null;
+        try {
+            payloadJson = JsonUtil.objectToJson(dto);
+        } catch (Exception e) {
+            log.debug("[{}] Failed to serialize NotificationDTO for logging: {}", traceId, e.getMessage());
+        }
+        log.debug("[{}] Notification payload prepared for save/publish: {}", traceId, payloadJson != null ? payloadJson : dto);
+
+        notification = notificationRepository.save(notification);
+
+        log.info("[{}] Notification persisted with ID: {} for receiverId: {}", traceId, notification.getId(), receiverId);
+
+        // publish to Redis (other instances will forward to clients)
+        try {
+            redisPublisher.publishToUser(receiver.getId(), dto);
+            log.debug("[{}] Redis publish attempted for receiverId={} payload={}", traceId, receiverId, payloadJson != null ? payloadJson : dto);
+        } catch (Exception e) {
+            log.error("[{}] Redis publish failed for receiverId {}: {}", traceId, receiverId, e.getMessage(), e);
+        }
+
+        return notificationMapper.toDTO(notification);
     }
 }

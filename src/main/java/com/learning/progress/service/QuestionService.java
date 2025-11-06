@@ -9,9 +9,7 @@ import java.util.Map;
 
 public interface QuestionService {
     List<QuestionDto> bulkQuestion(List<QuestionDto> dtos, Long sectionId);
-    QuestionDto getQuestion(Long id);
     void deleteQuestions(List<Long> ids);
-    List<QuestionDto> getQuestionsBySection(Long sectionId);
 
     void updateScoreQuestion(Long questionId, double score);
     Map<Long, List<QuestionDto>> bulkInsertQuestionsForSections(Map<Long, List<QuestionDto>> sectionQuestionsMap);

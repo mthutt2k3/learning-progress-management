@@ -348,7 +348,7 @@ public class SubmissionQuestionServiceImpl implements SubmissionQuestionService 
         }
         String title = Const.NOTIFICATION.SUBMISSION_TITLE;
         String message = String.format(Const.NOTIFICATION.SUBMISSION_MESSAGE_TEMPLATE, dailyChallenge.getChallengeName());
-        notificationService.createNotification(userId, null, message, title, null, null);
+        notificationService.createNotification(userId, null, title, message, null, null);
 
         // XÓA CACHE
         cacheService.clearSubmissionCache(userId, submissionChallengeId);

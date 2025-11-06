@@ -69,11 +69,9 @@ public class ChallengeSectionServiceImpl implements ChallengeSectionService {
         validateUserAccessToClass(question.getSection().getChallenge().getClassLesson().getClassChapter().getClazz().getId());
         questionService.updateScoreQuestion(questionId, score);
 
-        Long sectionId = question.getSection().getId();
         Long challengeId = question.getSection().getChallenge().getId();
 
-        cacheService.clearCacheForQuestion(questionId, sectionId, challengeId);
-        cacheService.clearCacheForSection(sectionId, challengeId);
+        cacheService.clearCacheForChallenge(challengeId);
 
         log.info("Successfully updated score for questionId: {}", questionId);
     }
@@ -118,7 +116,7 @@ public class ChallengeSectionServiceImpl implements ChallengeSectionService {
         long tSaveQuestions = System.currentTimeMillis() - tSaveQuestionsStart;
 
         long tCacheClearStart = System.currentTimeMillis();
-        cacheService.clearCacheForSection(section.getId(), challengeId);
+        cacheService.clearCacheForChallenge(challengeId);
         long tCacheClear = System.currentTimeMillis() - tCacheClearStart;
 
         // Trigger auto-grading if the challenge is published or higher and questions were updated
@@ -192,7 +190,7 @@ public class ChallengeSectionServiceImpl implements ChallengeSectionService {
         }
 
         // === 6. Clear cache ===
-        cacheService.clearCacheForSection(null, challengeId);
+        cacheService.clearCacheForChallenge(challengeId);
 
         log.info("Bulk inserted {} sections with questions", results.size());
         return results;
@@ -206,22 +204,11 @@ public class ChallengeSectionServiceImpl implements ChallengeSectionService {
     public SectionWithQuestionsDto getSection(Long id) {
         log.info("Retrieving section with ID: {}", id);
 
-        String cacheKey = cacheService.buildSectionCacheKey(id);
-        SectionWithQuestionsDto cached = cacheService.getCachedObject(cacheKey, new TypeReference<>() {});
-
-        if (cached != null) {
-            log.debug("Cache HIT for section: {}", id);
-            return cached;
-        }
-
         ChallengeSection section = findSectionById(id);
         validateUserAccessToClass(section.getChallenge().getClassLesson().getClassChapter().getClazz().getId());
 
         List<QuestionDto> questions = mapQuestionsToDto(section.getQuestions());
         SectionWithQuestionsDto result = challengeSectionMapper.toSectionWithQuestionsDto(section, questions);
-
-        cacheService.cacheObject(cacheKey, result, CacheService.SECTION_TTL_MINUTES);
-        log.debug("Cache MISS & stored section: {}", id);
 
         log.info("Successfully retrieved section with ID: {}", id);
         return result;
@@ -315,31 +302,65 @@ public class ChallengeSectionServiceImpl implements ChallengeSectionService {
     @Override
     @Transactional
     public void bulkOrderSection(Long challengeId, List<QuickBulkSectionRequest> dtos) {
+        long tTotalStart = System.currentTimeMillis();
         log.info("Processing bulk order for {} sections in challengeId: {}", dtos.size(), challengeId);
 
+        long tStepStart;
+        long tStepElapsed;
+
+        // 1. loadExistingSections
+        tStepStart = System.currentTimeMillis();
         List<ChallengeSection> existingSections = loadExistingSections(challengeId);
+        tStepElapsed = System.currentTimeMillis() - tStepStart;
+        log.debug("bulkOrderSection - loadExistingSections: {} ms", tStepElapsed);
+
         if (existingSections.isEmpty()) {
             log.warn("No sections to process for challengeId: {}", challengeId);
+            log.info("bulkOrderSection total: {} ms", System.currentTimeMillis() - tTotalStart);
             return;
         }
 
+        // 2. validateUserAccessToClass
+        tStepStart = System.currentTimeMillis();
         validateUserAccessToClass(existingSections.get(0).getChallenge().getClassLesson().getClassChapter().getClazz().getId());
+        tStepElapsed = System.currentTimeMillis() - tStepStart;
+        log.debug("bulkOrderSection - validateUserAccessToClass: {} ms", tStepElapsed);
 
+        // 3. filter requests
+        tStepStart = System.currentTimeMillis();
         List<QuickBulkSectionRequest> deleteRequests = filterDeleteRequests(dtos);
         List<QuickBulkSectionRequest> nonDeletedRequests = filterNonDeletedRequests(dtos);
+        tStepElapsed = System.currentTimeMillis() - tStepStart;
+        log.debug("bulkOrderSection - filterDelete/NonDeletedRequests: {} ms (delete={}, nonDeleted={})",
+                tStepElapsed, deleteRequests.size(), nonDeletedRequests.size());
 
+        // 4. validateBulkRequests
+        tStepStart = System.currentTimeMillis();
         validateBulkRequests(existingSections, deleteRequests, nonDeletedRequests);
+        tStepElapsed = System.currentTimeMillis() - tStepStart;
+        log.debug("bulkOrderSection - validateBulkRequests: {} ms", tStepElapsed);
+
+        // 5. loadSectionMap
+        tStepStart = System.currentTimeMillis();
         Map<Long, ChallengeSection> sectionMap = loadSectionMap(deleteRequests, nonDeletedRequests);
+        tStepElapsed = System.currentTimeMillis() - tStepStart;
+        log.debug("bulkOrderSection - loadSectionMap: {} ms (mapSize={})", tStepElapsed, sectionMap.size());
 
+        // 6. processSections (delete + update)
+        tStepStart = System.currentTimeMillis();
         processSections(deleteRequests, nonDeletedRequests, sectionMap);
+        tStepElapsed = System.currentTimeMillis() - tStepStart;
+        log.debug("bulkOrderSection - processSections: {} ms", tStepElapsed);
 
-        // XÓA TOÀN BỘ CACHE
-        cacheService.clearCacheForSection(null, challengeId);
-        deleteRequests.forEach(dto -> cacheService.clearCacheForSection(dto.getId(), challengeId));
-        nonDeletedRequests.forEach(dto -> cacheService.clearCacheForSection(dto.getId(), challengeId));
+        // 7. clear cache per section & challenge
+        tStepStart = System.currentTimeMillis();
+        cacheService.clearCacheForChallenge(challengeId);
+        tStepElapsed = System.currentTimeMillis() - tStepStart;
+        log.debug("bulkOrderSection - cacheClear: {} ms", tStepElapsed);
 
-        log.info("Successfully processed bulk order: {} deleted, {} reordered for challengeId: {}",
-                deleteRequests.size(), nonDeletedRequests.size(), challengeId);
+        long tTotalElapsed = System.currentTimeMillis() - tTotalStart;
+        log.info("Successfully processed bulk order: {} deleted, {} reordered for challengeId: {} (total {} ms)",
+                deleteRequests.size(), nonDeletedRequests.size(), challengeId, tTotalElapsed);
     }
 
     // ===================================================================

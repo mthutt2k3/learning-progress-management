@@ -29,4 +29,9 @@ public class SseController {
         redisPublisher.publishToUser(dto.getReceiverId(), dto);
         return "Sent!";
     }
+    @PostMapping("/without-redis")
+    public String mockWithoutRedis(@RequestBody NotificationDTO dto) {
+        sseService.sendNotification(dto);
+        return "Sent!";
+    }
 }

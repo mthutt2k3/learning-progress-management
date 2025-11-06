@@ -28,7 +28,7 @@ public class NotificationController {
     private JwtUtil jwtUtil;
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER', 'STUDENT', 'MANAGER')")
+    @PreAuthorize("isAuthenticated()")
     @Operation(summary = "Lấy danh sách thông báo", description = "Chỉ lấy thông báo của user đang đăng nhập")
     public ResponseEntity<DataResponse<List<NotificationDTO>>> getMyNotifications(
             @RequestParam(defaultValue = "0") @Min(0) int page,
@@ -45,7 +45,7 @@ public class NotificationController {
     }
 
     @GetMapping("/unread-count")
-    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER', 'STUDENT', 'MANAGER')")
+    @PreAuthorize("isAuthenticated()")
     @Operation(summary = "Đếm thông báo chưa đọc", description = "Trả về số lượng chưa đọc")
     public ResponseEntity<DataResponse<Long>> getUnreadCount() {
         Long currentUserId = jwtUtil.extractUserIdFromCurrentRequest();
@@ -54,7 +54,7 @@ public class NotificationController {
     }
 
     @PatchMapping("/{notificationId}/read")
-    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER', 'STUDENT', 'MANAGER')")
+    @PreAuthorize("isAuthenticated()")
     @Operation(summary = "Đánh dấu đã đọc", description = "Chỉ chủ sở hữu mới được")
     public ResponseEntity<DataResponse<?>> markAsRead(@PathVariable Long notificationId) {
         Long currentUserId = jwtUtil.extractUserIdFromCurrentRequest();
@@ -63,7 +63,7 @@ public class NotificationController {
     }
 
     @PatchMapping("/read-all")
-    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER', 'STUDENT', 'MANAGER')")
+    @PreAuthorize("isAuthenticated()")
     @Operation(summary = "Đánh dấu tất cả đã đọc", description = "Toàn bộ thông báo của user")
     public ResponseEntity<DataResponse<?>> markAllAsRead() {
         Long currentUserId = jwtUtil.extractUserIdFromCurrentRequest();
@@ -72,7 +72,7 @@ public class NotificationController {
     }
 
     @DeleteMapping("/{notificationId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER', 'STUDENT', 'MANAGER')")
+    @PreAuthorize("isAuthenticated()")
     @Operation(summary = "Xóa mềm thông báo", description = "Soft-delete, chỉ owner")
     public ResponseEntity<DataResponse<?>> deleteNotification(@PathVariable Long notificationId) {
         Long currentUserId = jwtUtil.extractUserIdFromCurrentRequest();
