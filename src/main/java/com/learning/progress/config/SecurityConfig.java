@@ -60,6 +60,8 @@ public class SecurityConfig {
                                 "/login",
                                 "/favicon.ico",
                                 "/api/v1/user/confirm-email-change/**"
+//                                ,
+//                                "/**"
                         ).permitAll()
                         .anyRequest().authenticated()
                 )
