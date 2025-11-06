@@ -14,4 +14,7 @@ public interface GradingQuestionRepository  extends JpaRepository<GradingQuestio
     List<GradingQuestion> findBySubmissionQuestion_SubmissionDaily_IdAndDeletedAtIsNull(Long submissionDailyId);
 
     List<GradingQuestion> findByGradingDailyIdAndDeletedAtIsNull(Long id);
+
+    // NEW: batch load grading questions for multiple gradingDaily ids to avoid N+1
+    List<GradingQuestion> findByGradingDailyIdInAndDeletedAtIsNull(List<Long> gradingDailyIds);
 }

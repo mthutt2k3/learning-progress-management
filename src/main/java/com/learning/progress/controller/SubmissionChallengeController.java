@@ -32,7 +32,6 @@ public class SubmissionChallengeController {
     private SubmissionChallengeService submissionChallengeService;
 
     private final SubmissionLogService submissionLogService;
-    private final JwtUtil jwtUtil;
 
     @GetMapping("/class/{classId}")
     @PreAuthorize("hasAnyRole('STUDENT', 'TEST_TAKER')")
@@ -89,5 +88,16 @@ public class SubmissionChallengeController {
 
         SubmissionLogsResponse logs = submissionLogService.getLogs(submissionChallengeId);
         return ResponseEntity.ok(DataResponse.success(logs, Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL));
+    }
+
+    @GetMapping("/{submissionChallengeId}/info")
+    @PreAuthorize("hasAnyRole('STUDENT', 'TEST_TAKER', 'TEACHER', 'TEACHING_ASSISTANT')")
+    @Operation(summary = "Get submission info with both challenge-level and submission-level deadlines",
+            description = "Returns submission times, challenge deadlines, grading totals (if graded) and related timing fields")
+    public ResponseEntity<DataResponse<StudentSubmissionDTO>> getSubmissionInfo(
+            @PathVariable Long submissionChallengeId) {
+
+        StudentSubmissionDTO dto = submissionChallengeService.getSubmissionInfo(submissionChallengeId);
+        return ResponseEntity.ok(DataResponse.success(dto, Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL));
     }
 }
