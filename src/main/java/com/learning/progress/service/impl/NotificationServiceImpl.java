@@ -22,9 +22,9 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
+import org.springframework.jmx.export.notification.NotificationPublisher;
 import org.springframework.stereotype.Service;
 
-import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -182,6 +182,8 @@ public class NotificationServiceImpl implements NotificationService {
         NotificationDTO dto = notificationMapper.toDTO(notification);
         // ✅ Publish Redis — các instance khác sẽ push SSE
 //        notificationPublisher.publish(dto);
+//        notificationPublisher.publish(dto);
+
 
         notification = notificationRepository.save(notification);
         log.info("[{}] Notification created with ID: {}", traceId, notification.getId());

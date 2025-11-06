@@ -11,38 +11,18 @@ import java.time.OffsetDateTime;
 @Getter
 @Setter
 @Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class NotificationDTO {
 
-    private final Long id;
-    private final Long receiverId;
-    private final String title;
-    private final String message;
-    private final Boolean isRead;
-    private final String targetUrl;
-    private final String avatarUrl;
-    private final OffsetDateTime createdAt;
-    private final String creatorName;
+    private Long id;
+    private Long receiverId;
+    private String title;
+    private String message;
+    private Boolean isRead;
+    private String targetUrl;
+    private String avatarUrl;
+    private OffsetDateTime createdAt;
+    private String creatorName;
 
-    @JsonCreator
-    public NotificationDTO(
-            @JsonProperty("id") Long id,
-            @JsonProperty("receiverId") Long receiverId,
-            @JsonProperty("title") String title,
-            @JsonProperty("message") String message,
-            @JsonProperty("isRead") Boolean isRead,
-            @JsonProperty("targetUrl") String targetUrl,
-            @JsonProperty("avatarUrl") String avatarUrl,
-            @JsonProperty("createdAt") OffsetDateTime createdAt,
-            @JsonProperty("creatorName") String creatorName
-    ) {
-        this.id = id;
-        this.receiverId = receiverId;
-        this.title = title;
-        this.message = message;
-        this.isRead = isRead;
-        this.targetUrl = targetUrl;
-        this.avatarUrl = avatarUrl;
-        this.createdAt = createdAt;
-        this.creatorName = creatorName;
-    }
 }
