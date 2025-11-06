@@ -18,6 +18,7 @@ public class StudentSubmissionDTO {
     private OffsetDateTime endDate; // submission.expiredAt (alias)
     private OffsetDateTime actualStartAt;
     private OffsetDateTime submittedAt;
+    private Duration challengeDuration;
     private Duration actualDuration;
     private boolean isLate;
 
@@ -26,4 +27,5 @@ public class StudentSubmissionDTO {
     private Double finalScore;
 
     private String overallFeedback;
+
 }

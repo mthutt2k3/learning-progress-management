@@ -29,6 +29,7 @@ public interface SubmissionMapper {
             @Mapping(target = "studentName", expression = "java(submission.getUser() != null ? (submission.getUser().getFullName() != null ? submission.getUser().getFullName() : submission.getUser().getEmail()) : null)"),
             @Mapping(target = "startDate", source = "submission.startedAt"),
             @Mapping(target = "endDate", source = "submission.expiredAt"),
+            @Mapping(target = "challengeDuration", source = "submission.challenge.durationMinutes"),
             @Mapping(target = "actualDuration", expression = "java(submission.getActualStartAt() != null && submission.getSubmittedAt() != null ? Duration.between(submission.getActualStartAt(), submission.getSubmittedAt()) : null)"),
     })
     StudentSubmissionDTO toStudentSubmissionDTO(
@@ -38,5 +39,9 @@ public interface SubmissionMapper {
             Double maxPossibleWeight,
             Double finalScore
     );
+    default Duration map(Integer minutes) {
+        return minutes != null ? Duration.ofMinutes(minutes) : null;
+    }
+
 
 }

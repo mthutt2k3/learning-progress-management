@@ -24,4 +24,7 @@ public interface SubmissionChallengeService {
 
     // New: mark that student started working on a submission (PENDING -> DRAFT, set actualStartAt)
     void startSubmission(Long submissionId);
+
+    // NEW: retrieve submission info including both challenge-level deadlines and submission-level deadlines
+    StudentSubmissionDTO getSubmissionInfo(Long submissionId);
 }

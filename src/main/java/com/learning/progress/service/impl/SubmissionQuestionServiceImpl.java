@@ -179,15 +179,6 @@ public class SubmissionQuestionServiceImpl implements SubmissionQuestionService 
     @Override
     @Transactional(readOnly = true)
     public DraftSubmissionResponse getDraftSubmission(Long submissionChallengeId) {
-        Long userId = jwtUtil.extractUserIdFromCurrentRequest();
-        String cacheKey = cacheService.buildDraftSubmissionCacheKey(userId, submissionChallengeId);
-
-        DraftSubmissionResponse cached = cacheService.getCachedObject(cacheKey, new TypeReference<>() {});
-        if (cached != null) {
-            log.debug("Cache HIT for draft: {}", cacheKey);
-            return cached;
-        }
-
         // 1. Lấy submission
         SubmissionDailyChallenge submission = submissionDailyChallengeRepository
                 .findByIdAndDeletedAtIsNull(submissionChallengeId)
@@ -273,9 +264,6 @@ public class SubmissionQuestionServiceImpl implements SubmissionQuestionService 
         response.setSubmissionChallengeId(submissionChallengeId);
         response.setStatus(submission.getSubmissionStatus());
         response.setSectionDetails(sectionDtos);
-
-        // Cache 5 phút
-        cacheService.cacheObject(cacheKey, response, 5);
 
         return response;
     }

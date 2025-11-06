@@ -1,9 +1,11 @@
 package com.learning.progress.service;
 
 import com.learning.progress.dto.submission.AppendSubmissionLogRequest;
-
-import java.util.List;
+import com.learning.progress.dto.submission.SubmissionLogsResponse;
+import jakarta.validation.Valid;
 
 public interface SubmissionLogService {
-    void appendLogs(Long submissionId, Long userId, List<AppendSubmissionLogRequest.SubmissionLogEvent> logs);
+    void appendLogs(Long submissionId, @Valid AppendSubmissionLogRequest logs);
+
+    SubmissionLogsResponse getLogs(Long submissionId);
 }
