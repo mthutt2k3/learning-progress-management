@@ -161,7 +161,7 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
         ChallengeType challengeType = challenge.getChallengeType();
         if (challengeType != ChallengeType.GV && challengeType != ChallengeType.RE && challengeType != ChallengeType.LI) {
             log.error("Auto-grading not allowed for challenge type: {}", challengeType);
-            throw new ApiException("Auto-grading is only allowed for GV, RE, or LI challenges", HttpStatus.BAD_REQUEST.value());
+            return;
         }
 
         // === LẤY TẤT CẢ SECTION VÀ QUESTION TRONG CHALLENGE ===
