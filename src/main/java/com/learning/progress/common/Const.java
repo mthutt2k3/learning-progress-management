@@ -421,6 +421,12 @@ public class Const {
     }
 
     public static final class NOTIFICATION {
-        public static final String NOT_FOUND_OR_NOT_OWNER = "";
+        public static final String NOT_FOUND_OR_NOT_OWNER = "Notification not found or you do not have permission.";
+
+        // NEW: centralized notification templates for submission events
+        public static final String SUBMISSION_TITLE = "Challenge submitted";
+        // use String.format(SUBMISSION_MESSAGE_TEMPLATE, challengeName)
+        public static final String SUBMISSION_MESSAGE_TEMPLATE = "You submitted \"%s\". Your submission has been received and will be graded soon.";
     }
 }
+

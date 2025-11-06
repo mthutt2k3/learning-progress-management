@@ -7,6 +7,7 @@ import com.learning.progress.entity.Notification;
 import com.learning.progress.entity.User;
 import com.learning.progress.exception.ApiException;
 import com.learning.progress.mapper.NotificationMapper;
+import com.learning.progress.messaging.RedisPublisher;
 import com.learning.progress.repository.NotificationRepository;
 import com.learning.progress.repository.UserRepository;
 import com.learning.progress.service.NotificationService;
@@ -25,6 +26,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.jmx.export.notification.NotificationPublisher;
 import org.springframework.stereotype.Service;
 
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -47,6 +49,8 @@ public class NotificationServiceImpl implements NotificationService {
 
     @Autowired
     private JwtUtil jwtUtil;
+    @Autowired
+    private RedisPublisher redisPublisher;
 
     /**
      * Lấy danh sách thông báo của user hiện tại
@@ -178,14 +182,12 @@ public class NotificationServiceImpl implements NotificationService {
                 .avatarUrl(avatarUrl)
                 .isRead(false)
                 .createdBy(createdBy)
+                .createdAt(OffsetDateTime.now())
                 .build();
         NotificationDTO dto = notificationMapper.toDTO(notification);
-        // ✅ Publish Redis — các instance khác sẽ push SSE
-//        notificationPublisher.publish(dto);
-//        notificationPublisher.publish(dto);
-
-
         notification = notificationRepository.save(notification);
+        // ✅ Publish Redis — các instance khác sẽ push SSE
+        redisPublisher.publishToUser(receiver.getId(), dto);
         log.info("[{}] Notification created with ID: {}", traceId, notification.getId());
 
         return dto;

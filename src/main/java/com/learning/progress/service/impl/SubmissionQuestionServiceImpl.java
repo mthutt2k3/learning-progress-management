@@ -18,6 +18,7 @@ import com.learning.progress.mapper.ChallengeSectionMapper;
 import com.learning.progress.repository.*;
 import com.learning.progress.cache.CacheService;
 import com.learning.progress.service.GradingDailyChallengeService;
+import com.learning.progress.service.NotificationService;
 import com.learning.progress.service.SubmissionQuestionService;
 import com.learning.progress.service.validator.SubmissionQuestionValidator;
 import com.learning.progress.util.AppValidator;
@@ -59,6 +60,8 @@ public class SubmissionQuestionServiceImpl implements SubmissionQuestionService 
     private GradingQuestionRepository gradingQuestionRepository;
     @Autowired
     private ChallengeSectionMapper challengeSectionMapper;
+    @Autowired
+    private NotificationService notificationService;
 
     @Override
     @Transactional(readOnly = true)
@@ -343,6 +346,10 @@ public class SubmissionQuestionServiceImpl implements SubmissionQuestionService 
             }
             cacheService.clearSubmissionsCacheForChallenge(dailyChallenge.getId());
         }
+        String title = Const.NOTIFICATION.SUBMISSION_TITLE;
+        String message = String.format(Const.NOTIFICATION.SUBMISSION_MESSAGE_TEMPLATE, dailyChallenge.getChallengeName());
+        notificationService.createNotification(userId, null, message, title, null, null);
+
         // XÓA CACHE
         cacheService.clearSubmissionCache(userId, submissionChallengeId);
     }
