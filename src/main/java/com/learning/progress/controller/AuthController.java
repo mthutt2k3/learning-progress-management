@@ -34,7 +34,6 @@ public class AuthController {
             );
     }
 
-    @PreAuthorize("isAuthenticated()")
     @PostMapping("/refresh-token")
     public ResponseEntity<?> refreshToken(@RequestParam String refreshToken) {
         Map<String, String> response = authService.refreshAccessToken(refreshToken);
