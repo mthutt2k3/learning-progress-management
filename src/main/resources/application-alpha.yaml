@@ -114,7 +114,7 @@ logging:
     org.springframework.orm.jpa: WARN
     org.springframework.transaction: WARN
     org.hibernate.engine.transaction.internal.TransactionImpl: WARN
-
+#    org.springframework.web.servlet.mvc.method.annotation: DEBUG
 mapping:
   max-message-per-sub-batch: 1000
 
@@ -142,8 +142,14 @@ azure:
     endpoint: ${TRANSLATOR_ENDPOINT}
     key: ${TRANSLATOR_API_KEY}
     region: southeastasia
+  speech:
+    key: ${AZURE_SPEECH_KEY}
+    region: southeastasia
 
 app:
+  redis:
+    channels:
+      user: "lpms:notification:{userId}"
   challenge:
     max-questions-per-challenge: 100
   pagination:
