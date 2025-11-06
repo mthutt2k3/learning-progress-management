@@ -2,13 +2,18 @@ package com.learning.progress.controller;
 
 import com.learning.progress.common.Const;
 import com.learning.progress.dto.DataResponse;
-import com.learning.progress.dto.challenge.DailyChallengeListDTO;
 import com.learning.progress.dto.challenge.StudentChallengeListDTO;
+import com.learning.progress.dto.submission.AppendSubmissionLogRequest;
+import com.learning.progress.dto.submission.SubmissionLogsResponse;
 import com.learning.progress.dto.submission.StudentSubmissionDTO;
 import com.learning.progress.service.SubmissionChallengeService;
+import com.learning.progress.service.SubmissionLogService;
+import com.learning.progress.util.JwtUtil;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -20,10 +25,14 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/v1/challenge-submissions")
 @Tag(name = "Submission Challenge Management", description = "APIs for managing daily challenge submissions")
+@RequiredArgsConstructor
 public class SubmissionChallengeController {
 
     @Autowired
     private SubmissionChallengeService submissionChallengeService;
+
+    private final SubmissionLogService submissionLogService;
+    private final JwtUtil jwtUtil;
 
     @GetMapping("/class/{classId}")
     @PreAuthorize("hasAnyRole('STUDENT', 'TEST_TAKER')")
@@ -59,5 +68,26 @@ public class SubmissionChallengeController {
     public ResponseEntity<DataResponse<Boolean>> startSubmission(@PathVariable Long submissionId) {
         submissionChallengeService.startSubmission(submissionId);
         return new ResponseEntity<>(DataResponse.success(true, Const.RESULT_MESSAGE_CODE.UPDATE_SUCCESSFUL), HttpStatus.OK);
+    }
+
+    @PostMapping("/{submissionChallengeId}/logs")
+    @PreAuthorize("hasAnyRole('STUDENT', 'TEST_TAKER')")
+    @Operation(summary = "Append anti-cheat logs", description = "Append behavior logs during challenge (only if anti-cheat enabled)")
+    public ResponseEntity<DataResponse<?>> appendLogs(
+            @PathVariable Long submissionChallengeId,
+            @Valid @RequestBody AppendSubmissionLogRequest request) {
+
+        submissionLogService.appendLogs(submissionChallengeId, request);
+        return new ResponseEntity<>(DataResponse.success(null, Const.RESULT_MESSAGE_CODE.SUCCESSFUL), HttpStatus.ACCEPTED);
+    }
+
+    @GetMapping("/{submissionChallengeId}/logs")
+    @PreAuthorize("hasAnyRole('STUDENT', 'TEST_TAKER', 'TEACHER', 'TEACHING_ASSISTANT')")
+    @Operation(summary = "Get submission event logs", description = "Retrieve anti-cheat / interaction logs for a submission")
+    public ResponseEntity<DataResponse<SubmissionLogsResponse>> getLogs(
+            @PathVariable Long submissionChallengeId) {
+
+        SubmissionLogsResponse logs = submissionLogService.getLogs(submissionChallengeId);
+        return ResponseEntity.ok(DataResponse.success(logs, Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL));
     }
 }
