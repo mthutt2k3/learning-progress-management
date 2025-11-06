@@ -32,7 +32,6 @@ public class CacheService {
     public static final String QUESTIONS_SECTION_KEY_PREFIX = "questions:section:";
     public static final String SUBMISSIONS_CHALLENGE_KEY_PREFIX = "submissions:challenge:";
     public static final String SUBMISSION_RESULT_KEY_PREFIX = "submission:result:user:";
-    public static final String SUBMISSION_DRAFT_KEY_PREFIX = "submission:draft:user:";
 
     // LEVEL CACHE (MỚI)
     public static final long LEVEL_TTL_MINUTES = 15;
@@ -45,12 +44,6 @@ public class CacheService {
         this.redisTemplate = redisTemplate;
         this.objectMapper = objectMapper;
     }
-
-    // === LẤY traceId TỪ MDC ===
-    public String getCurrentTraceId() {
-        return MDC.get(Const.LOGGING.TRACE_ID);
-    }
-
     // =====================================================================
     // GET + SET (TỰ ĐỘNG LOG + TRACEID)
     // =====================================================================
@@ -158,9 +151,6 @@ public class CacheService {
         return String.format("%s%d:submission:%d", SUBMISSION_RESULT_KEY_PREFIX, userId, submissionId);
     }
 
-    public String buildDraftSubmissionCacheKey(Long userId, Long submissionId) {
-        return String.format("%s%d:submission:%d", SUBMISSION_DRAFT_KEY_PREFIX, userId, submissionId);
-    }
     // =====================================================================
     // CLEAR CACHE HELPERS (KHÔNG CẦN traceId)
     // =====================================================================
@@ -202,10 +192,8 @@ public class CacheService {
     public void clearSubmissionCache(Long userId, Long submissionId) {
         try {
             String resultKey = buildSubmissionResultCacheKey(userId, submissionId);
-            String draftKey = buildDraftSubmissionCacheKey(userId, submissionId);
 
             delete(resultKey);
-            delete(draftKey);
             log.debug("Cleared submission caches for userId: {}, submissionId: {}", userId, submissionId);
         } catch (Exception e) {
             log.warn("Failed to clear submission cache: userId={}, submissionId={}", userId, submissionId, e);

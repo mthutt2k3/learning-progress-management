@@ -17,9 +17,9 @@ public class AppendSubmissionLogRequest {
     @AllArgsConstructor
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public static class SubmissionLogEvent {
-        private String event;                    // START, ANSWER_CHANGE, TAB_BLUR, COPY, PASTE, DEVTOOLS_OPEN, SUBMIT
+        private Long eventId;         // ID duy nhất cho mỗi event trong phiên làm bài
+        private String event;                    // ANSWER_CHANGE, TAB_BLUR, COPY, PASTE, DEVTOOLS_OPEN
         private OffsetDateTime timestamp;
-        private Long questionId;
         private List<String> oldValue;           // cho ANSWER_CHANGE
         private List<String> newValue;           // cho ANSWER_CHANGE
         private Long durationMs;                 // cho TAB_BLUR
