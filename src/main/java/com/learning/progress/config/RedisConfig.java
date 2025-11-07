@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.learning.progress.messaging.RedisListener;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
@@ -43,16 +44,18 @@ public class RedisConfig {
     @Bean
     public RedisMessageListenerContainer container(
             RedisConnectionFactory factory,
-            RedisListener listener
+            RedisListener listener,
+            RedisChannelProperties channelProps
     ) {
         RedisMessageListenerContainer container = new RedisMessageListenerContainer();
         container.setConnectionFactory(factory);
 
-        // Lắng nghe notification
-        container.addMessageListener(listener, new PatternTopic("lpms:notification:*"));
+        // subscribe using centralized prefixes from properties to avoid duplicated literals
+        String notifPattern = channelProps.getNotificationToUser() + "*";
+        String mismatchPattern = channelProps.getDeviceMismatch() + "*";
 
-        // ✅ Lắng nghe Device Mismatch
-        container.addMessageListener(listener, new PatternTopic("lpms:device-mismatch:*"));
+        container.addMessageListener(listener, new PatternTopic(notifPattern));
+        container.addMessageListener(listener, new PatternTopic(mismatchPattern));
 
         return container;
     }

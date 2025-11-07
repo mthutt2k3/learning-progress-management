@@ -17,10 +17,9 @@ import java.nio.charset.StandardCharsets;
 @Component
 @RequiredArgsConstructor
 public class RedisListener implements MessageListener {
-    private static final String PREFIX_NOTIFICATION = "lpms:notification:";
-    private static final String PREFIX_DEVICE_MISMATCH = "lpms:device-mismatch:";
 
     private final SseService sseService;
+    private final RedisChannelProperties channelProps;
 
     @Override
     public void onMessage(Message message, byte[] pattern) {
@@ -29,18 +28,22 @@ public class RedisListener implements MessageListener {
 
         log.debug("RedisListener received. channel={} rawBody={}", channel, body);
 
-        if (channel.startsWith(PREFIX_NOTIFICATION)) {
-            handleNotification(channel, body);
+        String notifPrefix = channelProps.getNotificationToUser();
+        String mismatchPrefix = channelProps.getDeviceMismatch();
+
+        if (notifPrefix != null && channel.startsWith(notifPrefix)) {
+            handleNotification(channel, body, notifPrefix);
         }
-        else if (channel.startsWith(PREFIX_DEVICE_MISMATCH)) {
-            handleDeviceMismatch(channel, body);
+        else if (mismatchPrefix != null && channel.startsWith(mismatchPrefix)) {
+            handleDeviceMismatch(channel, body, mismatchPrefix);
         }
         else {
             log.debug("Ignoring channel: {}", channel);
         }
     }
-    private void handleNotification(String channel, String body) {
-        String userIdStr = channel.substring(PREFIX_NOTIFICATION.length());
+
+    private void handleNotification(String channel, String body, String prefix) {
+        String userIdStr = channel.substring(prefix.length());
 
         try {
             Long userId = Long.parseLong(userIdStr);
@@ -57,16 +60,15 @@ public class RedisListener implements MessageListener {
             }
 
             log.debug("Dispatch Notification to SseService userId={} dto={}", userId, JsonUtil.objectToJsonPretty(dto));
-
             sseService.sendNotification(dto);
 
         } catch (Exception e) {
             log.error("Error handleNotification channel={}", channel, e);
         }
     }
-    private void handleDeviceMismatch(String channel, String body) {
-        String submissionIdStr = channel.substring(PREFIX_DEVICE_MISMATCH.length());
 
+    private void handleDeviceMismatch(String channel, String body, String prefix) {
+        String submissionIdStr = channel.substring(prefix.length());
         log.info("Device mismatch event for submissionId={} body={}", submissionIdStr, body);
 
         try {

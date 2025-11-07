@@ -171,7 +171,7 @@ public class NotificationServiceImpl implements NotificationService {
      */
     @Override
     @Async("notificationExecutor")
-    public NotificationDTO createNotification(
+    public void createNotification(
             Long receiverId, Long creatorId, String title,
             String message, String targetUrl, String avatarUrl) {
 
@@ -185,8 +185,6 @@ public class NotificationServiceImpl implements NotificationService {
                 ? userRepository.findByIdAndDeletedAtIsNull(creatorId).orElse(null)
                 : null;
 
-        String createdBy = jwtUtil.extractEmailPrefixFromCurrentRequest();
-
         Notification notification = Notification.builder()
                 .receiver(receiver)
                 .creator(creator)
@@ -195,7 +193,6 @@ public class NotificationServiceImpl implements NotificationService {
                 .targetUrl(targetUrl)
                 .avatarUrl(avatarUrl)
                 .isRead(false)
-                .createdBy(createdBy)
                 .createdAt(OffsetDateTime.now())
                 .build();
 
@@ -221,8 +218,6 @@ public class NotificationServiceImpl implements NotificationService {
         } catch (Exception e) {
             log.error("[{}] Redis publish failed for receiverId {}: {}", traceId, receiverId, e.getMessage(), e);
         }
-
-        return notificationMapper.toDTO(notification);
     }
 
     /**
@@ -231,7 +226,7 @@ public class NotificationServiceImpl implements NotificationService {
      */
     @Transactional
     @Async("notificationExecutor")
-    public List<NotificationDTO> createNotification(
+    public void createNotification(
             List<Long> receiverIds, Long creatorId, String title,
             String message, String targetUrl, String avatarUrl) {
 
@@ -255,7 +250,6 @@ public class NotificationServiceImpl implements NotificationService {
         }
 
         User creator = creatorId != null ? userRepository.findByIdAndDeletedAtIsNull(creatorId).orElse(null) : null;
-        String createdBy = jwtUtil.extractEmailPrefixFromCurrentRequest();
         OffsetDateTime now = OffsetDateTime.now();
 
         List<Notification> notifications = new ArrayList<>();
@@ -268,7 +262,6 @@ public class NotificationServiceImpl implements NotificationService {
                     .targetUrl(targetUrl)
                     .avatarUrl(avatarUrl)
                     .isRead(false)
-                    .createdBy(createdBy)
                     .createdAt(now)
                     .build();
             notifications.add(n);
@@ -307,6 +300,5 @@ public class NotificationServiceImpl implements NotificationService {
             }
         }
 
-        return dtos;
     }
 }

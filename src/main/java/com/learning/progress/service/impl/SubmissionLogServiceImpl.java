@@ -49,11 +49,14 @@ public class SubmissionLogServiceImpl implements SubmissionLogService {
     @Transactional
     public void appendLogs(Long submissionId, @Valid AppendSubmissionLogRequest logs) {
         Long userId = jwtUtil.extractUserIdFromCurrentRequest();
+
+        String clientIp = jwtUtil.getClientIpFromCurrentRequest();
+
         // 1. Validate đồng bộ (chỉ đọc)
         validateAppendLogs(submissionId, userId, logs);
 
         // 2. Gọi async để ghi log (ngoài transaction hiện tại)
-        appendLogsAsync(submissionId, userId, logs);
+        appendLogsAsync(submissionId, userId, clientIp, logs);
     }
 
     /**
@@ -99,7 +102,7 @@ public class SubmissionLogServiceImpl implements SubmissionLogService {
 
     @Async("taskExecutor")
     @Transactional
-    public void appendLogsAsync(Long submissionId, Long userId, @Valid AppendSubmissionLogRequest logRequest) {
+    public void appendLogsAsync(Long submissionId, Long userId, String clientIp, @Valid AppendSubmissionLogRequest logRequest) {
         List<AppendSubmissionLogRequest.SubmissionLogEvent> newLogs = logRequest.getLogs();
         if (newLogs.isEmpty()) return;
 
@@ -117,8 +120,6 @@ public class SubmissionLogServiceImpl implements SubmissionLogService {
                 return;
             }
 
-            // GÁN IP TỪ BE
-            String clientIp = jwtUtil.getClientIpFromCurrentRequest();
             newLogs.forEach(ev -> ev.setIpAddress(clientIp));
             // PHÁT HIỆN 2 MÁY
             List<AppendSubmissionLogRequest.SubmissionLogEvent> startSessionEvents = newLogs.stream()

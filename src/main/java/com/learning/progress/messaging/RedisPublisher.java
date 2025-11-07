@@ -20,8 +20,7 @@ public class RedisPublisher {
      * Gửi noti cho user cụ thể
      */
     public void publishNotificationToUser(Long userId, Object payload) {
-        String channel = channelProps.getNotificationToUser()
-                .replace("{userId}", String.valueOf(userId));
+        String channel = channelProps.getNotificationToUser()+ userId;
 
         publish(channel, payload, "notificationToUser");
     }
@@ -30,8 +29,7 @@ public class RedisPublisher {
      * Gửi cảnh báo mismatch
      */
     public void publishWarningDeviceMismatchToUser(Long submissionId, Object payload) {
-        String channel = channelProps.getDeviceMismatch()
-                .replace("{submissionId}", String.valueOf(submissionId));
+        String channel = channelProps.getDeviceMismatch() + submissionId;
 
         publish(channel, payload, "deviceMismatch");
     }
