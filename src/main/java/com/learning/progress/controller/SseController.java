@@ -26,7 +26,7 @@ public class SseController {
 
     @PostMapping
     public String mock(@RequestBody NotificationDTO dto) {
-        redisPublisher.publishToUser(dto.getReceiverId(), dto);
+        redisPublisher.publishNotificationToUser(dto.getReceiverId(), dto);
         return "Sent!";
     }
     @PostMapping("/without-redis")

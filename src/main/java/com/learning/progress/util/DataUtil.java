@@ -43,6 +43,10 @@ import java.util.stream.Collectors;
 
 @Slf4j
 public class DataUtil {
+    public static String bold(String text) {
+        if (text == null) return "";
+        return "<b>" + text + "</b>";
+    }
 
     public static LocalDate parseAndValidateDate(String dateStr, String pattern, String fieldName) {
         if (dateStr == null || dateStr.trim().isEmpty()) {
