@@ -16,7 +16,7 @@ public class GradeQuestionRequest {
     @Min(value = 0, message = "receivedWeight must be non-negative")
     private Double receivedWeight;
 
-    private String feedback;
+    private FeedbackContent feedback;
 
     // Reuse HighlightComment structure from ManualGradingRequest
     private List<HighlightComment> highlightComments;

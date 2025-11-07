@@ -1,16 +1,13 @@
 package com.learning.progress.service.impl;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.learning.progress.common.ChallengeType;
 import com.learning.progress.common.Const;
 import com.learning.progress.common.QuestionType;
 import com.learning.progress.common.SubmissionStatus;
 import com.learning.progress.dto.challenge.section.DataContent;
 import com.learning.progress.dto.challenge.section.DataItem;
-import com.learning.progress.dto.grading.HighlightComment;
-import com.learning.progress.dto.grading.GradingChallengeDetailResponse;
-import com.learning.progress.dto.grading.GradeSummaryRequest;
-import com.learning.progress.dto.grading.GradingQuestionDetailResponse;
-import com.learning.progress.dto.grading.GradeQuestionRequest;
+import com.learning.progress.dto.grading.*;
 import com.learning.progress.dto.submission.AnswerContent;
 import com.learning.progress.dto.submission.AnswerItem;
 import com.learning.progress.entity.*;
@@ -24,6 +21,7 @@ import com.learning.progress.util.DataUtil;
 import com.learning.progress.util.JwtUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -58,6 +56,9 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
     private CacheService cacheService;
     @Autowired
     private ChallengeSectionRepository challengeSectionRepository;
+    @Qualifier("objectMapper")
+    @Autowired
+    private ObjectMapper objectMapper;
 
     @Override
     @Transactional(readOnly = true)
@@ -529,7 +530,6 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
                     return g;
                 });
         grading.setGrader(grader);
-        // For per-question grading we do not finalize the grading header by default
         gradingDailyChallengeRepository.save(grading);
 
         GradingQuestion gq = gradingQuestionRepository
@@ -539,9 +539,19 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
         gq.setGradingDaily(grading);
         gq.setGrader(grader);
         gq.setReceivedWeight(request.getReceivedWeight());
-        gq.setFeedback(request.getFeedback());
-        String json = JsonUtil.objectToJson(request.getHighlightComments());
-        gq.setHighlightCommentsJson(json);
+
+        // ✅ Serialize feedback object to JSON string
+        if (request.getFeedback() != null) {
+            String feedbackJson = JsonUtil.objectToJson(request.getFeedback());
+            gq.setFeedback(feedbackJson);  // ← Dùng setFeedbackJson
+        }
+
+        // Serialize highlight comments
+        if (request.getHighlightComments() != null) {
+            String highlightJson = JsonUtil.objectToJson(request.getHighlightComments());
+            gq.setHighlightCommentsJson(highlightJson);
+        }
+
         gradingQuestionRepository.save(gq);
 
         // Clear individual submission cache
@@ -557,7 +567,17 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
                 .findBySubmissionQuestionIdAndDeletedAtIsNull(submissionQuestionId)
                 .orElseThrow(() -> new ApiException("Grading for this question not found", HttpStatus.NOT_FOUND.value()));
 
-        // parse highlight comments if present
+        // ✅ Parse feedback JSON string to object
+        FeedbackContent feedbackContent = null;
+        if (gq.getFeedback() != null && !gq.getFeedback().isBlank()) {  // ← Dùng getFeedbackJson
+            try {
+                feedbackContent = objectMapper.readValue(gq.getFeedback(), FeedbackContent.class);
+            } catch (Exception e) {
+                log.warn("Failed to parse feedback JSON for gqId={}: {}", gq.getId(), e.getMessage());
+            }
+        }
+
+        // Parse highlight comments
         List<HighlightComment> highlights = null;
         if (gq.getHighlightCommentsJson() != null && !gq.getHighlightCommentsJson().isBlank()) {
             try {
@@ -569,10 +589,9 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
 
         GradingQuestionDetailResponse resp = new GradingQuestionDetailResponse();
         resp.setSubmissionQuestionId(submissionQuestionId);
-
-        // received weight = what grader assigned for this question
         resp.setReceivedWeight(gq.getReceivedWeight());
-        // question weight = original max weight of the question (from Question.weight)
+
+        // Get question weight
         Double questionWeight = null;
         SubmissionQuestion sq = gq.getSubmissionQuestion();
         if (sq != null) {
@@ -583,7 +602,7 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
         }
         resp.setQuestionWeight(questionWeight);
 
-        resp.setFeedback(gq.getFeedback());
+        resp.setFeedback(feedbackContent);  // ← Return object, not string
         resp.setHighlightComments(highlights);
         resp.setGraderId(gq.getGrader() != null ? gq.getGrader().getId() : null);
         resp.setGraderName(gq.getGrader() != null ? gq.getGrader().getFullName() : null);
