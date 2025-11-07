@@ -329,24 +329,10 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
             throw new ApiException(Const.SUBMISSION.INVALID_ID, HttpStatus.BAD_REQUEST.value());
         }
 
-        SubmissionDailyChallenge submission = submissionDailyChallengeRepository
-                .findByIdAndDeletedAtIsNull(submissionId)
-                .orElseThrow(() -> {
-                    log.warn("[{}] not found submissionId={}", method, submissionId);
-                    return new ApiException(Const.SUBMISSION.NOT_FOUND, HttpStatus.NOT_FOUND.value());
-                });
+        // Use centralized validator which returns the loaded submission if allowed
+        SubmissionDailyChallenge submission = appValidator.validateUserAccessToSubmission(submissionId);
 
-        Long classId = submission.getChallenge().getClassLesson().getClassChapter().getClazz().getId();
-        appValidator.validateUserAccessToClass(classId);
-
-        String role = jwtUtil.extractRoleFromCurrentRequest();
-        Long currentUserId = jwtUtil.extractUserIdFromCurrentRequest();
-        if (("STUDENT".equals(role) || "TEST_TAKER".equals(role)) && !Objects.equals(submission.getUser().getId(), currentUserId)) {
-            log.warn("[{}] forbidden: user={} requested info for submissionOwner={}", method, currentUserId, submission.getUser().getId());
-            throw new ApiException(Const.SUBMISSION.FORBIDDEN_NOT_OWNER, HttpStatus.FORBIDDEN.value());
-        }
-
-        // Use repository helper to sum receivedWeight for this submission (efficient single-query)
+        // existing grading lookup and computations (unchanged)
         GradingDailyChallenge grading = gradingDailyChallengeRepository.findBySubmissionDailyIdAndDeletedAtIsNull(submissionId)
                 .orElse(null);
 
@@ -355,11 +341,9 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
         Double finalScore = null;
 
         if (grading != null) {
-            // sum received weight by submission id (repository optimized)
             Double sumReceived = gradingDailyChallengeRepository.sumReceivedWeightBySubmissionDailyId(submissionId);
             achievedTotal = sumReceived == null ? 0.0 : sumReceived;
 
-            // use DailyChallengeRepository sum helper for challenge max
             BigDecimal maxBig = dailyChallengeRepository.sumQuestionWeightByChallengeId(submission.getChallenge().getId());
             challengeMaxPossibleWeight = (maxBig == null) ? 0.0 : maxBig.doubleValue();
 

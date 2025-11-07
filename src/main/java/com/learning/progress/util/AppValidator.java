@@ -4,10 +4,12 @@ import com.learning.progress.common.ClassStudentStatus;
 import com.learning.progress.common.ClassTeacherStatus;
 import com.learning.progress.common.Const;
 import com.learning.progress.common.RoleName;
+import com.learning.progress.entity.SubmissionDailyChallenge;
 import com.learning.progress.entity.User;
 import com.learning.progress.exception.ApiException;
 import com.learning.progress.repository.ClassStudentRepository;
 import com.learning.progress.repository.ClassTeacherRepository;
+import com.learning.progress.repository.SubmissionDailyChallengeRepository;
 import com.learning.progress.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -35,6 +37,7 @@ public class AppValidator {
     private final UserRepository userRepository;
     private final ClassTeacherRepository classTeacherRepository;
     private final ClassStudentRepository classStudentRepository;
+    private final SubmissionDailyChallengeRepository submissionDailyChallengeRepository;
     /**
      * Validates that the order numbers in the given list of DTOs are sequential from 1 to expectedCount.
      *
@@ -98,6 +101,63 @@ public class AppValidator {
         if (!hasAccess) {
             throw new ApiException("You are not authorized to access this class", HttpStatus.FORBIDDEN.value());
         }
+    }
+
+    /**
+     * Validate access to a submission (submissionDaily). Returns the loaded SubmissionDailyChallenge if authorized.
+     * Rules:
+     *  - MANAGER: allowed
+     *  - TEACHER / TEACHING_ASSISTANT: allowed if they are active teacher in the class of the submission
+     *  - STUDENT / TEST_TAKER: allowed only if they own the submission
+     */
+    public SubmissionDailyChallenge validateUserAccessToSubmission(Long submissionId) {
+        if (submissionId == null) {
+            log.warn("validateUserAccessToSubmission called with null id");
+            throw new ApiException(Const.SUBMISSION.INVALID_ID, HttpStatus.BAD_REQUEST.value());
+        }
+
+        SubmissionDailyChallenge submission = submissionDailyChallengeRepository
+                .findByIdAndDeletedAtIsNull(submissionId)
+                .orElseThrow(() -> {
+                    log.warn("Submission not found: {}", submissionId);
+                    return new ApiException(Const.SUBMISSION.NOT_FOUND, HttpStatus.NOT_FOUND.value());
+                });
+
+        Long classId = submission.getChallenge()
+                .getClassLesson().getClassChapter().getClazz().getId();
+
+        String roleStr = jwtUtil.extractRoleFromCurrentRequest();
+        Long currentUserId = jwtUtil.extractUserIdFromCurrentRequest();
+
+        RoleName roleName = validateAndConvertEnum(roleStr, RoleName.class);
+
+        // MANAGER allowed always
+        if (roleName == RoleName.MANAGER) {
+            return submission;
+        }
+
+        // Teachers allowed only when they belong to the class
+        if (roleName == RoleName.TEACHER || roleName == RoleName.TEACHING_ASSISTANT) {
+            boolean isTeacher = classTeacherRepository.existsByUser_IdAndClazz_IdAndStatus(currentUserId, classId, ClassTeacherStatus.ACTIVE);
+            if (!isTeacher) {
+                log.warn("Access denied: user {} role {} is not teacher of class {}", currentUserId, roleName, classId);
+                throw new ApiException(Const.SECURITY.FORBIDDEN_ROLE, HttpStatus.FORBIDDEN.value());
+            }
+            return submission;
+        }
+
+        // Students allowed only for their own submission
+        if (roleName == RoleName.STUDENT || roleName == RoleName.TEST_TAKER) {
+            if (!Objects.equals(submission.getUser().getId(), currentUserId)) {
+                log.warn("Access denied: user {} attempting to access submission {} owned by {}", currentUserId, submissionId, submission.getUser().getId());
+                throw new ApiException(Const.SUBMISSION.FORBIDDEN_NOT_OWNER, HttpStatus.FORBIDDEN.value());
+            }
+            return submission;
+        }
+
+        // default deny
+        log.warn("Access denied: user {} with role {} not allowed to access submission {}", currentUserId, roleName, submissionId);
+        throw new ApiException(Const.SECURITY.FORBIDDEN_ROLE, HttpStatus.FORBIDDEN.value());
     }
 
     public <E extends Enum<E>> void validateEnumValue(

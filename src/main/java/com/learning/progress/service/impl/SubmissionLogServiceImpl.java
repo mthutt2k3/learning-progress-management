@@ -69,27 +69,20 @@ public class SubmissionLogServiceImpl implements SubmissionLogService {
         }
         List<AppendSubmissionLogRequest.SubmissionLogEvent> newLogs = logRequest.getLogs();
 
-        if (newLogs.isEmpty()) {
-            return; // Không cần làm gì
+        if (newLogs == null || newLogs.isEmpty()) {
+            return; // nothing to validate
         }
 
-        SubmissionDailyChallenge submission = submissionDailyChallengeRepository
-                .findByIdAndDeletedAtIsNull(submissionId)
-                .orElseThrow(() -> new ApiException(Const.SUBMISSION.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+        // Centralized validation: will throw if not allowed and also returns the submission
+        SubmissionDailyChallenge submission = appValidator.validateUserAccessToSubmission(submissionId);
 
-        appValidator.validateUserAccessToClass(submission.getChallenge().getClassLesson().getClassChapter().getClazz().getId());
-        // Kiểm tra quyền sở hữu
-        if (!submission.getUser().getId().equals(userId)) {
-            throw new ApiException("Unauthorized", HttpStatus.FORBIDDEN.value());
-        }
-
-        // Kiểm tra anti-cheat
+        // Validate anti-cheat enabled (behavior kept)
         if (!Boolean.TRUE.equals(submission.getChallenge().getHasAntiCheat())) {
             log.debug("Anti-cheat disabled for challenge {}, ignoring logs", submission.getChallenge().getId());
-            // Vẫn cho phép gọi async (nhưng async sẽ return sớm)
+            // still allow call to proceed (async will return quickly)
         }
 
-        // Validate format log (tùy chọn)
+        // Validate format of logs
         for (AppendSubmissionLogRequest.SubmissionLogEvent log : newLogs) {
             if (log.getEvent() == null || log.getEvent().isBlank()) {
                 throw new ApiException("Log event type is required", HttpStatus.BAD_REQUEST.value());

@@ -26,8 +26,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.OffsetDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -103,9 +101,6 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
             }
         }
 
-        // finalScore on a 10-point scale (uses DataUtil to convert achieved/max -> scale of 10)
-        Double finalScoreOn10 = DataUtil.getFinalScore(achievedSum, maxPossibleScore);
-
         // === LẤY FEEDBACK ===
         String teacherFeedback = grading.getOverallFeedback();
 
@@ -113,7 +108,7 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
                 .gradingChallengeId(grading.getId())
                 .totalWeight(achievedSum)
                 .maxPossibleWeight(maxPossibleScore)
-                .finalScore(finalScoreOn10)
+                .finalScore(grading.getFinalScore())
                 .totalQuestions(totalQuestions)
                 .correctAnswers(correct)
                 .wrongAnswers(wrong)
@@ -215,9 +210,6 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
             int skippedInSection = 0;
             int emptyInSection = 0;
 
-//            log.info("--- Section: '{}' | Questions: {} ---",
-//                    section.getId(), totalInSection);
-
             for (Question question : sectionQuestions) {
                 Long qId = question.getId();
                 double qMaxScore = question.getWeight().doubleValue();
@@ -291,12 +283,7 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
             }
         }
 
-        // === TÍNH % TỔNG ===
-        double scorePercentage = maxPossibleScore == 0 ? 0.0 :
-                BigDecimal.valueOf((totalWeight / maxPossibleScore) * 100.0)
-                        .setScale(2, RoundingMode.HALF_UP)
-                        .doubleValue();
-
+        Double finalScore = DataUtil.getFinalScore(totalWeight, maxPossibleScore);
 
         // === LƯU GRADING ===
         GradingDailyChallenge grading = gradingDailyChallengeRepository
@@ -304,6 +291,7 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
                 .orElse(new GradingDailyChallenge());
         grading.setSubmissionDaily(submission);
         grading.setIsFinalized(true);
+        grading.setFinalScore(finalScore);
         gradingDailyChallengeRepository.save(grading);
 
         gradingQuestions.forEach(gq -> gq.setGradingDaily(grading));
@@ -332,7 +320,7 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
                 totalQuestions,
                 totalQuestions - totalSkipped - totalEmpty,
                 totalSkipped, totalEmpty,
-                maxPossibleScore, totalWeight, scorePercentage);
+                maxPossibleScore, totalWeight, finalScore);
     }
 
     private GradingResult getAnswerScoreFractionDetailed(
