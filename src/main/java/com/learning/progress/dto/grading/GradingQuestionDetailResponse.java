@@ -12,7 +12,7 @@ public class GradingQuestionDetailResponse {
     private Long submissionQuestionId;
     private Double receivedWeight;
     private Double questionWeight;
-    private String feedback;
+    private FeedbackContent feedback;
     private List<HighlightComment> highlightComments;
     private Long graderId;
     private String graderName;

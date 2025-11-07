@@ -38,6 +38,7 @@ public class GradingQuestion extends BaseEntity{
     private Double receivedWeight;
 
     @Column(name = "feedback", length = Integer.MAX_VALUE)
+    @JdbcTypeCode(SqlTypes.JSON)
     private String feedback;
 
     @Column(name = "highlight_comments_json")
