@@ -9,5 +9,6 @@ import org.springframework.stereotype.Component;
 @Component
 @ConfigurationProperties(prefix = "app.redis.channels")
 public class RedisChannelProperties {
-    private String user; // lpms:notification:{userId}
+    private String notificationToUser; // lpms:notification:{userId}
+    private String deviceMismatch; //
 }

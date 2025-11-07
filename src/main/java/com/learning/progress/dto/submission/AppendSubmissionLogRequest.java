@@ -24,5 +24,8 @@ public class AppendSubmissionLogRequest {
         private List<String> newValue;           // cho ANSWER_CHANGE
         private Long durationMs;                 // cho TAB_BLUR
         private String content;                  // cho COPY/PASTE
+
+        private String deviceFingerprint;  // SHA256(canvas + UA + screen + ...)
+        private String ipAddress;          // IP client
     }
 }

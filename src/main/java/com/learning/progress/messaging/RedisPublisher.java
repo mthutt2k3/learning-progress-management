@@ -19,22 +19,48 @@ public class RedisPublisher {
     /**
      * Gửi noti cho user cụ thể
      */
-    public void publishToUser(Long userId, Object payload) {
-        String channel = channelProps.getUser().replace("{userId}", userId.toString());
-        String payloadJson = null;
-        try {
-            payloadJson = JsonUtil.objectToJson(payload);
-        } catch (Exception e) {
-            // best-effort serialization for logging
-            log.debug("Failed to serialize payload for logging, payload class={}", payload != null ? payload.getClass().getName() : "null", e);
-        }
+    public void publishNotificationToUser(Long userId, Object payload) {
+        String channel = channelProps.getNotificationToUser()
+                .replace("{userId}", String.valueOf(userId));
+
+        publish(channel, payload, "notificationToUser");
+    }
+
+    /**
+     * Gửi cảnh báo mismatch
+     */
+    public void publishWarningDeviceMismatchToUser(Long submissionId, Object payload) {
+        String channel = channelProps.getDeviceMismatch()
+                .replace("{submissionId}", String.valueOf(submissionId));
+
+        publish(channel, payload, "deviceMismatch");
+    }
+
+    /**
+     * Common publish handler
+     */
+    private void publish(String channel, Object payload, String eventType) {
+        String payloadJson = safeSerialize(payload);
 
         try {
-            log.debug("Publishing to Redis channel={} payloadJson={}", channel, payloadJson);
+            log.debug("[Redis Publish] eventType={} channel={} payload={}", eventType, channel, payloadJson);
             redisTemplate.convertAndSend(channel, payload);
-            log.info("Published notification to channel={} payload={}", channel, payloadJson != null ? payloadJson : payload);
+            log.info("[Redis OK] eventType={} channel={}", eventType, channel);
         } catch (Exception e) {
-            log.error("Redis publish failed for user {} on channel {}. payload={}", userId, channel, payloadJson != null ? payloadJson : payload, e);
+            log.error("[Redis ERR] eventType={} channel={} payload={}", eventType, channel, payloadJson, e);
+        }
+    }
+
+    /**
+     * Serialize payload safely (best effort)
+     */
+    private String safeSerialize(Object payload) {
+        try {
+            return JsonUtil.objectToJson(payload);
+        } catch (Exception e) {
+            log.debug("Failed to serialize payload for logging. payloadClass={}",
+                    payload != null ? payload.getClass().getName() : "null", e);
+            return String.valueOf(payload);
         }
     }
 }

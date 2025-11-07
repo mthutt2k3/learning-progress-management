@@ -42,10 +42,19 @@ public class RedisConfig {
     }
     @Bean
     public RedisMessageListenerContainer container(
-            RedisConnectionFactory factory, RedisListener listener) {
-        RedisMessageListenerContainer c = new RedisMessageListenerContainer();
-        c.setConnectionFactory(factory);
-        c.addMessageListener(listener, new PatternTopic("lpms:notification:*"));
-        return c;
+            RedisConnectionFactory factory,
+            RedisListener listener
+    ) {
+        RedisMessageListenerContainer container = new RedisMessageListenerContainer();
+        container.setConnectionFactory(factory);
+
+        // Lắng nghe notification
+        container.addMessageListener(listener, new PatternTopic("lpms:notification:*"));
+
+        // ✅ Lắng nghe Device Mismatch
+        container.addMessageListener(listener, new PatternTopic("lpms:device-mismatch:*"));
+
+        return container;
     }
+
 }

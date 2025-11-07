@@ -216,7 +216,7 @@ public class NotificationServiceImpl implements NotificationService {
 
         // publish to Redis (other instances will forward to clients)
         try {
-            redisPublisher.publishToUser(receiver.getId(), dto);
+            redisPublisher.publishNotificationToUser(receiver.getId(), dto);
             log.debug("[{}] Redis publish attempted for receiverId={} payload={}", traceId, receiverId, payloadJson != null ? payloadJson : dto);
         } catch (Exception e) {
             log.error("[{}] Redis publish failed for receiverId {}: {}", traceId, receiverId, e.getMessage(), e);
@@ -300,7 +300,7 @@ public class NotificationServiceImpl implements NotificationService {
             Notification persisted = saved.get(i);
             NotificationDTO dto = dtos.get(i);
             try {
-                redisPublisher.publishToUser(persisted.getReceiver().getId(), dto);
+                redisPublisher.publishNotificationToUser(persisted.getReceiver().getId(), dto);
                 log.debug("[{}] Redis publish attempted for receiverId={} notificationId={}", traceId, persisted.getReceiver().getId(), persisted.getId());
             } catch (Exception e) {
                 log.error("[{}] Redis publish failed for receiverId {} notificationId {}: {}", traceId, persisted.getReceiver().getId(), persisted.getId(), e.getMessage(), e);
