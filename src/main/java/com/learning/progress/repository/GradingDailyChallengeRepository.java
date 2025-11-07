@@ -2,6 +2,8 @@ package com.learning.progress.repository;
 
 import com.learning.progress.entity.GradingDailyChallenge;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.Collection;
@@ -13,4 +15,16 @@ public interface GradingDailyChallengeRepository extends JpaRepository<GradingDa
     Optional<GradingDailyChallenge> findBySubmissionDailyIdAndDeletedAtIsNull(Long submissionDailyId);
 
     List<GradingDailyChallenge> findBySubmissionDailyIdInAndDeletedAtIsNull(List<Long> submissionIds);
+
+    /**
+     * Sum of receivedWeight for all grading questions that belong to the grading record
+     * associated with the given submissionDailyId. Returns null if no rows found.
+     */
+    @Query("""
+        SELECT SUM(gq.receivedWeight)
+        FROM GradingQuestion gq
+        WHERE gq.gradingDaily.submissionDaily.id = :submissionDailyId
+          AND gq.deletedAt IS NULL
+        """)
+    Double sumReceivedWeightBySubmissionDailyId(@Param("submissionDailyId") Long submissionDailyId);
 }

@@ -11,6 +11,7 @@ import org.springframework.data.repository.query.Param;
 
 import java.util.Optional;
 import java.util.List;
+import java.math.BigDecimal;
 
 public interface DailyChallengeRepository extends JpaRepository<DailyChallenge, Long> {
 
@@ -67,4 +68,18 @@ public interface DailyChallengeRepository extends JpaRepository<DailyChallenge, 
 
     // New: fetch all challenges for multiple lessons in one query to avoid N+1
     List<DailyChallenge> findByClassLessonIdInAndDeletedAtIsNull(List<Long> lessonIds);
+
+    /**
+     * Sum of question.weight for a given daily challenge (max possible weight).
+     * Returns null if no questions found.
+     *
+     * Note: question -> section -> challenge relationship used (q.section.challenge).
+     */
+    @Query("""
+        SELECT SUM(q.weight)
+        FROM Question q
+        WHERE q.section.challenge.id = :challengeId
+          AND q.deletedAt IS NULL
+        """)
+    BigDecimal sumQuestionWeightByChallengeId(@Param("challengeId") Long challengeId);
 }

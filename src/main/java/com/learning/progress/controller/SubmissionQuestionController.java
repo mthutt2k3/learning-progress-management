@@ -6,7 +6,6 @@ import com.learning.progress.dto.submission.DraftSubmissionResponse;
 import com.learning.progress.dto.submission.SaveSubmissionRequest;
 import com.learning.progress.dto.submission.SubmissionResultResponse;
 import com.learning.progress.service.SubmissionQuestionService;
-import com.learning.progress.util.JwtUtil;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -22,8 +21,6 @@ import org.springframework.web.bind.annotation.*;
 public class SubmissionQuestionController {
     @Autowired
     private SubmissionQuestionService submissionQuestionService;
-    @Autowired
-    private JwtUtil jwtUtil;
 
     @PostMapping("{submissionChallengeId}")
     @PreAuthorize("hasAnyRole('STUDENT', 'TEST_TAKER')")

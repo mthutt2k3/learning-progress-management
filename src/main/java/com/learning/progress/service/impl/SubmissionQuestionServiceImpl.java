@@ -75,18 +75,11 @@ public class SubmissionQuestionServiceImpl implements SubmissionQuestionService 
             return cached;
         }
 
-        // 1. Lấy submission + challenge
-        SubmissionDailyChallenge submission = submissionDailyChallengeRepository
-                .findByIdAndDeletedAtIsNull(submissionChallengeId)
-                .orElseThrow(() -> {
-                    log.error("Submission not found: {}", submissionChallengeId);
-                    return new ApiException(Const.SUBMISSION.NOT_FOUND, HttpStatus.NOT_FOUND.value());
-                });
+        // 1. Lấy submission + validate access via centralized helper
+        SubmissionDailyChallenge submission = appValidator.validateUserAccessToSubmission(submissionChallengeId);
 
         DailyChallenge challenge = submission.getChallenge();
         Long challengeId = challenge.getId();
-        Long classId = challenge.getClassLesson().getClassChapter().getClazz().getId();
-        appValidator.validateUserAccessToClass(classId);
 
         // 2. LẤY TẤT CẢ SECTIONS + QUESTIONS (chỉ 1 query nhờ JOIN FETCH)
         List<ChallengeSection> sections = challengeSectionRepository
@@ -182,15 +175,11 @@ public class SubmissionQuestionServiceImpl implements SubmissionQuestionService 
     @Override
     @Transactional(readOnly = true)
     public DraftSubmissionResponse getDraftSubmission(Long submissionChallengeId) {
-        // 1. Lấy submission
-        SubmissionDailyChallenge submission = submissionDailyChallengeRepository
-                .findByIdAndDeletedAtIsNull(submissionChallengeId)
-                .orElseThrow(() -> new ApiException(Const.SUBMISSION.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+        // 1. Lấy submission + validate access
+        SubmissionDailyChallenge submission = appValidator.validateUserAccessToSubmission(submissionChallengeId);
 
-        // Kiểm tra quyền + trạng thái
+        // Kiểm tra quyền + trạng thái (behavior unchanged)
         Long classId = submission.getChallenge().getClassLesson().getClassChapter().getClazz().getId();
-        appValidator.validateUserAccessToClass(classId);
-
         SubmissionStatus status = submission.getSubmissionStatus();
 
         if (status == SubmissionStatus.PENDING) {
@@ -199,7 +188,6 @@ public class SubmissionQuestionServiceImpl implements SubmissionQuestionService 
         } else if (status != SubmissionStatus.DRAFT) {
             throw new ApiException("Submission is not in draft mode", HttpStatus.BAD_REQUEST.value());
         }
-
 
         DailyChallenge challenge = submission.getChallenge();
         Long challengeId = challenge.getId();
@@ -274,17 +262,13 @@ public class SubmissionQuestionServiceImpl implements SubmissionQuestionService 
     @Override
 // @Transactional
     public void saveSubmission(Long submissionChallengeId, SaveSubmissionRequest request) {
-        SubmissionDailyChallenge submission = submissionDailyChallengeRepository.findByIdAndDeletedAtIsNull(submissionChallengeId)
-                .orElseThrow(() -> new ApiException(Const.SUBMISSION.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+        SubmissionDailyChallenge submission = appValidator.validateUserAccessToSubmission(submissionChallengeId);
 
         DailyChallenge dailyChallenge = submission.getChallenge();
         Long classId = dailyChallenge.getClassLesson().getClassChapter().getClazz().getId();
-        appValidator.validateUserAccessToClass(classId);
+        // appValidator.validateUserAccessToClass(classId); // removed: validated by submission validator
         Long userId = jwtUtil.extractUserIdFromCurrentRequest();
-        // Kiểm tra quyền sở hữu
-        if (!submission.getUser().getId().equals(userId)) {
-            throw new ApiException("Unauthorized", HttpStatus.FORBIDDEN.value());
-        }
+        // ownership already enforced by validateUserAccessToSubmission for STUDENT/TEST_TAKER
 
         SubmissionStatus status = submission.getSubmissionStatus();
         if (status == SubmissionStatus.SUBMITTED || status == SubmissionStatus.GRADED) {
@@ -369,13 +353,9 @@ public class SubmissionQuestionServiceImpl implements SubmissionQuestionService 
         }
 
         SubmissionDailyChallenge submission = sq.getSubmissionDaily();
-        if (submission == null) {
-            throw new ApiException(Const.SUBMISSION.NOT_FOUND, HttpStatus.NOT_FOUND.value());
-        }
 
-        // Access check consistent with other endpoints
-        Long classId = submission.getChallenge().getClassLesson().getClassChapter().getClazz().getId();
-        appValidator.validateUserAccessToClass(classId);
+        // Validate access using centralized helper (will throw if unauthorized)
+        appValidator.validateUserAccessToSubmission(submission.getId());
 
         Question q = sq.getQuestion();
 
