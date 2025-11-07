@@ -24,11 +24,15 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
+import java.util.ArrayList;
+import java.util.Set;
+import java.util.HashSet;
 
 @Service
 public class NotificationServiceImpl implements NotificationService {
@@ -166,7 +170,7 @@ public class NotificationServiceImpl implements NotificationService {
      * Tạo thông báo – dùng ở mọi nơi
      */
     @Override
-    @Transactional
+    @Async("notificationExecutor")
     public NotificationDTO createNotification(
             Long receiverId, Long creatorId, String title,
             String message, String targetUrl, String avatarUrl) {
@@ -219,5 +223,90 @@ public class NotificationServiceImpl implements NotificationService {
         }
 
         return notificationMapper.toDTO(notification);
+    }
+
+    /**
+     * Tạo thông báo cho nhiều người nhận cùng lúc.
+     * Trả về danh sách NotificationDTO đã được lưu.
+     */
+    @Transactional
+    @Async("notificationExecutor")
+    public List<NotificationDTO> createNotification(
+            List<Long> receiverIds, Long creatorId, String title,
+            String message, String targetUrl, String avatarUrl) {
+
+        String traceId = TraceUtil.getTraceId();
+        log.info("[{}] Creating bulk notifications for {} receivers, title={}", traceId, receiverIds == null ? 0 : receiverIds.size(), title);
+
+        if (receiverIds == null || receiverIds.isEmpty()) {
+            throw new ApiException("Receiver IDs are required", HttpStatus.BAD_REQUEST.value());
+        }
+
+        // Remove duplicates while preserving semantics
+        Set<Long> uniqueIds = new HashSet<>(receiverIds);
+
+        // Fetch receivers from DB
+        List<User> receivers = userRepository.findAllByIdInAndDeletedAtIsNull(new ArrayList<>(uniqueIds));
+        Set<Long> foundIds = receivers.stream().map(User::getId).collect(Collectors.toSet());
+        List<Long> missing = uniqueIds.stream().filter(id -> !foundIds.contains(id)).collect(Collectors.toList());
+        if (!missing.isEmpty()) {
+            log.error("[{}] Some receiver IDs not found: {}", traceId, missing);
+            throw new ApiException("Receiver IDs not found: " + missing, HttpStatus.NOT_FOUND.value());
+        }
+
+        User creator = creatorId != null ? userRepository.findByIdAndDeletedAtIsNull(creatorId).orElse(null) : null;
+        String createdBy = jwtUtil.extractEmailPrefixFromCurrentRequest();
+        OffsetDateTime now = OffsetDateTime.now();
+
+        List<Notification> notifications = new ArrayList<>();
+        for (User receiver : receivers) {
+            Notification n = Notification.builder()
+                    .receiver(receiver)
+                    .creator(creator)
+                    .title(title)
+                    .message(message)
+                    .targetUrl(targetUrl)
+                    .avatarUrl(avatarUrl)
+                    .isRead(false)
+                    .createdBy(createdBy)
+                    .createdAt(now)
+                    .build();
+            notifications.add(n);
+        }
+
+        // Log payload preview
+        String payloadPreview = null;
+        try {
+            // create preview DTO list for logging
+            List<NotificationDTO> preview = notifications.stream()
+                    .map(notificationMapper::toDTO)
+                    .collect(Collectors.toList());
+            payloadPreview = JsonUtil.objectToJson(preview);
+        } catch (Exception e) {
+            log.debug("[{}] Failed to serialize bulk NotificationDTO preview: {}", traceId, e.getMessage());
+        }
+        log.debug("[{}] Bulk notification payload preview size={} {}", traceId, notifications.size(), payloadPreview != null ? payloadPreview : "");
+
+        // Persist all notifications
+        List<Notification> saved = notificationRepository.saveAll(notifications);
+        log.info("[{}] Persisted {} notifications", traceId, saved.size());
+
+        // Convert to DTOs and publish each to Redis
+        List<NotificationDTO> dtos = saved.stream()
+                .map(notificationMapper::toDTO)
+                .collect(Collectors.toList());
+
+        for (int i = 0; i < saved.size(); i++) {
+            Notification persisted = saved.get(i);
+            NotificationDTO dto = dtos.get(i);
+            try {
+                redisPublisher.publishToUser(persisted.getReceiver().getId(), dto);
+                log.debug("[{}] Redis publish attempted for receiverId={} notificationId={}", traceId, persisted.getReceiver().getId(), persisted.getId());
+            } catch (Exception e) {
+                log.error("[{}] Redis publish failed for receiverId {} notificationId {}: {}", traceId, persisted.getReceiver().getId(), persisted.getId(), e.getMessage(), e);
+            }
+        }
+
+        return dtos;
     }
 }
