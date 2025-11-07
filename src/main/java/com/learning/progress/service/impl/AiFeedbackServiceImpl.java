@@ -20,8 +20,6 @@ import com.microsoft.cognitiveservices.speech.*;
 import com.microsoft.cognitiveservices.speech.audio.AudioConfig;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
-import org.springframework.web.client.RestTemplate;
-import org.springframework.web.multipart.MultipartFile;
 import ws.schild.jave.Encoder;
 import ws.schild.jave.EncoderException;
 import ws.schild.jave.MultimediaObject;
@@ -88,7 +86,7 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
         OpenAiServiceImpl.ChallengeContext context = openAiServiceImpl.eagerLoadChallengeContext(challenge);
 
         // 4. Build prompt
-        String prompt = buildWritingGradingPrompt(context, question.getQuestionText(), studentWriting, request.getAge());
+        String prompt = buildWritingGradingPrompt(context, question.getQuestionText(), studentWriting);
 
         // 5. Call OpenAI with retry
         String aiResponse = null;
@@ -154,8 +152,7 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
     private String buildWritingGradingPrompt(
             OpenAiServiceImpl.ChallengeContext context,
             String questionText,
-            String studentWriting,
-            Integer age) {
+            String studentWriting) {
 
         StringBuilder prompt = new StringBuilder();
 
@@ -210,8 +207,8 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
         prompt.append(studentWriting).append("\n");
         prompt.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n");
 
-        String ageInstructions = openAiServiceImpl.getAgeBasedLevelInstructions(age);
-        prompt.append(ageInstructions).append("\n\n");
+//        String ageInstructions = openAiServiceImpl.getAgeBasedLevelInstructions(age);
+//        prompt.append(ageInstructions).append("\n\n");
 
         prompt.append("OUTPUT (exact JSON only, no extra text). Note: ALL textual values must be in Vietnamese:\n");
         prompt.append("{\n");
@@ -381,6 +378,10 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
 
                         PronunciationAssessmentResponse response;
 
+                        if (request.getReferenceText() != null && !request.getReferenceText().trim().isEmpty()) {
+                            validateEnglishOnly(request.getReferenceText());
+                        }
+
                         if (hasReferenceText) {
                             // Use continuous recognition WITH pronunciation assessment
                             log.info("[{}] Scripted assessment with reference text", traceId);
@@ -388,7 +389,7 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
                         } else {
                             // Use continuous recognition WITHOUT pronunciation assessment
                             log.info("[{}] Free-form assessment", traceId);
-                            response = assessFreeForm(wavFile, request.getAge());
+                            response = assessFreeForm(wavFile);
                         }
 
                         log.info("[{}] Assessment completed on attempt {}. Score: {}",
@@ -571,8 +572,7 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
         return aggregatePronunciationResults(
                 result,
                 request.getReferenceText(),
-                request.getEnableMiscue(),
-                request.getAge()
+                request.getEnableMiscue()
         );
     }
 
@@ -674,8 +674,7 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
     private PronunciationAssessmentResponse aggregatePronunciationResults(
             ContinuousPronunciationResult result,
             String referenceText,
-            Boolean enableMiscue,
-            Integer age) {
+            Boolean enableMiscue) {
 
         // Calculate weighted average scores
         double totalPronunciation = 0;
@@ -727,8 +726,7 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
                 avgFluency,
                 avgCompleteness,
                 avgProsody,
-                allWords,
-                age
+                allWords
         );
 
         return PronunciationAssessmentResponse.builder()
@@ -746,9 +744,12 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
     /**
      * Assess free-form (no reference text)
      */
-    private PronunciationAssessmentResponse assessFreeForm(File wavFile, Integer age) throws Exception {
+    private PronunciationAssessmentResponse assessFreeForm(File wavFile) throws Exception {
         SpeechAnalysisResult analysis = performDetailedSpeechRecognition(wavFile);
-        return generateAIAssessment(analysis, age);
+        if (analysis.getRecognizedText() != null && !analysis.getRecognizedText().trim().isEmpty()) {
+            validateEnglishOnly(analysis.getRecognizedText());
+        }
+        return generateAIAssessment(analysis);
     }
 
     /**
@@ -1033,9 +1034,6 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
     }
 
     /**
-     * Generate Vietnamese feedback based on scores
-     */
-    /**
      * Generate detailed Vietnamese feedback using AI
      */
     private String generateFeedback(
@@ -1044,8 +1042,7 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
             double fluencyScore,
             double completenessScore,
             Double prosodyScore,
-            List<PronunciationAssessmentResponse.WordAssessment> words,
-            Integer age) {
+            List<PronunciationAssessmentResponse.WordAssessment> words) {
 
         try {
             // Build prompt for AI
@@ -1055,8 +1052,7 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
                     fluencyScore,
                     completenessScore,
                     prosodyScore,
-                    words,
-                    age
+                    words
             );
 
             // Call OpenAI to generate feedback
@@ -1081,8 +1077,7 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
             double fluencyScore,
             double completenessScore,
             Double prosodyScore,
-            List<PronunciationAssessmentResponse.WordAssessment> words,
-            Integer age) {
+            List<PronunciationAssessmentResponse.WordAssessment> words) {
 
         StringBuilder prompt = new StringBuilder();
 
@@ -1154,8 +1149,8 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
         prompt.append("- <em>text</em> for italic emphasis\n");
         prompt.append("- Multiple spaces/newlines will be preserved as-is\n\n");
 
-        String ageInstructions = openAiServiceImpl.getAgeBasedLevelInstructions(age);
-        prompt.append(ageInstructions).append("\n\n");
+//        String ageInstructions = openAiServiceImpl.getAgeBasedLevelInstructions(age);
+//        prompt.append(ageInstructions).append("\n\n");
 
         prompt.append("Now, write the feedback in Vietnamese below:\n");
 
@@ -1506,10 +1501,10 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
     /**
      * Generate AI-powered assessment from speech analysis
      */
-    private PronunciationAssessmentResponse generateAIAssessment(SpeechAnalysisResult analysis, Integer age) {
+    private PronunciationAssessmentResponse generateAIAssessment(SpeechAnalysisResult analysis) {
 
         // Build prompt for AI
-        String prompt = buildAIAssessmentPrompt(analysis, age);
+        String prompt = buildAIAssessmentPrompt(analysis);
 
         // Call OpenAI
         String aiResponse = openAiServiceImpl.callOpenAI(prompt);
@@ -1521,13 +1516,13 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
     /**
      * Build comprehensive prompt for AI assessment
      */
-    private String buildAIAssessmentPrompt(SpeechAnalysisResult analysis, Integer age) {
+    private String buildAIAssessmentPrompt(SpeechAnalysisResult analysis) {
         StringBuilder prompt = new StringBuilder();
 
         prompt.append("You are an expert English pronunciation coach. Analyze the following speech recognition results and provide a comprehensive pronunciation assessment.\n\n");
 
-        String ageInstructions = openAiServiceImpl.getAgeBasedLevelInstructions(age);
-        prompt.append(ageInstructions).append("\n\n");
+//        String ageInstructions = openAiServiceImpl.getAgeBasedLevelInstructions(age);
+//        prompt.append(ageInstructions).append("\n\n");
 
         prompt.append("SPEECH ANALYSIS DATA:\n");
         prompt.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
@@ -1699,6 +1694,43 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
         }
 
         return (rateScore + pauseScore) / 2.0;
+    }
+
+    private void validateEnglishOnly(String text) {
+        if (text == null || text.trim().isEmpty()) {
+            return;
+        }
+
+        // Vietnamese Unicode ranges
+        // À-ỹ covers most Vietnamese diacritics
+        String vietnamesePattern = "[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđÀÁẠẢÃÂẦẤẬẨẪĂẰẮẶẲẴÈÉẸẺẼÊỀẾỆỂỄÌÍỊỈĨÒÓỌỎÕÔỒỐỘỔỖƠỜỚỢỞỠÙÚỤỦŨƯỪỨỰỬỮỲÝỴỶỸĐ]";
+
+        // Count Vietnamese characters
+        int vietnameseCount = 0;
+        int totalLetters = 0;
+
+        for (char c : text.toCharArray()) {
+            if (Character.isLetter(c)) {
+                totalLetters++;
+                if (String.valueOf(c).matches(vietnamesePattern)) {
+                    vietnameseCount++;
+                }
+            }
+        }
+
+        // If more than 30% of letters are Vietnamese, reject
+        if (totalLetters > 0) {
+            double vietnameseRatio = (double) vietnameseCount / totalLetters;
+
+            if (vietnameseRatio > 0.30) {
+                log.warn("Detected Vietnamese content: {} Vietnamese chars out of {} total letters ({:.1f}%)",
+                        vietnameseCount, totalLetters, vietnameseRatio * 100);
+                throw new ApiException(
+                        "This assessment only supports English pronunciation. Please provide English text or speech only.",
+                        HttpStatus.BAD_REQUEST.value()
+                );
+            }
+        }
     }
 
     // Supporting classes
