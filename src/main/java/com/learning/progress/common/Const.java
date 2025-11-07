@@ -418,6 +418,10 @@ public class Const {
 
     public static class SUBMISSION {
         public static final String NOT_FOUND = "Submission not found";
+        public static final String INVALID_ID = "Invalid submissionId";
+        public static final String FORBIDDEN_NOT_OWNER = "Forbidden: not the owner of the submission";
+        public static final String CANNOT_START_IN_CURRENT_STATUS = "Submission cannot be started in its current status";
+        public static final String UNAUTHORIZED_VIEW_SUBMISSIONS = "Unauthorized: Only teachers or teaching assistants can view submissions";
     }
 
     public static final class TRANSLATOR {
@@ -434,4 +438,3 @@ public class Const {
         public static final String SUBMISSION_MESSAGE_TEMPLATE = "You submitted \"%s\". Your submission has been received and will be graded soon.";
     }
 }
-

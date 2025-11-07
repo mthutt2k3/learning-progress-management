@@ -18,10 +18,7 @@ import com.learning.progress.util.DataUtil;
 import com.learning.progress.util.JwtUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
+import org.springframework.data.domain.*;
 import org.springframework.http.HttpStatus;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
@@ -30,11 +27,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.OffsetDateTime;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Service
@@ -109,66 +103,51 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
     public DataResponse<List<StudentChallengeListDTO>> getAllChallengesForStudent(
             Long classId, int page, int size, String text) {
 
+        final String method = "getAllChallengesForStudent";
         Long studentId = jwtUtil.extractUserIdFromCurrentRequest();
+        log.info("[{}] start classId={} studentId={} page={} size={} text={}", method, classId, studentId, page, size, text);
+
         appValidator.validatePaginationParams(page, size);
         appValidator.validateUserAccessToClass(classId);
 
         Pageable pageable = PageRequest.of(page, size);
-        // fetch lessons (same JPQL as before)
         Page<ClassLesson> lessonPage = dailyChallengeRepository.findLessonsWithChallengesByClassId(classId, text, false, pageable);
 
-        // Collect lesson ids
-        List<Long> lessonIds = lessonPage.getContent().stream()
-                .map(ClassLesson::getId)
-                .toList();
-
-        // Batch load all challenges for these lessons to avoid N+1
+        // batch loads to avoid N+1
+        List<Long> lessonIds = lessonPage.getContent().stream().map(ClassLesson::getId).toList();
         List<DailyChallenge> allChallenges = lessonIds.isEmpty() ? List.of()
                 : dailyChallengeRepository.findByClassLessonIdInAndDeletedAtIsNull(lessonIds);
-
-        // Group challenges by lesson id for fast lookup
         Map<Long, List<DailyChallenge>> challengesByLessonId = allChallenges.stream()
                 .collect(Collectors.groupingBy(ch -> ch.getClassLesson().getId()));
-
-        // Collect all challenge ids to batch-load student's submissions
         List<Long> challengeIds = allChallenges.stream().map(DailyChallenge::getId).toList();
 
-        // Batch load submissions for the student across these challengeIds (avoid per-challenge call)
-        List<SubmissionDailyChallenge> submissionsForStudent = challengeIds.isEmpty() ? List.of() :
-                submissionDailyChallengeRepository.findByUserIdAndChallengeIdInAndDeletedAtIsNull(studentId, challengeIds);
-
-        // Map challengeId -> SubmissionDailyChallenge (one submission per challenge expected)
+        List<SubmissionDailyChallenge> submissionsForStudent = challengeIds.isEmpty() ? List.of()
+                : submissionDailyChallengeRepository.findByUserIdAndChallengeIdInAndDeletedAtIsNull(studentId, challengeIds);
         Map<Long, SubmissionDailyChallenge> submissionByChallengeId = submissionsForStudent.stream()
-                .collect(Collectors.toMap(s -> s.getChallenge().getId(), s -> s, (a, b) -> a));
+                .filter(Objects::nonNull)
+                .collect(Collectors.toMap(s -> s.getChallenge().getId(), Function.identity(), (a, b) -> a));
 
-        // Collect submission ids to batch-load gradings
         List<Long> submissionIds = submissionsForStudent.stream().map(SubmissionDailyChallenge::getId).toList();
+        Map<Long, GradingDailyChallenge> gradingBySubmissionId = submissionIds.isEmpty() ? Map.of()
+                : gradingDailyChallengeRepository.findBySubmissionDailyIdInAndDeletedAtIsNull(submissionIds)
+                        .stream().collect(Collectors.toMap(g -> g.getSubmissionDaily().getId(), Function.identity(), (a,b)->a));
 
-        Map<Long, GradingDailyChallenge> gradingBySubmissionId = submissionIds.isEmpty() ? Map.of() :
-                gradingDailyChallengeRepository.findBySubmissionDailyIdInAndDeletedAtIsNull(submissionIds)
-                        .stream()
-                        .collect(Collectors.toMap(g -> g.getSubmissionDaily().getId(), g -> g, (a, b) -> a));
+        // NEW: batch compute achieved totals for all gradings referenced on this page to avoid per-grade DB calls
+        List<Long> gradingIds = gradingBySubmissionId.values().stream().map(GradingDailyChallenge::getId).filter(Objects::nonNull).toList();
+        Map<Long, Double> achievedByGradingId = gradingQuestionRepository.sumReceivedWeightMapByGradingIds(gradingIds);
 
-        // Batch fetch max possible weight per challenge (sum of question weights)
-        List<Object[]> sums = challengeIds.isEmpty() ? List.of() :
-                questionRepository.sumWeightByChallengeIds(challengeIds);
-        Map<Long, Double> maxWeightByChallengeId = sums.stream()
-                .collect(Collectors.toMap(
-                        r -> ((Number) r[0]).longValue(),
-                        r -> ((BigDecimal) r[1]).doubleValue()
-                ));
+        Map<Long, Double> maxWeightByChallengeId = questionRepository.getMaxWeightByChallengeIds(challengeIds);
 
-        // Assemble DTOs without further DB calls
-        List<StudentChallengeListDTO> data = lessonPage.getContent().stream()
+        OffsetDateTime now = OffsetDateTime.now();
+
+        List<StudentChallengeListDTO> result = lessonPage.getContent().stream()
                 .map(lesson -> {
                     List<DailyChallenge> challenges = challengesByLessonId.getOrDefault(lesson.getId(), List.of());
-                    List<StudentChallengeListDTO.StudentChallengeDTO> dtoChallenges = new ArrayList<>();
+                    List<StudentChallengeListDTO.StudentChallengeDTO> dtoChallenges = new ArrayList<>(challenges.size());
 
                     for (DailyChallenge ch : challenges) {
-                        // Only include published challenges for students (mirrors previous behavior)
                         if (ch.getChallengeStatus() == ChallengeStatus.DRAFT) continue;
 
-                        // Text filter (approximate: challenge name or description or lesson name)
                         if (text != null && !text.isBlank()) {
                             String ltext = text.toLowerCase();
                             boolean matches = (ch.getChallengeName() != null && ch.getChallengeName().toLowerCase().contains(ltext))
@@ -177,50 +156,33 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
                             if (!matches) continue;
                         }
 
-                        SubmissionDailyChallenge s = submissionByChallengeId.get(ch.getId());
+                        SubmissionDailyChallenge submission = submissionByChallengeId.get(ch.getId());
+                        GradingDailyChallenge grading = (submission != null) ? gradingBySubmissionId.get(submission.getId()) : null;
 
-                        Long submissionChallengeId = null;
-                        OffsetDateTime startDate = ch.getStartDate();
-                        OffsetDateTime endDate = ch.getEndDate();
-                        SubmissionStatus submissionStatus = null;
-                        Boolean isLate = false;
-                        OffsetDateTime submittedAt = null;
-                        Duration actualDuration = null;
+                        // compute visible scores based on endDate
                         Double totalWeight = null;
+                        Double maxPossibleWeight = maxWeightByChallengeId.getOrDefault(ch.getId(), 0.0);
                         Double finalScore = null;
-                        Double maxPossibleWeight = null;
 
-                        if (s != null) {
-                            submissionChallengeId = s.getId();
-                            if (s.getStartedAt() != null) startDate = s.getStartedAt();
-                            if (s.getExpiredAt() != null) endDate = s.getExpiredAt();
-                            submissionStatus = s.getSubmissionStatus();
-                            isLate = Boolean.TRUE.equals(s.getIsLate());
-                            submittedAt = s.getSubmittedAt();
-                            if (s.getActualStartAt() != null && s.getSubmittedAt() != null) {
-                                actualDuration = Duration.between(s.getActualStartAt(), s.getSubmittedAt());
-                            }
-                            GradingDailyChallenge g = gradingBySubmissionId.get(s.getId());
-                            if (g != null) {
-                                // compute totalWeight dynamically from grading questions
-                                totalWeight = gradingQuestionRepository.findByGradingDailyIdAndDeletedAtIsNull(g.getId())
-                                        .stream()
-                                        .mapToDouble(gqt -> gqt.getReceivedWeight() == null ? 0.0 : gqt.getReceivedWeight())
-                                        .sum();
-                                maxPossibleWeight = maxWeightByChallengeId.get(ch.getId());
+                        if (grading != null) {
+                            // use precomputed achieved total
+                            double achieved = achievedByGradingId.getOrDefault(grading.getId(), 0.0);
+
+                            OffsetDateTime effectiveEnd = (submission != null && submission.getExpiredAt() != null) ? submission.getExpiredAt() : ch.getEndDate();
+                            if (effectiveEnd != null && now.isBefore(effectiveEnd)) {
+                                if (submission != null) submission.setSubmissionStatus(SubmissionStatus.SUBMITTED);
+                            } else {
+                                totalWeight = achieved;
                                 finalScore = DataUtil.getFinalScore(totalWeight, maxPossibleWeight);
+                                if (submission != null) submission.setSubmissionStatus(SubmissionStatus.GRADED);
                             }
                         }
-                        DailyChallengeListDTO.DailyChallengeInLessonDTO challengeDTO = dailyChallengeMapper.dailyChallengeToDailyChallengeInLessonDTO(ch);
 
-                        // Use mapper to build studentSubmissionDTO with computed totals / grading
-                        GradingDailyChallenge gradingForSubmission = (s != null) ? gradingBySubmissionId.get(s.getId()) : null;
+                        DailyChallengeListDTO.DailyChallengeInLessonDTO challengeDTO =
+                                dailyChallengeMapper.dailyChallengeToDailyChallengeInLessonDTO(ch);
+
                         StudentSubmissionDTO studentSubmissionDTO = submissionMapper.toStudentSubmissionDTO(
-                                s,
-                                gradingForSubmission,
-                                totalWeight,
-                                maxPossibleWeight,
-                                finalScore
+                                submission, grading, totalWeight, maxPossibleWeight, finalScore
                         );
 
                         StudentChallengeListDTO.StudentChallengeDTO dto = StudentChallengeListDTO.StudentChallengeDTO.builder()
@@ -230,11 +192,20 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
                         dtoChallenges.add(dto);
                     }
 
-                    return new StudentChallengeListDTO(lesson.getId(), lesson.getClassLessonName(), lesson.getClassLessonContent(), lesson.getOrderNumber(), dtoChallenges);
+                    return new StudentChallengeListDTO(
+                            lesson.getId(),
+                            lesson.getClassLessonName(),
+                            lesson.getClassLessonContent(),
+                            lesson.getOrderNumber(),
+                            dtoChallenges
+                    );
                 })
                 .toList();
 
-        return DataResponse.success(data, Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL)
+        log.info("[{}] completed classId={} studentId={} lessonsReturned={} totalLessons={}",
+                method, classId, studentId, result.size(), lessonPage.getTotalElements());
+
+        return DataResponse.success(result, Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL)
                 .page(page).size(size)
                 .totalElements(lessonPage.getTotalElements())
                 .totalPages(lessonPage.getTotalPages());
@@ -244,19 +215,15 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
     @Transactional(readOnly = true)
     public DataResponse<List<StudentSubmissionDTO>> getSubmissionsByChallenge(Long challengeId, int page, int size,
                                                                               String text, String sortBy, String sortDir) {
-        log.debug("Attempting to get submissions for challengeId: {}", challengeId);
+        final String method = "getSubmissionsByChallenge";
+        log.info("[{}] start challengeId={} page={} size={} sortBy={} sortDir={}", method, challengeId, page, size, sortBy, sortDir);
 
         String cacheKey = cacheService.buildSubmissionsByChallengeCacheKey(challengeId, page, size, text, sortBy, sortDir);
-        List<StudentSubmissionDTO> cachedData = cacheService.getCachedObject(cacheKey, new TypeReference<>() {
-        });
-
+        List<StudentSubmissionDTO> cachedData = cacheService.getCachedObject(cacheKey, new TypeReference<>() {});
         if (cachedData != null) {
-            log.debug("Cache HIT for submissions: {}", cacheKey);
+            log.debug("[{}] cache hit key={}", method, cacheKey);
             return DataResponse.success(cachedData, Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL)
-                    .page(page)
-                    .size(size)
-                    .totalElements(cachedData.size())
-                    .totalPages((cachedData.size() + size - 1) / size);
+                    .page(page).size(size).totalElements(cachedData.size()).totalPages((cachedData.size()+size-1)/size);
         }
 
         appValidator.validatePaginationParams(page, size);
@@ -264,7 +231,7 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
 
         DailyChallenge challenge = dailyChallengeRepository.findByIdAndDeletedAtIsNull(challengeId)
                 .orElseThrow(() -> {
-                    log.error("Challenge not found for challengeId: {}", challengeId);
+                    log.error("[{}] challenge not found id={}", method, challengeId);
                     return new ApiException(Const.CHALLENGE.NOT_FOUND, HttpStatus.NOT_FOUND.value());
                 });
 
@@ -272,9 +239,9 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
         appValidator.validateUserAccessToClass(classId);
 
         String role = jwtUtil.extractRoleFromCurrentRequest();
-        if (!role.equals("TEACHER") && !role.equals("TEACHING_ASSISTANT")) {
-            log.error("Unauthorized access to submissions for challengeId: {} by user with role: {}", challengeId, role);
-            throw new ApiException("Unauthorized: Only teachers or teaching assistants can view submissions", HttpStatus.FORBIDDEN.value());
+        if (!"TEACHER".equals(role) && !"TEACHING_ASSISTANT".equals(role)) {
+            log.warn("[{}] unauthorized role={} for challengeId={}", method, role, challengeId);
+            throw new ApiException(Const.SUBMISSION.UNAUTHORIZED_VIEW_SUBMISSIONS, HttpStatus.FORBIDDEN.value());
         }
 
         Sort sort = Sort.by(sortDir.equalsIgnoreCase("asc") ? Sort.Direction.ASC : Sort.Direction.DESC, sortBy);
@@ -283,40 +250,19 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
         Page<SubmissionDailyChallenge> submissionPage = submissionDailyChallengeRepository
                 .findByChallengeIdAndDeletedAtIsNull(challengeId, text == null ? "" : text, pageable);
 
-        List<Long> submissionIds = submissionPage.getContent().stream()
-                .map(SubmissionDailyChallenge::getId)
-                .toList();
+        List<Long> submissionIds = submissionPage.getContent().stream().map(SubmissionDailyChallenge::getId).toList();
 
-        // Batch load finalized gradings and map by submissionId
-        Map<Long, GradingDailyChallenge> gradingMap = submissionIds.isEmpty() ? Map.of() :
-                gradingDailyChallengeRepository.findBySubmissionDailyIdInAndDeletedAtIsNull(submissionIds)
-                        .stream()
-                        .collect(Collectors.toMap(g -> g.getSubmissionDaily().getId(), g -> g, (a, b) -> a));
+        Map<Long, GradingDailyChallenge> gradingMap = submissionIds.isEmpty() ? Map.of()
+                : gradingDailyChallengeRepository.findBySubmissionDailyIdInAndDeletedAtIsNull(submissionIds)
+                    .stream().collect(Collectors.toMap(g -> g.getSubmissionDaily().getId(), Function.identity(), (a,b)->a));
 
-        // Batch load grading questions for all grading ids to avoid N+1
-        Map<Long, Double> totalReceivedByGradingId;
-        if (gradingMap.isEmpty()) {
-            totalReceivedByGradingId = Map.of();
-        } else {
-            List<Long> gradingIds = gradingMap.values().stream()
-                    .map(GradingDailyChallenge::getId)
-                    .toList();
+        Map<Long, Double> totalReceivedByGradingId = gradingQuestionRepository.sumReceivedWeightMapByGradingIds(gradingMap.values().stream().map(GradingDailyChallenge::getId).toList());
 
-            List<GradingQuestion> allGradingQuestions = gradingQuestionRepository.findByGradingDailyIdInAndDeletedAtIsNull(gradingIds);
+        double challengeMaxPossibleWeight = questionRepository.findByChallengeIdAndDeletedAtIsNull(challengeId)
+                .stream()
+                .mapToDouble(q -> q.getWeight() == null ? 0.0 : q.getWeight().doubleValue())
+                .sum();
 
-            totalReceivedByGradingId = allGradingQuestions.stream()
-                    .collect(Collectors.groupingBy(gq -> gq.getGradingDaily().getId(),
-                            Collectors.summingDouble(gq -> gq.getReceivedWeight() == null ? 0.0 : gq.getReceivedWeight())));
-        }
-
-        // compute max possible weight for the whole challenge (sum of question weights)
-        List<Question> questionsForChallenge = questionRepository.findByChallengeIdAndDeletedAtIsNull(challengeId);
-        double challengeMaxPossibleWeight = questionsForChallenge == null ? 0.0 :
-                questionsForChallenge.stream()
-                        .mapToDouble(q -> q.getWeight() == null ? 0.0 : q.getWeight().doubleValue())
-                        .sum();
-
-        // Build DTOs using mapper and precomputed totals (no per-submission DB call)
         List<StudentSubmissionDTO> data = submissionPage.getContent().stream()
                 .map(sub -> {
                     GradingDailyChallenge g = gradingMap.get(sub.getId());
@@ -326,27 +272,113 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
                         totalWeight = totalReceivedByGradingId.getOrDefault(g.getId(), 0.0);
                         finalScore = DataUtil.getFinalScore(totalWeight, Double.valueOf(challengeMaxPossibleWeight));
                     }
-                    return submissionMapper.toStudentSubmissionDTO(
-                            sub,
-                            g,
-                            totalWeight,
-                            Double.valueOf(challengeMaxPossibleWeight),
-                            finalScore
-                    );
+                    return submissionMapper.toStudentSubmissionDTO(sub, g, totalWeight, Double.valueOf(challengeMaxPossibleWeight), finalScore);
                 })
                 .toList();
 
-        cacheService.cacheObject(cacheKey, data, 5); // TTL 5 phút
-        log.debug("Cache stored for submissions: {}", cacheKey);
-
-        log.info("Retrieved {} submissions ({} total) for challengeId: {}", data.size(), submissionPage.getTotalElements(), challengeId);
+        cacheService.cacheObject(cacheKey, data, 5);
+        log.info("[{}] completed challengeId={} returned={} totalElements={}", method, challengeId, data.size(), submissionPage.getTotalElements());
 
         return DataResponse.success(data, Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL)
-                .page(page)
-                .size(size)
+                .page(page).size(size)
                 .totalElements(submissionPage.getTotalElements())
                 .totalPages(submissionPage.getTotalPages());
     }
+
+    @Override
+    @Transactional
+    public void startSubmission(Long submissionId) {
+        final String method = "startSubmission";
+        Long userId = jwtUtil.extractUserIdFromCurrentRequest();
+        log.info("[{}] start submissionId={} by userId={}", method, submissionId, userId);
+
+        SubmissionDailyChallenge submission = submissionDailyChallengeRepository
+                .findByIdAndDeletedAtIsNull(submissionId)
+                .orElseThrow(() -> {
+                    log.warn("[{}] submission not found id={}", method, submissionId);
+                    return new ApiException(Const.SUBMISSION.NOT_FOUND, HttpStatus.NOT_FOUND.value());
+                });
+
+        if (!Objects.equals(submission.getUser().getId(), userId)) {
+            log.warn("[{}] forbidden owner mismatch submissionOwner={} caller={}", method, submission.getUser().getId(), userId);
+            throw new ApiException(Const.SUBMISSION.FORBIDDEN_NOT_OWNER, HttpStatus.FORBIDDEN.value());
+        }
+
+        if (submission.getSubmissionStatus() != SubmissionStatus.PENDING) {
+            log.debug("[{}] invalid status submissionId={} currentStatus={}", method, submissionId, submission.getSubmissionStatus());
+            throw new ApiException(Const.SUBMISSION.CANNOT_START_IN_CURRENT_STATUS, HttpStatus.BAD_REQUEST.value());
+        }
+
+        submission.setSubmissionStatus(SubmissionStatus.DRAFT);
+        submission.setActualStartAt(OffsetDateTime.now());
+        submissionDailyChallengeRepository.save(submission);
+
+        cacheService.clearSubmissionCache(userId, submissionId);
+        cacheService.clearSubmissionsCacheForChallenge(submission.getChallenge().getId());
+        log.info("[{}] completed submission started submissionId={} by userId={}", method, submissionId, userId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public StudentSubmissionDTO getSubmissionInfo(Long submissionId) {
+        final String method = "getSubmissionInfo";
+        log.info("[{}] start submissionId={}", method, submissionId);
+
+        if (submissionId == null) {
+            log.warn("[{}] invalid id null", method);
+            throw new ApiException(Const.SUBMISSION.INVALID_ID, HttpStatus.BAD_REQUEST.value());
+        }
+
+        SubmissionDailyChallenge submission = submissionDailyChallengeRepository
+                .findByIdAndDeletedAtIsNull(submissionId)
+                .orElseThrow(() -> {
+                    log.warn("[{}] not found submissionId={}", method, submissionId);
+                    return new ApiException(Const.SUBMISSION.NOT_FOUND, HttpStatus.NOT_FOUND.value());
+                });
+
+        Long classId = submission.getChallenge().getClassLesson().getClassChapter().getClazz().getId();
+        appValidator.validateUserAccessToClass(classId);
+
+        String role = jwtUtil.extractRoleFromCurrentRequest();
+        Long currentUserId = jwtUtil.extractUserIdFromCurrentRequest();
+        if (("STUDENT".equals(role) || "TEST_TAKER".equals(role)) && !Objects.equals(submission.getUser().getId(), currentUserId)) {
+            log.warn("[{}] forbidden: user={} requested info for submissionOwner={}", method, currentUserId, submission.getUser().getId());
+            throw new ApiException(Const.SUBMISSION.FORBIDDEN_NOT_OWNER, HttpStatus.FORBIDDEN.value());
+        }
+
+        // Use repository helper to sum receivedWeight for this submission (efficient single-query)
+        GradingDailyChallenge grading = gradingDailyChallengeRepository.findBySubmissionDailyIdAndDeletedAtIsNull(submissionId)
+                .orElse(null);
+
+        Double achievedTotal = null;
+        Double challengeMaxPossibleWeight = null;
+        Double finalScore = null;
+
+        if (grading != null) {
+            // sum received weight by submission id (repository optimized)
+            Double sumReceived = gradingDailyChallengeRepository.sumReceivedWeightBySubmissionDailyId(submissionId);
+            achievedTotal = sumReceived == null ? 0.0 : sumReceived;
+
+            // use DailyChallengeRepository sum helper for challenge max
+            BigDecimal maxBig = dailyChallengeRepository.sumQuestionWeightByChallengeId(submission.getChallenge().getId());
+            challengeMaxPossibleWeight = (maxBig == null) ? 0.0 : maxBig.doubleValue();
+
+            finalScore = DataUtil.getFinalScore(achievedTotal, challengeMaxPossibleWeight);
+        }
+
+        StudentSubmissionDTO dto = submissionMapper.toStudentSubmissionDTO(
+                submission,
+                grading,
+                achievedTotal,
+                challengeMaxPossibleWeight,
+                finalScore
+        );
+
+        log.info("[{}] completed submissionId={} gradingPresent={}", method, submissionId, grading != null);
+        return dto;
+    }
+
+    // --------------------- private helpers ---------------------
 
     @Override
     @Transactional
@@ -445,97 +477,5 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
             });
             affectedChallenges.forEach(cacheService::clearSubmissionsCacheForChallenge);
         }
-    }
-
-    @Override
-    @Transactional
-    public void startSubmission(Long submissionId) {
-        log.info("Student requested to START submissionId={}", submissionId);
-        Long userId = jwtUtil.extractUserIdFromCurrentRequest();
-
-        SubmissionDailyChallenge submission = submissionDailyChallengeRepository
-                .findByIdAndDeletedAtIsNull(submissionId)
-                .orElseThrow(() -> new ApiException("Submission not found", HttpStatus.NOT_FOUND.value()));
-
-        if (!submission.getUser().getId().equals(userId)) {
-            log.warn("User {} attempted to start submission {} owned by {}", userId, submissionId, submission.getUser().getId());
-            throw new ApiException("Forbidden: not the owner of the submission", HttpStatus.FORBIDDEN.value());
-        }
-
-        if (submission.getSubmissionStatus() != SubmissionStatus.PENDING) {
-            log.debug("Submission {} is not PENDING (current={}), cannot start", submissionId, submission.getSubmissionStatus());
-            throw new ApiException("Submission cannot be started in its current status", HttpStatus.BAD_REQUEST.value());
-        }
-
-        submission.setSubmissionStatus(SubmissionStatus.DRAFT);
-        submission.setActualStartAt(OffsetDateTime.now());
-        submissionDailyChallengeRepository.save(submission);
-
-        // Clear individual submission cache
-        cacheService.clearSubmissionCache(userId, submissionId);
-        cacheService.clearSubmissionsCacheForChallenge(submission.getChallenge().getId());
-        log.info("Submission {} started by user {}", submissionId, userId);
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public StudentSubmissionDTO getSubmissionInfo(Long submissionId) {
-        if (submissionId == null) {
-            throw new ApiException("Invalid submissionId", HttpStatus.BAD_REQUEST.value());
-        }
-
-        SubmissionDailyChallenge submission = submissionDailyChallengeRepository
-                .findByIdAndDeletedAtIsNull(submissionId)
-                .orElseThrow(() -> new ApiException("Submission not found", HttpStatus.NOT_FOUND.value()));
-
-        // Validate access to the class/challenge
-        Long classId = submission.getChallenge().getClassLesson().getClassChapter().getClazz().getId();
-        appValidator.validateUserAccessToClass(classId);
-
-        String role = jwtUtil.extractRoleFromCurrentRequest();
-        Long currentUserId = jwtUtil.extractUserIdFromCurrentRequest();
-
-        // If requester is a student/test_taker, restrict to owner
-        if ("STUDENT".equals(role) || "TEST_TAKER".equals(role)) {
-            if (!submission.getUser().getId().equals(currentUserId)) {
-                throw new ApiException("Forbidden: not the owner of the submission", HttpStatus.FORBIDDEN.value());
-            }
-        } else {
-            // for teacher/ta/admin/manager we allow (assuming class access validated above)
-        }
-
-        // Find grading if exists
-        GradingDailyChallenge grading = gradingDailyChallengeRepository.findBySubmissionDailyIdInAndDeletedAtIsNull(List.of(submissionId))
-                .stream().findFirst().orElse(null);
-
-        Double achievedTotal = null;
-        Double challengeMaxPossibleWeight = null;
-        Double finalScore = null;
-
-        if (grading != null) {
-            achievedTotal = gradingQuestionRepository.findByGradingDailyIdAndDeletedAtIsNull(grading.getId())
-                    .stream()
-                    .mapToDouble(gqt -> gqt.getReceivedWeight() == null ? 0.0 : gqt.getReceivedWeight())
-                    .sum();
-
-            List<Question> questionsForChallenge = questionRepository.findByChallengeIdAndDeletedAtIsNull(submission.getChallenge().getId());
-            challengeMaxPossibleWeight = questionsForChallenge == null ? 0.0 :
-                    questionsForChallenge.stream()
-                            .mapToDouble(q -> q.getWeight() == null ? 0.0 : q.getWeight().doubleValue())
-                            .sum();
-
-            finalScore = DataUtil.getFinalScore(achievedTotal, challengeMaxPossibleWeight);
-        }
-
-        // Use mapper to construct DTO (mapper will handle mapped fields)
-
-        // Additional fields not covered by mapper (if any) can be set here (e.g. overallFeedback/isLate already handled by mapper if mapped)
-        return submissionMapper.toStudentSubmissionDTO(
-                submission,
-                grading,
-                achievedTotal,
-                challengeMaxPossibleWeight,
-                finalScore
-        );
     }
 }
