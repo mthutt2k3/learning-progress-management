@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.learning.progress.messaging.RedisListener;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
@@ -42,10 +43,21 @@ public class RedisConfig {
     }
     @Bean
     public RedisMessageListenerContainer container(
-            RedisConnectionFactory factory, RedisListener listener) {
-        RedisMessageListenerContainer c = new RedisMessageListenerContainer();
-        c.setConnectionFactory(factory);
-        c.addMessageListener(listener, new PatternTopic("lpms:notification:*"));
-        return c;
+            RedisConnectionFactory factory,
+            RedisListener listener,
+            RedisChannelProperties channelProps
+    ) {
+        RedisMessageListenerContainer container = new RedisMessageListenerContainer();
+        container.setConnectionFactory(factory);
+
+        // subscribe using centralized prefixes from properties to avoid duplicated literals
+        String notifPattern = channelProps.getNotificationToUser() + "*";
+        String mismatchPattern = channelProps.getDeviceMismatch() + "*";
+
+        container.addMessageListener(listener, new PatternTopic(notifPattern));
+        container.addMessageListener(listener, new PatternTopic(mismatchPattern));
+
+        return container;
     }
+
 }

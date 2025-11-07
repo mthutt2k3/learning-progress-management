@@ -3,10 +3,15 @@ package com.learning.progress.common;
 import java.util.regex.Pattern;
 
 public class Const {
+    public static class SUBMISSION_EVENT {
+        public static final String SESSION_START = "SESSION_START";
+        public static final String DEVICE_MISMATCH = "DEVICE_MISMATCH";
+    }
     public static class SSE {
         public static final String EVENT_CONNECT = "connect";
         public static final String EVENT_NOTIFICATION = "notification";
         public static final String EVENT_PING = "ping";
+        public static final String EVENT_DEVICE_MISMATCH = "device_mismatch";
     }
     public static class VALIDATE_INPUT {
         public static final String regexEmail =

@@ -280,6 +280,12 @@ public class SubmissionQuestionServiceImpl implements SubmissionQuestionService 
         DailyChallenge dailyChallenge = submission.getChallenge();
         Long classId = dailyChallenge.getClassLesson().getClassChapter().getClazz().getId();
         appValidator.validateUserAccessToClass(classId);
+        Long userId = jwtUtil.extractUserIdFromCurrentRequest();
+        // Kiểm tra quyền sở hữu
+        if (!submission.getUser().getId().equals(userId)) {
+            throw new ApiException("Unauthorized", HttpStatus.FORBIDDEN.value());
+        }
+
         SubmissionStatus status = submission.getSubmissionStatus();
         if (status == SubmissionStatus.SUBMITTED || status == SubmissionStatus.GRADED) {
             throw new ApiException("Submission already completed", HttpStatus.BAD_REQUEST.value());
@@ -332,7 +338,6 @@ public class SubmissionQuestionServiceImpl implements SubmissionQuestionService 
             }
             submissionQuestionRepository.saveAll(toSave);
         }
-        Long userId = jwtUtil.extractUserIdFromCurrentRequest();
 
         // === CHỈ KHI NỘP CHÍNH THỨC ===
         if (!request.getSaveAsDraft()) {

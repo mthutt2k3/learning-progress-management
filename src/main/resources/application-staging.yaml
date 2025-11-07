@@ -149,7 +149,8 @@ azure:
 app:
   redis:
     channels:
-      user: "lpms:notification:{userId}"
+      notification-to-user: "lpms:notification:"
+      device-mismatch: "lpms:submission:device-mismatch:"
   challenge:
     max-questions-per-challenge: 100
   pagination:

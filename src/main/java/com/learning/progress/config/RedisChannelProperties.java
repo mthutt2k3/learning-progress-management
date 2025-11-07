@@ -1,4 +1,3 @@
-// src/main/java/com/learning/progress/config/RedisChannelProperties.java
 package com.learning.progress.config;
 
 import lombok.Data;
@@ -9,5 +8,6 @@ import org.springframework.stereotype.Component;
 @Component
 @ConfigurationProperties(prefix = "app.redis.channels")
 public class RedisChannelProperties {
-    private String user; // lpms:notification:{userId}
+    private String notificationToUser;
+    private String deviceMismatch;
 }

@@ -76,7 +76,7 @@ public interface NotificationService {
      * @param avatarUrl   URL avatar người tạo (có thể null)
      * @return NotiDTO vừa tạo
      */
-    NotificationDTO createNotification(
+    void createNotification(
             Long receiverId,
             Long creatorId,
             String title,
