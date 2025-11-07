@@ -1,10 +1,9 @@
 package com.learning.progress.dto.ai;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import jakarta.validation.constraints.Max;
-import jakarta.validation.constraints.Min;
-import jakarta.validation.constraints.NotEmpty;
-import jakarta.validation.constraints.NotNull;
+import com.learning.progress.common.DifficultyLevel;
+import com.learning.progress.common.LessonFocus;
+import jakarta.validation.constraints.*;
 import lombok.Data;
 
 import java.util.List;
@@ -22,9 +21,14 @@ public class GenerateGVQuestionsRequest {
 
     private String description; // Optional additional context for AI
 
-    @Min(value = 6, message = "Age must be at least 6")
-    @Max(value = 18, message = "Age must be at most 18")
-    private Integer age;
+    @NotBlank(message = "Level is required")
+    private String level;
+
+    private List<LessonFocus> lessonFocus; // Enum: GRAMMAR_TENSES, VOCABULARY_THEMATIC, etc.
+
+    private String customLessonFocus; // Custom focus if not using enum
+
+    private String vocabularyList; // Optional: AI will prioritize using these words
 
     @Data
     public static class QuestionTypeConfig {

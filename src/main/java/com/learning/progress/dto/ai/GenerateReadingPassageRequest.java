@@ -1,10 +1,15 @@
 package com.learning.progress.dto.ai;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.learning.progress.common.DifficultyLevel;
+import com.learning.progress.common.LessonFocus;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
+
+import java.util.List;
 
 @Data
 @JsonIgnoreProperties(ignoreUnknown = true)
@@ -20,7 +25,12 @@ public class GenerateReadingPassageRequest {
 
     private String description;
 
-    @Min(value = 6, message = "Age must be at least 6")
-    @Max(value = 18, message = "Age must be at most 18")
-    private Integer age;
+    @NotBlank(message = "Level is required")
+    private String level;
+
+    private List<LessonFocus> lessonFocus; // Enum: GRAMMAR_TENSES, VOCABULARY_THEMATIC, etc.
+
+    private String customLessonFocus; // Custom focus if not using enum
+
+    private String vocabularyList; // Optional: AI will prioritize using these words
 }
