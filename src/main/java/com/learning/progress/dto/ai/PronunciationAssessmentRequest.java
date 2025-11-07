@@ -43,8 +43,4 @@ public class PronunciationAssessmentRequest {
      * Default: Phoneme
      */
     private String granularity = "Phoneme";
-
-    @Min(value = 6, message = "Age must be at least 6")
-    @Max(value = 18, message = "Age must be at most 18")
-    private Integer age;
 }

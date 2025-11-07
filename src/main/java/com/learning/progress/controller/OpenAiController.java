@@ -146,13 +146,11 @@ public class OpenAiController {
             description = "Upload audio file and get pronunciation assessment with scores for accuracy, fluency, prosody")
     public ResponseEntity<DataResponse<PronunciationAssessmentResponse>> assessPronunciation(
             @RequestParam(value = "audioUrl", required = false) String audioUrl,
-            @RequestParam(value = "referenceText", required = false) String referenceText,
-            @RequestParam(value = "age", required = false) Integer age){
+            @RequestParam(value = "referenceText", required = false) String referenceText){
 
         PronunciationAssessmentRequest request = PronunciationAssessmentRequest.builder()
                 .audioUrl(audioUrl)
                 .referenceText(referenceText)
-                .age(age)
                 .enableMiscue(true)
                 .enableProsody(true)
                 .gradingSystem("HundredMark")
