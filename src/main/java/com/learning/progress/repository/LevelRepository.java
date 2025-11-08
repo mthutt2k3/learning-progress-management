@@ -76,4 +76,5 @@ public interface LevelRepository extends JpaRepository<Level, Long> {
     """)
     List<Level> findByLevelCodeInIgnoreCase(@Param("codes") List<String> codes);
 
+    Optional<Level> findByIdAndDeletedAtIsNull(Long levelId);
 }
