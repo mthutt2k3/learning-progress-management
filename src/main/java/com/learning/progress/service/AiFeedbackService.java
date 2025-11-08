@@ -4,6 +4,7 @@ import com.learning.progress.dto.ai.GradingWritingRequest;
 import com.learning.progress.dto.ai.GradingWritingResponse;
 import com.learning.progress.dto.ai.PronunciationAssessmentRequest;
 import com.learning.progress.dto.ai.PronunciationAssessmentResponse;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 public interface AiFeedbackService {
 
@@ -12,4 +13,5 @@ public interface AiFeedbackService {
 
     PronunciationAssessmentResponse assessPronunciation(PronunciationAssessmentRequest request);
 
+    SseEmitter gradeWritingStream(GradingWritingRequest request);
 }
