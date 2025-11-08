@@ -22,7 +22,7 @@ public class AutoGradeJob implements Job {
         log.info("Starting Quartz auto-grade job for submissionId: {}", submissionId);
 
         try {
-            gradingService.autoGradeSubmission(submissionId);
+            gradingService.autoGradeSubmission(submissionId, false);
             log.info("Quartz auto-grade completed for submissionId: {}", submissionId);
         } catch (Exception e) {
             log.error("Auto-grade failed in Quartz job for submissionId: {}", submissionId, e);

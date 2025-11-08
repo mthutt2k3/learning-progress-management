@@ -63,6 +63,7 @@ public class SubmissionDailyChallenge extends BaseEntity{
     @Column(name = "submission_status", nullable = false)
     private SubmissionStatus submissionStatus = SubmissionStatus.PENDING;
 
-    @OneToMany(mappedBy = "submissionDaily", fetch = FetchType.LAZY, cascade = CascadeType.ALL)
-    private List<GradingDailyChallenge> gradingDailyChallenges;
+    @OneToOne(mappedBy = "submissionDaily", fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
+    private GradingDailyChallenge gradingDailyChallenge;
+
 }
