@@ -61,9 +61,6 @@ public interface DailyChallengeRepository extends JpaRepository<DailyChallenge, 
 
     boolean existsByClassLessonAndChallengeNameAndDeletedAtIsNull(ClassLesson classLesson, String challengeName);
 
-    // New JPA helper: fetch challenges for a given lesson (used to assemble DTOs in service)
-    List<DailyChallenge> findByClassLessonAndDeletedAtIsNull(ClassLesson classLesson);
-
     boolean existsByClassLessonAndChallengeNameAndDeletedAtIsNullAndIdNot(ClassLesson classLesson, String challengeName, Long id);
 
     // New: fetch all challenges for multiple lessons in one query to avoid N+1
@@ -82,4 +79,17 @@ public interface DailyChallengeRepository extends JpaRepository<DailyChallenge, 
           AND q.deletedAt IS NULL
         """)
     BigDecimal sumQuestionWeightByChallengeId(@Param("challengeId") Long challengeId);
+
+    @Query("""
+    SELECT dc
+    FROM DailyChallenge dc
+    JOIN dc.classLesson cl
+    JOIN cl.classChapter cc
+    JOIN cc.clazz c
+    WHERE c.id = :classId
+      AND dc.deletedAt IS NULL
+      AND dc.challengeStatus <> 'DRAFT'
+    """)
+    List<DailyChallenge> findNonDraftByClassId(@Param("classId") Long classId);
+
 }
