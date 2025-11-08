@@ -495,11 +495,8 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
     @Transactional
     public void gradeSubmissionQuestion(Long submissionQuestionId, GradeQuestionRequest request) {
         // Find submission question
-        SubmissionQuestion sq = submissionQuestionRepository.findById(submissionQuestionId)
+        SubmissionQuestion sq = submissionQuestionRepository.findByIdAndDeletedAtIsNull(submissionQuestionId)
                 .orElseThrow(() -> new ApiException("Submission question not found", HttpStatus.NOT_FOUND.value()));
-        if (sq.getDeletedAt() != null) {
-            throw new ApiException("Submission question not found", HttpStatus.NOT_FOUND.value());
-        }
 
         SubmissionDailyChallenge submission = sq.getSubmissionDaily();
         Long submissionId = submission.getId();
@@ -511,6 +508,9 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
             throw new ApiException("Manual grading is only allowed for WR, SP challenges", HttpStatus.BAD_REQUEST.value());
         }
 
+        if(request.getReceivedWeight() > sq.getQuestion().getWeight()) {
+            throw new ApiException("Received weight cannot exceed question's max weight", HttpStatus.BAD_REQUEST.value());
+        }
         Long classId = challenge.getClassLesson().getClassChapter().getClazz().getId();
         appValidator.validateUserAccessToClass(classId);
 
