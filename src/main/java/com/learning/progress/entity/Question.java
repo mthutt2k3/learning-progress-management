@@ -39,7 +39,7 @@ public class Question extends BaseEntity{
     private Integer orderNumber;
 
     @Column(name = "weight", nullable = false)
-    private BigDecimal weight;
+    private Double weight;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "question_type", nullable = false)

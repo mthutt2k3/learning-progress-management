@@ -32,7 +32,7 @@ public class DraftSubmissionResponse {
         private Long submissionQuestionId;
         private String questionText;
         private int orderNumber;
-        private BigDecimal score;
+        private Double score;
         private QuestionType questionType;
         private StudentDataContent content;
         private AnswerContent submittedContent;

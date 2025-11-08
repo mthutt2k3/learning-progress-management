@@ -1,9 +1,7 @@
 package com.learning.progress.service.impl;
 
 import com.fasterxml.jackson.core.type.TypeReference;
-import com.learning.progress.common.ChallengeType;
-import com.learning.progress.common.Const;
-import com.learning.progress.common.SubmissionStatus;
+import com.learning.progress.common.*;
 import com.learning.progress.dto.challenge.section.DataContent;
 import com.learning.progress.dto.challenge.section.SectionDto;
 import com.learning.progress.dto.challenge.section.StudentDataContent;
@@ -76,7 +74,7 @@ public class SubmissionQuestionServiceImpl implements SubmissionQuestionService 
         }
 
         // 1. Lấy submission + validate access via centralized helper
-        SubmissionDailyChallenge submission = appValidator.validateUserAccessToSubmission(submissionChallengeId);
+        SubmissionDailyChallenge submission = appValidator.validateUserAccessToSubmissionResult(submissionChallengeId);
 
         DailyChallenge challenge = submission.getChallenge();
         Long challengeId = challenge.getId();
@@ -178,8 +176,6 @@ public class SubmissionQuestionServiceImpl implements SubmissionQuestionService 
         // 1. Lấy submission + validate access
         SubmissionDailyChallenge submission = appValidator.validateUserAccessToSubmission(submissionChallengeId);
 
-        // Kiểm tra quyền + trạng thái (behavior unchanged)
-        Long classId = submission.getChallenge().getClassLesson().getClassChapter().getClazz().getId();
         SubmissionStatus status = submission.getSubmissionStatus();
 
         if (status == SubmissionStatus.PENDING) {
@@ -260,15 +256,12 @@ public class SubmissionQuestionServiceImpl implements SubmissionQuestionService 
     }
 
     @Override
-// @Transactional
+    @Transactional
     public void saveSubmission(Long submissionChallengeId, SaveSubmissionRequest request) {
         SubmissionDailyChallenge submission = appValidator.validateUserAccessToSubmission(submissionChallengeId);
 
         DailyChallenge dailyChallenge = submission.getChallenge();
-        Long classId = dailyChallenge.getClassLesson().getClassChapter().getClazz().getId();
-        // appValidator.validateUserAccessToClass(classId); // removed: validated by submission validator
         Long userId = jwtUtil.extractUserIdFromCurrentRequest();
-        // ownership already enforced by validateUserAccessToSubmission for STUDENT/TEST_TAKER
 
         SubmissionStatus status = submission.getSubmissionStatus();
         if (status == SubmissionStatus.SUBMITTED || status == SubmissionStatus.GRADED) {
@@ -333,12 +326,13 @@ public class SubmissionQuestionServiceImpl implements SubmissionQuestionService 
             if (type == ChallengeType.GV || type == ChallengeType.RE || type == ChallengeType.LI) {
                 quartzJobTriggerService.triggerAutoGrade(submission.getId());
             }
+
+            String title = Const.NOTIFICATION.SUBMISSION_TITLE;
+            String message = String.format(Const.NOTIFICATION.SUBMISSION_MESSAGE_TEMPLATE, dailyChallenge.getChallengeName());
+            notificationService.createNotification(userId, null, title, message, null, null);
+
             cacheService.clearSubmissionsCacheForChallenge(dailyChallenge.getId());
         }
-        String title = Const.NOTIFICATION.SUBMISSION_TITLE;
-        String message = String.format(Const.NOTIFICATION.SUBMISSION_MESSAGE_TEMPLATE, dailyChallenge.getChallengeName());
-        notificationService.createNotification(userId, null, title, message, null, null);
-
         // XÓA CACHE
         cacheService.clearSubmissionCache(userId, submissionChallengeId);
     }

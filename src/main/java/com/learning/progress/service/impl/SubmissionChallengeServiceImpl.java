@@ -16,9 +16,12 @@ import com.learning.progress.service.SubmissionChallengeService;
 import com.learning.progress.util.AppValidator;
 import com.learning.progress.util.DataUtil;
 import com.learning.progress.util.JwtUtil;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.*;
+import org.springframework.data.util.Pair;
 import org.springframework.http.HttpStatus;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
@@ -57,7 +60,10 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
     private DailyChallengeMapper dailyChallengeMapper;
     @Autowired
     private SubmissionMapper submissionMapper;
-
+    @Autowired
+    private UserRepository userRepository;
+    @PersistenceContext
+    private EntityManager entityManager;
     @Override
     @Async("taskExecutor")
     @Transactional
@@ -461,5 +467,166 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
             });
             affectedChallenges.forEach(cacheService::clearSubmissionsCacheForChallenge);
         }
+    }
+
+    /**
+     * Create temporary submissions for provided users for all existing (non-draft, non-deleted) challenges in the class.
+     * Avoid creating duplicates by checking existing submissions per user/challenge.
+     */
+    @Override
+    @Transactional
+    public void createTemporarySubmissionsForUsers(Long classId, List<Long> userIds) {
+        final String method = "createTemporarySubmissionsForUsers";
+        if (classId == null || userIds.isEmpty()) {
+            log.debug("[{}] Invalid input: classId={}, userIds={}", method, classId, userIds);
+            return;
+        }
+
+        log.info("[{}] Starting: classId={}, userCount={}", method, classId, userIds.size());
+
+        // 1. Fetch active challenges (non-draft) for class
+        List<DailyChallenge> challenges = dailyChallengeRepository.findNonDraftByClassId(classId);
+        if (challenges.isEmpty()) {
+            log.debug("[{}] No active challenges found for classId={}", method, classId);
+            return;
+        }
+
+        // 2. Fetch valid users
+        List<User> validUsers = userRepository.findAllByIdInAndDeletedAtIsNull(userIds);
+        if (validUsers.isEmpty()) {
+            log.debug("[{}] No valid users found for userIds={}", method, userIds);
+            return;
+        }
+
+        Set<Long> validUserIds = validUsers.stream().map(User::getId).collect(Collectors.toSet());
+        List<Long> challengeIds = challenges.stream().map(DailyChallenge::getId).toList();
+
+        // 3. Batch load existing submissions (userId + challengeId) → avoid N+1
+        List<SubmissionDailyChallenge> existingSubs = submissionDailyChallengeRepository
+                .findByUserIdInAndChallengeIdInAndDeletedAtIsNull(validUserIds, challengeIds);
+
+        // Build lookup: (userId, challengeId) → exists
+        Set<Pair<Long, Long>> existingPairs = existingSubs.stream()
+                .map(s -> Pair.of(s.getUser().getId(), s.getChallenge().getId()))
+                .collect(Collectors.toSet());
+
+        // 4. Build new submissions
+        List<SubmissionDailyChallenge> toCreate = new ArrayList<>();
+
+        for (User user : validUsers) {
+            for (DailyChallenge challenge : challenges) {
+                if (existingPairs.contains(Pair.of(user.getId(), challenge.getId()))) {
+                    continue;
+                }
+
+                SubmissionDailyChallenge sub = SubmissionDailyChallenge.builder()
+                        .user(user)
+                        .challenge(challenge)
+                        .submissionStatus(SubmissionStatus.PENDING)
+                        .startedAt(challenge.getStartDate())
+                        .expiredAt(challenge.getEndDate())
+                        .build();
+
+                toCreate.add(sub);
+            }
+        }
+
+        // 5. Save & clear cache
+        if (!toCreate.isEmpty()) {
+            submissionDailyChallengeRepository.saveAll(toCreate);
+
+            Set<Long> affectedChallengeIds = toCreate.stream()
+                    .map(s -> s.getChallenge().getId())
+                    .collect(Collectors.toSet());
+
+            affectedChallengeIds.forEach(cacheService::clearSubmissionsCacheForChallenge);
+
+            log.info("[{}] Created {} temporary submissions for classId={}, users={}",
+                    method, toCreate.size(), classId, validUserIds.size());
+        } else {
+            log.debug("[{}] No new submissions needed (all exist) for classId={}", method, classId);
+        }
+    }
+
+    @Override
+    @Transactional
+    public void restoreSubmissionsForUsers(Long classId, List<Long> userIds) {
+        final String method = "restoreSubmissionsForUsers";
+        if (classId == null || userIds.isEmpty()) {
+            log.debug("[{}] Invalid input: classId={}, userIds={}", method, classId, userIds);
+            return;
+        }
+
+        log.info("[{}] Starting: classId={}, userCount={}", method, classId, userIds.size());
+
+        // 1. Lấy CHỈ ID của submission bị soft-delete trong class
+        List<Long> submissionIdsToRestore = submissionDailyChallengeRepository
+                .findSubmissionIdsByUserIdsAndClassIdAndDeletedAtIsNotNull(userIds, classId);
+
+        if (submissionIdsToRestore.isEmpty()) {
+            log.debug("[{}] No soft-deleted submissions to restore for classId={}", method, classId);
+            return;
+        }
+
+        // 2. Dùng getReferenceById → proxy, không load entity
+        OffsetDateTime now = OffsetDateTime.now();
+
+        List<SubmissionDailyChallenge> proxies = submissionIdsToRestore.stream()
+                .map(submissionDailyChallengeRepository::getReferenceById)
+                .peek(sub -> {
+                    sub.setDeletedAt(null);
+                    sub.setDeletedBy(null);
+                    if (sub.getSubmissionStatus() == null) {
+                        sub.setSubmissionStatus(SubmissionStatus.PENDING);
+                    }
+                    sub.setUpdatedAt(now);
+                })
+                .toList();
+
+        // 3. saveAll → batch UPDATE
+        submissionDailyChallengeRepository.saveAllAndFlush(proxies);
+
+        log.info("[{}] Restored {} submissions for classId={}, users={}",
+                method, submissionIdsToRestore.size(), classId, userIds.size());
+    }
+
+    @Override
+    @Transactional
+    public void softDeleteSubmissionsForUser(Long classId, Long userId) {
+        final String method = "softDeleteSubmissionsForUser";
+        if (classId == null || userId == null) {
+            log.debug("[{}] Invalid input: classId={}, userId={}", method, classId, userId);
+            return;
+        }
+
+        log.info("[{}] Starting: classId={}, userId={}", method, classId, userId);
+
+        // 1. Lấy CHỈ ID (1 query, không load entity)
+        List<Long> submissionIds = submissionDailyChallengeRepository
+                .findSubmissionIdsByUserAndClass(userId, classId);
+
+        if (submissionIds.isEmpty()) {
+            log.debug("[{}] No submissions to soft-delete for classId={}, userId={}", method, classId, userId);
+            return;
+        }
+
+        // 2. Dùng getReference() → proxy, không SELECT
+        OffsetDateTime now = OffsetDateTime.now();
+        String deletedBy = jwtUtil.extractEmailPrefixFromCurrentRequest();
+
+        List<SubmissionDailyChallenge> proxies = submissionIds.stream()
+                .map(id -> {
+                    SubmissionDailyChallenge proxy = entityManager.getReference(SubmissionDailyChallenge.class, id);
+                    proxy.setDeletedAt(now);
+                    proxy.setDeletedBy(deletedBy);
+                    return proxy;
+                })
+                .toList();
+
+        // 3. saveAll → batch update (Hibernate gom thành batch nếu bật batch_size)
+        submissionDailyChallengeRepository.saveAllAndFlush(proxies);
+
+        log.info("[{}] Soft-deleted {} submissions for classId={}, userId={}",
+                method, submissionIds.size(), classId, userId);
     }
 }

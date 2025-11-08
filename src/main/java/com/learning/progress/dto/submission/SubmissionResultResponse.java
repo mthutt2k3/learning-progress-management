@@ -33,7 +33,7 @@ public class SubmissionResultResponse {
         private String questionText;
         private int orderNumber;
         private QuestionType questionType;
-        private BigDecimal score;
+        private Double score;
         private BigDecimal receivedScore;
         private GradingQuestionResult gradingQuestionResult;
         private DataContent questionContent; // Question content with correct answers
