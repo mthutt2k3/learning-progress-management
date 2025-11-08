@@ -1,15 +1,13 @@
 package com.learning.progress.repository;
 
-import com.learning.progress.entity.ChallengeSection;
 import com.learning.progress.entity.Question;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-import java.util.Collection;
-import java.util.List;
-import java.util.Optional;
-import java.util.Set;
+import java.math.BigDecimal;
+import java.util.*;
+import java.util.stream.Collectors;
 
 public interface QuestionRepository extends JpaRepository<Question, Long> {
     List<Question> findBySectionIdAndDeletedAtIsNull(Long sectionId);
@@ -45,4 +43,12 @@ public interface QuestionRepository extends JpaRepository<Question, Long> {
     @Query("SELECT q.section.challenge.id, SUM(q.weight) FROM Question q WHERE q.section.challenge.id IN :challengeIds AND q.deletedAt IS NULL GROUP BY q.section.challenge.id")
     List<Object[]> sumWeightByChallengeIds(@Param("challengeIds") List<Long> challengeIds);
 
+    default Map<Long, Double> getMaxWeightByChallengeIds(List<Long> challengeIds) {
+        if (challengeIds == null || challengeIds.isEmpty()) return Map.of();
+        List<Object[]> sums = sumWeightByChallengeIds(challengeIds);
+        return sums.stream().collect(Collectors.toMap(
+                r -> ((Number) r[0]).longValue(),
+                r -> ((BigDecimal) r[1]).doubleValue()
+        ));
+    }
 }

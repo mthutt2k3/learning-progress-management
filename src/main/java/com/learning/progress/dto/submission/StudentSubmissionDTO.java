@@ -12,6 +12,7 @@ import java.time.OffsetDateTime;
 public class StudentSubmissionDTO {
     private Long submissionId;
     private Long studentId;
+    private String studentCode; // Full name or email of the student
     private String studentName; // Full name or email of the student
     private SubmissionStatus submissionStatus;
     private OffsetDateTime startDate; // submission.startedAt

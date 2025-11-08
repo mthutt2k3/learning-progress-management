@@ -28,6 +28,9 @@ public class GradingDailyChallenge extends BaseEntity{
     @JoinColumn(name = "grader_id")
     private User grader;
 
+    @Column(name = "final_score")
+    private Double finalScore;
+
     @Column(name = "overall_feedback")
     private String overallFeedback;
 

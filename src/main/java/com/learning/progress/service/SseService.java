@@ -2,6 +2,7 @@
 package com.learning.progress.service;
 
 import com.learning.progress.common.Const;
+import com.learning.progress.dto.notification.DeviceMismatchNotification;
 import com.learning.progress.dto.notification.NotificationDTO;
 import com.learning.progress.util.JsonUtil;
 import lombok.extern.slf4j.Slf4j;
@@ -55,6 +56,13 @@ public class SseService {
         Long userId = dto.getReceiverId();
         String json = JsonUtil.objectToJson(dto);
         sendToUser(userId, json, Const.SSE.EVENT_NOTIFICATION);
+    }
+    public void sendWarningDeviceMismatch(DeviceMismatchNotification dto) {
+        if (dto == null || dto.getUserId() == null) {
+            log.warn("[SSE] sendWarningDeviceMismatch missing userId");
+            return;
+        }
+        sendToUser(dto.getUserId(), JsonUtil.objectToJson(dto), Const.SSE.EVENT_DEVICE_MISMATCH);
     }
 
     private void sendToUser(Long userId, String data, String eventName) {
