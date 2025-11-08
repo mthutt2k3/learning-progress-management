@@ -1,5 +1,6 @@
 package com.learning.progress.controller;
 
+import com.learning.progress.dto.notification.DeviceMismatchNotification;
 import com.learning.progress.dto.notification.NotificationDTO;
 import com.learning.progress.messaging.RedisPublisher;
 import com.learning.progress.service.SseService;
@@ -24,14 +25,15 @@ public class SseController {
         return sseService.connect(userId);
     }
 
-    @PostMapping
-    public String mock(@RequestBody NotificationDTO dto) {
+    @PostMapping("/mock/notification")
+    public String mockNotification(@RequestBody NotificationDTO dto) {
         redisPublisher.publishNotificationToUser(dto.getReceiverId(), dto);
         return "Sent!";
     }
-    @PostMapping("/without-redis")
-    public String mockWithoutRedis(@RequestBody NotificationDTO dto) {
-        sseService.sendNotification(dto);
+
+    @PostMapping("/mock/device-mismatch")
+    public String mockDeviceMismatch(@RequestBody DeviceMismatchNotification dto) {
+        redisPublisher.publishWarningDeviceMismatchToUser(dto.getSubmissionId(), dto);
         return "Sent!";
     }
 }

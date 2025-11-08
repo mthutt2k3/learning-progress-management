@@ -54,27 +54,8 @@ public class ChallengeSectionServiceImpl implements ChallengeSectionService {
     private SubmissionDailyChallengeRepository submissionDailyChallengeRepository;
     @Autowired
     private QuartzJobTriggerService quartzJobTriggerService;
-
-    // =====================================================================
-    // UPDATE SCORE
-    // =====================================================================
-
-    @Override
-    public void updateScoreQuestion(Long questionId, double score) {
-        log.info("Update score question: {}", questionId);
-
-        Question question = questionRepository.findByIdAndDeletedAtIsNull(questionId)
-                .orElseThrow(() -> new ApiException("Question not found", HttpStatus.NOT_FOUND.value()));
-
-        validateUserAccessToClass(question.getSection().getChallenge().getClassLesson().getClassChapter().getClazz().getId());
-        questionService.updateScoreQuestion(questionId, score);
-
-        Long challengeId = question.getSection().getChallenge().getId();
-
-        cacheService.clearCacheForChallenge(challengeId);
-
-        log.info("Successfully updated score for questionId: {}", questionId);
-    }
+    @Autowired
+    private DailyChallengeRepository dailyChallengeRepository;
 
     // =====================================================================
     // SAVE SECTION
@@ -307,7 +288,11 @@ public class ChallengeSectionServiceImpl implements ChallengeSectionService {
 
         long tStepStart;
         long tStepElapsed;
-
+        DailyChallenge challenge = dailyChallengeRepository.findByIdAndDeletedAtIsNull(challengeId)
+                .orElseThrow(() -> {
+                    log.error("Challenge not found for challengeId: {}", challengeId);
+                    return new ApiException(Const.CHALLENGE.NOT_FOUND, HttpStatus.NOT_FOUND.value());
+                });
         // 1. loadExistingSections
         tStepStart = System.currentTimeMillis();
         List<ChallengeSection> existingSections = loadExistingSections(challengeId);
@@ -333,6 +318,11 @@ public class ChallengeSectionServiceImpl implements ChallengeSectionService {
         tStepElapsed = System.currentTimeMillis() - tStepStart;
         log.debug("bulkOrderSection - filterDelete/NonDeletedRequests: {} ms (delete={}, nonDeleted={})",
                 tStepElapsed, deleteRequests.size(), nonDeletedRequests.size());
+
+        if(challenge.getChallengeStatus().isPublishedOrHigher() && !deleteRequests.isEmpty()) {
+            log.error("Cannot delete sections for a published or higher challenge: {}", challengeId);
+            throw new ApiException("Cannot delete sections for a published or higher challenge.", HttpStatus.BAD_REQUEST.value());
+        }
 
         // 4. validateBulkRequests
         tStepStart = System.currentTimeMillis();
@@ -579,5 +569,6 @@ public class ChallengeSectionServiceImpl implements ChallengeSectionService {
             log.debug("Updated {} sections", toUpdate.size());
         }
     }
+
 }
 

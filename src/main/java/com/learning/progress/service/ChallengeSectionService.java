@@ -16,6 +16,4 @@ public interface ChallengeSectionService {
 
     void bulkOrderSection(Long challengeId, List<QuickBulkSectionRequest> dto);
 
-    void updateScoreQuestion(Long questionId, double score);
-
 }
