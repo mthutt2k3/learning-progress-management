@@ -19,12 +19,15 @@ public interface SubmissionChallengeService {
 
     int detectAndMarkLateSubmissions();
 
-    // New: update submissions' startedAt/expiredAt when the parent challenge's dates change
     void updateSubmissionsDatesForChallenge(Long challengeId, OffsetDateTime newStart, OffsetDateTime newEnd);
 
-    // New: mark that student started working on a submission (PENDING -> DRAFT, set actualStartAt)
     void startSubmission(Long submissionId);
 
-    // NEW: retrieve submission info including both challenge-level deadlines and submission-level deadlines
     StudentSubmissionDTO getSubmissionInfo(Long submissionId);
+
+    void createTemporarySubmissionsForUsers(Long classId, List<Long> userIds);
+
+    void restoreSubmissionsForUsers(Long classId, List<Long> userIds);
+
+    void softDeleteSubmissionsForUser(Long classId, Long userId);
 }

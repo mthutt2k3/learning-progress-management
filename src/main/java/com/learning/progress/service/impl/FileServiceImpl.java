@@ -2138,7 +2138,7 @@ public class FileServiceImpl implements FileService {
         spacing.setSpacingAfter(200);
     }
 
-    private void addQuestionHeader(XWPFDocument document, int questionNumber, BigDecimal score) {
+    private void addQuestionHeader(XWPFDocument document, int questionNumber, Double score) {
         XWPFParagraph headerPara = document.createParagraph();
         headerPara.setSpacingBefore(300);
         headerPara.setSpacingAfter(100);

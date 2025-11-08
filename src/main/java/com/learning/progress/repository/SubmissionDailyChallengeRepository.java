@@ -13,11 +13,11 @@ import java.time.OffsetDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 public interface SubmissionDailyChallengeRepository extends JpaRepository<SubmissionDailyChallenge, Long> {
-    /**
-     * Find a SubmissionDailyChallenge by userId and challengeId where deletedAt is null.
-     */
+    List<SubmissionDailyChallenge> findAllByDeletedAtIsNull();
+
     Optional<SubmissionDailyChallenge> findByUserIdAndChallengeIdAndDeletedAtIsNull(Long userId, Long challengeId);
 
     Optional<SubmissionDailyChallenge> findByIdAndDeletedAtIsNull(Long submissionChallengeId);
@@ -43,11 +43,38 @@ public interface SubmissionDailyChallengeRepository extends JpaRepository<Submis
 
     List<SubmissionDailyChallenge> findByUserIdAndChallengeIdInAndDeletedAtIsNull(Long studentId, List<Long> challengeIds);
 
-    // New helper: fetch all (non-deleted) submissions for a given challenge id
     List<SubmissionDailyChallenge> findByChallengeIdAndDeletedAtIsNull(Long challengeId);
 
     long countByChallengeIdAndSubmittedAtIsNotNullAndDeletedAtIsNull(Long id);
 
     @Query("SELECT s.id FROM SubmissionDailyChallenge s WHERE s.challenge.id = :challengeId AND s.deletedAt IS NULL")
     List<Long> findIdsByChallengeIdAndDeletedAtIsNull(@Param("challengeId") Long challengeId);
+
+    List<SubmissionDailyChallenge> findByUserIdInAndDeletedAtIsNotNull(List<Long> userIds);
+
+    List<SubmissionDailyChallenge> findByUserIdInAndChallengeIdInAndDeletedAtIsNull(Set<Long> validUserIds, List<Long> challengeIds);
+
+    @Query("""
+    SELECT s.id FROM SubmissionDailyChallenge s
+    JOIN s.challenge ch
+    JOIN ch.classLesson cl
+    JOIN cl.classChapter cc
+    JOIN cc.clazz c
+    WHERE s.user.id = :userId
+      AND c.id = :classId
+      AND s.deletedAt IS NULL
+    """)
+    List<Long> findSubmissionIdsByUserAndClass(Long userId, Long classId);
+
+    @Query("""
+    SELECT s.id FROM SubmissionDailyChallenge s
+    JOIN s.challenge ch
+    JOIN ch.classLesson cl
+    JOIN cl.classChapter cc
+    JOIN cc.clazz c
+    WHERE s.user.id IN :userIds
+      AND c.id = :classId
+      AND s.deletedAt IS NOT NULL
+    """)
+    List<Long> findSubmissionIdsByUserIdsAndClassIdAndDeletedAtIsNotNull(List<Long> userIds, Long classId);
 }

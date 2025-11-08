@@ -422,6 +422,7 @@ public class Const {
         public static final String FORBIDDEN_NOT_OWNER = "Forbidden: not the owner of the submission";
         public static final String CANNOT_START_IN_CURRENT_STATUS = "Submission cannot be started in its current status";
         public static final String UNAUTHORIZED_VIEW_SUBMISSIONS = "Unauthorized: Only teachers or teaching assistants can view submissions";
+        public static final String FORBIDDEN_CHALLENGE_DRAFT = "You are not allowed to access challenges that are not yet completed.";
     }
 
     public static final class TRANSLATOR {

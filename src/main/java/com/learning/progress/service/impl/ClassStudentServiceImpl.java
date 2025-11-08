@@ -21,6 +21,7 @@ import com.learning.progress.service.FileService;
 import com.learning.progress.util.AppValidator;
 import com.learning.progress.util.JwtUtil;
 import com.learning.progress.util.TraceUtil;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
@@ -38,8 +39,8 @@ import java.time.OffsetDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
-
 @Service
+@Slf4j
 public class ClassStudentServiceImpl implements ClassStudentService {
 
     @Autowired
@@ -50,9 +51,6 @@ public class ClassStudentServiceImpl implements ClassStudentService {
 
     @Autowired
     private UserRepository userRepository;
-
-    @Autowired
-    private SubmissionDailyChallengeRepository submissionRepository;
 
     @Autowired
     private ClassHistoryService classHistoryService;
@@ -71,6 +69,13 @@ public class ClassStudentServiceImpl implements ClassStudentService {
 
     @Autowired
     private BlobSasService blobSasService;
+
+    @Autowired
+    private SubmissionDailyChallengeRepository submissionRepository;
+
+    // NEW: submission service to create/restore/soft-delete submissions
+    @Autowired
+    private com.learning.progress.service.SubmissionChallengeService submissionChallengeService;
 
     @Value("${azure.storage.student-to-class-template}")
     private String studentToClassTemplate;
@@ -350,6 +355,15 @@ public class ClassStudentServiceImpl implements ClassStudentService {
                     ActionType.CREATE_STUDENT.name(),
                     visibleToRoles
             );
+
+            // create temporary submissions for these newly added users
+            List<Long> newlyIds = newlyAddedUsers.stream().map(User::getId).toList();
+            try {
+                submissionChallengeService.createTemporarySubmissionsForUsers(classId, newlyIds);
+            } catch (Exception ex) {
+                log.error("Failed to create temporary submissions for newly added users classId={} users={} error={}",
+                        classId, newlyIds, ex.getMessage(), ex);
+            }
         }
 
         // Log history cho reactivated students
@@ -372,6 +386,15 @@ public class ClassStudentServiceImpl implements ClassStudentService {
                     ActionType.REACTIVATE_STUDENT.name(),
                     visibleToRoles
             );
+
+            // restore soft-deleted submissions for reactivated users
+            List<Long> reactivatedIds = reactivatedUsers.stream().map(User::getId).toList();
+            try {
+                submissionChallengeService.restoreSubmissionsForUsers(classId, reactivatedIds);
+            } catch (Exception ex) {
+                log.error("Failed to restore submissions for reactivated users classId={} users={} error={}",
+                        classId, reactivatedIds, ex.getMessage(), ex);
+            }
         }
     }
 
@@ -447,6 +470,13 @@ public class ClassStudentServiceImpl implements ClassStudentService {
                 ActionType.DELETE_STUDENT.name(),
                 visibleToRoles
         );
+
+        // soft-delete submissions for this user in the class
+        try {
+            submissionChallengeService.softDeleteSubmissionsForUser(classId, userId);
+        } catch (Exception ex) {
+            log.error("Failed to soft-delete submissions for removed user classId={} userId={} error={}", classId, userId, ex.getMessage(), ex);
+        }
     }
 
     @Override

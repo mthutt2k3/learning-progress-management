@@ -61,11 +61,9 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
     @Override
     @Transactional(readOnly = true)
     public GradingChallengeDetailResponse getChallengeGradingDetail(Long submissionId) {
-        validateAndGetSubmission(submissionId);
+        SubmissionDailyChallenge submissionDailyChallenge = appValidator.validateUserAccessToSubmissionResult(submissionId);
 
-        GradingDailyChallenge grading = gradingDailyChallengeRepository
-                .findBySubmissionDailyIdAndDeletedAtIsNull(submissionId)
-                .orElseThrow(() -> new ApiException("Submission not graded yet", HttpStatus.BAD_REQUEST.value()));
+        GradingDailyChallenge grading = submissionDailyChallenge.getGradingDailyChallenge();
 
         // === TÍNH THỐNG KÊ CÂU HỎI ===
         List<GradingQuestion> gqs = gradingQuestionRepository
@@ -119,25 +117,8 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
 
     }
 
-    private SubmissionDailyChallenge validateAndGetSubmission(Long submissionId) {
-        SubmissionDailyChallenge submission = submissionDailyChallengeRepository
-                .findByIdAndDeletedAtIsNull(submissionId)
-                .orElseThrow(() -> new ApiException(Const.SUBMISSION.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
-
-        Long classId = submission.getChallenge()
-                .getClassLesson().getClassChapter().getClazz().getId();
-
-        appValidator.validateUserAccessToClass(classId);
-
-        if (submission.getSubmissionStatus() != SubmissionStatus.GRADED) {
-            throw new ApiException("Submission not graded yet", HttpStatus.BAD_REQUEST.value());
-        }
-
-        return submission;
-    }
-
     @Override
-    public void autoGradeSubmission(Long submissionId) {
+    public void autoGradeSubmission(Long submissionId, boolean force) {
         log.info("Starting auto-grading for submissionId: {}", submissionId);
 
         SubmissionDailyChallenge submission = submissionDailyChallengeRepository
@@ -147,8 +128,10 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
                     return new ApiException(Const.SUBMISSION.NOT_FOUND, HttpStatus.NOT_FOUND.value());
                 });
 
-        if (submission.getSubmissionStatus() != SubmissionStatus.SUBMITTED) {
-            throw new ApiException("Auto-grading is only allowed for SUBMITTED submissions", HttpStatus.BAD_REQUEST.value());
+        if(submission.getGradingDailyChallenge().getFinalScore() != null && !force) {
+            log.info("Submission {} already has a final score {}, skipping auto-grading.",
+                    submissionId, submission.getGradingDailyChallenge().getFinalScore());
+            return;
         }
 
         DailyChallenge challenge = submission.getChallenge();
@@ -186,7 +169,7 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
         List<Question> questions = allQuestionIds.isEmpty() ? List.of() :
                 questionRepository.findByIdInAndDeletedAtIsNull(new ArrayList<>(allQuestionIds));
 
-        Map<Long, Question> questionMap = questions.stream()
+        questions.stream()
                 .collect(Collectors.toMap(Question::getId, q -> q));
 
         // === KẾT QUẢ CHUNG ===
@@ -298,6 +281,7 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
         gradingQuestionRepository.saveAll(gradingQuestions);
 
         submission.setSubmissionStatus(SubmissionStatus.GRADED);
+        submission.setGradingDailyChallenge(grading);
         submissionDailyChallengeRepository.save(submission);
 
         cacheService.clearSubmissionsCacheForChallenge(challenge.getId());
@@ -492,11 +476,8 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
     @Transactional
     public void gradeSubmissionQuestion(Long submissionQuestionId, GradeQuestionRequest request) {
         // Find submission question
-        SubmissionQuestion sq = submissionQuestionRepository.findById(submissionQuestionId)
+        SubmissionQuestion sq = submissionQuestionRepository.findByIdAndDeletedAtIsNull(submissionQuestionId)
                 .orElseThrow(() -> new ApiException("Submission question not found", HttpStatus.NOT_FOUND.value()));
-        if (sq.getDeletedAt() != null) {
-            throw new ApiException("Submission question not found", HttpStatus.NOT_FOUND.value());
-        }
 
         SubmissionDailyChallenge submission = sq.getSubmissionDaily();
         Long submissionId = submission.getId();
@@ -508,6 +489,9 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
             throw new ApiException("Manual grading is only allowed for WR, SP challenges", HttpStatus.BAD_REQUEST.value());
         }
 
+        if(request.getReceivedWeight() > sq.getQuestion().getWeight()) {
+            throw new ApiException("Received weight cannot exceed question's max weight", HttpStatus.BAD_REQUEST.value());
+        }
         Long classId = challenge.getClassLesson().getClassChapter().getClazz().getId();
         appValidator.validateUserAccessToClass(classId);
 
@@ -560,7 +544,7 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
         GradingQuestion gq = gradingQuestionRepository
                 .findBySubmissionQuestionIdAndDeletedAtIsNull(submissionQuestionId)
                 .orElseThrow(() -> new ApiException("Grading for this question not found", HttpStatus.NOT_FOUND.value()));
-
+        appValidator.validateUserAccessToSubmissionResult(gq.getGradingDaily().getSubmissionDaily().getId());
         // ✅ Parse feedback JSON string to object
         FeedbackContent feedbackContent = null;
         if (gq.getFeedback() != null && !gq.getFeedback().isBlank()) {  // ← Dùng getFeedbackJson

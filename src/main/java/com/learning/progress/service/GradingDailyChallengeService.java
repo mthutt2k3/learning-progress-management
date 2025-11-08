@@ -7,7 +7,7 @@ import com.learning.progress.dto.grading.GradingQuestionDetailResponse;
 
 public interface GradingDailyChallengeService {
 
-    void autoGradeSubmission(Long submissionId);
+    void autoGradeSubmission(Long submissionId, boolean force);
 
     GradingChallengeDetailResponse getChallengeGradingDetail(Long submissionId);
 

@@ -124,7 +124,7 @@ public class QuestionServiceImpl implements QuestionService {
         Question question = questionRepository.findByIdAndDeletedAtIsNull(questionId)
                 .orElseThrow(() -> new ApiException(Const.QUESTION.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
-        question.setWeight(BigDecimal.valueOf(score));
+        question.setWeight(score);
         questionRepository.save(question);
 
         log.info("Updated score for question ID {} to {}", questionId, score);
@@ -190,7 +190,7 @@ public class QuestionServiceImpl implements QuestionService {
                 Question q = new Question();
                 q.setSection(section);
                 q.setQuestionText(dto.getQuestionText());
-                q.setWeight(BigDecimal.valueOf(dto.getWeight()));
+                q.setWeight(dto.getWeight());
                 q.setQuestionType(QuestionType.valueOf(dto.getQuestionType()));
                 q.setOrderNumber(order);
                 q.setQuestionContentJson(JsonUtil.objectToMap(dto.getContent()));
@@ -372,7 +372,7 @@ public class QuestionServiceImpl implements QuestionService {
                     .filter(qq -> qq.getDeletedAt() == null)
                     .orElseThrow(() -> new ApiException("Question not found: " + dto.getId(), HttpStatus.NOT_FOUND.value()));
             q.setQuestionText(dto.getQuestionText());
-            q.setWeight(BigDecimal.valueOf(dto.getWeight()));
+            q.setWeight(dto.getWeight());
             q.setQuestionType(QuestionType.valueOf(dto.getQuestionType()));
             q.setOrderNumber(dto.getOrderNumber());
             q.setQuestionContentJson(JsonUtil.objectToMap(dto.getContent()));
@@ -384,7 +384,7 @@ public class QuestionServiceImpl implements QuestionService {
             Question q = new Question();
             q.setSection(section);
             q.setQuestionText(dto.getQuestionText());
-            q.setWeight(BigDecimal.valueOf(dto.getWeight()));
+            q.setWeight(dto.getWeight());
             q.setQuestionType(QuestionType.valueOf(dto.getQuestionType()));
             q.setOrderNumber(dto.getOrderNumber());
             q.setQuestionContentJson(JsonUtil.objectToMap(dto.getContent()));

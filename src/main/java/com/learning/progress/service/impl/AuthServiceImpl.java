@@ -167,8 +167,9 @@ public class AuthServiceImpl implements AuthService {
         }
 
         user.setRequestResetPasswordByTeacher(true);
+        user.setResetPasswordTokenUsed(false);
         userRepository.save(user);
-        return "";
+        return Const.RESULT_MESSAGE_CODE.PASSWORD_RESET_TEACHER_SENT;
     }
 
     /**

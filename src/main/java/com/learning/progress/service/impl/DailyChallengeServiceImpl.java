@@ -12,7 +12,6 @@ import com.learning.progress.util.*;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.BeanUtils;
 import org.springframework.data.domain.*;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -186,14 +185,19 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
         // Business rules:
         // - Once IN_PROGRESS or CLOSED, teacher cannot change startDate.
         // - Once CLOSED, teacher cannot change endDate.
+        // ✅ Start date must be >= now
+        OffsetDateTime now = OffsetDateTime.now();
+        if (challenge.getChallengeStatus() == ChallengeStatus.DRAFT && challenge.getStartDate().isBefore(now)) {
+            throw badRequest(Const.CHALLENGE.START_DATE_MUST_BE_FUTURE);
+        }
         if ((challenge.getChallengeStatus() == ChallengeStatus.IN_PROGRESS
-                || challenge.getChallengeStatus() == ChallengeStatus.CLOSED)
+                || challenge.getChallengeStatus() == ChallengeStatus.FINISHED)
                 && dto.getStartDate() != null
                 && !dto.getStartDate().equals(challenge.getStartDate())) {
             throw badRequest(Const.CHALLENGE.CANNOT_CHANGE_START_DATE);
         }
 
-        if (challenge.getChallengeStatus() == ChallengeStatus.CLOSED
+        if (challenge.getChallengeStatus() == ChallengeStatus.FINISHED
                 && dto.getEndDate() != null
                 && !dto.getEndDate().equals(challenge.getEndDate())) {
             throw badRequest(Const.CHALLENGE.CANNOT_CHANGE_END_DATE);
@@ -362,11 +366,6 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
         if (c.getEndDate() == null) throw badRequest(Const.CHALLENGE.END_DATE_REQUIRED);
         if (c.getEndDate().isBefore(c.getStartDate()))
             throw badRequest(Const.CHALLENGE.INVALID_DATE_RANGE);
-        // ✅ Start date must be >= now
-        OffsetDateTime now = OffsetDateTime.now();
-        if (c.getStartDate().isBefore(now)) {
-            throw badRequest(Const.CHALLENGE.START_DATE_MUST_BE_FUTURE);
-        }
     }
 
     // --- VALIDATE PUBLISH ---
@@ -469,7 +468,7 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
                 // PUBLISHED|IN_PROGRESS -> CLOSED when endDate reached
                 if ((current == ChallengeStatus.PUBLISHED || current == ChallengeStatus.IN_PROGRESS)
                         && end != null && !end.isAfter(now)) {
-                    ch.setChallengeStatus(ChallengeStatus.CLOSED);
+                    ch.setChallengeStatus(ChallengeStatus.FINISHED);
                     changed = true;
                     log.info("Scheduled transition: challenge {} -> CLOSED", ch.getId());
                 }

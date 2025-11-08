@@ -18,9 +18,9 @@ import org.hibernate.annotations.OnDeleteAction;
 @Entity
 @Table(name = "grading_daily_challenges")
 public class GradingDailyChallenge extends BaseEntity{
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @OneToOne
     @OnDelete(action = OnDeleteAction.CASCADE)
-    @JoinColumn(name = "submission_daily_id", nullable = false)
+    @JoinColumn(name = "submission_daily_id", nullable = false, unique = true)
     private SubmissionDailyChallenge submissionDaily;
 
     @ManyToOne(fetch = FetchType.LAZY)
