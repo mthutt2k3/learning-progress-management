@@ -48,7 +48,7 @@ public interface QuestionRepository extends JpaRepository<Question, Long> {
         List<Object[]> sums = sumWeightByChallengeIds(challengeIds);
         return sums.stream().collect(Collectors.toMap(
                 r -> ((Number) r[0]).longValue(),
-                r -> ((BigDecimal) r[1]).doubleValue()
+                r -> ((Number) r[1]).doubleValue()
         ));
     }
 }
