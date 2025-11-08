@@ -150,11 +150,10 @@ public class AppValidator {
                 throw new ApiException(Const.SUBMISSION.FORBIDDEN_NOT_OWNER, HttpStatus.FORBIDDEN.value());
             }
 
-            // Chỉ được xem KẾT QUẢ khi:
-            // - submission đã nộp (SUBMITTED, GRADED)
-            // - hoặc challenge đã kết thúc
-            if (submissionStatus != SubmissionStatus.SUBMITTED && submissionStatus != SubmissionStatus.GRADED &&
-                    challengeStatus != ChallengeStatus.FINISHED) {
+            // Only allow viewing result when submission is SUBMITTED or GRADED and the challenge is FINISHED
+            if ((submissionStatus != SubmissionStatus.SUBMITTED && submissionStatus != SubmissionStatus.GRADED)
+                    || challengeStatus != ChallengeStatus.FINISHED) {
+                log.warn("Submission result not available: submissionStatus={}, challengeStatus={}", submissionStatus, challengeStatus);
                 throw new ApiException("Submission result is not available yet", HttpStatus.FORBIDDEN.value());
             }
             return submission;
