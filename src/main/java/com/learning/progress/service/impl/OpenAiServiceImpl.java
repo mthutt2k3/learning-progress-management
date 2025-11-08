@@ -1647,4 +1647,65 @@ public class OpenAiServiceImpl implements OpenAiService {
             }
         }
     }
+
+    /**
+     * Call Azure OpenAI Vision API for OCR (extract text from image)
+     */
+    public String callOpenAIVisionForOCR(String prompt, String base64Image) {
+        log.info("Azure OpenAI Vision start OCR");
+
+        // Build Azure OpenAI endpoint for vision model
+        String url = UriComponentsBuilder
+                .fromHttpUrl(endpoint + "/openai/deployments/gpt-5-mini/chat/completions")
+                .queryParam("api-version", API_VERSION)
+                .toUriString();
+
+        // Build message content with text + image
+        List<Map<String, Object>> contentList = new ArrayList<>();
+
+        // Add text prompt
+        contentList.add(Map.of("type", "text", "content", prompt));
+
+        // Add image
+        contentList.add(Map.of(
+                "type", "image_url",
+                "image_url", Map.of("url", "data:image/jpeg;base64," + base64Image)
+        ));
+
+        // Build request body
+        Map<String, Object> requestBody = Map.of(
+                "messages", new Object[]{
+                        Map.of("role", "user", "content", contentList)
+                },
+                "max_completion_tokens", 16000
+        );
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.set("api-key", apiKey);
+
+        HttpEntity<Map<String, Object>> requestEntity = new HttpEntity<>(requestBody, headers);
+
+        try {
+            ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.POST, requestEntity, Map.class);
+
+            if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
+                var choices = (List<Map<String, Object>>) response.getBody().get("choices");
+                if (choices != null && !choices.isEmpty()) {
+                    Map<String, Object> message = (Map<String, Object>) choices.get(0).get("message");
+                    String content = (String) message.get("content");
+
+                    log.debug("OCR extracted text (first 500 chars): {}",
+                            content.length() > 500 ? content.substring(0, 500) : content);
+
+                    return content.trim();
+                }
+            }
+        } catch (Exception e) {
+            log.error("Error calling Azure OpenAI Vision for OCR: {}", e.getMessage(), e);
+            throw new RuntimeException("Failed to call Azure OpenAI Vision: " + e.getMessage(), e);
+        }
+
+        throw new RuntimeException("No response from Azure OpenAI Vision");
+    }
 }
