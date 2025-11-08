@@ -137,7 +137,7 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
     }
 
     @Override
-    public void autoGradeSubmission(Long submissionId) {
+    public void autoGradeSubmission(Long submissionId, boolean force) {
         log.info("Starting auto-grading for submissionId: {}", submissionId);
 
         SubmissionDailyChallenge submission = submissionDailyChallengeRepository
@@ -147,8 +147,10 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
                     return new ApiException(Const.SUBMISSION.NOT_FOUND, HttpStatus.NOT_FOUND.value());
                 });
 
-        if (submission.getSubmissionStatus() != SubmissionStatus.SUBMITTED) {
-            throw new ApiException("Auto-grading is only allowed for SUBMITTED submissions", HttpStatus.BAD_REQUEST.value());
+        if(submission.getGradingDailyChallenge().getFinalScore() != null && !force) {
+            log.info("Submission {} already has a final score {}, skipping auto-grading.",
+                    submissionId, submission.getGradingDailyChallenge().getFinalScore());
+            return;
         }
 
         DailyChallenge challenge = submission.getChallenge();
@@ -186,7 +188,7 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
         List<Question> questions = allQuestionIds.isEmpty() ? List.of() :
                 questionRepository.findByIdInAndDeletedAtIsNull(new ArrayList<>(allQuestionIds));
 
-        Map<Long, Question> questionMap = questions.stream()
+        questions.stream()
                 .collect(Collectors.toMap(Question::getId, q -> q));
 
         // === KẾT QUẢ CHUNG ===
@@ -298,6 +300,7 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
         gradingQuestionRepository.saveAll(gradingQuestions);
 
         submission.setSubmissionStatus(SubmissionStatus.GRADED);
+        submission.setGradingDailyChallenge(grading);
         submissionDailyChallengeRepository.save(submission);
 
         cacheService.clearSubmissionsCacheForChallenge(challenge.getId());

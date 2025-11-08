@@ -15,9 +15,8 @@ import java.util.List;
 import java.util.Optional;
 
 public interface SubmissionDailyChallengeRepository extends JpaRepository<SubmissionDailyChallenge, Long> {
-    /**
-     * Find a SubmissionDailyChallenge by userId and challengeId where deletedAt is null.
-     */
+    List<SubmissionDailyChallenge> findAllByDeletedAtIsNull();
+
     Optional<SubmissionDailyChallenge> findByUserIdAndChallengeIdAndDeletedAtIsNull(Long userId, Long challengeId);
 
     Optional<SubmissionDailyChallenge> findByIdAndDeletedAtIsNull(Long submissionChallengeId);
