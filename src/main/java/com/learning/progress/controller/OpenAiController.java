@@ -10,9 +10,11 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.util.List;
 
@@ -163,5 +165,14 @@ public class OpenAiController {
                 DataResponse.success(result, Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL),
                 HttpStatus.OK
         );
+    }
+
+    @GetMapping(value = "/writing/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter gradeWritingStream(@RequestParam Long submissionQuestionId) {
+
+        GradingWritingRequest request = new GradingWritingRequest();
+        request.setSubmissionQuestionId(submissionQuestionId);
+
+        return aiFeedbackService.gradeWritingStream(request);
     }
 }
