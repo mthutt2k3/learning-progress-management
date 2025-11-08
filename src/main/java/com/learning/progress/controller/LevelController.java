@@ -25,7 +25,7 @@ public class LevelController {
     @Autowired
     private LevelService levelService;
 
-    @PreAuthorize("hasRole('MANAGER')")
+    @PreAuthorize("hasAnyRole('MANAGER', 'TEACHER')")
     @GetMapping("/publish")
     @Operation(summary = "View Level List", description = "Retrieve a list of all levels that published")
     public ResponseEntity<DataResponse<List<LevelDetailsResponse>>> viewPublishedLevelList(
