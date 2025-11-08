@@ -93,15 +93,4 @@ public class ChallengeSectionController {
         DataResponse<List<StudentSectionWithQuestionsDto>> response = sectionService.listSectionsWithoutAnswers(challengeId, page, size, text);
         return new ResponseEntity<>(response, HttpStatus.OK);
     }
-
-    @PatchMapping("/questions/{questionId}/point")
-    @PreAuthorize("hasRole('TEACHER')")
-    @Operation(summary = "Update question point",
-            description = "Update the score (point) of a specific question inside a section (TEACHER only)")
-    public ResponseEntity<DataResponse<Void>> updateScoreQuestion(
-            @Parameter(description = "Question ID") @PathVariable Long questionId,
-            @RequestParam double score) {
-        sectionService.updateScoreQuestion(questionId, score);
-        return ResponseEntity.ok(DataResponse.success(null, Const.RESULT_MESSAGE_CODE.UPDATE_SUCCESSFUL));
-    }
 }
