@@ -61,11 +61,9 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
     @Override
     @Transactional(readOnly = true)
     public GradingChallengeDetailResponse getChallengeGradingDetail(Long submissionId) {
-        validateAndGetSubmission(submissionId);
+        SubmissionDailyChallenge submissionDailyChallenge = appValidator.validateUserAccessToSubmissionResult(submissionId);
 
-        GradingDailyChallenge grading = gradingDailyChallengeRepository
-                .findBySubmissionDailyIdAndDeletedAtIsNull(submissionId)
-                .orElseThrow(() -> new ApiException("Submission not graded yet", HttpStatus.BAD_REQUEST.value()));
+        GradingDailyChallenge grading = submissionDailyChallenge.getGradingDailyChallenge();
 
         // === TÍNH THỐNG KÊ CÂU HỎI ===
         List<GradingQuestion> gqs = gradingQuestionRepository
@@ -117,23 +115,6 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
                 .teacherFeedback(teacherFeedback)
                 .build();
 
-    }
-
-    private SubmissionDailyChallenge validateAndGetSubmission(Long submissionId) {
-        SubmissionDailyChallenge submission = submissionDailyChallengeRepository
-                .findByIdAndDeletedAtIsNull(submissionId)
-                .orElseThrow(() -> new ApiException(Const.SUBMISSION.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
-
-        Long classId = submission.getChallenge()
-                .getClassLesson().getClassChapter().getClazz().getId();
-
-        appValidator.validateUserAccessToClass(classId);
-
-        if (submission.getSubmissionStatus() != SubmissionStatus.GRADED) {
-            throw new ApiException("Submission not graded yet", HttpStatus.BAD_REQUEST.value());
-        }
-
-        return submission;
     }
 
     @Override
@@ -563,7 +544,7 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
         GradingQuestion gq = gradingQuestionRepository
                 .findBySubmissionQuestionIdAndDeletedAtIsNull(submissionQuestionId)
                 .orElseThrow(() -> new ApiException("Grading for this question not found", HttpStatus.NOT_FOUND.value()));
-
+        appValidator.validateUserAccessToSubmissionResult(gq.getGradingDaily().getSubmissionDaily().getId());
         // ✅ Parse feedback JSON string to object
         FeedbackContent feedbackContent = null;
         if (gq.getFeedback() != null && !gq.getFeedback().isBlank()) {  // ← Dùng getFeedbackJson
