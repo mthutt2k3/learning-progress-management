@@ -1,9 +1,6 @@
 package com.learning.progress.util;
 
-import com.learning.progress.common.ClassStudentStatus;
-import com.learning.progress.common.ClassTeacherStatus;
-import com.learning.progress.common.Const;
-import com.learning.progress.common.RoleName;
+import com.learning.progress.common.*;
 import com.learning.progress.entity.SubmissionDailyChallenge;
 import com.learning.progress.entity.User;
 import com.learning.progress.exception.ApiException;
@@ -103,6 +100,70 @@ public class AppValidator {
         }
     }
 
+    public SubmissionDailyChallenge validateUserAccessToSubmissionResult(Long submissionChallengeId) {
+        if (submissionChallengeId == null) {
+            log.warn("validateUserAccessToSubmission called with null id");
+            throw new ApiException(Const.SUBMISSION.INVALID_ID, HttpStatus.BAD_REQUEST.value());
+        }
+
+        SubmissionDailyChallenge submission = submissionDailyChallengeRepository
+                .findByIdAndDeletedAtIsNull(submissionChallengeId)
+                .orElseThrow(() -> {
+                    log.warn("Submission not found: {}", submissionChallengeId);
+                    return new ApiException(Const.SUBMISSION.NOT_FOUND, HttpStatus.NOT_FOUND.value());
+                });
+
+        Long classId = submission.getChallenge()
+                .getClassLesson().getClassChapter().getClazz().getId();
+        SubmissionStatus submissionStatus = submission.getSubmissionStatus();
+        ChallengeStatus challengeStatus = submission.getChallenge().getChallengeStatus();
+
+        String roleStr = jwtUtil.extractRoleFromCurrentRequest();
+        Long currentUserId = jwtUtil.extractUserIdFromCurrentRequest();
+
+        RoleName roleName = validateAndConvertEnum(roleStr, RoleName.class);
+
+        // MANAGER allowed always
+        if (roleName == RoleName.MANAGER) {
+            return submission;
+        }
+
+        // Teachers allowed only when they belong to the class
+        if (roleName == RoleName.TEACHER || roleName == RoleName.TEACHING_ASSISTANT) {
+            boolean isTeacher = classTeacherRepository.existsByUser_IdAndClazz_IdAndStatus(currentUserId, classId, ClassTeacherStatus.ACTIVE);
+            if (!isTeacher) {
+                log.warn("Access denied: user {} role {} is not teacher of class {}", currentUserId, roleName, classId);
+                throw new ApiException(Const.SECURITY.FORBIDDEN_ROLE, HttpStatus.FORBIDDEN.value());
+            }
+            if(submissionStatus != SubmissionStatus.SUBMITTED && submissionStatus != SubmissionStatus.GRADED) {
+                log.warn("Access denied: user {} role {} trying to access submission {} of restricted challenge",
+                        currentUserId, roleName, submissionChallengeId);
+                throw new ApiException(Const.SUBMISSION.FORBIDDEN_CHALLENGE_DRAFT, HttpStatus.FORBIDDEN.value());
+            }
+            return submission;
+        }
+
+        // Students allowed only for their own submission
+        if (roleName == RoleName.STUDENT || roleName == RoleName.TEST_TAKER) {
+            if (!Objects.equals(submission.getUser().getId(), currentUserId)) {
+                log.warn("Access denied: user {} attempting to access submission {} owned by {}", currentUserId, submissionChallengeId, submission.getUser().getId());
+                throw new ApiException(Const.SUBMISSION.FORBIDDEN_NOT_OWNER, HttpStatus.FORBIDDEN.value());
+            }
+
+            // Chỉ được xem KẾT QUẢ khi:
+            // - submission đã nộp (SUBMITTED, GRADED)
+            // - hoặc challenge đã kết thúc
+            if (submissionStatus != SubmissionStatus.SUBMITTED && submissionStatus != SubmissionStatus.GRADED &&
+                    challengeStatus != ChallengeStatus.FINISHED) {
+                throw new ApiException("Submission result is not available yet", HttpStatus.FORBIDDEN.value());
+            }
+            return submission;
+        }
+
+        // default deny
+        log.warn("Access denied: user {} with role {} not allowed to access submission {}", currentUserId, roleName, submissionChallengeId);
+        throw new ApiException(Const.SECURITY.FORBIDDEN_ROLE, HttpStatus.FORBIDDEN.value());
+    }
     /**
      * Validate access to a submission (submissionDaily). Returns the loaded SubmissionDailyChallenge if authorized.
      * Rules:
@@ -125,6 +186,7 @@ public class AppValidator {
 
         Long classId = submission.getChallenge()
                 .getClassLesson().getClassChapter().getClazz().getId();
+        SubmissionStatus submissionStatus = submission.getSubmissionStatus();
 
         String roleStr = jwtUtil.extractRoleFromCurrentRequest();
         Long currentUserId = jwtUtil.extractUserIdFromCurrentRequest();
@@ -142,6 +204,11 @@ public class AppValidator {
             if (!isTeacher) {
                 log.warn("Access denied: user {} role {} is not teacher of class {}", currentUserId, roleName, classId);
                 throw new ApiException(Const.SECURITY.FORBIDDEN_ROLE, HttpStatus.FORBIDDEN.value());
+            }
+            if(submissionStatus != SubmissionStatus.SUBMITTED && submissionStatus != SubmissionStatus.GRADED) {
+                log.warn("Access denied: user {} role {} trying to access submission {} of restricted challenge",
+                        currentUserId, roleName, submissionId);
+                throw new ApiException(Const.SUBMISSION.FORBIDDEN_CHALLENGE_DRAFT, HttpStatus.FORBIDDEN.value());
             }
             return submission;
         }
