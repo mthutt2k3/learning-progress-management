@@ -263,6 +263,9 @@ public class SubmissionQuestionServiceImpl implements SubmissionQuestionService 
         DailyChallenge dailyChallenge = submission.getChallenge();
         Long userId = jwtUtil.extractUserIdFromCurrentRequest();
 
+        appValidator.validateClassIsActive(dailyChallenge.getClassLesson().getClassChapter().getClazz().getId());
+        appValidator.validateUserAccessToClass(dailyChallenge.getClassLesson().getClassChapter().getClazz().getId());
+
         SubmissionStatus status = submission.getSubmissionStatus();
         if (status == SubmissionStatus.SUBMITTED || status == SubmissionStatus.GRADED) {
             throw new ApiException("Submission already completed", HttpStatus.BAD_REQUEST.value());

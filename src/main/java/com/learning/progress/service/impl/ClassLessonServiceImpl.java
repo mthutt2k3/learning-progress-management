@@ -73,6 +73,7 @@ public class ClassLessonServiceImpl implements ClassLessonService {
                 .orElseThrow(() -> new ApiException(Const.CLASS_CHAPTER.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
         Long classId = classChapter.getClazz().getId();
 
+        appValidator.validateClassIsActive(classId);
         appValidator.validateUserAccessToClass(classChapter.getClazz().getId());
 
         // Load existing active class lessons
@@ -341,6 +342,8 @@ public class ClassLessonServiceImpl implements ClassLessonService {
     @Override
     @Transactional
     public List<ClassLessonDTO> importLessonsInClassFromExcel(MultipartFile file, Long classId) {
+        appValidator.validateClassIsActive(classId);
+        appValidator.validateUserAccessToClass(classId);
         // Validate teacher assignment
         Long currentUserId = jwtUtil.extractUserIdFromCurrentRequest();
         if ( !classTeacherRepository.existsByClazz_IdAndUser_IdAndStatus(classId, currentUserId, ClassTeacherStatus.ACTIVE)) {
@@ -425,11 +428,12 @@ public class ClassLessonServiceImpl implements ClassLessonService {
         List<ImportLessonDTO> importList;
 
         // Bước 1: Validate class exists
-        Clazz classEntity;
         try {
-            classEntity = classRepository.findById(classId)
+            classRepository.findById(classId)
                     .filter(c -> c.getDeletedAt() == null)
                     .orElseThrow(() -> new ApiException(Const.CLASS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+            appValidator.validateClassIsActive(classId);
+            appValidator.validateUserAccessToClass(classId);
         } catch (ApiException e) {
             result.setTotalRows(0);
             result.setValidRows(0);

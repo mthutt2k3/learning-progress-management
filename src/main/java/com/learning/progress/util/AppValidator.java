@@ -1,13 +1,11 @@
 package com.learning.progress.util;
 
 import com.learning.progress.common.*;
+import com.learning.progress.entity.Clazz;
 import com.learning.progress.entity.SubmissionDailyChallenge;
 import com.learning.progress.entity.User;
 import com.learning.progress.exception.ApiException;
-import com.learning.progress.repository.ClassStudentRepository;
-import com.learning.progress.repository.ClassTeacherRepository;
-import com.learning.progress.repository.SubmissionDailyChallengeRepository;
-import com.learning.progress.repository.UserRepository;
+import com.learning.progress.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -27,6 +25,7 @@ import java.util.stream.IntStream;
 @RequiredArgsConstructor
 public class AppValidator {
 
+    private final ClassRepository classRepository;
     @Value("${app.pagination.max-size}")
     private int maxSize;
 
@@ -321,4 +320,12 @@ public class AppValidator {
         }
     }
 
+    public void validateClassIsActive(Long classId) {
+        Clazz clazz = classRepository.findById(classId)
+                .orElseThrow(() -> new ApiException(Const.CLASS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+
+        if (clazz.getDeletedAt() != null || clazz.getStatus() == ClassStatus.FINISHED) {
+            throw new ApiException(Const.CLASS.FINISHED_OR_DELETED, HttpStatus.BAD_REQUEST.value());
+        }
+    }
 }

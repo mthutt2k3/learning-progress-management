@@ -352,6 +352,7 @@ public class Const {
         public static final String DELETED = "Class has been deleted";
         public static final String FINISHED_CLASS = "Class has been finished";
 
+        public static final String EXIST_NAME = "Class name already exists";
         public static final String CLASS_NAME_REQUIRED = "Class name cannot be empty";
         public static final String CLASS_NAME_MAX_LENGTH = "Class name cannot exceed 50 characters";
         public static final int CLASS_NAME_MAX_LENGTH_VALUE = 50;
@@ -367,11 +368,15 @@ public class Const {
         // Permission / access
         public static final String TEACHER_NOT_ASSIGNED = "Teacher is not assigned to this class";
 
+        public static final String FINISHED_OR_DELETED = "Class has been finished or deleted, cannot modify";
+
     }
     public static class SYLLABUS {
         public static final String ID_REQUIRED = "Syllabus ID cannot be empty";
         public static final String NOT_FOUND = "Syllabus not found or deleted";
         public static final String EXIST_NAME = "Syllabus name already exists";
+        public static final String IN_USE_BY_ACTIVE_CLASS = "Cannot delete syllabus that is being used by active classes";
+
     }
     public static class CLASS_HISTORY {
         public static final String CREATE_CLASS = "Created class %s with syllabus %s";
