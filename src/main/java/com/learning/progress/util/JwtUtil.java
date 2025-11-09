@@ -244,16 +244,21 @@ public class JwtUtil {
 
         String ip = request.getHeader("X-Forwarded-For");
         if (ip != null && !ip.isBlank() && !"unknown".equalsIgnoreCase(ip)) {
-            // Trường hợp chuỗi có nhiều IP -> lấy IP đầu tiên
-            return ip.split(",")[0].trim();
+            return extractIp(ip.split(",")[0].trim());
         }
 
         ip = request.getHeader("X-Real-IP");
         if (ip != null && !ip.isBlank() && !"unknown".equalsIgnoreCase(ip)) {
-            return ip.trim();
+            return extractIp(ip.trim());
         }
 
-        return request.getRemoteAddr();
+        return extractIp(request.getRemoteAddr());
+    }
+
+    private String extractIp(String addr) {
+        if (addr == null || addr.isBlank()) return null;
+        int colonIndex = addr.indexOf(':');
+        return colonIndex > 0 ? addr.substring(0, colonIndex) : addr;
     }
 
 }
