@@ -174,14 +174,11 @@ public class ClassStudentServiceImpl implements ClassStudentService {
     @Override
     @Transactional
     public void addStudentToClass(Long classId, AddStudentToClassRequest request) {
+        appValidator.validateClassIsActive(classId);
         appValidator.validateUserAccessToClass(classId);
         // 1️⃣ Validate class
         Clazz clazz = classRepository.findById(classId)
                 .orElseThrow(() -> new ApiException(Const.CLASS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
-
-        if (clazz.getStatus() == ClassStatus.INACTIVE) {
-            throw new ApiException(Const.CLASS.INACTIVE, HttpStatus.BAD_REQUEST.value());
-        }
 
         if (clazz.getDeletedAt() != null) {
             throw new ApiException(Const.CLASS.DELETED, HttpStatus.BAD_REQUEST.value());
@@ -401,20 +398,17 @@ public class ClassStudentServiceImpl implements ClassStudentService {
     @Override
     @Transactional
     public void removeStudentFromClass(Long classId, Long userId) {
-        appValidator.validateUserAccessToClass(classId);
         // Fetch and validate class
         Clazz clazz = classRepository.findById(classId)
                 .orElseThrow(() -> new ApiException(Const.CLASS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
-
-        // Validate class is active
-        if (clazz.getStatus() == ClassStatus.INACTIVE) {
-            throw new ApiException(Const.CLASS.INACTIVE, HttpStatus.BAD_REQUEST.value());
-        }
 
         // Validate class is not deleted
         if (clazz.getDeletedAt() != null) {
             throw new ApiException(Const.CLASS.DELETED, HttpStatus.BAD_REQUEST.value());
         }
+
+        appValidator.validateClassIsActive(classId);
+        appValidator.validateUserAccessToClass(classId);
 
         // Fetch and validate user
         User user = userRepository.findByIdAndDeletedAtIsNull(userId)
@@ -666,11 +660,6 @@ public class ClassStudentServiceImpl implements ClassStudentService {
                     if (clazz == null) {
                         errors.append("• Class Code không tồn tại: ").append(record.getClassCode()).append("\n");
                     } else {
-                        // Validate class status
-                        if (clazz.getStatus() == ClassStatus.INACTIVE) {
-                            errors.append("• Class đang INACTIVE, không thể thêm học sinh\n");
-                        }
-
                         if (clazz.getDeletedAt() != null) {
                             errors.append("• Class đã bị xóa, không thể thêm học sinh\n");
                         }

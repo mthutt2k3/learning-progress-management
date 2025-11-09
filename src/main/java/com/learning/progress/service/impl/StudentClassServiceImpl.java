@@ -55,7 +55,7 @@ public class StudentClassServiceImpl implements ClassServiceStrategy {
     @Transactional(readOnly = true)
     public ClassOverviewDTO getClassOverview(Long id) {
         appValidator.validateUserAccessToClass(id);
-        Clazz clazz = classRepository.findByIdAndDeletedAtIsNullAndStatusNot(id, ClassStatus.INACTIVE)
+        Clazz clazz = classRepository.findByIdAndDeletedAtIsNull(id)
                 .orElseThrow(() -> new ApiException(Const.CLASS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
 

@@ -437,6 +437,7 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
         DailyChallenge challenge = submission.getChallenge();
 
         Long classId = challenge.getClassLesson().getClassChapter().getClazz().getId();
+        appValidator.validateClassIsActive(classId);
         appValidator.validateUserAccessToClass(classId);
 
         Long graderId = jwtUtil.extractUserIdFromCurrentRequest();
@@ -496,6 +497,7 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
             throw new ApiException("Received weight cannot exceed question's max weight", HttpStatus.BAD_REQUEST.value());
         }
         Long classId = challenge.getClassLesson().getClassChapter().getClazz().getId();
+        appValidator.validateClassIsActive(classId);
         appValidator.validateUserAccessToClass(classId);
 
         Long graderId = jwtUtil.extractUserIdFromCurrentRequest();
