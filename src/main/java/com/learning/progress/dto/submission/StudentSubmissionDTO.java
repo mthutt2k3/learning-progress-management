@@ -26,6 +26,7 @@ public class StudentSubmissionDTO {
     private Double totalWeight;
     private Double maxPossibleWeight;
     private Double rawScore;
+    private Double penaltyApplied;
     private Double finalScore;
 
     private String overallFeedback;

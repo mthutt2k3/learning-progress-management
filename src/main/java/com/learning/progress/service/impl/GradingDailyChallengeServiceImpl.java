@@ -106,7 +106,9 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
                 .gradingChallengeId(grading.getId())
                 .totalWeight(achievedSum)
                 .maxPossibleWeight(maxPossibleScore)
-                .finalScore(grading.getRawScore())
+                .finalScore(DataUtil.getFinalScore(grading.getRawScore(), grading.getPenaltyApplied()))
+                .penaltyApplied(grading.getPenaltyApplied())
+                .rawScore(grading.getRawScore())
                 .totalQuestions(totalQuestions)
                 .correctAnswers(correct)
                 .wrongAnswers(wrong)
@@ -441,9 +443,13 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
         User grader = userRepository.findByIdAndDeletedAtIsNull(graderId)
                 .orElseThrow(() -> new ApiException(Const.ACCOUNT.ACCOUNT_NOT_FOUND, HttpStatus.BAD_REQUEST.value()));
 
-        Double finalScore = request.getFinalScore();
-        if (finalScore != null && (finalScore < 0.0 || finalScore > 10.0)) {
+        Double rawScore = request.getRawScore();
+        if (rawScore != null && (rawScore < 0.0 || rawScore > 10.0)) {
             throw new ApiException("Final score must be between 0 and 10", HttpStatus.BAD_REQUEST.value());
+        }
+        Double penalty = request.getPenaltyApplied();
+        if(penalty < 0.0 || penalty > 1.0) {
+            throw new ApiException("Penalty applied must be between 0.0 and 1.0", HttpStatus.BAD_REQUEST.value());
         }
 
         GradingDailyChallenge grading = gradingDailyChallengeRepository
@@ -452,7 +458,8 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
         grading.setSubmissionDaily(submission);
         grading.setGrader(grader);
         // Do not persist totalWeight on grading header; per-question weights are the source of truth.
-        grading.setRawScore(request.getFinalScore());
+        grading.setRawScore(rawScore);
+        grading.setPenaltyApplied(penalty);
         grading.setOverallFeedback(request.getOverallFeedback());
         grading.setIsFinalized(true);
         gradingDailyChallengeRepository.save(grading);

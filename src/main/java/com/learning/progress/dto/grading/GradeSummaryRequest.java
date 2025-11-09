@@ -6,7 +6,8 @@ import lombok.Setter;
 @Getter
 @Setter
 public class GradeSummaryRequest {
-    private Double finalScore;
+    private Double rawScore;
+    private Double penaltyApplied;
     private String overallFeedback;
 }
 

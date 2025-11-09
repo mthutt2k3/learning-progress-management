@@ -2163,4 +2163,23 @@ public class DataUtil {
         return round(raw, 2);
     }
 
+    /**
+     * Tính điểm cuối cùng sau khi áp dụng phạt muộn.
+     *
+     * @param rawScore        Điểm gốc (trước phạt)
+     * @param penaltyApplied  Phần trăm bị trừ (0.0 → 1.0)
+     * @return finalScore = rawScore × (1 - penaltyApplied)
+     */
+    public static Double getFinalScore(Double rawScore, Double penaltyApplied) {
+        // Kiểm tra null
+        if (rawScore == null || penaltyApplied == null) {
+            return rawScore; // Không phạt nếu thiếu dữ liệu
+        }
+
+        // Đảm bảo penaltyApplied trong [0.0, 1.0]
+        double penalty = Math.max(0.0, Math.min(1.0, penaltyApplied));
+
+        // Tính điểm cuối
+        return rawScore * (1.0 - penalty);
+    }
 }

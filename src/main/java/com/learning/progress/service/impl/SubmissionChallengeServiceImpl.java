@@ -166,34 +166,27 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
 
                         SubmissionDailyChallenge submission = submissionByChallengeId.get(ch.getId());
 
-                        if(submission == null){
-                            log.warn("[{}] No submission found for studentId={} challengeId={}", method, studentId, ch.getId());
-                            submission = new SubmissionDailyChallenge();
-                        }
-
-                        GradingDailyChallenge grading = (submission != null) ? gradingBySubmissionId.get(submission.getId()) : null;
+                        GradingDailyChallenge grading = gradingBySubmissionId.get(submission.getId());
 
                         // compute visible scores based on endDate
                         Double totalWeight = null;
                         Double maxPossibleWeight = maxWeightByChallengeId.getOrDefault(ch.getId(), 0.0);
-                        Double finalScore = null;
 
                         if (grading != null) {
                             // use precomputed achieved total
                             double achieved = achievedByGradingId.getOrDefault(grading.getId(), 0.0);
 
-                            OffsetDateTime effectiveEnd = (submission != null && submission.getExpiredAt() != null) ? submission.getExpiredAt() : ch.getEndDate();
+                            OffsetDateTime effectiveEnd = submission.getExpiredAt() != null ? submission.getExpiredAt() : ch.getEndDate();
                             if (effectiveEnd != null && now.isBefore(effectiveEnd)) {
-                                if (submission != null) submission.setSubmissionStatus(SubmissionStatus.SUBMITTED);
+                                submission.setSubmissionStatus(SubmissionStatus.SUBMITTED);
                             } else {
                                 totalWeight = achieved;
-                                finalScore = DataUtil.getRawScore(totalWeight, maxPossibleWeight);
-                                if (submission != null) submission.setSubmissionStatus(SubmissionStatus.GRADED);
+                                submission.setSubmissionStatus(SubmissionStatus.GRADED);
                             }
                         }
 
                         StudentSubmissionDTO studentSubmissionDTO = submissionMapper.toStudentSubmissionDTO(
-                                submission, grading, totalWeight, maxPossibleWeight, finalScore
+                                submission, grading, totalWeight, maxPossibleWeight
                         );
 
                         StudentChallengeListDTO.StudentChallengeDTO dto = StudentChallengeListDTO.StudentChallengeDTO.builder()
@@ -278,12 +271,10 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
                 .map(sub -> {
                     GradingDailyChallenge g = gradingMap.get(sub.getId());
                     Double totalWeight = null;
-                    Double finalScore = null;
                     if (g != null) {
                         totalWeight = totalReceivedByGradingId.getOrDefault(g.getId(), 0.0);
-                        finalScore = DataUtil.getRawScore(totalWeight, Double.valueOf(challengeMaxPossibleWeight));
                     }
-                    return submissionMapper.toStudentSubmissionDTO(sub, g, totalWeight, Double.valueOf(challengeMaxPossibleWeight), finalScore);
+                    return submissionMapper.toStudentSubmissionDTO(sub, g, totalWeight, Double.valueOf(challengeMaxPossibleWeight));
                 })
                 .toList();
 
@@ -349,7 +340,6 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
 
         Double achievedTotal = null;
         Double challengeMaxPossibleWeight = null;
-        Double finalScore = null;
 
         if (grading != null) {
             Double sumReceived = gradingDailyChallengeRepository.sumReceivedWeightBySubmissionDailyId(submissionId);
@@ -357,16 +347,13 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
 
             BigDecimal maxBig = dailyChallengeRepository.sumQuestionWeightByChallengeId(submission.getChallenge().getId());
             challengeMaxPossibleWeight = (maxBig == null) ? 0.0 : maxBig.doubleValue();
-
-            finalScore = DataUtil.getRawScore(achievedTotal, challengeMaxPossibleWeight);
         }
 
         StudentSubmissionDTO dto = submissionMapper.toStudentSubmissionDTO(
                 submission,
                 grading,
                 achievedTotal,
-                challengeMaxPossibleWeight,
-                finalScore
+                challengeMaxPossibleWeight
         );
 
         log.info("[{}] completed submissionId={} gradingPresent={}", method, submissionId, grading != null);
