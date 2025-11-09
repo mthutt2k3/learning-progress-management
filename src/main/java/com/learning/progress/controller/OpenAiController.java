@@ -148,6 +148,7 @@ public class OpenAiController {
             description = "Upload audio file and get pronunciation assessment with scores for accuracy, fluency, prosody")
     public ResponseEntity<DataResponse<PronunciationAssessmentResponse>> assessPronunciation(
             @RequestParam(value = "audioUrl", required = false) String audioUrl,
+            @RequestParam(value = "questionText", required = false) String questionText,
             @RequestParam(value = "referenceText", required = false) String referenceText){
 
         PronunciationAssessmentRequest request = PronunciationAssessmentRequest.builder()
@@ -159,7 +160,7 @@ public class OpenAiController {
                 .granularity("Phoneme")
                 .build();
 
-        PronunciationAssessmentResponse result = aiFeedbackService.assessPronunciation(request);
+        PronunciationAssessmentResponse result = aiFeedbackService.assessPronunciation(request, questionText);
 
         return new ResponseEntity<>(
                 DataResponse.success(result, Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL),

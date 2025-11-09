@@ -28,6 +28,7 @@ import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.util.UriComponentsBuilder;
 
 import java.io.*;
+import java.net.URL;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.regex.Matcher;
@@ -286,6 +287,45 @@ public class OpenAiServiceImpl implements OpenAiService {
                     throw new IllegalArgumentException("Section content is required");
                 }
 
+                // ✅ Enhanced content = gốc + OCR (nếu có ảnh)
+                String enhancedContent = section.getSectionsContent();
+
+                // ✅ Chỉ với READING + có sectionUrl + là ảnh → OCR
+                if ("RE".equals(dailyChallengeType) &&
+                        section.getSectionsUrl() != null &&
+                        !section.getSectionsUrl().trim().isEmpty()) {
+
+                    String sectionUrl = section.getSectionsUrl().trim();
+
+                    if (isImageUrl(sectionUrl)) {
+                        log.info("Detected image URL in reading section, performing OCR: {}", sectionUrl);
+
+                        try {
+                            String traceId = TraceUtil.getTraceId();
+                            String ocrText = extractTextFromImageUrl(sectionUrl, traceId);
+
+                            if (ocrText != null && !ocrText.trim().isEmpty()) {
+                                // ✅ Ghép OCR text vào content gốc
+                                enhancedContent = section.getSectionsContent() + "\n\n" + ocrText;
+                                log.info("Successfully appended OCR text ({} chars) to section content",
+                                        ocrText.length());
+                            }
+                        } catch (Exception e) {
+                            log.error("Failed to extract text from section image: {}", e.getMessage());
+                            // Continue với content gốc thay vì fail
+                        }
+                    }
+                }
+
+                // ✅ Tạo section với content đã enhance (để không modify request object)
+                SectionDto enhancedSection = new SectionDto();
+                enhancedSection.setId(section.getId());
+                enhancedSection.setSectionTitle(section.getSectionTitle());
+                enhancedSection.setSectionsContent(enhancedContent); // ✅ Dùng content đã ghép OCR
+                enhancedSection.setResourceType(section.getResourceType());
+                enhancedSection.setSectionsUrl(section.getSectionsUrl());
+                enhancedSection.setOrderNumber(section.getOrderNumber());
+
                 List<ContentBasedQuestionTask> sectionTasks = new ArrayList<>();
                 int questionOrder = 1;
 
@@ -299,7 +339,7 @@ public class OpenAiServiceImpl implements OpenAiService {
                     for (int i = 0; i < numberOfQuestions; i++) {
                         sectionTasks.add(new ContentBasedQuestionTask(
                                 context,
-                                section,
+                                enhancedSection, // ✅ Dùng section với content đã có OCR text
                                 questionType,
                                 request.getDescription(),
                                 contextInfo,
@@ -361,6 +401,7 @@ public class OpenAiServiceImpl implements OpenAiService {
 
                 ensureUniquePositionIds(allQuestions);
 
+                // ✅ Return với section gốc (không có OCR text trong response)
                 SectionWithQuestionsDto result = new SectionWithQuestionsDto(section, allQuestions);
                 results.add(result);
 
@@ -376,6 +417,223 @@ public class OpenAiServiceImpl implements OpenAiService {
                 results.size(), results.stream().mapToInt(s -> s.getQuestions().size()).sum());
 
         return results;
+    }
+
+    /**
+     * Check if content is an image URL
+     */
+    private boolean isImageUrl(String content) {
+        if (content == null || content.trim().isEmpty()) {
+            return false;
+        }
+
+        String lowerContent = content.toLowerCase().trim();
+
+        if (!lowerContent.startsWith("http://") && !lowerContent.startsWith("https://")) {
+            return false;
+        }
+
+        return lowerContent.contains(".jpg")
+                || lowerContent.contains(".jpeg")
+                || lowerContent.contains(".png")
+                || lowerContent.contains(".gif")
+                || lowerContent.contains(".webp")
+                || lowerContent.contains(".bmp")
+                || (lowerContent.contains("blob.core.windows.net") &&
+                !lowerContent.contains(".webm") &&
+                !lowerContent.contains(".mp3") &&
+                !lowerContent.contains(".mp4"));
+    }
+
+    /**
+     * Extract text from image URL using OCR
+     */
+    private String extractTextFromImageUrl(String imageUrl, String traceId) {
+        File imageFile = null;
+
+        try {
+            log.info("[{}] Downloading image from URL...", traceId);
+            imageFile = downloadImageFromUrl(imageUrl);
+
+            log.info("[{}] Extracting text from image using OCR...", traceId);
+            return extractTextFromImage(imageFile);
+
+        } catch (Exception e) {
+            log.error("[{}] Failed to extract text from image URL: {}", traceId, e.getMessage(), e);
+            throw new ApiException("Failed to extract text from image: " + e.getMessage(),
+                    HttpStatus.INTERNAL_SERVER_ERROR.value());
+        } finally {
+            if (imageFile != null && imageFile.exists()) {
+                try {
+                    imageFile.delete();
+                    log.debug("[{}] Cleaned up temp image file", traceId);
+                } catch (Exception e) {
+                    log.warn("[{}] Failed to delete temp image file: {}", traceId, e.getMessage());
+                }
+            }
+        }
+    }
+
+    /**
+     * Download image from URL to temp file
+     */
+    private File downloadImageFromUrl(String imageUrl) throws IOException {
+        try {
+            String tempDir = System.getProperty("java.io.tmpdir");
+
+            String extension = ".jpg";
+            String lowerUrl = imageUrl.toLowerCase();
+            if (lowerUrl.contains(".png")) extension = ".png";
+            else if (lowerUrl.contains(".jpeg")) extension = ".jpeg";
+            else if (lowerUrl.contains(".gif")) extension = ".gif";
+            else if (lowerUrl.contains(".webp")) extension = ".webp";
+            else if (lowerUrl.contains(".bmp")) extension = ".bmp";
+
+            String filename = "reading_section_" + UUID.randomUUID() + extension;
+            File tempFile = new File(tempDir, filename);
+
+            URL url = new URL(imageUrl);
+            try (InputStream in = url.openStream();
+                 FileOutputStream out = new FileOutputStream(tempFile)) {
+                byte[] buffer = new byte[8192];
+                int bytesRead;
+                while ((bytesRead = in.read(buffer)) != -1) {
+                    out.write(buffer, 0, bytesRead);
+                }
+            }
+
+            log.debug("Downloaded image to: {}", tempFile.getAbsolutePath());
+            return tempFile;
+
+        } catch (Exception e) {
+            log.error("Failed to download image from URL: {}", e.getMessage());
+            throw new IOException("Failed to download image from URL", e);
+        }
+    }
+
+    /**
+     * Extract text from image using OpenAI Vision API
+     */
+    private String extractTextFromImage(File imageFile) {
+        try {
+            String base64Image = convertImageToBase64(imageFile);
+            String prompt = buildOCRPrompt();
+
+            String extractedText = null;
+            int maxRetries = 3;
+            Exception lastException = null;
+
+            for (int attempt = 1; attempt <= maxRetries; attempt++) {
+                try {
+                    log.info("Calling OpenAI Vision for OCR (attempt {}/{})...", attempt, maxRetries);
+                    extractedText = callOpenAIVisionForOCR(prompt, base64Image);
+                    break;
+                } catch (Exception e) {
+                    lastException = e;
+                    log.warn("OCR failed on attempt {}/{}: {}", attempt, maxRetries, e.getMessage());
+
+                    if (attempt < maxRetries) {
+                        try {
+                            Thread.sleep(1000L * attempt);
+                        } catch (InterruptedException ie) {
+                            Thread.currentThread().interrupt();
+                        }
+                    }
+                }
+            }
+
+            if (extractedText == null) {
+                throw new RuntimeException("Failed to extract text after " + maxRetries + " attempts: "
+                        + (lastException != null ? lastException.getMessage() : "unknown error"));
+            }
+
+            return parseOCRResponse(extractedText.trim());
+
+        } catch (ApiException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("Failed to extract text from image: {}", e.getMessage(), e);
+            throw new RuntimeException("Failed to extract text from image", e);
+        }
+    }
+
+    /**
+     * Parse OCR JSON response
+     */
+    private String parseOCRResponse(String jsonResponse) {
+        try {
+            String cleaned = cleanJsonResponse(jsonResponse);
+            JsonNode root = objectMapper.readTree(cleaned);
+
+            String status = root.hasNonNull("status") ? root.get("status").asText() : "UNKNOWN";
+
+            switch (status) {
+                case "SUCCESS":
+                    String extractedText = root.hasNonNull("text") ? root.get("text").asText() : "";
+                    if (extractedText.isEmpty()) {
+                        throw new ApiException("OCR returned empty text", HttpStatus.BAD_REQUEST.value());
+                    }
+                    return extractedText;
+
+                case "ILLEGIBLE_HANDWRITING":
+                    throw new ApiException("Chữ viết tay không rõ ràng, không thể đọc được", HttpStatus.BAD_REQUEST.value());
+
+                case "NO_TEXT_FOUND":
+                    throw new ApiException("Không tìm thấy văn bản trong ảnh", HttpStatus.BAD_REQUEST.value());
+
+                case "BLANK_IMAGE":
+                    throw new ApiException("Ảnh trống hoặc không hợp lệ", HttpStatus.BAD_REQUEST.value());
+
+                default:
+                    throw new ApiException("Lỗi OCR: Trạng thái không xác định - " + status,
+                            HttpStatus.INTERNAL_SERVER_ERROR.value());
+            }
+
+        } catch (ApiException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("Failed to parse OCR response: {}", e.getMessage(), e);
+            throw new ApiException("Không thể xử lý kết quả OCR: " + e.getMessage(),
+                    HttpStatus.INTERNAL_SERVER_ERROR.value());
+        }
+    }
+
+    /**
+     * Build OCR prompt
+     */
+    private String buildOCRPrompt() {
+        StringBuilder prompt = new StringBuilder();
+
+        prompt.append("You are an expert OCR system specialized in reading English text from images.\n\n");
+
+        prompt.append("CRITICAL: You MUST respond with ONLY valid JSON in this exact format:\n\n");
+        prompt.append("{\n");
+        prompt.append("  \"status\": \"SUCCESS\" | \"ILLEGIBLE_HANDWRITING\" | \"NO_TEXT_FOUND\" | \"BLANK_IMAGE\",\n");
+        prompt.append("  \"text\": \"extracted text (only if status is SUCCESS)\"\n");
+        prompt.append("}\n\n");
+
+        prompt.append("TASK: Extract ALL text from the image.\n\n");
+
+        prompt.append("RULES:\n");
+        prompt.append("- Transcribe EXACTLY what is written\n");
+        prompt.append("- DO NOT correct spelling or grammar\n");
+        prompt.append("- Preserve line breaks and structure\n");
+        prompt.append("- If unclear but readable → transcribe best interpretation\n");
+        prompt.append("- If 70%+ unreadable → return ILLEGIBLE_HANDWRITING\n\n");
+
+        prompt.append("Return ONLY the JSON object, no markdown, no extra text.\n");
+
+        return prompt.toString();
+    }
+
+    /**
+     * Convert image to base64
+     */
+    private String convertImageToBase64(File imageFile) throws IOException {
+        try (FileInputStream fis = new FileInputStream(imageFile)) {
+            byte[] imageBytes = fis.readAllBytes();
+            return Base64.getEncoder().encodeToString(imageBytes);
+        }
     }
 
     public ChallengeContext eagerLoadChallengeContext(DailyChallenge challenge) {
@@ -773,10 +1031,16 @@ public class OpenAiServiceImpl implements OpenAiService {
         prompt.append("- Follow the Vietnamese National High School (THPT Quốc Gia) style for clarity and fairness.\n\n");
 
         if (userDescription != null && !userDescription.isBlank()) {
-            prompt.append("🔥 ADDITIONAL REQUIREMENTS (HIGH PRIORITY):\n");
-            prompt.append(userDescription).append("\n");
-            prompt.append("IMPORTANT: Apply these requirements while maintaining alignment with lesson content and learning objectives.\n");
-            prompt.append("Do NOT create questions that are completely unrelated to the lesson or violate common sense.\n\n");
+            prompt.append("💡 ADDITIONAL SUGGESTIONS (OPTIONAL - USE ONLY IF RELEVANT):\n");
+            prompt.append(userDescription).append("\n\n");
+
+            prompt.append("⚠️ IMPORTANT INSTRUCTION FOR USER SUGGESTIONS:\n");
+            prompt.append("- These suggestions are SECONDARY and OPTIONAL\n");
+            prompt.append("- ONLY apply suggestions that are relevant to the lesson content\n");
+            prompt.append("- If suggestions contradict or are unrelated to the lesson → IGNORE them completely\n");
+            prompt.append("- If suggestions don't make sense or violate common sense → IGNORE them\n");
+            prompt.append("- NEVER create questions based solely on user suggestions if they don't fit the lesson\n");
+            prompt.append("- Lesson content alignment is ALWAYS the top priority\n\n");
         }
 
         prompt.append("TASK:\n");
@@ -840,10 +1104,16 @@ public class OpenAiServiceImpl implements OpenAiService {
         prompt.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n");
 
         if (userDescription != null && !userDescription.isBlank()) {
-            prompt.append("🔥 ADDITIONAL REQUIREMENTS (HIGH PRIORITY):\n");
-            prompt.append(userDescription).append("\n");
-            prompt.append("IMPORTANT: Apply these requirements while maintaining alignment with passage content.\n");
-            prompt.append("Do NOT create questions unrelated to the passage or violate common sense.\n\n");
+            prompt.append("💡 ADDITIONAL SUGGESTIONS (OPTIONAL - USE ONLY IF RELEVANT):\n");
+            prompt.append(userDescription).append("\n\n");
+
+            prompt.append("⚠️ IMPORTANT INSTRUCTION FOR USER SUGGESTIONS:\n");
+            prompt.append("- These suggestions are SECONDARY and OPTIONAL\n");
+            prompt.append("- ONLY apply suggestions that are relevant to the lesson content\n");
+            prompt.append("- If suggestions contradict or are unrelated to the lesson → IGNORE them completely\n");
+            prompt.append("- If suggestions don't make sense or violate common sense → IGNORE them\n");
+            prompt.append("- NEVER create questions based solely on user suggestions if they don't fit the lesson\n");
+            prompt.append("- Lesson content alignment is ALWAYS the top priority\n\n");
         }
 
         prompt.append("TASK:\n");
@@ -1010,13 +1280,6 @@ public class OpenAiServiceImpl implements OpenAiService {
                         .append("}\n\n");
                 break;
 
-            case "MULTIPLE_SELECT":
-                prompt.append("REQUIREMENTS:\n");
-                prompt.append("- 4–6 options total\n");
-                prompt.append("- 2–3 options with isCorrect=true\n");
-                prompt.append("- positionId=null for all\n\n");
-                break;
-
             case "REARRANGE":
                 prompt.append("⚠️ CRITICAL FORMAT:\n");
                 prompt.append("- questionText MUST contain [[pos_xxxxxx]] placeholders for EACH word/phrase\n");
@@ -1042,10 +1305,77 @@ public class OpenAiServiceImpl implements OpenAiService {
                         .append("}\n\n");
                 break;
 
+            case "DRAG_AND_DROP":
+                prompt.append("⚠️ CRITICAL FORMAT:\n");
+                prompt.append("- questionText contains [[pos_xxxxxx]] placeholders for drop zones\n");
+                prompt.append("- Each placeholder needs exactly 1 correct answer with matching positionId\n");
+                prompt.append("- Can include distractor answers (isCorrect=false, positionId=null) to increase difficulty\n");
+                prompt.append("- Number of correct answers = number of placeholders\n\n");
+
+                prompt.append("EXAMPLE:\n");
+                prompt.append("{\n")
+                        .append("  \"questionText\": \"Complete the sentence: [[pos_a1b2c3]] is the capital of [[pos_d4e5f6]], and [[pos_g7h8i9]] is spoken there.\",\n")
+                        .append("  \"orderNumber\": 1,\n")
+                        .append("  \"score\": 1.0,\n")
+                        .append("  \"questionType\": \"DRAG_AND_DROP\",\n")
+                        .append("  \"content\": {\n")
+                        .append("    \"data\": [\n")
+                        .append("      {\"id\": \"ans1\", \"value\": \"Paris\", \"isCorrect\": true, \"positionId\": \"a1b2c3\"},\n")
+                        .append("      {\"id\": \"ans2\", \"value\": \"France\", \"isCorrect\": true, \"positionId\": \"d4e5f6\"},\n")
+                        .append("      {\"id\": \"ans3\", \"value\": \"French\", \"isCorrect\": true, \"positionId\": \"g7h8i9\"},\n")
+                        .append("      {\"id\": \"dist1\", \"value\": \"Berlin\", \"isCorrect\": false, \"positionId\": null},\n")
+                        .append("      {\"id\": \"dist2\", \"value\": \"Spain\", \"isCorrect\": false, \"positionId\": null},\n")
+                        .append("      {\"id\": \"dist3\", \"value\": \"German\", \"isCorrect\": false, \"positionId\": null}\n")
+                        .append("    ]\n")
+                        .append("  }\n")
+                        .append("}\n\n");
+                break;
+
+            case "MULTIPLE_SELECT":
+                prompt.append("FORMAT: Similar to MULTIPLE_CHOICE but allows selecting multiple correct answers\n");
+                prompt.append("REQUIREMENTS:\n");
+                prompt.append("- 4–6 options total\n");
+                prompt.append("- 2–3 options with isCorrect=true\n");
+                prompt.append("- positionId=null for all\n\n");
+
+                prompt.append("EXAMPLE:\n");
+                prompt.append("{\n")
+                        .append("  \"questionText\": \"Which of the following are correct uses of the present perfect tense?\",\n")
+                        .append("  \"orderNumber\": 1,\n")
+                        .append("  \"score\": 1.0,\n")
+                        .append("  \"questionType\": \"MULTIPLE_SELECT\",\n")
+                        .append("  \"content\": {\n")
+                        .append("    \"data\": [\n")
+                        .append("      {\"id\": \"opt1\", \"value\": \"I have lived here for 5 years.\", \"isCorrect\": true, \"positionId\": null},\n")
+                        .append("      {\"id\": \"opt2\", \"value\": \"She has just finished her homework.\", \"isCorrect\": true, \"positionId\": null},\n")
+                        .append("      {\"id\": \"opt3\", \"value\": \"They went to Paris last year.\", \"isCorrect\": false, \"positionId\": null},\n")
+                        .append("      {\"id\": \"opt4\", \"value\": \"We are studying now.\", \"isCorrect\": false, \"positionId\": null},\n")
+                        .append("      {\"id\": \"opt5\", \"value\": \"He has visited London twice.\", \"isCorrect\": true, \"positionId\": null}\n")
+                        .append("    ]\n")
+                        .append("  }\n")
+                        .append("}\n\n");
+                break;
+
             case "REWRITE":
                 prompt.append("REQUIREMENTS:\n");
-                prompt.append("- Must have ONLY 1 correct answer\n");
-                prompt.append("- positionId=null\n\n");
+                prompt.append("- Can have MULTIPLE correct answers (no incorrect answers)\n");
+                prompt.append("- All answers with isCorrect=true are acceptable\n");
+                prompt.append("- positionId=null for all\n\n");
+
+                prompt.append("EXAMPLE:\n");
+                prompt.append("{\n")
+                        .append("  \"questionText\": \"Rewrite this sentence in the passive voice: 'The teacher explained the lesson.'\",\n")
+                        .append("  \"orderNumber\": 1,\n")
+                        .append("  \"score\": 1.0,\n")
+                        .append("  \"questionType\": \"REWRITE\",\n")
+                        .append("  \"content\": {\n")
+                        .append("    \"data\": [\n")
+                        .append("      {\"id\": \"ans1\", \"value\": \"The lesson was explained by the teacher.\", \"isCorrect\": true, \"positionId\": null},\n")
+                        .append("      {\"id\": \"ans2\", \"value\": \"The lesson was explained by the teacher yesterday.\", \"isCorrect\": true, \"positionId\": null},\n")
+                        .append("      {\"id\": \"ans3\", \"value\": \"The lesson has been explained by the teacher.\", \"isCorrect\": true, \"positionId\": null}\n")
+                        .append("    ]\n")
+                        .append("  }\n")
+                        .append("}\n\n");
                 break;
 
             default:
@@ -1402,9 +1732,31 @@ public class OpenAiServiceImpl implements OpenAiService {
 
         prompt.append(buildVocabularyPrompt(vocabularyList));
 
+        prompt.append("⚠️ CRITICAL REQUIREMENTS:\n");
+        prompt.append("- Passage MUST be appropriate for English language learners at level: ").append(levelInfo.levelName).append("\n");
+        prompt.append("- Content must be educational, age-appropriate, and culturally sensitive\n");
+        prompt.append("- Passage should have clear structure and coherent flow\n");
+        prompt.append("- Language complexity must match the student level\n\n");
+
         if (description != null && !description.isBlank()) {
-            prompt.append("🔥 USER REQUIREMENTS:\n");
+            prompt.append("💡 TOPIC/THEME SUGGESTIONS (OPTIONAL - USE ONLY IF APPROPRIATE):\n");
             prompt.append(description).append("\n\n");
+
+            prompt.append("⚠️ IMPORTANT INSTRUCTION FOR TOPIC SUGGESTIONS:\n");
+            prompt.append("- These suggestions are OPTIONAL and should guide the general theme/topic\n");
+            prompt.append("- ONLY use suggestions that are:\n");
+            prompt.append("  • Appropriate for language learners\n");
+            prompt.append("  • Educational and meaningful\n");
+            prompt.append("  • Suitable for the student level (").append(levelInfo.levelName).append(")\n");
+            prompt.append("  • Culturally appropriate and not controversial\n");
+            prompt.append("- If suggestions are inappropriate, irrelevant, or too complex → CREATE a suitable alternative topic\n");
+            prompt.append("- If suggestions are too vague → Interpret them in an educational context\n");
+            prompt.append("- NEVER create passages with inappropriate, offensive, or non-educational content\n");
+            prompt.append("- Educational value and level appropriateness are ALWAYS the top priorities\n\n");
+        } else {
+            prompt.append("💡 TOPIC SELECTION:\n");
+            prompt.append("Choose an engaging, educational topic appropriate for level ").append(levelInfo.levelName).append("\n");
+            prompt.append("Examples: culture, science, technology, environment, daily life, history, etc.\n\n");
         }
 
         prompt.append("TASK:\n");
@@ -1675,9 +2027,27 @@ public class OpenAiServiceImpl implements OpenAiService {
         // Build request body
         Map<String, Object> requestBody = Map.of(
                 "messages", new Object[]{
+                        // System message để bắt buộc JSON response
+                        Map.of(
+                                "role", "system",
+                                "content",
+                                "You are a JSON-only API. You MUST respond with ONLY valid JSON. " +
+                                        "No markdown, no code blocks, no explanations. " +
+                                        "Your entire response must be a single JSON object and nothing else.\n\n" +
+
+                                        // 🔹 Thêm phần định dạng JSON mẫu
+                                        "CRITICAL: You MUST respond with ONLY valid JSON in this exact format, no markdown, no extra text:\n\n" +
+                                        "{\n" +
+                                        "  \"status\": \"SUCCESS\" | \"ILLEGIBLE_HANDWRITING\" | \"NO_TEXT_FOUND\" | \"BLANK_IMAGE\",\n" +
+                                        "  \"text\": \"the exact raw text as read from the image, with no corrections or modifications (only if status is SUCCESS)\",\n" +
+                                        "}\n\n" +
+                                        "IMPORTANT: You must NOT correct, interpret, or modify the text. The 'text' must match exactly what you read in the image."
+                        ),
+                        // User message with prompt và image
                         Map.of("role", "user", "content", contentList)
                 },
-                "max_completion_tokens", 16000
+                "max_completion_tokens", 16000, // Giảm xuống vì chỉ cần JSON ngắn
+                "response_format", Map.of("type", "json_object") // ⭐ CRITICAL: Bắt buộc JSON mode
         );
 
         HttpHeaders headers = new HttpHeaders();
