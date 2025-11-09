@@ -13,6 +13,7 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.Collection;
 
 public interface SubmissionDailyChallengeRepository extends JpaRepository<SubmissionDailyChallenge, Long> {
     @Query("""
@@ -65,6 +66,12 @@ public interface SubmissionDailyChallengeRepository extends JpaRepository<Submis
 
     List<SubmissionDailyChallenge> findByUserIdInAndChallengeIdInAndDeletedAtIsNull(Set<Long> validUserIds, List<Long> challengeIds);
 
+    /**
+     * Fetch submissions for given user ids and challenge ids (includes both active and soft-deleted records).
+     * Useful for sync/restore operations where we need to detect existing soft-deleted submissions.
+     */
+    List<SubmissionDailyChallenge> findByUserIdInAndChallengeIdIn(Collection<Long> userIds, Collection<Long> challengeIds);
+
     @Query("""
     SELECT s.id FROM SubmissionDailyChallenge s
     JOIN s.challenge ch
@@ -88,4 +95,5 @@ public interface SubmissionDailyChallengeRepository extends JpaRepository<Submis
       AND s.deletedAt IS NOT NULL
     """)
     List<Long> findSubmissionIdsByUserIdsAndClassIdAndDeletedAtIsNotNull(List<Long> userIds, Long classId);
+
 }
