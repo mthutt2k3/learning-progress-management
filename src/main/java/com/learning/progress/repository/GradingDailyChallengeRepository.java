@@ -2,6 +2,7 @@ package com.learning.progress.repository;
 
 import com.learning.progress.entity.GradingDailyChallenge;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -27,4 +28,14 @@ public interface GradingDailyChallengeRepository extends JpaRepository<GradingDa
           AND gq.deletedAt IS NULL
         """)
     Double sumReceivedWeightBySubmissionDailyId(@Param("submissionDailyId") Long submissionDailyId);
+
+    @Modifying
+    @Query("""
+    UPDATE GradingDailyChallenge g
+    SET g.isFinalized = false,
+        g.updatedAt = CURRENT_TIMESTAMP
+    WHERE g.submissionDaily.challenge.id = :challengeId
+      AND g.isFinalized = true
+    """)
+    int reopenGradingForChallenge(@Param("challengeId") Long challengeId);
 }

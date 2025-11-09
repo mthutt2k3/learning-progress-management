@@ -15,6 +15,8 @@ public class GradingChallengeDetailResponse {
     private Double totalWeight;
     private Double maxPossibleWeight;
     private Double finalScore;
+    private Double penaltyApplied;
+    private Double rawScore;
 
     private Integer totalQuestions;
     private Integer correctAnswers;
