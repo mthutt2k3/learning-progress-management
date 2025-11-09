@@ -28,7 +28,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.*;
 import java.util.function.Function;
@@ -162,7 +161,16 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
                             if (!matches) continue;
                         }
 
+                        DailyChallengeListDTO.DailyChallengeInLessonDTO challengeDTO =
+                                dailyChallengeMapper.dailyChallengeToDailyChallengeInLessonDTO(ch);
+
                         SubmissionDailyChallenge submission = submissionByChallengeId.get(ch.getId());
+
+                        if(submission == null){
+                            log.warn("[{}] No submission found for studentId={} challengeId={}", method, studentId, ch.getId());
+                            submission = new SubmissionDailyChallenge();
+                        }
+
                         GradingDailyChallenge grading = (submission != null) ? gradingBySubmissionId.get(submission.getId()) : null;
 
                         // compute visible scores based on endDate
@@ -179,13 +187,10 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
                                 if (submission != null) submission.setSubmissionStatus(SubmissionStatus.SUBMITTED);
                             } else {
                                 totalWeight = achieved;
-                                finalScore = DataUtil.getFinalScore(totalWeight, maxPossibleWeight);
+                                finalScore = DataUtil.getRawScore(totalWeight, maxPossibleWeight);
                                 if (submission != null) submission.setSubmissionStatus(SubmissionStatus.GRADED);
                             }
                         }
-
-                        DailyChallengeListDTO.DailyChallengeInLessonDTO challengeDTO =
-                                dailyChallengeMapper.dailyChallengeToDailyChallengeInLessonDTO(ch);
 
                         StudentSubmissionDTO studentSubmissionDTO = submissionMapper.toStudentSubmissionDTO(
                                 submission, grading, totalWeight, maxPossibleWeight, finalScore
@@ -276,7 +281,7 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
                     Double finalScore = null;
                     if (g != null) {
                         totalWeight = totalReceivedByGradingId.getOrDefault(g.getId(), 0.0);
-                        finalScore = DataUtil.getFinalScore(totalWeight, Double.valueOf(challengeMaxPossibleWeight));
+                        finalScore = DataUtil.getRawScore(totalWeight, Double.valueOf(challengeMaxPossibleWeight));
                     }
                     return submissionMapper.toStudentSubmissionDTO(sub, g, totalWeight, Double.valueOf(challengeMaxPossibleWeight), finalScore);
                 })
@@ -353,7 +358,7 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
             BigDecimal maxBig = dailyChallengeRepository.sumQuestionWeightByChallengeId(submission.getChallenge().getId());
             challengeMaxPossibleWeight = (maxBig == null) ? 0.0 : maxBig.doubleValue();
 
-            finalScore = DataUtil.getFinalScore(achievedTotal, challengeMaxPossibleWeight);
+            finalScore = DataUtil.getRawScore(achievedTotal, challengeMaxPossibleWeight);
         }
 
         StudentSubmissionDTO dto = submissionMapper.toStudentSubmissionDTO(

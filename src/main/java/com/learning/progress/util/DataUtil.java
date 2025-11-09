@@ -43,6 +43,17 @@ import java.util.stream.Collectors;
 
 @Slf4j
 public class DataUtil {
+
+
+    public static String normalizeText(String text) {
+        return Optional.ofNullable(text)
+                .map(t -> t.replaceAll("[^a-zA-Z0-9\\s]", "")  // Xóa ký tự đặc biệt
+                        .replaceAll("\\.+$", "")            // XÓA DẤU CHẤM CUỐI CÂU
+                        .toLowerCase()
+                        .trim())
+                .orElse("");
+    }
+
     public static String bold(String text) {
         if (text == null) return "";
         return "<b>" + text + "</b>";
@@ -2144,7 +2155,7 @@ public class DataUtil {
      * Returns 0.0 when maxPossibleWeight is null/zero or when achievedWeight is null.
      * Result rounded to 2 decimal places.
      */
-    public static Double getFinalScore(Double achievedWeight, Double maxPossibleWeight) {
+    public static Double getRawScore(Double achievedWeight, Double maxPossibleWeight) {
         if (achievedWeight == null || maxPossibleWeight == null || maxPossibleWeight == 0.0) {
             return 0.0;
         }

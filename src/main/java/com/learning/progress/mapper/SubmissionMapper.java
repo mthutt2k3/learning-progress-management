@@ -26,8 +26,8 @@ public interface SubmissionMapper {
     @Mappings({
             @Mapping(target = "submissionId", source = "submission.id"),
             @Mapping(target = "studentId", source = "submission.user.id"),
-            @Mapping(target = "studentCode", expression = "java(submission.getUser() != null ? submission.getUser().getUserName() : null)"),
-            @Mapping(target = "studentName", expression = "java(submission.getUser() != null ? (submission.getUser().getFullName() != null ? submission.getUser().getFullName() : submission.getUser().getEmail()) : null)"),
+            @Mapping(target = "studentCode", expression = "java(submission != null ? (submission.getUser() != null ? submission.getUser().getUserName() : null) : null)"),
+            @Mapping(target = "studentName", expression = "java(submission != null ? (submission.getUser() != null ? (submission.getUser().getFullName() != null ? submission.getUser().getFullName() : submission.getUser().getEmail()) : null) : null)"),
             @Mapping(target = "startDate", source = "submission.startedAt"),
             @Mapping(target = "endDate", source = "submission.expiredAt"),
             @Mapping(target = "challengeDuration", source = "submission.challenge.durationMinutes"),
