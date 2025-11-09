@@ -5,10 +5,7 @@ import com.learning.progress.dto.challenge.DailyChallengeListDTO;
 import com.learning.progress.dto.challenge.StudentChallengeListDTO;
 import com.learning.progress.dto.submission.SaveSubmissionRequest;
 import com.learning.progress.dto.submission.StudentSubmissionDTO;
-import com.learning.progress.entity.ClassLesson;
-import com.learning.progress.entity.DailyChallenge;
-import com.learning.progress.entity.GradingDailyChallenge;
-import com.learning.progress.entity.SubmissionDailyChallenge;
+import com.learning.progress.entity.*;
 import com.learning.progress.util.DataUtil;
 import org.mapstruct.*;
 
@@ -27,13 +24,13 @@ public interface SubmissionMapper {
     @Mappings({
             @Mapping(target = "submissionId", source = "submission.id"),
             @Mapping(target = "studentId", source = "submission.user.id"),
-            @Mapping(target = "studentCode", expression = "java(submission != null ? (submission.getUser() != null ? submission.getUser().getUserName() : null) : null)"),
-            @Mapping(target = "studentName", expression = "java(submission != null ? (submission.getUser() != null ? (submission.getUser().getFullName() != null ? submission.getUser().getFullName() : submission.getUser().getEmail()) : null) : null)"),
             @Mapping(target = "startDate", source = "submission.startedAt"),
             @Mapping(target = "endDate", source = "submission.expiredAt"),
             @Mapping(target = "challengeDuration", source = "submission.challenge.durationMinutes"),
-            @Mapping(target = "finalScore", expression = "java(DataUtil.getFinalScore(grading.getRawScore(), grading.getPenaltyApplied()))"),
-            @Mapping(target = "actualDuration", expression = "java(submission.getActualStartAt() != null && submission.getSubmittedAt() != null ? Duration.between(submission.getActualStartAt(), submission.getSubmittedAt()) : null)"),
+            @Mapping(target = "finalScore", ignore = true),
+            @Mapping(target = "actualDuration", ignore = true),
+            @Mapping(target = "studentCode", ignore = true),
+            @Mapping(target = "studentName", ignore = true),
     })
     StudentSubmissionDTO toStudentSubmissionDTO(
             SubmissionDailyChallenge submission,
@@ -41,6 +38,37 @@ public interface SubmissionMapper {
             Double totalWeight,
             Double maxPossibleWeight
     );
+
+    // TÁCH RIÊNG ĐỂ DỄ ĐỌC, DỄ TEST
+    @AfterMapping
+    default void enhanceStudentSubmissionDTO(
+            @MappingTarget StudentSubmissionDTO dto,
+            SubmissionDailyChallenge submission,
+            GradingDailyChallenge grading) {
+
+        // 1. Student info
+        if (submission != null && submission.getUser() != null) {
+            User user = submission.getUser();
+            dto.setStudentCode(user.getUserName());
+            dto.setStudentName(user.getFullName() != null ? user.getFullName() : user.getEmail());
+        }
+
+        // 2. Final score
+        if (grading != null) {
+            dto.setFinalScore(DataUtil.getFinalScore(grading.getRawScore(), grading.getPenaltyApplied()));
+        }
+
+        // 3. Actual duration
+        if (submission != null
+                && submission.getActualStartAt() != null
+                && submission.getSubmittedAt() != null) {
+
+            dto.setActualDuration(Duration.between(
+                    submission.getActualStartAt(),
+                    submission.getSubmittedAt()
+            ));
+        }
+    }
     default Duration map(Integer minutes) {
         return minutes != null ? Duration.ofMinutes(minutes) : null;
     }
