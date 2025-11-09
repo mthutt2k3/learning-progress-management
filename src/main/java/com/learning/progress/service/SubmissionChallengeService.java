@@ -25,9 +25,7 @@ public interface SubmissionChallengeService {
 
     StudentSubmissionDTO getSubmissionInfo(Long submissionId);
 
-    void createTemporarySubmissionsForUsers(Long classId, List<Long> userIds);
-
-    void restoreSubmissionsForUsers(Long classId, List<Long> userIds);
+    void syncSubmissionsForUsersInClass(Long classId, List<Long> userIds);
 
     void softDeleteSubmissionsForUser(Long classId, Long userId);
 }
