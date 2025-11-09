@@ -94,7 +94,7 @@ public class SyllabusServiceImpl implements SyllabusService {
         Syllabus syllabus = syllabusRepository.findByIdAndDeletedAtIsNull(id)
                 .orElseThrow(() -> new ApiException(Const.SYLLABUS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
-        Level level = levelRepository.findById(request.getLevelId())
+        Level level = levelRepository.findByIdAndDeletedAtIsNull(request.getLevelId())
                 .orElseThrow(() -> new ApiException(Const.LEVEL.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         Syllabus updatedSyllabus = syllabusMapper.toSyllabus(request);

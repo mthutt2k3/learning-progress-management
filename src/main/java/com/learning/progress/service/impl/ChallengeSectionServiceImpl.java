@@ -10,13 +10,11 @@ import com.learning.progress.entity.ChallengeSection;
 import com.learning.progress.entity.DailyChallenge;
 import com.learning.progress.entity.Question;
 import com.learning.progress.exception.ApiException;
-import com.learning.progress.job.QuartzJobTriggerService;
+import com.learning.progress.job.QuartzJobTrigger;
 import com.learning.progress.mapper.ChallengeSectionMapper;
-import com.learning.progress.repository.ChallengeSectionRepository;
-import com.learning.progress.repository.DailyChallengeRepository;
-import com.learning.progress.repository.QuestionRepository;
-import com.learning.progress.repository.SubmissionDailyChallengeRepository;
+import com.learning.progress.repository.*;
 import com.learning.progress.service.ChallengeSectionService;
+import com.learning.progress.service.GradingDailyChallengeService;
 import com.learning.progress.service.QuestionService;
 import com.learning.progress.util.AppValidator;
 import com.learning.progress.util.JwtUtil;
@@ -53,9 +51,13 @@ public class ChallengeSectionServiceImpl implements ChallengeSectionService {
     @Autowired
     private SubmissionDailyChallengeRepository submissionDailyChallengeRepository;
     @Autowired
-    private QuartzJobTriggerService quartzJobTriggerService;
+    private QuartzJobTrigger quartzJobTrigger;
     @Autowired
     private DailyChallengeRepository dailyChallengeRepository;
+    @Autowired
+    private GradingDailyChallengeService gradingDailyChallengeService;
+    @Autowired
+    private GradingDailyChallengeRepository gradingDailyChallengeRepository;
 
     // =====================================================================
     // SAVE SECTION
@@ -100,17 +102,19 @@ public class ChallengeSectionServiceImpl implements ChallengeSectionService {
         cacheService.clearCacheForChallenge(challengeId);
         long tCacheClear = System.currentTimeMillis() - tCacheClearStart;
 
-        // Trigger auto-grading if the challenge is published or higher and questions were updated
         if (challenge.getChallengeStatus().isPublishedOrHigher()) {
             log.info("Checking if questions were updated to trigger auto-grading.");
             boolean hasUpdates = questionService.hasUpdates(dto.getQuestions(), section.getId());
+
             if (hasUpdates) {
-                log.info("Questions were updated. Triggering auto-grading for submissions.");
-                List<Long> submissionIds = submissionDailyChallengeRepository
-                        .findIdsByChallengeIdAndDeletedAtIsNull(challengeId);
-                submissionIds.forEach(submissionId -> quartzJobTriggerService.triggerAutoGrade(submissionId));
+                log.info("Questions updated for published challenge ID {}. Reopening all finalized gradings.", challenge.getId());
+
+                int reopenedCount = gradingDailyChallengeRepository.reopenGradingForChallenge(challenge.getId());
+
+                log.info("Reopened {} finalized gradings for regrading due to question updates.", reopenedCount);
+
             } else {
-                log.info("No updates detected in questions. Skipping auto-grading.");
+                log.debug("No question updates detected for challenge ID {}.", challenge.getId());
             }
         }
 

@@ -9,6 +9,7 @@ import com.learning.progress.entity.ClassLesson;
 import com.learning.progress.entity.DailyChallenge;
 import com.learning.progress.entity.GradingDailyChallenge;
 import com.learning.progress.entity.SubmissionDailyChallenge;
+import com.learning.progress.util.DataUtil;
 import org.mapstruct.*;
 
 import java.time.Duration;
@@ -19,26 +20,26 @@ import java.util.List;
 @Mapper(
         componentModel = "spring",
         unmappedTargetPolicy = ReportingPolicy.IGNORE,
-        imports = {Duration.class}
+        imports = {Duration.class, DataUtil.class}
 )
 public interface SubmissionMapper {
 
     @Mappings({
             @Mapping(target = "submissionId", source = "submission.id"),
             @Mapping(target = "studentId", source = "submission.user.id"),
-            @Mapping(target = "studentCode", expression = "java(submission.getUser() != null ? submission.getUser().getUserName() : null)"),
-            @Mapping(target = "studentName", expression = "java(submission.getUser() != null ? (submission.getUser().getFullName() != null ? submission.getUser().getFullName() : submission.getUser().getEmail()) : null)"),
+            @Mapping(target = "studentCode", expression = "java(submission != null ? (submission.getUser() != null ? submission.getUser().getUserName() : null) : null)"),
+            @Mapping(target = "studentName", expression = "java(submission != null ? (submission.getUser() != null ? (submission.getUser().getFullName() != null ? submission.getUser().getFullName() : submission.getUser().getEmail()) : null) : null)"),
             @Mapping(target = "startDate", source = "submission.startedAt"),
             @Mapping(target = "endDate", source = "submission.expiredAt"),
             @Mapping(target = "challengeDuration", source = "submission.challenge.durationMinutes"),
+            @Mapping(target = "finalScore", expression = "java(DataUtil.getFinalScore(grading.getRawScore(), grading.getPenaltyApplied()))"),
             @Mapping(target = "actualDuration", expression = "java(submission.getActualStartAt() != null && submission.getSubmittedAt() != null ? Duration.between(submission.getActualStartAt(), submission.getSubmittedAt()) : null)"),
     })
     StudentSubmissionDTO toStudentSubmissionDTO(
             SubmissionDailyChallenge submission,
             GradingDailyChallenge grading,
             Double totalWeight,
-            Double maxPossibleWeight,
-            Double finalScore
+            Double maxPossibleWeight
     );
     default Duration map(Integer minutes) {
         return minutes != null ? Duration.ofMinutes(minutes) : null;
