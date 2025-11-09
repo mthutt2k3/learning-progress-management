@@ -106,7 +106,9 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
                 .gradingChallengeId(grading.getId())
                 .totalWeight(achievedSum)
                 .maxPossibleWeight(maxPossibleScore)
-                .finalScore(grading.getFinalScore())
+                .finalScore(DataUtil.getFinalScore(grading.getRawScore(), grading.getPenaltyApplied()))
+                .penaltyApplied(grading.getPenaltyApplied())
+                .rawScore(grading.getRawScore())
                 .totalQuestions(totalQuestions)
                 .correctAnswers(correct)
                 .wrongAnswers(wrong)
@@ -128,9 +130,10 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
                     return new ApiException(Const.SUBMISSION.NOT_FOUND, HttpStatus.NOT_FOUND.value());
                 });
 
-        if(submission.getGradingDailyChallenge().getFinalScore() != null && !force) {
+        GradingDailyChallenge existingGrading = submission.getGradingDailyChallenge();
+        if(existingGrading != null && Boolean.TRUE.equals(existingGrading.getIsFinalized()) && !force) {
             log.info("Submission {} already has a final score {}, skipping auto-grading.",
-                    submissionId, submission.getGradingDailyChallenge().getFinalScore());
+                    submissionId, submission.getGradingDailyChallenge().getRawScore());
             return;
         }
 
@@ -266,7 +269,7 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
             }
         }
 
-        Double finalScore = DataUtil.getFinalScore(totalWeight, maxPossibleScore);
+        Double rawScore = DataUtil.getRawScore(totalWeight, maxPossibleScore);
 
         // === LƯU GRADING ===
         GradingDailyChallenge grading = gradingDailyChallengeRepository
@@ -274,7 +277,7 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
                 .orElse(new GradingDailyChallenge());
         grading.setSubmissionDaily(submission);
         grading.setIsFinalized(true);
-        grading.setFinalScore(finalScore);
+        grading.setRawScore(rawScore);
         gradingDailyChallengeRepository.save(grading);
 
         gradingQuestions.forEach(gq -> gq.setGradingDaily(grading));
@@ -304,7 +307,7 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
                 totalQuestions,
                 totalQuestions - totalSkipped - totalEmpty,
                 totalSkipped, totalEmpty,
-                maxPossibleScore, totalWeight, finalScore);
+                maxPossibleScore, totalWeight, rawScore);
     }
 
     private GradingResult getAnswerScoreFractionDetailed(
@@ -363,7 +366,7 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
                             .filter(DataItem::isCorrect)
                             .collect(Collectors.toMap(
                                     DataItem::getPositionId,
-                                    di -> normalizeText(di.getValue()),
+                                    di -> DataUtil.normalizeText(di.getValue()),
                                     (e, r) -> e
                             ));
 
@@ -371,7 +374,7 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
                     Map<String, String> submittedMap = submittedContent.getData().stream()
                             .collect(Collectors.toMap(
                                     AnswerItem::getPositionId,
-                                    ai -> normalizeText(ai.getValue()),
+                                    ai -> DataUtil.normalizeText(ai.getValue()),
                                     (e, r) -> e
                             ));
 
@@ -394,11 +397,11 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
                 case REWRITE -> {
                     Set<String> correctValues = questionContent.getData().stream()
                             .filter(DataItem::isCorrect)
-                            .map(di -> normalizeText(di.getValue()))
+                            .map(di -> DataUtil.normalizeText(di.getValue()))
                             .collect(Collectors.toSet());
 
                     Set<String> submittedValues = submittedContent.getData().stream()
-                            .map(ai -> normalizeText(ai.getValue()))
+                            .map(ai -> DataUtil.normalizeText(ai.getValue()))
                             .collect(Collectors.toSet());
 
                     boolean match = !submittedValues.isEmpty() && submittedValues.stream().anyMatch(correctValues::contains);
@@ -423,11 +426,6 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
         }
     }
 
-    private String normalizeText(String text) {
-        return Optional.ofNullable(text)
-                .map(t -> t.replaceAll("[^a-zA-Z0-9\\s]", "").toLowerCase().trim())
-                .orElse("");
-    }
 
     @Override
     @Transactional
@@ -445,9 +443,13 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
         User grader = userRepository.findByIdAndDeletedAtIsNull(graderId)
                 .orElseThrow(() -> new ApiException(Const.ACCOUNT.ACCOUNT_NOT_FOUND, HttpStatus.BAD_REQUEST.value()));
 
-        Double finalScore = request.getFinalScore();
-        if (finalScore != null && (finalScore < 0.0 || finalScore > 10.0)) {
+        Double rawScore = request.getRawScore();
+        if (rawScore != null && (rawScore < 0.0 || rawScore > 10.0)) {
             throw new ApiException("Final score must be between 0 and 10", HttpStatus.BAD_REQUEST.value());
+        }
+        Double penalty = request.getPenaltyApplied();
+        if(penalty < 0.0 || penalty > 1.0) {
+            throw new ApiException("Penalty applied must be between 0.0 and 1.0", HttpStatus.BAD_REQUEST.value());
         }
 
         GradingDailyChallenge grading = gradingDailyChallengeRepository
@@ -456,7 +458,8 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
         grading.setSubmissionDaily(submission);
         grading.setGrader(grader);
         // Do not persist totalWeight on grading header; per-question weights are the source of truth.
-        grading.setFinalScore(request.getFinalScore());
+        grading.setRawScore(rawScore);
+        grading.setPenaltyApplied(penalty);
         grading.setOverallFeedback(request.getOverallFeedback());
         grading.setIsFinalized(true);
         gradingDailyChallengeRepository.save(grading);

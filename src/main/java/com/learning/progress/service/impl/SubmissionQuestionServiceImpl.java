@@ -11,7 +11,7 @@ import com.learning.progress.dto.submission.SaveSubmissionRequest;
 import com.learning.progress.dto.submission.SubmissionResultResponse;
 import com.learning.progress.entity.*;
 import com.learning.progress.exception.ApiException;
-import com.learning.progress.job.QuartzJobTriggerService;
+import com.learning.progress.job.QuartzJobTrigger;
 import com.learning.progress.mapper.ChallengeSectionMapper;
 import com.learning.progress.repository.*;
 import com.learning.progress.cache.CacheService;
@@ -49,7 +49,7 @@ public class SubmissionQuestionServiceImpl implements SubmissionQuestionService 
     @Autowired private GradingDailyChallengeService gradingDailyChallengeService;
     @Autowired private CacheService cacheService;
     @Autowired
-    private QuartzJobTriggerService quartzJobTriggerService;
+    private QuartzJobTrigger quartzJobTrigger;
     @Autowired
     private TransactionTemplate transactionTemplate;
     @Autowired
@@ -321,11 +321,6 @@ public class SubmissionQuestionServiceImpl implements SubmissionQuestionService 
             submission.setSubmissionStatus(SubmissionStatus.SUBMITTED);
             submission.setSubmittedAt(OffsetDateTime.now());
             submissionDailyChallengeRepository.saveAndFlush(submission);
-
-            ChallengeType type = dailyChallenge.getChallengeType();
-            if (type == ChallengeType.GV || type == ChallengeType.RE || type == ChallengeType.LI) {
-                quartzJobTriggerService.triggerAutoGrade(submission.getId());
-            }
 
             String title = Const.NOTIFICATION.SUBMISSION_TITLE;
             String message = String.format(Const.NOTIFICATION.SUBMISSION_MESSAGE_TEMPLATE, dailyChallenge.getChallengeName());

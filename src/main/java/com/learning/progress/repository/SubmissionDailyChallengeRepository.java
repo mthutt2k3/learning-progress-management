@@ -1,6 +1,6 @@
 package com.learning.progress.repository;
 
-import com.learning.progress.common.ChallengeMethod;
+import com.learning.progress.common.ChallengeType;
 import com.learning.progress.common.SubmissionStatus;
 import com.learning.progress.entity.SubmissionDailyChallenge;
 import org.springframework.data.domain.Page;
@@ -10,13 +10,24 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.OffsetDateTime;
-import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
 public interface SubmissionDailyChallengeRepository extends JpaRepository<SubmissionDailyChallenge, Long> {
-    List<SubmissionDailyChallenge> findAllByDeletedAtIsNull();
+    @Query("""
+    SELECT s FROM SubmissionDailyChallenge s
+    JOIN s.challenge c
+    LEFT JOIN FETCH s.gradingDailyChallenge g
+    WHERE c.challengeType IN :types
+      AND s.submissionStatus IN :submissionStatuses
+      AND (g IS NULL OR g.isFinalized = false)
+      AND s.deletedAt IS NULL
+    """)
+    List<SubmissionDailyChallenge> findPendingAutoGradeSubmissions(
+            @Param("types") Set<ChallengeType> types,
+            @Param("submissionStatuses") Set<SubmissionStatus> submissionStatuses
+    );
 
     Optional<SubmissionDailyChallenge> findByUserIdAndChallengeIdAndDeletedAtIsNull(Long userId, Long challengeId);
 

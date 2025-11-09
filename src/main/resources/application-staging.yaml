@@ -173,9 +173,9 @@ app:
       # Có thể thêm batch-size nếu dùng batch update
       batch-size: 100
 
-    # Auto-grade scheduler config (used by AutoGradeScheduler / QuartzJobTriggerService)
+    # Auto-grade scheduler config (used by AutoGradeScheduler / QuartzJobTrigger)
     auto-grade-job:
-      enabled: false                # master switch to enable/disable auto-grade sweeper
+      enabled: true                # master switch to enable/disable auto-grade sweeper
       use-quartz: true             # when true scheduler will create Quartz jobs, otherwise call service directly
       fixed-delay-ms: 60000        # how often the sweeper runs (ms)
 env:

@@ -11,7 +11,7 @@ public interface AiFeedbackService {
 
     GradingWritingResponse gradeWriting(GradingWritingRequest request);
 
-    PronunciationAssessmentResponse assessPronunciation(PronunciationAssessmentRequest request);
+    PronunciationAssessmentResponse assessPronunciation(PronunciationAssessmentRequest request, String questionText);
 
     SseEmitter gradeWritingStream(GradingWritingRequest request);
 }
