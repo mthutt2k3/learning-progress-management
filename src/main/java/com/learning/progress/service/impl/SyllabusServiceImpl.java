@@ -1,5 +1,6 @@
 package com.learning.progress.service.impl;
 
+import com.learning.progress.common.ClassStatus;
 import com.learning.progress.common.Const;
 import com.learning.progress.dto.excel.ValidationResult;
 import com.learning.progress.dto.syllabus.SyllabusDTO;
@@ -15,6 +16,7 @@ import com.learning.progress.entity.Level;
 import com.learning.progress.entity.Syllabus;
 import com.learning.progress.exception.ApiException;
 import com.learning.progress.mapper.SyllabusMapper;
+import com.learning.progress.repository.ClassRepository;
 import com.learning.progress.repository.LevelRepository;
 import com.learning.progress.repository.SyllabusRepository;
 import com.learning.progress.service.BlobSasService;
@@ -65,6 +67,8 @@ public class SyllabusServiceImpl implements SyllabusService {
 
     @Value("${azure.storage.syllabus-template}")
     private String syllabusTemplate;
+    @Autowired
+    private ClassRepository classRepository;
 
     @Override
     @Transactional
@@ -111,6 +115,13 @@ public class SyllabusServiceImpl implements SyllabusService {
     public void deleteSyllabus(Long id) {
         Syllabus syllabus = syllabusRepository.findByIdAndDeletedAtIsNull(id)
                 .orElseThrow(() -> new ApiException(Const.SYLLABUS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+
+        boolean hasActiveClasses = classRepository.existsBySyllabusIdAndStatusNotAndDeletedAtIsNull(
+                id, ClassStatus.FINISHED);
+
+        if (hasActiveClasses) {
+            throw new ApiException(Const.SYLLABUS.IN_USE_BY_ACTIVE_CLASS, HttpStatus.BAD_REQUEST.value());
+        }
 
         syllabus.setDeletedBy(jwtUtil.extractUsernameFromCurrentRequest());
         syllabus.setDeletedAt(OffsetDateTime.now());

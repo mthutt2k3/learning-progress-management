@@ -181,8 +181,6 @@ public class SubmissionQuestionServiceImpl implements SubmissionQuestionService 
         if (status == SubmissionStatus.PENDING) {
             submission.setSubmissionStatus(SubmissionStatus.DRAFT);
             submissionDailyChallengeRepository.save(submission);
-        } else if (status != SubmissionStatus.DRAFT) {
-            throw new ApiException("Submission is not in draft mode", HttpStatus.BAD_REQUEST.value());
         }
 
         DailyChallenge challenge = submission.getChallenge();
@@ -262,6 +260,9 @@ public class SubmissionQuestionServiceImpl implements SubmissionQuestionService 
 
         DailyChallenge dailyChallenge = submission.getChallenge();
         Long userId = jwtUtil.extractUserIdFromCurrentRequest();
+
+        appValidator.validateClassIsActive(dailyChallenge.getClassLesson().getClassChapter().getClazz().getId());
+        appValidator.validateUserAccessToClass(dailyChallenge.getClassLesson().getClassChapter().getClazz().getId());
 
         SubmissionStatus status = submission.getSubmissionStatus();
         if (status == SubmissionStatus.SUBMITTED || status == SubmissionStatus.GRADED) {

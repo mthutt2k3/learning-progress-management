@@ -52,6 +52,7 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
         ClassLesson classLesson = classLessonRepository.findByIdAndDeletedAtIsNull(request.getClassLessonId())
                 .orElseThrow(() -> notFound(traceId, Const.CLASS_LESSON.NOT_FOUND, request.getClassLessonId()));
 
+        appValidator.validateClassIsActive(classLesson.getClassChapter().getClazz().getId());
         appValidator.validateUserAccessToClass(classLesson.getClassChapter().getClazz().getId());
         boolean exists = dailyChallengeRepository.existsByClassLessonAndChallengeNameAndDeletedAtIsNull(
                 classLesson, request.getChallengeName());
@@ -170,6 +171,7 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
         DailyChallenge challenge = dailyChallengeRepository.findByIdAndDeletedAtIsNull(id)
                 .orElseThrow(() -> notFound(traceId, Const.CHALLENGE.NOT_FOUND, id));
 
+        appValidator.validateClassIsActive(challenge.getClassLesson().getClassChapter().getClazz().getId());
         appValidator.validateUserAccessToClass(challenge.getClassLesson().getClassChapter().getClazz().getId());
         validateUpdateDailyChallenge(dto);
 
@@ -243,6 +245,7 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
         DailyChallenge challenge = dailyChallengeRepository.findByIdAndDeletedAtIsNull(id)
                 .orElseThrow(() -> notFound(traceId, Const.CHALLENGE.NOT_FOUND, id));
 
+        appValidator.validateClassIsActive(challenge.getClassLesson().getClassChapter().getClazz().getId());
         appValidator.validateUserAccessToClass(challenge.getClassLesson().getClassChapter().getClazz().getId());
         challenge.setDeletedBy(jwtUtil.extractEmailPrefixFromCurrentRequest());
         challenge.setDeletedAt(OffsetDateTime.now());
@@ -263,6 +266,7 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
         DailyChallenge challenge = dailyChallengeRepository.findByIdAndDeletedAtIsNull(id)
                 .orElseThrow(() -> notFound(traceId, Const.CHALLENGE.NOT_FOUND, id));
 
+        appValidator.validateClassIsActive(challenge.getClassLesson().getClassChapter().getClazz().getId());
         appValidator.validateUserAccessToClass(challenge.getClassLesson().getClassChapter().getClazz().getId());
 
         if (challenge.getChallengeStatus() != ChallengeStatus.DRAFT) {

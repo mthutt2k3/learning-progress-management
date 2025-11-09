@@ -2,10 +2,7 @@ package com.learning.progress.entity;
 
 import com.learning.progress.common.SubmissionStatus;
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.*;
 import lombok.experimental.SuperBuilder;
 import org.hibernate.annotations.ColumnDefault;
 import org.hibernate.annotations.JdbcTypeCode;
@@ -57,6 +54,7 @@ public class SubmissionDailyChallenge extends BaseEntity{
 
     @ColumnDefault("false")
     @Column(name = "is_late", nullable = false)
+    @Builder.Default
     private Boolean isLate = false;
 
     @Enumerated(EnumType.STRING)

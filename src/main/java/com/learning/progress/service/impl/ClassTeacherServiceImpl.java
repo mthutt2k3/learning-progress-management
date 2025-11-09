@@ -115,14 +115,11 @@ public class ClassTeacherServiceImpl implements ClassTeacherService {
         Clazz clazz = classRepository.findById(classId)
                 .orElseThrow(() -> new ApiException(Const.CLASS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
-        if (clazz.getStatus() == ClassStatus.INACTIVE) {
-            throw new ApiException(Const.CLASS.INACTIVE, HttpStatus.BAD_REQUEST.value());
-        }
-
         if (clazz.getDeletedAt() != null) {
             throw new ApiException(Const.CLASS.DELETED, HttpStatus.BAD_REQUEST.value());
         }
 
+        appValidator.validateClassIsActive(clazz.getId());
         // 2️⃣ Extract user IDs and validate roles
         List<Long> userIds = request.getTeachers().stream()
                 .map(TeacherWithRole::getUserId)
@@ -407,13 +404,11 @@ public class ClassTeacherServiceImpl implements ClassTeacherService {
         Clazz clazz = classRepository.findById(classId)
                 .orElseThrow(() -> new ApiException(Const.CLASS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
-        if (clazz.getStatus() == ClassStatus.INACTIVE) {
-            throw new ApiException(Const.CLASS.INACTIVE, HttpStatus.BAD_REQUEST.value());
-        }
-
         if (clazz.getDeletedAt() != null) {
             throw new ApiException(Const.CLASS.DELETED, HttpStatus.BAD_REQUEST.value());
         }
+
+        appValidator.validateClassIsActive(clazz.getId());
 
         User user = userRepository.findByIdAndDeletedAtIsNull(userId)
                 .orElseThrow(() -> new ApiException(Const.USER.NOT_FOUND, HttpStatus.NOT_FOUND.value()));

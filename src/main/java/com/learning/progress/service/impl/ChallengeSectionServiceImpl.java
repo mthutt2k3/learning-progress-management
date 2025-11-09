@@ -86,6 +86,7 @@ public class ChallengeSectionServiceImpl implements ChallengeSectionService {
         }
 
         long tAccessStart = System.currentTimeMillis();
+        appValidator.validateClassIsActive(challenge.getClassLesson().getClassChapter().getClazz().getId());
         validateUserAccessToClass(challenge.getClassLesson().getClassChapter().getClazz().getId());
         appValidator.validateEnumValue(ResourceType.class, dto.getSection().getResourceType());
         long tAccess = System.currentTimeMillis() - tAccessStart;
@@ -136,6 +137,7 @@ public class ChallengeSectionServiceImpl implements ChallengeSectionService {
         log.info("Bulk INSERT {} sections for challengeId: {}", dtos.size(), challengeId);
 
         DailyChallenge challenge = validateChallengeExists(challengeId);
+        appValidator.validateClassIsActive(challenge.getClassLesson().getClassChapter().getClazz().getId());
         validateUserAccessToClass(challenge.getClassLesson().getClassChapter().getClazz().getId());
 
         // === 1. Prepare sections ===
@@ -311,7 +313,8 @@ public class ChallengeSectionServiceImpl implements ChallengeSectionService {
 
         // 2. validateUserAccessToClass
         tStepStart = System.currentTimeMillis();
-        validateUserAccessToClass(existingSections.get(0).getChallenge().getClassLesson().getClassChapter().getClazz().getId());
+        appValidator.validateClassIsActive(challenge.getClassLesson().getClassChapter().getClazz().getId());
+        validateUserAccessToClass(challenge.getClassLesson().getClassChapter().getClazz().getId());
         tStepElapsed = System.currentTimeMillis() - tStepStart;
         log.debug("bulkOrderSection - validateUserAccessToClass: {} ms", tStepElapsed);
 

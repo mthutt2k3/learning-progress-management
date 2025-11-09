@@ -64,4 +64,8 @@ public interface ClassRepository extends JpaRepository<Clazz, Long> {
 
     Optional<Clazz> findByIdAndDeletedAtIsNullAndStatusNot(Long id, ClassStatus status);
 
+    boolean existsByClassNameAndDeletedAtIsNull(String className);
+
+    boolean existsBySyllabusIdAndStatusNotAndDeletedAtIsNull(Long syllabusId, ClassStatus status);
+
 }
