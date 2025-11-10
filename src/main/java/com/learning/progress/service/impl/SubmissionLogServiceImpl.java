@@ -174,6 +174,10 @@ public class SubmissionLogServiceImpl implements SubmissionLogService {
             noti.setSubmissionId(submission.getId());
             noti.setUserId(userId);
             noti.setWarningCount(warningCount);
+            noti.setTargetDevice(new DeviceMismatchNotification.TargetDevice(
+                    lastStart.getDeviceFingerprint(),
+                    lastStart.getIpAddress()
+            ));
             noti.setMessage("Cảnh báo: Chỉ được dùng 1 thiết bị!");
 
             redisPublisher.publishWarningDeviceMismatchToUser(submission.getId(), noti);
