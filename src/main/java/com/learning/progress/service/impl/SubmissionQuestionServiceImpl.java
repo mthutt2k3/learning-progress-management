@@ -318,7 +318,7 @@ public class SubmissionQuestionServiceImpl implements SubmissionQuestionService 
         }
 
         // === CHỈ KHI NỘP CHÍNH THỨC ===
-        if (!request.getSaveAsDraft()) {
+        if (Boolean.FALSE.equals(request.getSaveAsDraft())) {
             submission.setSubmissionStatus(SubmissionStatus.SUBMITTED);
             submission.setSubmittedAt(OffsetDateTime.now());
             submissionDailyChallengeRepository.saveAndFlush(submission);

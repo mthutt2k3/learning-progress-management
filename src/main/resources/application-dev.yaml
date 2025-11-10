@@ -26,13 +26,15 @@ spring:
       host: ${REDIS_HOST}
       port: ${REDIS_PORT}
       password: ${REDIS_PASSWORD}
-      timeout: 2000 # Thời gian chờ kết nối (ms)
+      timeout: 400
+      connect-timeout: 400ms
       lettuce: # Sử dụng Lettuce làm client Redis
         pool:
-          max-active: 8 # Số kết nối tối đa
-          max-idle: 8 # Số kết nối nhàn rỗi tối đa
-          min-idle: 0 # Số kết nối nhàn rỗi tối thiểu
-          max-wait: 2000 # Thời gian chờ tối đa để lấy kết nối (ms)
+          enabled: true
+          max-active: 64 # Số kết nối tối đa
+          max-idle: 32 # Số kết nối nhàn rỗi tối đa
+          min-idle: 16 # Số kết nối nhàn rỗi tối thiểu
+          max-wait: 200 # Thời gian chờ tối đa để lấy kết nối (ms)
   servlet:
     multipart:
       max-file-size: 20MB
