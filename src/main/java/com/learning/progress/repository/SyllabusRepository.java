@@ -1,5 +1,6 @@
 package com.learning.progress.repository;
 
+import com.learning.progress.dto.dashboard.ManagerDashboardResponse;
 import com.learning.progress.entity.Chapter;
 import com.learning.progress.entity.Lesson;
 import com.learning.progress.entity.Syllabus;
@@ -33,25 +34,11 @@ public interface SyllabusRepository extends JpaRepository<Syllabus, Long> {
     @Query("SELECT l FROM Lesson l WHERE l.chapter.syllabus.id = :syllabusId AND l.deletedAt IS NULL ORDER BY l.chapter.orderNumber ASC, l.orderNumber ASC")
     List<Lesson> findLessonsBySyllabusId(Long syllabusId);
 
-    Optional<Syllabus> findBySyllabusCode(String syllabusId);
-
     boolean existsBySyllabusName(String syllabusName);
-
-    @Query("""
-        SELECT s FROM Syllabus s 
-        WHERE s.deletedAt IS NULL 
-        AND (:searchText IS NULL OR :searchText = '' OR 
-             LOWER(s.syllabusName) LIKE LOWER(CONCAT('%', :searchText, '%')) OR 
-             LOWER(s.syllabusCode) LIKE LOWER(CONCAT('%', :searchText, '%')) OR
-             LOWER(s.level.levelName) LIKE LOWER(CONCAT('%', :searchText, '%')))
-        ORDER BY s.createdAt DESC
-    """)
-    List<Syllabus> findAllBySearchText(@Param("searchText") String searchText);
 
     boolean existsBySyllabusNameIgnoreCase(String syllabusName);
 
     Optional<Syllabus> findByIdAndDeletedAtIsNull(Long id);
 
-    List<Syllabus> findBySyllabusCodeIn(List<String> syllabusCodes);
 
 }

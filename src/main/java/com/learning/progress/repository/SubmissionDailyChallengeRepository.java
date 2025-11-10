@@ -58,14 +58,6 @@ public interface SubmissionDailyChallengeRepository extends JpaRepository<Submis
     List<SubmissionDailyChallenge> findByChallengeIdAndDeletedAtIsNull(Long challengeId);
 
     long countByChallengeIdAndSubmittedAtIsNotNullAndDeletedAtIsNull(Long id);
-
-    @Query("SELECT s.id FROM SubmissionDailyChallenge s WHERE s.challenge.id = :challengeId AND s.deletedAt IS NULL")
-    List<Long> findIdsByChallengeIdAndDeletedAtIsNull(@Param("challengeId") Long challengeId);
-
-    List<SubmissionDailyChallenge> findByUserIdInAndDeletedAtIsNotNull(List<Long> userIds);
-
-    List<SubmissionDailyChallenge> findByUserIdInAndChallengeIdInAndDeletedAtIsNull(Set<Long> validUserIds, List<Long> challengeIds);
-
     /**
      * Fetch submissions for given user ids and challenge ids (includes both active and soft-deleted records).
      * Useful for sync/restore operations where we need to detect existing soft-deleted submissions.
@@ -83,17 +75,5 @@ public interface SubmissionDailyChallengeRepository extends JpaRepository<Submis
       AND s.deletedAt IS NULL
     """)
     List<Long> findSubmissionIdsByUserAndClass(Long userId, Long classId);
-
-    @Query("""
-    SELECT s.id FROM SubmissionDailyChallenge s
-    JOIN s.challenge ch
-    JOIN ch.classLesson cl
-    JOIN cl.classChapter cc
-    JOIN cc.clazz c
-    WHERE s.user.id IN :userIds
-      AND c.id = :classId
-      AND s.deletedAt IS NOT NULL
-    """)
-    List<Long> findSubmissionIdsByUserIdsAndClassIdAndDeletedAtIsNotNull(List<Long> userIds, Long classId);
 
 }
