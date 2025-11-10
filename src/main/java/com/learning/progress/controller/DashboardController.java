@@ -3,6 +3,7 @@ package com.learning.progress.controller;
 import com.learning.progress.dto.dashboard.AccountGrowthByRoleResponse;
 import com.learning.progress.dto.dashboard.AdminAccountDashboardResponse;
 import com.learning.progress.dto.DataResponse;
+import com.learning.progress.dto.dashboard.ManagerDashboardResponse;
 import com.learning.progress.service.AccountService;
 import com.learning.progress.service.DashboardService;
 import com.learning.progress.repository.UserRepository;
@@ -53,34 +54,48 @@ public class DashboardController {
     // =================================================================
     // Manager: KPI & dashboards (delegates to DashboardService)
     // =================================================================
-    @GetMapping("/manager/dashboard/kpis")
+    @GetMapping("/manager/dashboard/overview")
     @PreAuthorize("hasRole('MANAGER')")
-    public ResponseEntity<DataResponse<Map<String, Object>>> getManagerKpiOverview() {
-        Map<String, Object> kpis = dashboardService.getManagerKpiOverview();
-        return ResponseEntity.ok(DataResponse.success(kpis, "Manager KPI overview loaded"));
+    @Operation(summary = "Manager Dashboard Overview", description = "Tất cả dữ liệu dashboard")
+    public ResponseEntity<DataResponse<ManagerDashboardResponse>> getManagerDashboardOverview() {
+        ManagerDashboardResponse data = dashboardService.getManagerDashboardOverview();
+        return ResponseEntity.ok(DataResponse.success(data, "Manager dashboard loaded"));
+    }
+// Thêm vào DashboardController.java
+
+    @GetMapping("/manager/dashboard/levels")
+    @PreAuthorize("hasRole('MANAGER')")
+    @Cacheable(value = "managerReports", key = "'levels'")
+    @Operation(summary = "Level Report", description = "Báo cáo chi tiết theo Level: HS, syllabus, class, GV, performance")
+    public ResponseEntity<DataResponse<Map<String, Object>>> getLevelReport() {
+        Map<String, Object> data = dashboardService.getLevelReport();
+        return ResponseEntity.ok(DataResponse.success(data, "Level report loaded"));
     }
 
-    @GetMapping("/manager/dashboard/students/overview")
+    @GetMapping("/manager/dashboard/syllabus")
     @PreAuthorize("hasRole('MANAGER')")
-    public ResponseEntity<DataResponse<Map<String, Object>>> getStudentOverview(
-            @RequestParam(defaultValue = "7") int days) {
-        Map<String, Object> resp = dashboardService.getStudentOverview(days);
-        return ResponseEntity.ok(DataResponse.success(resp, "Student overview loaded"));
+    @Cacheable(value = "managerReports", key = "'syllabus'")
+    @Operation(summary = "Syllabus Report", description = "Báo cáo syllabus: chapter, lesson, usage, completion")
+    public ResponseEntity<DataResponse<Map<String, Object>>> getSyllabusReport() {
+        Map<String, Object> data = dashboardService.getSyllabusReport();
+        return ResponseEntity.ok(DataResponse.success(data, "Syllabus report loaded"));
     }
 
-    @GetMapping("/manager/dashboard/classes/performance")
+    @GetMapping("/manager/dashboard/users")
     @PreAuthorize("hasRole('MANAGER')")
-    public ResponseEntity<DataResponse<Map<String, Object>>> getClassPerformance(
-            @RequestParam(defaultValue = "5") int topN) {
-        Map<String, Object> resp = dashboardService.getClassPerformance(topN);
-        return ResponseEntity.ok(DataResponse.success(resp, "Class performance loaded"));
+    @Cacheable(value = "managerReports", key = "'users'")
+    @Operation(summary = "User Report", description = "Báo cáo user: role, status, growth, at-risk")
+    public ResponseEntity<DataResponse<Map<String, Object>>> getUserReport() {
+        Map<String, Object> data = dashboardService.getUserReport();
+        return ResponseEntity.ok(DataResponse.success(data, "User report loaded"));
     }
 
-    @GetMapping("/manager/dashboard/syllabus/insights")
+    @GetMapping("/manager/dashboard/classes")
     @PreAuthorize("hasRole('MANAGER')")
-    public ResponseEntity<DataResponse<Map<String, Object>>> getSyllabusInsights(
-            @RequestParam(defaultValue = "10") int topN) {
-        Map<String, Object> resp = dashboardService.getSyllabusInsights(topN);
-        return ResponseEntity.ok(DataResponse.success(resp, "Syllabus insights loaded"));
+    @Cacheable(value = "managerReports", key = "'classes'")
+    @Operation(summary = "Class Report", description = "Báo cáo class: active, upcoming, performance, ratio")
+    public ResponseEntity<DataResponse<Map<String, Object>>> getClassReport() {
+        Map<String, Object> data = dashboardService.getClassReport();
+        return ResponseEntity.ok(DataResponse.success(data, "Class report loaded"));
     }
 }

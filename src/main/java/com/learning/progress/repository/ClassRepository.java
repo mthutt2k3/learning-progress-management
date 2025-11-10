@@ -16,9 +16,6 @@ import java.util.Optional;
 @Repository
 public interface ClassRepository extends JpaRepository<Clazz, Long> {
 
-    @Query("SELECT c FROM Clazz c WHERE c.deletedAt IS NULL AND (:searchText IS NULL OR c.className LIKE %:searchText%)")
-    Page<Clazz> findBySearchText(String searchText, Pageable pageable);
-
     @Query("""
    SELECT c FROM Clazz c
    WHERE (:searchText IS NULL 
@@ -51,8 +48,6 @@ public interface ClassRepository extends JpaRepository<Clazz, Long> {
             @Param("classIds") List<Long> classIds,
             Pageable pageable);
 
-    Optional<Clazz> findByClassCodeIgnoreCase(String classCode);
-
     @Query("SELECT c FROM Clazz c WHERE LOWER(c.classCode) IN :classCodes")
     List<Clazz> findByClassCodeInIgnoreCase(@Param("classCodes") List<String> classCodes);
 
@@ -61,8 +56,6 @@ public interface ClassRepository extends JpaRepository<Clazz, Long> {
     List<Clazz> findByStatusAndStartDateLessThanEqualAndDeletedAtIsNull(ClassStatus classStatus, LocalDate today);
 
     List<Clazz> findByStatusAndEndDateLessThanEqualAndDeletedAtIsNull(ClassStatus classStatus, LocalDate upcomingThreshold);
-
-    Optional<Clazz> findByIdAndDeletedAtIsNullAndStatusNot(Long id, ClassStatus status);
 
     boolean existsByClassNameAndDeletedAtIsNull(String className);
 
