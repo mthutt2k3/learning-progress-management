@@ -182,6 +182,10 @@
 			<artifactId>jave-nativebin-linux64</artifactId>
 			<version>3.5.0</version>
 		</dependency>
+		<dependency>
+			<groupId>org.apache.commons</groupId>
+			<artifactId>commons-pool2</artifactId>
+		</dependency>
 	</dependencies>
 
 	<build>

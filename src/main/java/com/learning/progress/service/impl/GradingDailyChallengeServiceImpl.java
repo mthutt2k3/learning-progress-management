@@ -20,6 +20,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.*;
 import java.util.function.Function;
@@ -175,7 +176,7 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
             return;
         }
 
-        if (!force && isAlreadyFinalized(submission)) {
+        if (!force && isAlreadyFinalized(submission) && submission.getSubmissionStatus() == SubmissionStatus.GRADED) {
             log.info("[{}] grading already finalized and force=false, skip", method);
             return;
         }
@@ -240,6 +241,34 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
         Map<Long, Question> questionMap = extractQuestionMap(sections);
         log.debug("[{}] questionDefsCount={}", method, questionMap.size());
 
+        // Danh sách để lưu các SubmissionQuestion cần tạo mới
+        List<SubmissionQuestion> toCreate = new ArrayList<>();
+
+        for (Question question : questionMap.values()) {
+            SubmissionQuestion existing = submissionQuestionMap.get(question.getId());
+            if (existing == null) {
+                // Thiếu → tạo placeholder
+                SubmissionQuestion sq = new SubmissionQuestion();
+                sq.setSubmissionDaily(submission);
+                sq.setQuestion(question);
+                sq.setSubmissionContentJson(JsonUtil.objectToMap(new AnswerContent()));
+                // có thể set các field mặc định khác nếu cần
+                toCreate.add(sq);
+            }
+            // else: đã có → bỏ qua, không làm gì
+        }
+
+        if (!toCreate.isEmpty()) {
+            log.debug("[{}] creating {} missing submissionQuestion placeholders", method, toCreate.size());
+            submissionQuestionRepo.saveAll(toCreate);
+
+            // Reload lại map để đảm bảo submissionQuestionMap chứa đầy đủ (cả cũ + mới)
+            submissionQuestionMap = loadSubmissionQuestionsWithQuestion(submission.getId());
+            log.debug("[{}] reloaded submissionQuestionsLoaded={}", method, submissionQuestionMap.size());
+        } else {
+            log.debug("[{}] all questions already have submissionQuestion, nothing to create", method);
+        }
+
         double totalAchieved = 0.0;
         double maxPossible = 0.0;
         List<GradingQuestion> gradingQuestions = new ArrayList<>();
@@ -251,7 +280,7 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
             }
             for (Question question : section.getQuestions()) {
                 long questionId = Optional.ofNullable(question.getId()).orElse(-1L);
-                double questionMax = Optional.ofNullable(question.getWeight()).orElse(0.0).doubleValue();
+                double questionMax = Optional.ofNullable(question.getWeight()).orElse(BigDecimal.ZERO.doubleValue());
                 maxPossible += questionMax;
 
                 SubmissionQuestion submissionQuestion = submissionQuestionMap.get(question.getId());
@@ -273,7 +302,7 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
 
                 DataContent questionContent = parseQuestionContent(question);
                 AnswerContent answerContent = parseAnswerContent(submissionQuestion);
-                if (questionContent == null || answerContent == null) {
+                if (questionContent == null || answerContent == null || answerContent.getData() == null) {
                     gradingQuestion.setReceivedWeight(0.0);
                     gradingQuestions.add(gradingQuestion);
                     log.debug("[{}] questionId={} parse failed -> assigned 0", method, questionId);

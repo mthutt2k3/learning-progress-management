@@ -15,6 +15,8 @@ import com.learning.progress.cache.CacheService;
 import com.learning.progress.service.SubmissionChallengeService;
 import com.learning.progress.util.AppValidator;
 import com.learning.progress.util.JwtUtil;
+import com.learning.progress.util.JsonUtil;
+import com.learning.progress.dto.submission.AnswerContent;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import lombok.extern.slf4j.Slf4j;
@@ -51,6 +53,7 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
     private final GradingQuestionRepository gradingQuestionRepository;
     private final CacheService cacheService;
     private final QuestionRepository questionRepository;
+    private final SubmissionQuestionRepository submissionQuestionRepository;
     private final DailyChallengeMapper dailyChallengeMapper;
     private final SubmissionMapper submissionMapper;
     private final UserRepository userRepository;
@@ -67,6 +70,7 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
             GradingQuestionRepository gradingQuestionRepository,
             CacheService cacheService,
             QuestionRepository questionRepository,
+            SubmissionQuestionRepository submissionQuestionRepository,
             DailyChallengeMapper dailyChallengeMapper,
             SubmissionMapper submissionMapper,
             UserRepository userRepository,
@@ -81,6 +85,7 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
         this.gradingQuestionRepository = gradingQuestionRepository;
         this.cacheService = cacheService;
         this.questionRepository = questionRepository;
+        this.submissionQuestionRepository = submissionQuestionRepository;
         this.dailyChallengeMapper = dailyChallengeMapper;
         this.submissionMapper = submissionMapper;
         this.userRepository = userRepository;
@@ -320,12 +325,60 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
             page = submissionDailyChallengeRepository.findExpiredTestSubmissionsForAutoSubmit(SubmissionStatus.PENDING, OffsetDateTime.now(), pageable);
             List<SubmissionDailyChallenge> toSubmit = page.getContent();
             if (!toSubmit.isEmpty()) {
+                // mark as submitted
                 toSubmit.forEach(s -> {
                     s.setSubmissionStatus(SubmissionStatus.SUBMITTED);
                     s.setSubmittedAt(OffsetDateTime.now());
                 });
+                // persist submissions first so IDs are available for submissionQuestions
                 submissionDailyChallengeRepository.saveAll(toSubmit);
-                toSubmit.forEach(s -> cacheService.clearSubmissionCache(s.getUser().getId(), s.getId()));
+
+                // For each affected challenge, load questions once to avoid repeated DB calls
+                Set<Long> affectedChallengeIds = toSubmit.stream()
+                        .map(s -> s.getChallenge().getId())
+                        .collect(Collectors.toSet());
+                Map<Long, List<Question>> questionsByChallenge = affectedChallengeIds.stream()
+                        .collect(Collectors.toMap(
+                                cid -> cid,
+                                cid -> questionRepository.findByChallengeIdAndDeletedAtIsNull(cid)
+                        ));
+
+                // Create missing SubmissionQuestion rows with empty content if absent
+                List<SubmissionQuestion> submissionQuestionsToCreate = new ArrayList<>();
+                for (SubmissionDailyChallenge submission : toSubmit) {
+                    Long submissionId = submission.getId();
+                    Long challengeId = submission.getChallenge().getId();
+                    List<Question> questions = questionsByChallenge.getOrDefault(challengeId, List.of());
+
+                    // existing submissionQuestion ids for this submission
+                    List<SubmissionQuestion> existingForSubmission = submissionQuestionRepository
+                            .findBySubmissionDailyIdAndDeletedAtIsNull(submissionId);
+                    Set<Long> existingQuestionIds = existingForSubmission.stream()
+                            .filter(sq -> sq.getQuestion() != null)
+                            .map(sq -> sq.getQuestion().getId())
+                            .collect(Collectors.toSet());
+
+                    for (Question q : questions) {
+                        if (!existingQuestionIds.contains(q.getId())) {
+                            SubmissionQuestion newSq = new SubmissionQuestion();
+                            newSq.setSubmissionDaily(submission);
+                            newSq.setQuestion(q);
+                            // empty answer content
+                            newSq.setSubmissionContentJson(JsonUtil.objectToMap(new AnswerContent()));
+                            submissionQuestionsToCreate.add(newSq);
+                        }
+                    }
+                }
+
+                if (!submissionQuestionsToCreate.isEmpty()) {
+                    submissionQuestionRepository.saveAll(submissionQuestionsToCreate);
+                    log.debug("autoSubmitExpiredSubmissions: created {} submissionQuestion placeholders", submissionQuestionsToCreate.size());
+                }
+
+                // clear caches and publish logs as before
+                toSubmit.forEach(s -> {
+                    cacheService.clearSubmissionCache(s.getUser().getId(), s.getId());
+                });
                 Set<Long> affected = toSubmit.stream().map(s -> s.getChallenge().getId()).collect(Collectors.toSet());
                 affected.forEach(cacheService::clearSubmissionsCacheForChallenge);
                 log.debug("autoSubmitExpiredSubmissions: auto-submitted {} items", toSubmit.size());
