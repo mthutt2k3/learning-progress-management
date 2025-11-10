@@ -151,6 +151,9 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
     private AutoGradingData computeAutoGrading(SubmissionDailyChallenge submission, DailyChallenge challenge) {
         List<ChallengeSection> sections = sectionRepo.findByChallengeIdWithQuestions(challenge.getId());
         Map<Long, SubmissionQuestion> sqMap = loadSubmissionQuestionsWithQuestion(submission.getId());
+        if(sqMap.size() == 0) {
+            log.warn("No submission questions found for submissionId={}", submission.getId());
+        }
         Map<Long, Question> questionMap = extractQuestionMap(sections);
 
         double totalAchieved = 0.0;

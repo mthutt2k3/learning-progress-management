@@ -14,7 +14,6 @@ import com.learning.progress.repository.*;
 import com.learning.progress.cache.CacheService;
 import com.learning.progress.service.SubmissionChallengeService;
 import com.learning.progress.util.AppValidator;
-import com.learning.progress.util.DataUtil;
 import com.learning.progress.util.JwtUtil;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
@@ -230,7 +229,7 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
                 .map(s -> {
                     GradingDailyChallenge grading = gradingBySubmissionId.get(s.getId());
                     Double achieved = grading == null ? null : totalReceivedByGradingId.getOrDefault(grading.getId(), 0.0);
-                    return submissionMapper.toStudentSubmissionDTO(s, grading, achieved, Double.valueOf(challengeMaxPossibleWeight));
+                    return submissionMapper.toStudentSubmissionDTO(s, grading, achieved, Double.valueOf(challengeMaxPossibleWeight), true);
                 })
                 .collect(Collectors.toList());
 
@@ -303,7 +302,7 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
             challengeMaxPossible = maxBig == null ? 0.0 : maxBig.doubleValue();
         }
 
-        StudentSubmissionDTO dto = submissionMapper.toStudentSubmissionDTO(submission, grading, achievedTotal, challengeMaxPossible);
+        StudentSubmissionDTO dto = submissionMapper.toStudentSubmissionDTO(submission, grading, achievedTotal, challengeMaxPossible, true);
         log.info("[{}] exit submissionId={} gradingPresent={}", action, submissionId, grading != null);
         return dto;
     }
@@ -595,7 +594,9 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
         if (submission == null) return null;
 
         GradingDailyChallenge grading = gradingBySubmissionId.get(submission.getId());
-        Double visibleTotal = null;
+        boolean visibleScore = false;
+
+        Double totalWeight = null;
         Double maxPossible = maxWeightByChallengeId.getOrDefault(challenge.getId(), 0.0);
 
         if (grading != null) {
@@ -605,11 +606,12 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
                 // Hide scores until end date; display as SUBMITTED if before effective end
                 submission.setSubmissionStatus(SubmissionStatus.SUBMITTED);
             } else {
-                visibleTotal = achieved;
+                visibleScore = true;
+                totalWeight = achieved;
                 submission.setSubmissionStatus(SubmissionStatus.GRADED);
             }
         }
 
-        return submissionMapper.toStudentSubmissionDTO(submission, grading, visibleTotal, maxPossible);
+        return submissionMapper.toStudentSubmissionDTO(submission, grading, totalWeight, maxPossible, visibleScore);
     }
 }
