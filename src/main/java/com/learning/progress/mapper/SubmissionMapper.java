@@ -1,18 +1,12 @@
 package com.learning.progress.mapper;
 
 import com.learning.progress.common.ChallengeStatus;
-import com.learning.progress.dto.challenge.DailyChallengeListDTO;
-import com.learning.progress.dto.challenge.StudentChallengeListDTO;
-import com.learning.progress.dto.submission.SaveSubmissionRequest;
 import com.learning.progress.dto.submission.StudentSubmissionDTO;
 import com.learning.progress.entity.*;
 import com.learning.progress.util.DataUtil;
 import org.mapstruct.*;
 
 import java.time.Duration;
-import java.time.OffsetDateTime;
-import java.util.ArrayList;
-import java.util.List;
 
 @Mapper(
         componentModel = "spring",
@@ -36,15 +30,16 @@ public interface SubmissionMapper {
             SubmissionDailyChallenge submission,
             GradingDailyChallenge grading,
             Double totalWeight,
-            Double maxPossibleWeight
-    );
+            Double maxPossibleWeight,
+            boolean visibleScore);
 
     // TÁCH RIÊNG ĐỂ DỄ ĐỌC, DỄ TEST
     @AfterMapping
     default void enhanceStudentSubmissionDTO(
             @MappingTarget StudentSubmissionDTO dto,
             SubmissionDailyChallenge submission,
-            GradingDailyChallenge grading) {
+            GradingDailyChallenge grading,
+            boolean visibleScore) {
 
         // 1. Student info
         if (submission != null && submission.getUser() != null) {
@@ -53,9 +48,15 @@ public interface SubmissionMapper {
             dto.setStudentName(user.getFullName() != null ? user.getFullName() : user.getEmail());
         }
 
-        // 2. Final score
-        if (grading != null) {
+        // 2. score
+        if (visibleScore && grading != null) {
             dto.setFinalScore(DataUtil.getFinalScore(grading.getRawScore(), grading.getPenaltyApplied()));
+            dto.setRawScore(grading.getRawScore());
+            dto.setPenaltyApplied(grading.getPenaltyApplied());
+        } else {
+            dto.setFinalScore(null);
+            dto.setRawScore(null);
+            dto.setPenaltyApplied(null);
         }
 
         // 3. Actual duration

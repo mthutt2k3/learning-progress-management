@@ -17,4 +17,15 @@ public class DeviceMismatchNotification {
     private String message;
     private int warningCount;
     private OffsetDateTime timestamp = OffsetDateTime.now();
+
+    private TargetDevice targetDevice;
+
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class TargetDevice{
+        private String deviceFingerprint;
+        private String ipAddress;
+    }
 }
