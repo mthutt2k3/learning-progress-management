@@ -23,6 +23,7 @@ public interface SubmissionDailyChallengeRepository extends JpaRepository<Submis
     WHERE c.challengeType IN :types
       AND (s.submissionStatus IN :submissionStatuses
       OR (g IS NULL OR g.isFinalized = false))
+      AND CURRENT_TIMESTAMP > s.expiredAt
       AND s.deletedAt IS NULL
     """)
     List<SubmissionDailyChallenge> findPendingAutoGradeSubmissions(
