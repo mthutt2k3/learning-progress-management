@@ -32,6 +32,7 @@ import java.time.OffsetDateTime;
 import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * SubmissionChallengeServiceImpl
@@ -321,70 +322,112 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
         int pageSize = 100;
         Pageable pageable = PageRequest.of(0, pageSize);
         Page<SubmissionDailyChallenge> page;
+
         do {
-            page = submissionDailyChallengeRepository.findExpiredTestSubmissionsForAutoSubmit(SubmissionStatus.PENDING, OffsetDateTime.now(), pageable);
-            List<SubmissionDailyChallenge> toSubmit = page.getContent();
-            if (!toSubmit.isEmpty()) {
-                // mark as submitted
-                toSubmit.forEach(s -> {
-                    s.setSubmissionStatus(SubmissionStatus.SUBMITTED);
-                    s.setSubmittedAt(OffsetDateTime.now());
-                });
-                // persist submissions first so IDs are available for submissionQuestions
-                submissionDailyChallengeRepository.saveAll(toSubmit);
+            page = submissionDailyChallengeRepository.findExpiredTestSubmissionsForAutoSubmit(
+                    SubmissionStatus.PENDING, OffsetDateTime.now(), pageable);
 
-                // For each affected challenge, load questions once to avoid repeated DB calls
-                Set<Long> affectedChallengeIds = toSubmit.stream()
-                        .map(s -> s.getChallenge().getId())
+            List<SubmissionDailyChallenge> toProcess = page.getContent();
+            if (toProcess.isEmpty()) {
+                pageable = pageable.next();
+                continue;
+            }
+
+            // 1. Lấy tất cả challengeId bị ảnh hưởng để load questions một lần
+            Set<Long> affectedChallengeIds = toProcess.stream()
+                    .map(s -> s.getChallenge().getId())
+                    .collect(Collectors.toSet());
+
+            Map<Long, List<Question>> questionsByChallenge = affectedChallengeIds.stream()
+                    .collect(Collectors.toMap(
+                            Function.identity(),
+                            cid -> questionRepository.findByChallengeIdAndDeletedAtIsNull(cid)
+                    ));
+
+            // 2. Lấy tất cả existing SubmissionQuestion của các submission đang xử lý
+            List<Long> submissionIds = toProcess.stream()
+                    .map(SubmissionDailyChallenge::getId)
+                    .collect(Collectors.toList());
+
+            List<SubmissionQuestion> existingSQs = submissionQuestionRepository
+                    .findBySubmissionDailyIdInAndDeletedAtIsNull(submissionIds);
+
+            // Map: submissionId -> list SubmissionQuestion
+            Map<Long, List<SubmissionQuestion>> existingSQMap = existingSQs.stream()
+                    .collect(Collectors.groupingBy(sq -> sq.getSubmissionDaily().getId()));
+
+            // 3. Danh sách cần tạo mới và danh sách cần cập nhật trạng thái
+            List<SubmissionQuestion> sqToCreate = new ArrayList<>();
+            List<SubmissionDailyChallenge> toSubmit = new ArrayList<>();   // sẽ thành SUBMITTED
+            List<SubmissionDailyChallenge> toMiss = new ArrayList<>();     // sẽ thành MISSED
+
+            OffsetDateTime now = OffsetDateTime.now();
+
+            for (SubmissionDailyChallenge submission : toProcess) {
+                Long submissionId = submission.getId();
+                Long challengeId = submission.getChallenge().getId();
+                List<Question> challengeQuestions = questionsByChallenge.getOrDefault(challengeId, List.of());
+                List<SubmissionQuestion> existingForThis = existingSQMap.getOrDefault(submissionId, List.of());
+
+                // Nếu không có bất kỳ SubmissionQuestion nào → MISSED
+                if (existingForThis.isEmpty()) {
+                    submission.setSubmissionStatus(SubmissionStatus.MISSED);
+                    toMiss.add(submission);
+                    continue;
+                }
+
+                // Có ít nhất 1 SubmissionQuestion → SUBMITTED
+                submission.setSubmissionStatus(SubmissionStatus.SUBMITTED);
+                submission.setSubmittedAt(now);
+                toSubmit.add(submission);
+
+                // Tìm các question còn thiếu để tạo placeholder
+                Set<Long> existingQuestionIds = existingForThis.stream()
+                        .filter(sq -> sq.getQuestion() != null)
+                        .map(sq -> sq.getQuestion().getId())
                         .collect(Collectors.toSet());
-                Map<Long, List<Question>> questionsByChallenge = affectedChallengeIds.stream()
-                        .collect(Collectors.toMap(
-                                cid -> cid,
-                                cid -> questionRepository.findByChallengeIdAndDeletedAtIsNull(cid)
-                        ));
 
-                // Create missing SubmissionQuestion rows with empty content if absent
-                List<SubmissionQuestion> submissionQuestionsToCreate = new ArrayList<>();
-                for (SubmissionDailyChallenge submission : toSubmit) {
-                    Long submissionId = submission.getId();
-                    Long challengeId = submission.getChallenge().getId();
-                    List<Question> questions = questionsByChallenge.getOrDefault(challengeId, List.of());
-
-                    // existing submissionQuestion ids for this submission
-                    List<SubmissionQuestion> existingForSubmission = submissionQuestionRepository
-                            .findBySubmissionDailyIdAndDeletedAtIsNull(submissionId);
-                    Set<Long> existingQuestionIds = existingForSubmission.stream()
-                            .filter(sq -> sq.getQuestion() != null)
-                            .map(sq -> sq.getQuestion().getId())
-                            .collect(Collectors.toSet());
-
-                    for (Question q : questions) {
-                        if (!existingQuestionIds.contains(q.getId())) {
-                            SubmissionQuestion newSq = new SubmissionQuestion();
-                            newSq.setSubmissionDaily(submission);
-                            newSq.setQuestion(q);
-                            // empty answer content
-                            newSq.setSubmissionContentJson(JsonUtil.objectToMap(new AnswerContent()));
-                            submissionQuestionsToCreate.add(newSq);
-                        }
+                for (Question q : challengeQuestions) {
+                    if (!existingQuestionIds.contains(q.getId())) {
+                        SubmissionQuestion newSq = new SubmissionQuestion();
+                        newSq.setSubmissionDaily(submission);
+                        newSq.setQuestion(q);
+                        newSq.setSubmissionContentJson(JsonUtil.objectToMap(new AnswerContent()));
+                        sqToCreate.add(newSq);
                     }
                 }
-
-                if (!submissionQuestionsToCreate.isEmpty()) {
-                    submissionQuestionRepository.saveAll(submissionQuestionsToCreate);
-                    log.debug("autoSubmitExpiredSubmissions: created {} submissionQuestion placeholders", submissionQuestionsToCreate.size());
-                }
-
-                // clear caches and publish logs as before
-                toSubmit.forEach(s -> {
-                    cacheService.clearSubmissionCache(s.getUser().getId(), s.getId());
-                });
-                Set<Long> affected = toSubmit.stream().map(s -> s.getChallenge().getId()).collect(Collectors.toSet());
-                affected.forEach(cacheService::clearSubmissionsCacheForChallenge);
-                log.debug("autoSubmitExpiredSubmissions: auto-submitted {} items", toSubmit.size());
             }
+
+            // 4. Persist tất cả thay đổi
+            // Thay thế 2 khối if riêng biệt bằng:
+            List<SubmissionDailyChallenge> allToUpdate = new ArrayList<>();
+            allToUpdate.addAll(toSubmit);
+            allToUpdate.addAll(toMiss);
+
+            if (!allToUpdate.isEmpty()) {
+                submissionDailyChallengeRepository.saveAll(allToUpdate);
+            }
+            if (!sqToCreate.isEmpty()) {
+                submissionQuestionRepository.saveAll(sqToCreate);
+                log.debug("autoSubmitExpiredSubmissions: created {} missing SubmissionQuestion placeholders", sqToCreate.size());
+            }
+
+            // 5. Clear cache
+            Stream.concat(toSubmit.stream(), toMiss.stream()).forEach(s -> {
+                cacheService.clearSubmissionCache(s.getUser().getId(), s.getId());
+            });
+
+            Set<Long> affectedChallengeIdsFinal = Stream.concat(toSubmit.stream(), toMiss.stream())
+                    .map(s -> s.getChallenge().getId())
+                    .collect(Collectors.toSet());
+            affectedChallengeIdsFinal.forEach(cacheService::clearSubmissionsCacheForChallenge);
+
+            log.debug("autoSubmitExpiredSubmissions: processed {} items ({} SUBMITTED, {} MISSED)",
+                    toProcess.size(), toSubmit.size(), toMiss.size());
+
             pageable = pageable.next();
         } while (page.hasNext());
+
         log.info("autoSubmitExpiredSubmissions: completed");
     }
 

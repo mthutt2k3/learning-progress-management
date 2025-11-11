@@ -21,9 +21,8 @@ public interface SubmissionDailyChallengeRepository extends JpaRepository<Submis
     JOIN s.challenge c
     LEFT JOIN FETCH s.gradingDailyChallenge g
     WHERE c.challengeType IN :types
-      AND (s.submissionStatus IN :submissionStatuses
-      OR (g IS NULL OR g.isFinalized = false))
-      AND CURRENT_TIMESTAMP > s.expiredAt
+      AND s.submissionStatus IN :submissionStatuses
+      AND (g IS NULL OR g.isFinalized = false)
       AND s.deletedAt IS NULL
     """)
     List<SubmissionDailyChallenge> findPendingAutoGradeSubmissions(

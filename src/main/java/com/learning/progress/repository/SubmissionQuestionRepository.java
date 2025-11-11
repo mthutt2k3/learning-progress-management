@@ -26,4 +26,5 @@ public interface SubmissionQuestionRepository extends JpaRepository<SubmissionQu
 
     Optional<SubmissionQuestion> findByIdAndDeletedAtIsNull(Long submissionQuestionId);
 
+    List<SubmissionQuestion> findBySubmissionDailyIdInAndDeletedAtIsNull(List<Long> submissionIds);
 }
