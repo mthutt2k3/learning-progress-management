@@ -6,6 +6,7 @@ import com.learning.progress.dto.DataResponse;
 import com.learning.progress.dto.challenge.DailyChallengeListDTO;
 import com.learning.progress.dto.challenge.StudentChallengeListDTO;
 import com.learning.progress.dto.submission.ExtendSubmissionDeadlineRequest;
+import com.learning.progress.dto.submission.ResetSubmissionRequest;
 import com.learning.progress.dto.submission.StudentSubmissionDTO;
 import com.learning.progress.entity.*;
 import com.learning.progress.exception.ApiException;
@@ -697,6 +698,92 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
 
         log.info("[{}] completed: updated={} submissions", action, toUpdate.size());
         return "Extended deadline for " + toUpdate.size() + " submissions.";
+    }
+
+    /**
+     * @param request
+     * @return
+     */
+    @Override
+    public String resetSubmissions(ResetSubmissionRequest request) {
+        final String action = "resetSubmissions";
+        String teacherEmail = jwtUtil.extractEmailFromCurrentRequest();
+        OffsetDateTime now = OffsetDateTime.now();
+
+        List<Long> oldSubmissionIds = request.getSubmissionIds();
+        OffsetDateTime newStart = request.getNewStartDate();
+        OffsetDateTime newEnd = request.getNewEndDate();
+
+        // Validate thời gian
+        if (newStart == null || newEnd == null || newEnd.isBefore(newStart)) {
+            log.warn("[{}] invalid dates: start={} end={}", action, newStart, newEnd);
+            throw new ApiException(Const.SUBMISSION.INVALID_RESET_DATES, HttpStatus.BAD_REQUEST.value());
+        }
+
+        if (oldSubmissionIds == null || oldSubmissionIds.isEmpty()) {
+            log.warn("[{}] empty submissionIds", action);
+            throw new ApiException(Const.SUBMISSION.EMPTY_SUBMISSION_IDS, HttpStatus.BAD_REQUEST.value());
+        }
+
+        log.info("[{}] start: teacher={} submissions={} newStart={} newEnd={}",
+                action, teacherEmail, oldSubmissionIds.size(), newStart, newEnd);
+
+        // 1. Lấy submission cũ
+        List<SubmissionDailyChallenge> oldSubmissions = submissionDailyChallengeRepository
+                .findByIdInAndDeletedAtIsNull(oldSubmissionIds);
+
+        if (oldSubmissions.isEmpty()) {
+            log.debug("[{}] no valid submissions found", action);
+            throw new ApiException(Const.SUBMISSION.NOT_FOUND, HttpStatus.NOT_FOUND.value());
+        }
+
+        // Validate quyền truy cập
+        request.getSubmissionIds().forEach(appValidator::validateUserAccessToSubmission);
+
+        // 2. Soft-delete submission cũ
+        oldSubmissions.forEach(old -> {
+            old.setDeletedAt(now);
+            old.setDeletedBy(teacherEmail + " (reset)");
+            old.setUpdatedAt(now);
+        });
+        submissionDailyChallengeRepository.saveAll(oldSubmissions);
+
+        // 3. Tạo submission mới với thời gian mới
+        List<SubmissionDailyChallenge> newSubmissions = new ArrayList<>();
+
+        // Load questions cho các challenge
+        Set<Long> challengeIds = oldSubmissions.stream()
+                .map(s -> s.getChallenge().getId())
+                .collect(Collectors.toSet());
+
+        for (SubmissionDailyChallenge old : oldSubmissions) {
+            DailyChallenge challenge = old.getChallenge();
+            User user = old.getUser();
+
+            SubmissionDailyChallenge newSub = SubmissionDailyChallenge.builder()
+                    .user(user)
+                    .challenge(challenge)
+                    .submissionStatus(SubmissionStatus.PENDING)
+                    .startedAt(newStart)
+                    .expiredAt(newEnd)
+                    .actualStartAt(null)
+                    .submittedAt(null)
+                    .isLate(false)
+                    .build();
+
+            newSubmissions.add(newSub);
+        }
+
+        // 4. Save tất cả
+        submissionDailyChallengeRepository.saveAllAndFlush(newSubmissions);
+
+        // 5. Clear cache
+        newSubmissions.forEach(s -> cacheService.clearSubmissionCache(s.getUser().getId(), s.getId()));
+        challengeIds.forEach(cacheService::clearSubmissionsCacheForChallenge);
+
+        log.info("[{}] completed: reset {} submissions | new period: {} → {}",
+                action, newSubmissions.size(), newStart, newEnd);
+        return "Reset " + newSubmissions.size() + " submissions.";
     }
 
     // ----------------------- Private helpers -----------------------

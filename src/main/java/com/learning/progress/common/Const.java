@@ -431,6 +431,7 @@ public class Const {
         public static final String EMPTY_SUBMISSION_IDS = "Submission IDs cannot be empty";
         public static final String INVALID_EXTEND_TIME = "Invalid extend time";
         public static final String NO_ELIGIBLE_FOR_EXTENSION = "No submissions are eligible for extension";
+        public static final String INVALID_RESET_DATES = "Invalid reset dates";
     }
 
     public static final class TRANSLATOR {
