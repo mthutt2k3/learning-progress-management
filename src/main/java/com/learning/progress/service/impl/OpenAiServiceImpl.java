@@ -1261,7 +1261,7 @@ public class OpenAiServiceImpl implements OpenAiService {
             case "DROPDOWN":
                 prompt.append("⚠️ CRITICAL FORMAT:\n");
                 prompt.append("- questionText MUST contain [[pos_xxxxxx]] placeholders\n");
-                prompt.append("- Each dropdown has 3–4 options, exactly 1 with isCorrect=true\n");
+                prompt.append("- Each dropdown has exactly 4 options, exactly 1 with isCorrect=true\n");
                 prompt.append("- All options for one dropdown share the same positionId\n\n");
 
                 prompt.append("EXAMPLE:\n");

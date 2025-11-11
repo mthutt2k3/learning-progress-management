@@ -1469,13 +1469,13 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
         PronunciationAssessmentResponse response = assessWithReferenceTextContinuous(wavFile, request);
 
         // Add note in feedback that reference was auto-generated
-        String enhancedFeedback = enhanceFeedbackWithCorrectionNote(
-                response.getFeedback(),
-                originalRecognizedText,
-                correctedReferenceText
-        );
+//        String enhancedFeedback = enhanceFeedbackWithCorrectionNote(
+//                response.getFeedback(),
+//                originalRecognizedText,
+//                correctedReferenceText
+//        );
 
-        response.setFeedback(enhancedFeedback);
+        response.setFeedback(response.getFeedback());
 
         log.info("[{}] Assessment with corrected reference completed. Score: {}",
                 traceId, response.getPronunciationScore());
@@ -1813,12 +1813,23 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
             String aiFeedback = openAiServiceImpl.callOpenAIForFeedback(prompt);
 
             // Clean and return
-            return aiFeedback.trim();
+            return extractFeedbackFromJson(aiFeedback.trim());
 
         } catch (Exception e) {
             log.error("Failed to generate AI feedback, using fallback: {}", e.getMessage());
             // Fallback to basic feedback if AI fails
             return generateBasicFeedback(pronunciationScore, accuracyScore, fluencyScore, completenessScore, prosodyScore, words);
+        }
+    }
+
+    private String extractFeedbackFromJson(String jsonResponse) {
+        try {
+            ObjectMapper mapper = new ObjectMapper();
+            JsonNode node = mapper.readTree(jsonResponse);
+            return node.get("feedback").asText();
+        } catch (Exception e) {
+            log.warn("Failed to parse JSON feedback, returning raw response: {}", e.getMessage());
+            return jsonResponse.trim(); // fallback to original if parse fails
         }
     }
 
