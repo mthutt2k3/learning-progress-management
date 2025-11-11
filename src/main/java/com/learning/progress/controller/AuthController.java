@@ -61,7 +61,7 @@ public class AuthController {
         return ResponseEntity.ok(DataResponse.success(Const.RESULT_MESSAGE_CODE.PASSWORD_RESET_TEACHER_SENT, Const.RESULT_MESSAGE_CODE.PASSWORD_RESET_EMAIL_SENT));
     }
 
-    @PreAuthorize("hasRole('MANAGER') or hasRole('TEACHER')")
+    @PreAuthorize("hasRole('MANAGER') or hasRole('TEACHER') or hasRole('TEACHING_ASSISTANT')")
     @PostMapping("/reset-password-by-teacher")
     @Operation(
             summary = "Reset student password by teacher",
