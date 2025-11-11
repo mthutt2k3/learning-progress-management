@@ -3,6 +3,8 @@ package com.learning.progress.cache;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
@@ -12,7 +14,9 @@ import java.util.concurrent.TimeUnit;
 @Service
 @Slf4j
 public class CacheService {
-
+    // Cache Enable Flag
+    @Value("${app.redis.enabled:true}")
+    private boolean enabled;
     // TTL Constants
     public static final long SECTION_TTL_MINUTES = 10;
     public static final long SECTIONS_LIST_TTL_MINUTES = 5;
@@ -33,15 +37,20 @@ public class CacheService {
     private final RedisTemplate<String, Object> redisTemplate;
     private final ObjectMapper objectMapper;
 
-    public CacheService(RedisTemplate<String, Object> redisTemplate, ObjectMapper objectMapper) {
+    public CacheService(@Autowired(required = false) RedisTemplate<String, Object> redisTemplate, ObjectMapper objectMapper) {
         this.redisTemplate = redisTemplate;
         this.objectMapper = objectMapper;
     }
+
     // =====================================================================
     // GET + SET (TỰ ĐỘNG LOG + TRACEID)
     // =====================================================================
 
     public <T> T getCachedObject(String key, TypeReference<T> typeReference) {
+        if (!enabled) {
+            log.debug("Cache disabled, skipping get for key: {}", key);
+            return null;
+        }
         try {
             Object value = redisTemplate.opsForValue().get(key);
             if (value != null) {
@@ -57,6 +66,10 @@ public class CacheService {
     }
 
     public void cacheObject(String key, Object value, long ttlMinutes) {
+        if (!enabled) {
+            log.debug("Cache disabled, skipping set for key: {}", key);
+            return;
+        }
         try {
             redisTemplate.opsForValue().set(key, value, ttlMinutes, TimeUnit.MINUTES);
             log.debug("Cached object for key: {} (TTL: {}m)", key, ttlMinutes);
@@ -70,6 +83,10 @@ public class CacheService {
     // =====================================================================
 
     public void delete(String key) {
+        if (!enabled) {
+            log.debug("Cache disabled, skipping set for key: {}", key);
+            return;
+        }
         try {
             Boolean deleted = redisTemplate.delete(key);
             log.debug("Deleted cache key: {} → {}", key, deleted);
@@ -79,6 +96,10 @@ public class CacheService {
     }
 
     private void deletePattern(String pattern) {
+        if (!enabled) {
+            log.debug("Cache disabled, skipping set for pattern: {}", pattern);
+            return;
+        }
         try {
             Set<String> keys = redisTemplate.keys(pattern);
             if (keys != null && !keys.isEmpty()) {
@@ -136,17 +157,29 @@ public class CacheService {
     // =====================================================================
 
     public void clearLevelCache(Long levelId) {
+        if (!enabled) {
+            log.debug("Cache disabled, skipping clear level cache for levelId: {}", levelId);
+            return;
+        }
         String key = buildLevelDetailsCacheKey(levelId);
         delete(key);
     }
 
     public void clearLevelListCache() {
+        if (!enabled) {
+            log.debug("Cache disabled, skipping clear level list cache");
+            return;
+        }
         deletePattern("levels:all:*");
         deletePattern("levels:published:*");
         log.debug("Cleared all level list caches");
     }
 
     public void clearCacheForChallenge(Long challengeId) {
+        if (!enabled) {
+            log.debug("Cache disabled, skipping clear cache for challengeId: {}", challengeId);
+            return;
+        }
         deletePattern(SECTIONS_CHALLENGE_KEY_PREFIX + challengeId + ":*");
         deletePattern(SECTIONS_PUBLIC_CHALLENGE_KEY_PREFIX + challengeId + ":*");
         deletePattern(SUBMISSIONS_CHALLENGE_KEY_PREFIX + challengeId + ":*");
@@ -154,10 +187,18 @@ public class CacheService {
     }
 
     public void clearSubmissionsCacheForChallenge(Long challengeId) {
+        if (!enabled) {
+            log.debug("Cache disabled, skipping clear submissions cache for challenge: {}", challengeId);
+            return;
+        }
         deletePattern(SUBMISSIONS_CHALLENGE_KEY_PREFIX + challengeId + ":*");
         log.debug("Cleared submissions cache for challenge: {}", challengeId);
     }
     public void clearSubmissionCache(Long userId, Long submissionId) {
+        if (!enabled) {
+            log.debug("Cache disabled, skipping clear submission cache for userId: {}, submissionId: {}", userId, submissionId);
+            return;
+        }
         try {
             String resultKey = buildSubmissionResultCacheKey(userId, submissionId);
 
