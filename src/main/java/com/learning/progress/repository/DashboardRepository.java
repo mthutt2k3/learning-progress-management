@@ -12,7 +12,7 @@ import java.time.*;
 import java.util.List;
 
 @Repository
-public interface DashboardRepository extends JpaRepository<User, Long> {
+public interface DashboardRepository {
 
     // =================================================================
     // 1. Admin Dashboard - Account Growth by Role
