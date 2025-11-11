@@ -428,6 +428,9 @@ public class Const {
         public static final String CANNOT_START_IN_CURRENT_STATUS = "Submission cannot be started in its current status";
         public static final String UNAUTHORIZED_VIEW_SUBMISSIONS = "Unauthorized: Only teachers or teaching assistants can view submissions";
         public static final String FORBIDDEN_CHALLENGE_DRAFT = "You are not allowed to access challenges that are not yet completed.";
+        public static final String EMPTY_SUBMISSION_IDS = "Submission IDs cannot be empty";
+        public static final String INVALID_EXTEND_TIME = "Invalid extend time";
+        public static final String NO_ELIGIBLE_FOR_EXTENSION = "No submissions are eligible for extension";
     }
 
     public static final class TRANSLATOR {

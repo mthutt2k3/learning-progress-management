@@ -25,9 +25,10 @@ public interface SubmissionDailyChallengeRepository extends JpaRepository<Submis
       AND (g IS NULL OR g.isFinalized = false)
       AND s.deletedAt IS NULL
     """)
-    List<SubmissionDailyChallenge> findPendingAutoGradeSubmissions(
+    Page<SubmissionDailyChallenge> findPendingAutoGradeSubmissions(
             @Param("types") Set<ChallengeType> types,
-            @Param("submissionStatuses") Set<SubmissionStatus> submissionStatuses
+            @Param("submissionStatuses") Set<SubmissionStatus> submissionStatuses,
+            Pageable pageable
     );
 
     Optional<SubmissionDailyChallenge> findByUserIdAndChallengeIdAndDeletedAtIsNull(Long userId, Long challengeId);
@@ -76,4 +77,5 @@ public interface SubmissionDailyChallengeRepository extends JpaRepository<Submis
     """)
     List<Long> findSubmissionIdsByUserAndClass(Long userId, Long classId);
 
+    List<SubmissionDailyChallenge> findByIdInAndDeletedAtIsNull(List<Long> submissionIds);
 }

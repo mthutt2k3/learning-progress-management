@@ -10,7 +10,6 @@ import com.learning.progress.entity.ChallengeSection;
 import com.learning.progress.entity.DailyChallenge;
 import com.learning.progress.entity.Question;
 import com.learning.progress.exception.ApiException;
-import com.learning.progress.job.QuartzJobTrigger;
 import com.learning.progress.mapper.ChallengeSectionMapper;
 import com.learning.progress.repository.*;
 import com.learning.progress.service.ChallengeSectionService;
@@ -50,8 +49,6 @@ public class ChallengeSectionServiceImpl implements ChallengeSectionService {
     @Autowired private CacheService cacheService;
     @Autowired
     private SubmissionDailyChallengeRepository submissionDailyChallengeRepository;
-    @Autowired
-    private QuartzJobTrigger quartzJobTrigger;
     @Autowired
     private DailyChallengeRepository dailyChallengeRepository;
     @Autowired

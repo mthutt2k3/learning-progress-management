@@ -11,7 +11,6 @@ import com.learning.progress.dto.submission.SaveSubmissionRequest;
 import com.learning.progress.dto.submission.SubmissionResultResponse;
 import com.learning.progress.entity.*;
 import com.learning.progress.exception.ApiException;
-import com.learning.progress.job.QuartzJobTrigger;
 import com.learning.progress.mapper.ChallengeSectionMapper;
 import com.learning.progress.repository.*;
 import com.learning.progress.cache.CacheService;
@@ -48,8 +47,6 @@ public class SubmissionQuestionServiceImpl implements SubmissionQuestionService 
     @Autowired private QuestionRepository questionRepository;
     @Autowired private GradingDailyChallengeService gradingDailyChallengeService;
     @Autowired private CacheService cacheService;
-    @Autowired
-    private QuartzJobTrigger quartzJobTrigger;
     @Autowired
     private TransactionTemplate transactionTemplate;
     @Autowired
@@ -267,6 +264,9 @@ public class SubmissionQuestionServiceImpl implements SubmissionQuestionService 
         SubmissionStatus status = submission.getSubmissionStatus();
         if (status == SubmissionStatus.SUBMITTED || status == SubmissionStatus.GRADED) {
             throw new ApiException("Submission already completed", HttpStatus.BAD_REQUEST.value());
+        }
+        if (status == SubmissionStatus.MISSED) {
+            throw new ApiException("Submission missed", HttpStatus.BAD_REQUEST.value());
         }
          submissionQuestionValidator.validateSubmissionQuestions(dailyChallenge.getId(), request);
 

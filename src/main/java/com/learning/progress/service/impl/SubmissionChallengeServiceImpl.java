@@ -5,6 +5,7 @@ import com.learning.progress.common.*;
 import com.learning.progress.dto.DataResponse;
 import com.learning.progress.dto.challenge.DailyChallengeListDTO;
 import com.learning.progress.dto.challenge.StudentChallengeListDTO;
+import com.learning.progress.dto.submission.ExtendSubmissionDeadlineRequest;
 import com.learning.progress.dto.submission.StudentSubmissionDTO;
 import com.learning.progress.entity.*;
 import com.learning.progress.exception.ApiException;
@@ -623,6 +624,79 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
 
         submissionDailyChallengeRepository.saveAllAndFlush(proxies);
         log.info("[{}] soft-deleted {} submissions for classId={} userId={}", action, submissionIds.size(), classId, userId);
+    }
+
+
+    @Override
+    @Transactional
+    public String extendSubmissionDeadline(ExtendSubmissionDeadlineRequest request) {
+        final String action = "extendSubmissionDeadline";
+        String teacherEmail = jwtUtil.extractEmailFromCurrentRequest();
+
+        List<Long> submissionIds = request.getSubmissionIds();
+        OffsetDateTime newExpiredAt = request.getNewExpiredAt();
+
+        if (submissionIds == null || submissionIds.isEmpty()) {
+            log.warn("[{}] empty submissionIds", action);
+            throw new ApiException(Const.SUBMISSION.EMPTY_SUBMISSION_IDS, HttpStatus.BAD_REQUEST.value());
+        }
+        if (newExpiredAt == null || newExpiredAt.isBefore(OffsetDateTime.now())) {
+            log.warn("[{}] invalid newExpiredAt={}", action, newExpiredAt);
+            throw new ApiException(Const.SUBMISSION.INVALID_EXTEND_TIME, HttpStatus.BAD_REQUEST.value());
+        }
+
+        log.info("[{}] start: teacher={} submissions={} newExpiredAt={}",
+                action, teacherEmail, submissionIds.size(), newExpiredAt);
+
+        // Lấy submissions + validate quyền truy cập lớp
+        List<SubmissionDailyChallenge> submissions = submissionDailyChallengeRepository
+                .findByIdInAndDeletedAtIsNull(submissionIds);
+
+        if (submissions.isEmpty()) {
+            log.debug("[{}] no valid submissions found", action);
+            throw new ApiException(Const.SUBMISSION.NOT_FOUND, HttpStatus.NOT_FOUND.value());
+        }
+
+        Set<Long> classIds = submissions.stream()
+                .map(s -> s.getChallenge().getClassLesson().getClassChapter().getClazz().getId())
+                .collect(Collectors.toSet());
+
+        for (Long classId : classIds) {
+            appValidator.validateUserAccessToClass(classId);
+        }
+
+        // Chỉ gia hạn nếu chưa SUBMITTED/GRADED hoặc đã MISSED
+        List<SubmissionDailyChallenge> toUpdate = submissions.stream()
+                .filter(s -> {
+                    SubmissionStatus status = s.getSubmissionStatus();
+                    return status == SubmissionStatus.PENDING ||
+                            status == SubmissionStatus.DRAFT ||
+                            status == SubmissionStatus.MISSED;
+                })
+                .peek(s -> {
+//                    s.setS(newExpiredAt);
+                    s.setExpiredAt(newExpiredAt);
+                    s.setIsLate(false);
+                })
+                .collect(Collectors.toList());
+
+        if (toUpdate.isEmpty()) {
+            log.debug("[{}] no submissions eligible for extension", action);
+            throw new ApiException(Const.SUBMISSION.NO_ELIGIBLE_FOR_EXTENSION, HttpStatus.BAD_REQUEST.value());
+        }
+
+        submissionDailyChallengeRepository.saveAll(toUpdate);
+
+        // Clear cache
+        Set<Long> challengeIds = toUpdate.stream()
+                .map(s -> s.getChallenge().getId())
+                .collect(Collectors.toSet());
+
+        toUpdate.forEach(s -> cacheService.clearSubmissionCache(s.getUser().getId(), s.getId()));
+        challengeIds.forEach(cacheService::clearSubmissionsCacheForChallenge);
+
+        log.info("[{}] completed: updated={} submissions", action, toUpdate.size());
+        return "Extended deadline for " + toUpdate.size() + " submissions.";
     }
 
     // ----------------------- Private helpers -----------------------
