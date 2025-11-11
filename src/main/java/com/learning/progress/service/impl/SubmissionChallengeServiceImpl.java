@@ -655,14 +655,17 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
         if (grading != null) {
             double achieved = achievedByGradingId.getOrDefault(grading.getId(), 0.0);
             OffsetDateTime effectiveEnd = Optional.ofNullable(submission.getExpiredAt()).orElse(challenge.getEndDate());
-            if (effectiveEnd != null && now.isBefore(effectiveEnd)) {
-                // Hide scores until end date; display as SUBMITTED if before effective end
-                submission.setSubmissionStatus(SubmissionStatus.SUBMITTED);
-            } else {
-                visibleScore = true;
-                totalWeight = achieved;
-                submission.setSubmissionStatus(SubmissionStatus.GRADED);
+            if(submission.getSubmissionStatus() == SubmissionStatus.GRADED){
+                if (effectiveEnd != null && now.isBefore(effectiveEnd)) {
+                    // Hide scores until end date; display as SUBMITTED if before effective end
+                    submission.setSubmissionStatus(SubmissionStatus.SUBMITTED);
+                } else {
+                    visibleScore = true;
+                    totalWeight = achieved;
+                    submission.setSubmissionStatus(SubmissionStatus.GRADED);
+                }
             }
+
         }
 
         return submissionMapper.toStudentSubmissionDTO(submission, grading, totalWeight, maxPossible, visibleScore);
