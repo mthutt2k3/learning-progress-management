@@ -14,8 +14,8 @@ spring:
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
-        show_sql: false
-        format_sql: false
+        show_sql: true
+        format_sql: true
         generate_statistics: false
         jdbc.batch_size: 500
         order_inserts: false
@@ -178,7 +178,7 @@ app:
 
     # Auto-grade scheduler config (used by AutoGradeScheduler / QuartzJobTrigger)
     auto-grade-job:
-      enabled: false                # master switch to enable/disable auto-grade sweeper
+      enabled: true                # master switch to enable/disable auto-grade sweeper
       use-quartz: true             # when true scheduler will create Quartz jobs, otherwise call service directly
       fixed-delay-ms: 60000        # how often the sweeper runs (ms)
 env:
