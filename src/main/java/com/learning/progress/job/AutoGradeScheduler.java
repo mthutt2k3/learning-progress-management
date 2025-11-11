@@ -58,7 +58,7 @@ public class AutoGradeScheduler {
         log.info("[{}] start: useQuartz={} fixedDelayMs={}", method, useQuartz, fixedDelayMs);
 
         Set<ChallengeType> supportedTypes = Set.of(ChallengeType.GV, ChallengeType.RE, ChallengeType.LI);
-        Set<SubmissionStatus> submissionStatuses = Set.of(SubmissionStatus.SUBMITTED);
+        Set<SubmissionStatus> submissionStatuses = Set.of(SubmissionStatus.SUBMITTED, SubmissionStatus.GRADED);
 
         try {
             // LẤY CHỈ CÁC SUBMISSION CẦN AUTO-GRADE
