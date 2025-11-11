@@ -4,6 +4,7 @@ import com.learning.progress.common.Const;
 import com.learning.progress.dto.DataResponse;
 import com.learning.progress.dto.challenge.StudentChallengeListDTO;
 import com.learning.progress.dto.submission.AppendSubmissionLogRequest;
+import com.learning.progress.dto.submission.ExtendSubmissionDeadlineRequest;
 import com.learning.progress.dto.submission.SubmissionLogsResponse;
 import com.learning.progress.dto.submission.StudentSubmissionDTO;
 import com.learning.progress.service.SubmissionChallengeService;
@@ -99,5 +100,17 @@ public class SubmissionChallengeController {
 
         StudentSubmissionDTO dto = submissionChallengeService.getSubmissionInfo(submissionChallengeId);
         return ResponseEntity.ok(DataResponse.success(dto, Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL));
+    }
+    @PostMapping("/extend-deadline")
+    @PreAuthorize("hasAnyRole('TEACHER', 'TEACHING_ASSISTANT')")
+    @Operation(
+            summary = "Gia hạn thời gian nộp bài cho học sinh",
+            description = "Chỉ teacher/TA mới được gia hạn. Có thể gia hạn cho nhiều submission cùng lúc."
+    )
+    public ResponseEntity<DataResponse<Integer>> extendSubmissionDeadline(
+            @Valid @RequestBody ExtendSubmissionDeadlineRequest request) {
+        return ResponseEntity.ok(DataResponse.success(
+                null,
+                submissionChallengeService.extendSubmissionDeadline(request)));
     }
 }
