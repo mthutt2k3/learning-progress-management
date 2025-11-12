@@ -1,21 +1,42 @@
 package com.learning.progress.service;
 
+import com.learning.progress.dto.report.ChallengeReportDTO;
+import com.learning.progress.dto.report.ClassReportDTO;
+import com.learning.progress.dto.report.StudentPerformanceDTO;
+
 import java.util.Map;
 
 public interface ReportService {
-    // Class Report
-    Map<String, Object> classOverview(Long classId);
-    Map<String, Object> classChallengeTrend(Long classId, String skill);
-    Map<String, Object> classStudentPerformance(Long classId);
 
-    // Daily Challenge Report
-    Map<String, Object> challengeOverview(Long challengeId);
-    Map<String, Object> challengeStudentDetails(Long challengeId, int page, int size, String search);
-    Map<String, Object> challengeProgressByStatus(Long challengeId);
+    /* --------------------------------------------------------
+     * CLASS REPORT APIs
+     * -------------------------------------------------------- */
 
-    // Student Report
-    Map<String, Object> studentOverview(Long studentId);
-    Map<String, Object> studentSkillRadar(Long studentId);
-    Map<String, Object> studentProgressTrend(Long studentId);
-    Map<String, Object> studentAttendanceChart(Long studentId);
+    ClassReportDTO.ClassOverview getClassOverview(Long classId);
+
+    ClassReportDTO.MembersDetail getMembersDetail(Long classId, String sortBy);
+
+    ClassReportDTO.ChallengeStatsBySkill getChallengeStatsBySkill(Long classId, String skill);
+
+    ClassReportDTO.ChallengeProgressBySkill getChallengeProgressBySkill(Long classId);
+
+    /* --------------------------------------------------------
+     * CHALLENGE REPORT APIs
+     * -------------------------------------------------------- */
+
+    ChallengeReportDTO.ChallengeOverview getChallengeOverview(Long challengeId);
+
+    ChallengeReportDTO.StudentPerformanceList getStudentPerformanceList(Long challengeId);
+
+    ChallengeReportDTO.ChallengeChartData getChallengeChartData(Long challengeId);
+
+    /* --------------------------------------------------------
+     * STUDENT PERFORMANCE APIs
+     * -------------------------------------------------------- */
+
+    StudentPerformanceDTO.StudentOverview getStudentOverview();
+
+    StudentPerformanceDTO.LevelHistory getStudentLevelHistory();
+
+    StudentPerformanceDTO.ClassChallengeDetail getStudentClassChallengeDetail(Long classId);
 }
