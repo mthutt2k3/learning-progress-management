@@ -15,6 +15,7 @@ import com.learning.progress.service.GradingDailyChallengeService;
 import com.learning.progress.util.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -43,6 +44,10 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
     private final JwtUtil jwtUtil;
     @Qualifier("objectMapper")
     private final ObjectMapper objectMapper;
+
+    // NEW: notification service
+    @Autowired
+    private com.learning.progress.service.NotificationService notificationService;
 
     private static final Set<ChallengeType> AUTO_GRADABLE_TYPES = Set.of(
             ChallengeType.GV, ChallengeType.RE, ChallengeType.LI
@@ -209,6 +214,17 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
         long totalMs = (System.nanoTime() - startNs) / 1_000_000;
         log.info("[{}] exit submissionId={} totalMs={} achieved={} maxPossible={} rawScore={}",
                 method, submissionId, totalMs, autoData.totalAchieved(), autoData.maxPossible(), autoData.rawScore());
+
+        // notify student about auto grading
+        try {
+            if (submission.getUser() != null && submission.getUser().getId() != null) {
+                String title = "Bài làm vừa được chấm tự động";
+                String message = "Bài làm của bạn cho bài \"" + (challenge != null ? challenge.getChallengeName() : "") + "\" đã được chấm tự động. Điểm: " + autoData.rawScore();
+                notificationService.createNotification(submission.getUser().getId(), null, title, message, null, null);
+            }
+        } catch (Exception ex) {
+            log.debug("Failed to send autoGrade notification for submissionId={} error={}", submissionId, ex.getMessage());
+        }
     }
 
     private boolean isAlreadyFinalized(SubmissionDailyChallenge submission) {
@@ -482,6 +498,17 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
 
         long durationMs = (System.nanoTime() - startNs) / 1_000_000;
         log.info("[{}] exit submissionId={} durationMs={}", method, submissionId, durationMs);
+
+        // notify student
+        try {
+            if (submission.getUser() != null && submission.getUser().getId() != null) {
+                String title = "Bài làm đã được chấm";
+                String message = "Bài làm của bạn cho bài \"" + (challenge != null ? challenge.getChallengeName() : "") + "\" đã được chấm. Điểm: " + request.getRawScore();
+                notificationService.createNotification(submission.getUser().getId(), null, title, message, null, null);
+            }
+        } catch (Exception ex) {
+            log.debug("Failed to send manual grade notification for submissionId={} error={}", submissionId, ex.getMessage());
+        }
     }
 
     // ========================================================================
@@ -553,6 +580,17 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
 
         long durationMs = (System.nanoTime() - startNs) / 1_000_000;
         log.info("[{}] exit submissionQuestionId={} durationMs={} gradingQuestionId={}", method, submissionQuestionId, durationMs, gradingQuestion.getId());
+
+        // notify student about per-question grading
+        try {
+            if (submission.getUser() != null && submission.getUser().getId() != null) {
+                String title = "Cập nhật điểm câu hỏi";
+                String message = "Một câu hỏi trong bài làm của bạn đã được chấm. SubmissionId=" + submission.getId();
+                notificationService.createNotification(submission.getUser().getId(), null, title, message, null, null);
+            }
+        } catch (Exception ex) {
+            log.debug("Failed to send per-question grade notification for sqId={} error={}", submissionQuestionId, ex.getMessage());
+        }
     }
 
     // ========================================================================
