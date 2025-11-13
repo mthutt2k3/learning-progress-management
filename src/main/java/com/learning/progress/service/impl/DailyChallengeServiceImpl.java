@@ -12,6 +12,7 @@ import com.learning.progress.util.*;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.*;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -39,6 +40,10 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
     // New injections required to compute counts
     private final SubmissionDailyChallengeRepository submissionDailyChallengeRepository;
     private final ClassStudentRepository classStudentRepository;
+
+    // NEW: notification service
+    @Autowired
+    private com.learning.progress.service.NotificationService notificationService;
 
     /* --------------------------------------------------------
      * CREATE
@@ -76,6 +81,16 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
 
         dailyChallengeRepository.save(challenge);
         log.info("[{}] Created daily challenge id: {}", traceId, challenge.getId());
+
+        // notify caller (confirmation)
+        try {
+            Long actor = jwtUtil.extractUserIdFromCurrentRequest();
+            String title = "Tạo bài tập mới thành công";
+            String message = "Bạn đã tạo bài tập \"" + challenge.getChallengeName() + "\" cho lớp.";
+            notificationService.createNotification(actor, null, title, message, null, null);
+        } catch (Exception ex) {
+            log.debug("Failed to send createChallenge notification: {}", ex.getMessage());
+        }
 
         return dailyChallengeMapper.mapToDTO(challenge);
     }
@@ -195,7 +210,7 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
         if ((challenge.getChallengeStatus() == ChallengeStatus.IN_PROGRESS
                 || challenge.getChallengeStatus() == ChallengeStatus.FINISHED)
                 && dto.getStartDate() != null
-                && !dto.getStartDate().equals(challenge.getStartDate())) {
+                && !dto.getStartDate().toInstant().equals(challenge.getStartDate().toInstant())) {
             throw badRequest(Const.CHALLENGE.CANNOT_CHANGE_START_DATE);
         }
 
@@ -229,6 +244,17 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
         }
 
         log.info("[{}] Updated challenge id: {}", traceId, id);
+
+        // notify actor
+        try {
+            Long actor = jwtUtil.extractUserIdFromCurrentRequest();
+            String title = "Cập nhật bài tập thành công";
+            String message = "Bạn đã cập nhật bài tập \"" + challenge.getChallengeName() + "\".";
+            notificationService.createNotification(actor, null, title, message, null, null);
+        } catch (Exception ex) {
+            log.debug("Failed to send updateChallenge notification: {}", ex.getMessage());
+        }
+
         return dailyChallengeMapper.mapToDTO(challenge);
     }
 
@@ -252,6 +278,16 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
 
         dailyChallengeRepository.save(challenge);
         log.info("[{}] Deleted challenge id: {}", traceId, id);
+
+        // notify actor
+        try {
+            Long actor = jwtUtil.extractUserIdFromCurrentRequest();
+            String title = "Xóa bài tập thành công";
+            String message = "Bạn đã xóa bài tập \"" + challenge.getChallengeName() + "\".";
+            notificationService.createNotification(actor, null, title, message, null, null);
+        } catch (Exception ex) {
+            log.debug("Failed to send deleteChallenge notification: {}", ex.getMessage());
+        }
     }
 
     /* --------------------------------------------------------
@@ -281,6 +317,17 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
         dailyChallengeRepository.save(challenge);
 
         log.info("[{}] Challenge {} set to PUBLISHED", traceId, id);
+
+        // notify actor
+        try {
+            Long actor = jwtUtil.extractUserIdFromCurrentRequest();
+            String title = "Đã công bố bài tập";
+            String message = "Bài tập \"" + challenge.getChallengeName() + "\" đã được công bố.";
+            notificationService.createNotification(actor, null, title, message, null, null);
+        } catch (Exception ex) {
+            log.debug("Failed to send publishChallenge notification: {}", ex.getMessage());
+        }
+
         return dailyChallengeMapper.mapToDTO(challenge);
     }
 

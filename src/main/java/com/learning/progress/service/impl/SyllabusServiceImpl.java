@@ -65,6 +65,10 @@ public class SyllabusServiceImpl implements SyllabusService {
     @Autowired
     private BlobSasService blobSasService;
 
+    // NEW: notification service
+    @Autowired
+    private com.learning.progress.service.NotificationService notificationService;
+
     @Value("${azure.storage.syllabus-template}")
     private String syllabusTemplate;
     @Autowired
@@ -89,6 +93,16 @@ public class SyllabusServiceImpl implements SyllabusService {
         syllabus.setSyllabusCode(syllabusCode);
         syllabusRepository.saveAndFlush(syllabus);
 
+        // notify actor
+        try {
+            Long actor = jwtUtil.extractUserIdFromCurrentRequest();
+            String title = "Tạo syllabus thành công";
+            String message = "Bạn đã tạo syllabus \"" + syllabus.getSyllabusName() + "\".";
+            notificationService.createNotification(actor, null, title, message, null, null);
+        } catch (Exception ex) {
+            log.debug("Failed to send createSyllabus notification: {}", ex.getMessage());
+        }
+
         return syllabusMapper.toSyllabusDTO(syllabus);
     }
 
@@ -106,6 +120,16 @@ public class SyllabusServiceImpl implements SyllabusService {
         syllabus.setLevel(level);
         syllabus.setDescription(updatedSyllabus.getDescription());
         syllabusRepository.save(syllabus);
+
+        // notify actor
+        try {
+            Long actor = jwtUtil.extractUserIdFromCurrentRequest();
+            String title = "Cập nhật syllabus thành công";
+            String message = "Bạn đã cập nhật syllabus \"" + syllabus.getSyllabusName() + "\".";
+            notificationService.createNotification(actor, null, title, message, null, null);
+        } catch (Exception ex) {
+            log.debug("Failed to send updateSyllabus notification: {}", ex.getMessage());
+        }
 
         return syllabusMapper.toSyllabusDTO(syllabus);
     }
@@ -126,6 +150,16 @@ public class SyllabusServiceImpl implements SyllabusService {
         syllabus.setDeletedBy(jwtUtil.extractUsernameFromCurrentRequest());
         syllabus.setDeletedAt(OffsetDateTime.now());
         syllabusRepository.save(syllabus);
+
+        // notify actor
+        try {
+            Long actor = jwtUtil.extractUserIdFromCurrentRequest();
+            String title = "Xóa syllabus";
+            String message = "Bạn đã xóa syllabus \"" + syllabus.getSyllabusName() + "\".";
+            notificationService.createNotification(actor, null, title, message, null, null);
+        } catch (Exception ex) {
+            log.debug("Failed to send deleteSyllabus notification: {}", ex.getMessage());
+        }
     }
 
     @Override
@@ -272,6 +306,17 @@ public class SyllabusServiceImpl implements SyllabusService {
         }
 
         log.info("Imported {} syllabuses successfully", result.size());
+
+        // notify actor
+        try {
+            Long actor = jwtUtil.extractUserIdFromCurrentRequest();
+            String title = "Import syllabus hoàn tất";
+            String message = "Bạn đã import " + result.size() + " syllabus thành công.";
+            notificationService.createNotification(actor, null, title, message, null, null);
+        } catch (Exception ex) {
+            log.debug("Failed to send importSyllabus notification: {}", ex.getMessage());
+        }
+
         return result;
     }
 
