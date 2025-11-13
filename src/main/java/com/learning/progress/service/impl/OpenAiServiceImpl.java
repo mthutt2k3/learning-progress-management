@@ -1027,6 +1027,7 @@ public class OpenAiServiceImpl implements OpenAiService {
         prompt.append("Each question must:\n");
         prompt.append("- Match the student's level: ").append(levelInfo.levelName).append("\n");
         prompt.append("- Be written in natural, clear, age-appropriate English.\n");
+        prompt.append(getGrammarAndFormattingInstructions());
         prompt.append("- Have plausible distractors and one clear correct answer.\n");
         prompt.append("- Follow the Vietnamese National High School (THPT Quốc Gia) style for clarity and fairness.\n\n");
 
@@ -1047,8 +1048,9 @@ public class OpenAiServiceImpl implements OpenAiService {
         prompt.append("Generate EXACTLY ").append(numberOfQuestions).append(" HIGH-QUALITY ").append(questionType).append(" questions\n");
         prompt.append("Level: ").append(levelInfo.levelName).append("\n\n");
 
+        prompt.append(getGrammarAndFormattingInstructions());
         appendJSONFormat(prompt, questionType);
-        appendQuestionTypeRules(prompt, questionType);
+        appendQuestionTypeRules(prompt, questionType, "GV");
 
         prompt.append("\n✅ FINAL CHECKLIST:\n");
         prompt.append("□ Questions aligned with lesson content\n");
@@ -1103,6 +1105,39 @@ public class OpenAiServiceImpl implements OpenAiService {
         prompt.append(section.getSectionsContent()).append("\n");
         prompt.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n");
 
+        prompt.append("🚨 CRITICAL CONTENT-BASED REQUIREMENTS (MUST FOLLOW):\n");
+        prompt.append("- ALL questions MUST be answerable ONLY from the passage above\n");
+        prompt.append("- ONLY ask about information, facts, details, or vocabulary that EXISTS in the passage\n");
+        prompt.append("- DO NOT ask about general English grammar rules\n");
+        prompt.append("- DO NOT ask about knowledge not mentioned in the passage\n");
+        prompt.append("- DO NOT create questions testing skills beyond passage comprehension\n\n");
+
+        prompt.append("✅ ALLOWED QUESTION TYPES:\n");
+        prompt.append("- Main idea / purpose questions based on passage content\n");
+        prompt.append("- Detail questions about specific information in the passage\n");
+        prompt.append("- Inference questions that can be answered from passage clues\n");
+        prompt.append("- Vocabulary questions about words/phrases used IN THE PASSAGE\n");
+        prompt.append("- Reference questions (what does 'it/they/this' refer to in the passage)\n\n");
+
+        prompt.append("❌ FORBIDDEN QUESTION TYPES:\n");
+        prompt.append("- Grammar rules not demonstrated in the passage\n");
+        prompt.append("- Vocabulary not present in the passage\n");
+        prompt.append("- General knowledge questions\n");
+        prompt.append("- Questions requiring external information\n\n");
+
+        prompt.append("📝 PARAPHRASING RULES:\n");
+        prompt.append("- You MAY paraphrase words/phrases from the passage in questions and options\n");
+        prompt.append("- Paraphrasing level should match difficulty level\n");
+        prompt.append("- Keep the SAME meaning as in the passage\n");
+        prompt.append("- The correct answer must match passage information (even if paraphrased)\n\n");
+
+        prompt.append("⚠️ VALIDATION BEFORE GENERATING:\n");
+        prompt.append("For EVERY question, ask yourself:\n");
+        prompt.append("1. Can this be answered by ONLY reading the passage?\n");
+        prompt.append("2. Is the information needed in the passage?\n");
+        prompt.append("3. Would someone who hasn't read the passage struggle to answer?\n");
+        prompt.append("If ANY answer is NO → DO NOT create that question\n\n");
+
         if (userDescription != null && !userDescription.isBlank()) {
             prompt.append("💡 ADDITIONAL SUGGESTIONS (OPTIONAL - USE ONLY IF RELEVANT):\n");
             prompt.append(userDescription).append("\n\n");
@@ -1121,7 +1156,7 @@ public class OpenAiServiceImpl implements OpenAiService {
         prompt.append("Level: ").append(levelInfo.levelName).append("\n\n");
 
         appendJSONFormat(prompt, questionType);
-        appendQuestionTypeRules(prompt, questionType);
+        appendQuestionTypeRules(prompt, questionType, "BASED");
 
         prompt.append("\n✅ FINAL CHECKLIST:\n");
         prompt.append("□ Questions based on passage content\n");
@@ -1188,7 +1223,7 @@ public class OpenAiServiceImpl implements OpenAiService {
         prompt.append("}\n\n");
     }
 
-    private void appendQuestionTypeRules(StringBuilder prompt, String questionType) {
+    private void appendQuestionTypeRules(StringBuilder prompt, String questionType, String dailyChallengeType) {
         prompt.append("📚 DETAILED SPECIFICATIONS FOR ").append(questionType).append(":\n\n");
 
         switch (questionType) {
@@ -1239,24 +1274,49 @@ public class OpenAiServiceImpl implements OpenAiService {
                 break;
 
             case "FILL_IN_THE_BLANK":
-                prompt.append("⚠️ CRITICAL FORMAT:\n");
-                prompt.append("FORMAT: \"Text [[pos_xxxxxx]](hint) more text.\"\n");
-                prompt.append("- xxxxxx is a random 6-character ID (lowercase a-z and 0-9)\n");
-                prompt.append("- positionId in data MUST match the xxxxxx\n\n");
+                if(dailyChallengeType != null && dailyChallengeType.equals("GV")) {
+                    prompt.append("⚠️ CRITICAL FORMAT:\n");
+                    prompt.append("FORMAT: \"Text [[pos_xxxxxx]](base word) more text.\"\n");
+                    prompt.append("- xxxxxx is a random 6-character ID (lowercase a-z and 0-9)\n");
+                    prompt.append("- The word inside parentheses ( ) is the ORIGINAL / BASE FORM of the missing word (used as a hint)\n");
+                    prompt.append("- positionId in data MUST match the xxxxxx\n\n");
 
-                prompt.append("EXAMPLE:\n");
-                prompt.append("{\n")
-                        .append("  \"questionText\": \"If I [[pos_a7k3m2]](know) her address, I would visit her tomorrow.\",\n")
-                        .append("  \"orderNumber\": 1,\n")
-                        .append("  \"score\": 1.0,\n")
-                        .append("  \"questionType\": \"FILL_IN_THE_BLANK\",\n")
-                        .append("  \"content\": {\n")
-                        .append("    \"data\": [\n")
-                        .append("      {\"id\": \"ans1\", \"value\": \"knew\", \"isCorrect\": true, \"positionId\": \"a7k3m2\"}\n")
-                        .append("    ]\n")
-                        .append("  }\n")
-                        .append("}\n\n");
-                break;
+
+                    prompt.append("EXAMPLE:\n");
+                    prompt.append("{\n")
+                            .append("  \"questionText\": \"If I [[pos_a7k3m2]](know) her address, I would visit her tomorrow.\",\n")
+                            .append("  \"orderNumber\": 1,\n")
+                            .append("  \"score\": 1.0,\n")
+                            .append("  \"questionType\": \"FILL_IN_THE_BLANK\",\n")
+                            .append("  \"content\": {\n")
+                            .append("    \"data\": [\n")
+                            .append("      {\"id\": \"ans1\", \"value\": \"knew\", \"isCorrect\": true, \"positionId\": \"a7k3m2\"}\n")
+                            .append("    ]\n")
+                            .append("  }\n")
+                            .append("}\n\n");
+                    break;
+                } else {
+                    prompt.append("⚠️ CRITICAL FORMAT:\n");
+                    prompt.append("FORMAT: \"Text [[pos_xxxxxx]] more text.\"\n");
+                    prompt.append("- xxxxxx is a random 6-character ID (lowercase a-z and 0-9)\n");
+                    prompt.append("- positionId in data MUST match the xxxxxx\n\n");
+
+
+                    prompt.append("EXAMPLE:\n");
+                    prompt.append("{\n")
+                            .append("  \"questionText\": \"If I knew her [[pos_a7k3m2]], I would visit her tomorrow.\",\n")
+                            .append("  \"orderNumber\": 1,\n")
+                            .append("  \"score\": 1.0,\n")
+                            .append("  \"questionType\": \"FILL_IN_THE_BLANK\",\n")
+                            .append("  \"content\": {\n")
+                            .append("    \"data\": [\n")
+                            .append("      {\"id\": \"ans1\", \"value\": \"address\", \"isCorrect\": true, \"positionId\": \"a7k3m2\"}\n")
+                            .append("    ]\n")
+                            .append("  }\n")
+                            .append("}\n\n");
+                    break;
+                }
+
 
             case "DROPDOWN":
                 prompt.append("⚠️ CRITICAL FORMAT:\n");
@@ -1738,6 +1798,8 @@ public class OpenAiServiceImpl implements OpenAiService {
         prompt.append("- Passage should have clear structure and coherent flow\n");
         prompt.append("- Language complexity must match the student level\n\n");
 
+        prompt.append(getGrammarAndFormattingInstructions());
+
         if (description != null && !description.isBlank()) {
             prompt.append("💡 TOPIC/THEME SUGGESTIONS (OPTIONAL - USE ONLY IF APPROPRIATE):\n");
             prompt.append(description).append("\n\n");
@@ -1766,10 +1828,16 @@ public class OpenAiServiceImpl implements OpenAiService {
 
         prompt.append("JSON FORMAT:\n");
         prompt.append("{\n");
-        prompt.append("  \"passage\": \"Full text with paragraphs separated by \\n\\n\",\n");
+        prompt.append("  \"passage\": \"Full HTML text with each paragraph wrapped in <p> tags\",\n");
         prompt.append("  \"numberOfParagraphs\": ").append(numberOfParagraphs).append(",\n");
         prompt.append("  \"totalWords\": <actual count>\n");
         prompt.append("}\n\n");
+
+        prompt.append("⚠️ HTML FORMATTING REQUIREMENTS:\n");
+        prompt.append("- Wrap EACH paragraph in <p></p> tags\n");
+        prompt.append("- Format: <p>Paragraph 1 content...</p><p>Paragraph 2 content...</p>\n");
+        prompt.append("- Do NOT use \\n\\n or line breaks, use HTML tags only\n");
+        prompt.append("- Ensure proper HTML entity encoding if needed\n\n");
 
         prompt.append("Return ONLY valid JSON.\n");
 
@@ -2077,5 +2145,22 @@ public class OpenAiServiceImpl implements OpenAiService {
         }
 
         throw new RuntimeException("No response from Azure OpenAI Vision");
+    }
+
+    /**
+     * Standard grammar and formatting instructions for all AI-generated content
+     */
+    private String getGrammarAndFormattingInstructions() {
+        StringBuilder instructions = new StringBuilder();
+
+        instructions.append("✍️ GRAMMAR & FORMATTING RULES (MANDATORY FOR ALL CONTENT):\n");
+        instructions.append("- ALWAYS capitalize the first letter of EVERY sentence\n");
+        instructions.append("- ALWAYS capitalize the pronoun 'I' (NEVER write lowercase 'i')\n");
+        instructions.append("- Capitalize proper nouns (names, places, etc.)\n");
+        instructions.append("- Use proper punctuation (periods, commas, question marks, apostrophes)\n");
+        instructions.append("- Write complete, grammatically correct sentences\n");
+        instructions.append("- Follow standard English capitalization and punctuation rules\n\n");
+
+        return instructions.toString();
     }
 }

@@ -437,7 +437,7 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
     @Transactional
     public int detectAndMarkLateSubmissions() {
         OffsetDateTime now = OffsetDateTime.now();
-        List<SubmissionDailyChallenge> late = submissionDailyChallengeRepository.findBySubmissionStatusAndExpiredAtBeforeAndDeletedAtIsNull(SubmissionStatus.PENDING, now);
+        List<SubmissionDailyChallenge> late = submissionDailyChallengeRepository.findLateSubmissions(now);
         if (late.isEmpty()) {
             log.debug("detectAndMarkLateSubmissions: none found");
             return 0;
