@@ -43,6 +43,17 @@ public interface SubmissionDailyChallengeRepository extends JpaRepository<Submis
     List<SubmissionDailyChallenge> findBySubmissionStatusAndExpiredAtBeforeAndDeletedAtIsNull(SubmissionStatus submissionStatus, OffsetDateTime now);
 
     @Query("""
+    SELECT s 
+    FROM SubmissionDailyChallenge s
+    WHERE s.deletedAt IS NULL
+      AND (
+            (s.submittedAt IS NULL AND s.expiredAt < :now)
+         OR (s.expiredAt < s.submittedAt)
+      )
+    """)
+    List<SubmissionDailyChallenge> findLateSubmissions(@Param("now") OffsetDateTime now);
+
+    @Query("""
     SELECT s FROM SubmissionDailyChallenge s
     JOIN s.challenge c
     WHERE s.submissionStatus = :status
