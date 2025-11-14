@@ -345,10 +345,7 @@ public class OpenAiServiceImpl implements OpenAiService {
                                 contextInfo,
                                 dailyChallengeType,
                                 questionOrder++,
-                                levelInfo,
-                                request.getLessonFocus(),
-                                request.getCustomLessonFocus(),
-                                request.getVocabularyList()
+                                levelInfo
                         ));
                     }
                 }
@@ -875,10 +872,7 @@ public class OpenAiServiceImpl implements OpenAiService {
                         firstTask.userDescription,
                         firstTask.contextInfo,
                         firstTask.dailyChallengeType,
-                        firstTask.levelInfo,
-                        firstTask.lessonFocus,
-                        firstTask.customLessonFocus,
-                        firstTask.vocabularyList
+                        firstTask.levelInfo
                 );
 
                 String aiResponse = callOpenAI(prompt);
@@ -968,8 +962,7 @@ public class OpenAiServiceImpl implements OpenAiService {
         ContentBasedQuestionTask(ChallengeContext context, SectionDto section,
                                  String questionType, String userDescription,
                                  String contextInfo, String dailyChallengeType, int orderNumber,
-                                 LevelInfo levelInfo, List<LessonFocus> lessonFocus,
-                                 String customLessonFocus, String vocabularyList) {
+                                 LevelInfo levelInfo) {
             this.context = context;
             this.section = section;
             this.questionType = questionType;
@@ -978,9 +971,6 @@ public class OpenAiServiceImpl implements OpenAiService {
             this.dailyChallengeType = dailyChallengeType;
             this.orderNumber = orderNumber;
             this.levelInfo = levelInfo;
-            this.lessonFocus = lessonFocus;
-            this.customLessonFocus = customLessonFocus;
-            this.vocabularyList = vocabularyList;
         }
     }
 
@@ -1029,7 +1019,6 @@ public class OpenAiServiceImpl implements OpenAiService {
         prompt.append("- Be written in natural, clear, age-appropriate English.\n");
         prompt.append(getGrammarAndFormattingInstructions());
         prompt.append("- Have plausible distractors and one clear correct answer.\n");
-        prompt.append("- Follow the Vietnamese National High School (THPT Quốc Gia) style for clarity and fairness.\n\n");
 
         if (userDescription != null && !userDescription.isBlank()) {
             prompt.append("💡 ADDITIONAL SUGGESTIONS (OPTIONAL - USE ONLY IF RELEVANT):\n");
@@ -1048,7 +1037,6 @@ public class OpenAiServiceImpl implements OpenAiService {
         prompt.append("Generate EXACTLY ").append(numberOfQuestions).append(" HIGH-QUALITY ").append(questionType).append(" questions\n");
         prompt.append("Level: ").append(levelInfo.levelName).append("\n\n");
 
-        prompt.append(getGrammarAndFormattingInstructions());
         appendJSONFormat(prompt, questionType);
         appendQuestionTypeRules(prompt, questionType, "GV");
 
@@ -1078,10 +1066,7 @@ public class OpenAiServiceImpl implements OpenAiService {
             String userDescription,
             String contextInfo,
             String dailyChallengeType,
-            LevelInfo levelInfo,
-            List<LessonFocus> lessonFocus,
-            String customLessonFocus,
-            String vocabularyList) {
+            LevelInfo levelInfo) {
 
         StringBuilder prompt = new StringBuilder();
 
@@ -1092,10 +1077,6 @@ public class OpenAiServiceImpl implements OpenAiService {
         prompt.append("📖 LESSON CONTEXT:\n");
         prompt.append("Lesson Name: ").append(context.classLessonName).append("\n");
         prompt.append("Chapter: ").append(context.classChapterName).append("\n\n");
-
-        prompt.append(buildLessonFocusPrompt(lessonFocus, customLessonFocus));
-
-        prompt.append(buildVocabularyPrompt(vocabularyList));
 
         prompt.append("CHALLENGE TYPE: ").append(dailyChallengeType).append("\n");
         appendDCTypeInstructions(prompt, dailyChallengeType);
@@ -1111,6 +1092,12 @@ public class OpenAiServiceImpl implements OpenAiService {
         prompt.append("- DO NOT ask about general English grammar rules\n");
         prompt.append("- DO NOT ask about knowledge not mentioned in the passage\n");
         prompt.append("- DO NOT create questions testing skills beyond passage comprehension\n\n");
+
+        prompt.append("Each question must:\n");
+        prompt.append("- Match the student's level: ").append(levelInfo.levelName).append("\n");
+        prompt.append("- Be written in natural, clear, age-appropriate English.\n");
+        prompt.append(getGrammarAndFormattingInstructions());
+        prompt.append("- Have plausible distractors and one clear correct answer.\n");
 
         prompt.append("✅ ALLOWED QUESTION TYPES:\n");
         prompt.append("- Main idea / purpose questions based on passage content\n");
@@ -1161,13 +1148,6 @@ public class OpenAiServiceImpl implements OpenAiService {
         prompt.append("\n✅ FINAL CHECKLIST:\n");
         prompt.append("□ Questions based on passage content\n");
         prompt.append("□ Appropriate for level: ").append(levelInfo.levelName).append("\n");
-        if (lessonFocus != null && !lessonFocus.isEmpty()) {
-            prompt.append("□ Tests specified lesson focus areas\n");
-        }
-        if (vocabularyList != null && !vocabularyList.isBlank()) {
-            prompt.append("□ Incorporates required vocabulary\n");
-        }
-        prompt.append("□ Professional THPT QG standard\n");
         prompt.append("□ Valid JSON format\n");
         prompt.append("□ Exactly ").append(numberOfQuestions).append(" questions\n\n");
 
@@ -1757,10 +1737,7 @@ public class OpenAiServiceImpl implements OpenAiService {
                 request.getNumberOfParagraphs(),
                 wordsPerParagraphDefault,
                 request.getDescription(),
-//                "",
                 levelInfo,
-                request.getLessonFocus(),
-                request.getCustomLessonFocus(),
                 request.getVocabularyList()
         );
 
@@ -1776,10 +1753,7 @@ public class OpenAiServiceImpl implements OpenAiService {
             int numberOfParagraphs,
             int wordsPerParagraph,
             String description,
-//            String contextInfo,
             LevelInfo levelInfo,
-            List<LessonFocus> lessonFocus,
-            String customLessonFocus,
             String vocabularyList) {
 
         StringBuilder prompt = new StringBuilder();
@@ -1787,8 +1761,6 @@ public class OpenAiServiceImpl implements OpenAiService {
         prompt.append("You are an expert English teacher creating reading passages.\n\n");
 
         prompt.append(getDifficultyLevelInstructions(levelInfo));
-
-        prompt.append(buildLessonFocusPrompt(lessonFocus, customLessonFocus));
 
         prompt.append(buildVocabularyPrompt(vocabularyList));
 
@@ -1865,21 +1837,284 @@ public class OpenAiServiceImpl implements OpenAiService {
     private String buildParsingPrompt(String fileContent, String description) {
         StringBuilder prompt = new StringBuilder();
 
-        prompt.append("You are an expert at parsing educational content.\n\n");
+        prompt.append("You are an expert at parsing educational content into structured JSON format.\n\n");
 
-        prompt.append("TASK: Parse questions from this file content.\n\n");
+        prompt.append("🎯 YOUR TASK:\n");
+        prompt.append("Parse the provided file content and extract all questions into a structured JSON format.\n");
+        prompt.append("You MUST identify the question type correctly and format each question according to its type.\n\n");
 
         if (description != null && !description.isBlank()) {
-            prompt.append("INSTRUCTIONS:\n");
+            prompt.append("📝 ADDITIONAL PARSING INSTRUCTIONS:\n");
             prompt.append(description).append("\n\n");
         }
 
-        prompt.append("FILE CONTENT:\n");
-        prompt.append(fileContent).append("\n\n");
+        prompt.append("📄 FILE CONTENT TO PARSE:\n");
+        prompt.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+        prompt.append(fileContent).append("\n");
+        prompt.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n");
 
-        prompt.append("Return sections with questions in JSON format.\n");
+        prompt.append(getGrammarAndFormattingInstructions());
+
+        prompt.append("⚠️ CRITICAL: You MUST respond with ONLY valid JSON in this EXACT format:\n\n");
+        prompt.append("{\n");
+        prompt.append("  \"sections\": [\n");
+        prompt.append("    {\n");
+        prompt.append("      \"section\": {\n");
+        prompt.append("        \"sectionTitle\": \"string or null\"\n");
+        prompt.append("      },\n");
+        prompt.append("      \"questions\": [\n");
+        prompt.append("        {\n");
+        prompt.append("          \"questionText\": \"string (required)\",\n");
+        prompt.append("          \"orderNumber\": 1,\n");
+        prompt.append("          \"score\": 1.0,\n");
+        prompt.append("          \"questionType\": \"QUESTION_TYPE\",\n");
+        prompt.append("          \"content\": {\n");
+        prompt.append("            \"data\": [\n");
+        prompt.append("              {\n");
+        prompt.append("                \"id\": \"string (required)\",\n");
+        prompt.append("                \"value\": \"string (required)\",\n");
+        prompt.append("                \"isCorrect\": boolean (required),\n");
+        prompt.append("                \"positionId\": \"string or null\"\n");
+        prompt.append("              }\n");
+        prompt.append("            ]\n");
+        prompt.append("          }\n");
+        prompt.append("        }\n");
+        prompt.append("      ]\n");
+        prompt.append("    }\n");
+        prompt.append("  ]\n");
+        prompt.append("}\n\n");
+
+        prompt.append("🔍 QUESTION TYPE IDENTIFICATION:\n");
+        prompt.append("Carefully analyze each question and identify its type from these options:\n");
+        prompt.append("- MULTIPLE_CHOICE: Question with 4 options, only 1 correct\n");
+        prompt.append("- TRUE_OR_FALSE: Question with True/False options\n");
+        prompt.append("- FILL_IN_THE_BLANK: Question with blanks to fill in\n");
+        prompt.append("- DROPDOWN: Question with dropdown selections\n");
+        prompt.append("- DRAG_AND_DROP: Matching or drag-and-drop questions\n");
+        prompt.append("- REARRANGE: Sentence ordering questions\n");
+        prompt.append("- MULTIPLE_SELECT: Question with multiple correct answers\n");
+        prompt.append("- REWRITE: Sentence transformation questions\n\n");
+
+        // Append detailed rules for each question type
+        appendDetailedQuestionTypeRulesForParsing(prompt);
+
+        prompt.append("\n✅ VALIDATION CHECKLIST:\n");
+        prompt.append("□ Valid JSON format (no markdown, no comments)\n");
+        prompt.append("□ All questions have correct questionType\n");
+        prompt.append("□ All required fields present (questionText, orderNumber, score, questionType, content.data)\n");
+        prompt.append("□ Each data item has: id, value, isCorrect, positionId\n");
+        prompt.append("□ Position IDs use only lowercase letters (a-z) and numbers (0-9)\n");
+        prompt.append("□ Multiple choice has exactly 4 options\n");
+        prompt.append("□ True/False has exactly 2 options\n");
+        prompt.append("□ All questions follow grammar rules (capitalize first letter, capitalize 'I')\n\n");
+
+        prompt.append("🚨 CRITICAL REMINDERS:\n");
+        prompt.append("- DO NOT add extra text, explanations, or markdown\n");
+        prompt.append("- DO NOT include trailing commas\n");
+        prompt.append("- Return ONLY the JSON object\n");
+        prompt.append("- Preserve original question content while ensuring proper formatting\n");
+        prompt.append("- If a question type is unclear, use MULTIPLE_CHOICE as default\n\n");
+
+        prompt.append("Parse the content now and return ONLY valid JSON:\n");
 
         return prompt.toString();
+    }
+
+    /**
+     * Detailed question type rules specifically for parsing (not generation)
+     */
+    private void appendDetailedQuestionTypeRulesForParsing(StringBuilder prompt) {
+        prompt.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+        prompt.append("📚 DETAILED SPECIFICATIONS FOR EACH QUESTION TYPE\n");
+        prompt.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n");
+
+        // MULTIPLE_CHOICE
+        prompt.append("1️⃣ MULTIPLE_CHOICE\n");
+        prompt.append("IDENTIFICATION: Question with 4 answer options (A, B, C, D)\n");
+        prompt.append("FORMAT REQUIREMENTS:\n");
+        prompt.append("- Exactly 4 options in data array\n");
+        prompt.append("- Exactly 1 option with isCorrect=true\n");
+        prompt.append("- All options have positionId=null\n\n");
+        prompt.append("EXAMPLE:\n");
+        prompt.append("{\n");
+        prompt.append("  \"questionText\": \"What is the capital of France?\",\n");
+        prompt.append("  \"orderNumber\": 1,\n");
+        prompt.append("  \"score\": 1.0,\n");
+        prompt.append("  \"questionType\": \"MULTIPLE_CHOICE\",\n");
+        prompt.append("  \"content\": {\n");
+        prompt.append("    \"data\": [\n");
+        prompt.append("      {\"id\": \"opt1\", \"value\": \"London\", \"isCorrect\": false, \"positionId\": null},\n");
+        prompt.append("      {\"id\": \"opt2\", \"value\": \"Paris\", \"isCorrect\": true, \"positionId\": null},\n");
+        prompt.append("      {\"id\": \"opt3\", \"value\": \"Berlin\", \"isCorrect\": false, \"positionId\": null},\n");
+        prompt.append("      {\"id\": \"opt4\", \"value\": \"Madrid\", \"isCorrect\": false, \"positionId\": null}\n");
+        prompt.append("    ]\n");
+        prompt.append("  }\n");
+        prompt.append("}\n\n");
+
+        // TRUE_OR_FALSE
+        prompt.append("2️⃣ TRUE_OR_FALSE\n");
+        prompt.append("IDENTIFICATION: Statement that can be marked as True or False\n");
+        prompt.append("FORMAT REQUIREMENTS:\n");
+        prompt.append("- Exactly 2 options: \"True\" and \"False\"\n");
+        prompt.append("- Exactly 1 option with isCorrect=true\n");
+        prompt.append("- Both options have positionId=null\n\n");
+        prompt.append("EXAMPLE:\n");
+        prompt.append("{\n");
+        prompt.append("  \"questionText\": \"The Earth is flat.\",\n");
+        prompt.append("  \"orderNumber\": 1,\n");
+        prompt.append("  \"score\": 1.0,\n");
+        prompt.append("  \"questionType\": \"TRUE_OR_FALSE\",\n");
+        prompt.append("  \"content\": {\n");
+        prompt.append("    \"data\": [\n");
+        prompt.append("      {\"id\": \"opt1\", \"value\": \"True\", \"isCorrect\": false, \"positionId\": null},\n");
+        prompt.append("      {\"id\": \"opt2\", \"value\": \"False\", \"isCorrect\": true, \"positionId\": null}\n");
+        prompt.append("    ]\n");
+        prompt.append("  }\n");
+        prompt.append("}\n\n");
+
+        // FILL_IN_THE_BLANK
+        prompt.append("3️⃣ FILL_IN_THE_BLANK\n");
+        prompt.append("IDENTIFICATION: Sentence with blank(s) to complete\n");
+        prompt.append("FORMAT REQUIREMENTS:\n");
+        prompt.append("- questionText MUST contain [[pos_xxxxxx]] placeholder(s)\n");
+        prompt.append("- Use [[pos_xxxxxx]](hint) format for GV questions (hint in parentheses)\n");
+        prompt.append("- Use [[pos_xxxxxx]] format for content-based questions (no hint)\n");
+        prompt.append("- xxxxxx = random 6-character ID (lowercase a-z and 0-9 only)\n");
+        prompt.append("- Each answer has matching positionId\n");
+        prompt.append("- Multiple blanks = multiple data items with different positionIds\n\n");
+        prompt.append("EXAMPLE (with hint):\n");
+        prompt.append("{\n");
+        prompt.append("  \"questionText\": \"If I [[pos_a7k3m2]](know) her address, I would visit her.\",\n");
+        prompt.append("  \"orderNumber\": 1,\n");
+        prompt.append("  \"score\": 1.0,\n");
+        prompt.append("  \"questionType\": \"FILL_IN_THE_BLANK\",\n");
+        prompt.append("  \"content\": {\n");
+        prompt.append("    \"data\": [\n");
+        prompt.append("      {\"id\": \"ans1\", \"value\": \"knew\", \"isCorrect\": true, \"positionId\": \"a7k3m2\"}\n");
+        prompt.append("    ]\n");
+        prompt.append("  }\n");
+        prompt.append("}\n\n");
+
+        // DROPDOWN
+        prompt.append("4️⃣ DROPDOWN\n");
+        prompt.append("IDENTIFICATION: Sentence with dropdown menu(s) for selection\n");
+        prompt.append("FORMAT REQUIREMENTS:\n");
+        prompt.append("- questionText MUST contain [[pos_xxxxxx]] placeholder(s)\n");
+        prompt.append("- Each dropdown has exactly 4 options\n");
+        prompt.append("- All options for one dropdown share the same positionId\n");
+        prompt.append("- Exactly 1 option per dropdown with isCorrect=true\n\n");
+        prompt.append("EXAMPLE:\n");
+        prompt.append("{\n");
+        prompt.append("  \"questionText\": \"The company [[pos_k5l6m7]] expand into Asian markets next year.\",\n");
+        prompt.append("  \"orderNumber\": 1,\n");
+        prompt.append("  \"score\": 1.0,\n");
+        prompt.append("  \"questionType\": \"DROPDOWN\",\n");
+        prompt.append("  \"content\": {\n");
+        prompt.append("    \"data\": [\n");
+        prompt.append("      {\"id\": \"opt1\", \"value\": \"plans to\", \"isCorrect\": true, \"positionId\": \"k5l6m7\"},\n");
+        prompt.append("      {\"id\": \"opt2\", \"value\": \"is planning\", \"isCorrect\": false, \"positionId\": \"k5l6m7\"},\n");
+        prompt.append("      {\"id\": \"opt3\", \"value\": \"will plan\", \"isCorrect\": false, \"positionId\": \"k5l6m7\"},\n");
+        prompt.append("      {\"id\": \"opt4\", \"value\": \"planned\", \"isCorrect\": false, \"positionId\": \"k5l6m7\"}\n");
+        prompt.append("    ]\n");
+        prompt.append("  }\n");
+        prompt.append("}\n\n");
+
+        // REARRANGE
+        prompt.append("5️⃣ REARRANGE\n");
+        prompt.append("IDENTIFICATION: Jumbled words/phrases that need to be arranged into a sentence\n");
+        prompt.append("FORMAT REQUIREMENTS:\n");
+        prompt.append("- questionText has [[pos_xxxxxx]] for EACH word/phrase\n");
+        prompt.append("- Use 5-8 items total\n");
+        prompt.append("- All items have isCorrect=true\n");
+        prompt.append("- Each item has unique positionId matching its placeholder\n");
+        prompt.append("- Order in data array = correct order\n\n");
+        prompt.append("EXAMPLE:\n");
+        prompt.append("{\n");
+        prompt.append("  \"questionText\": \"[[pos_a1b2c3]] [[pos_d4e5f6]] [[pos_g7h8i9]] [[pos_j1k2l3]] [[pos_m4n5o6]]\",\n");
+        prompt.append("  \"orderNumber\": 1,\n");
+        prompt.append("  \"score\": 1.0,\n");
+        prompt.append("  \"questionType\": \"REARRANGE\",\n");
+        prompt.append("  \"content\": {\n");
+        prompt.append("    \"data\": [\n");
+        prompt.append("      {\"id\": \"item1\", \"value\": \"She\", \"isCorrect\": true, \"positionId\": \"a1b2c3\"},\n");
+        prompt.append("      {\"id\": \"item2\", \"value\": \"has been\", \"isCorrect\": true, \"positionId\": \"d4e5f6\"},\n");
+        prompt.append("      {\"id\": \"item3\", \"value\": \"studying\", \"isCorrect\": true, \"positionId\": \"g7h8i9\"},\n");
+        prompt.append("      {\"id\": \"item4\", \"value\": \"English\", \"isCorrect\": true, \"positionId\": \"j1k2l3\"},\n");
+        prompt.append("      {\"id\": \"item5\", \"value\": \"recently\", \"isCorrect\": true, \"positionId\": \"m4n5o6\"}\n");
+        prompt.append("    ]\n");
+        prompt.append("  }\n");
+        prompt.append("}\n\n");
+
+        // DRAG_AND_DROP
+        prompt.append("6️⃣ DRAG_AND_DROP\n");
+        prompt.append("IDENTIFICATION: Matching items or filling multiple blanks by dragging items\n");
+        prompt.append("FORMAT REQUIREMENTS:\n");
+        prompt.append("- questionText contains [[pos_xxxxxx]] placeholders for drop zones\n");
+        prompt.append("- Each correct answer has positionId matching its placeholder\n");
+        prompt.append("- Can include distractors with isCorrect=false and positionId=null\n");
+        prompt.append("- Number of correct answers = number of placeholders\n\n");
+        prompt.append("EXAMPLE:\n");
+        prompt.append("{\n");
+        prompt.append("  \"questionText\": \"[[pos_a1b2c3]] is the capital of [[pos_d4e5f6]].\",\n");
+        prompt.append("  \"orderNumber\": 1,\n");
+        prompt.append("  \"score\": 1.0,\n");
+        prompt.append("  \"questionType\": \"DRAG_AND_DROP\",\n");
+        prompt.append("  \"content\": {\n");
+        prompt.append("    \"data\": [\n");
+        prompt.append("      {\"id\": \"ans1\", \"value\": \"Paris\", \"isCorrect\": true, \"positionId\": \"a1b2c3\"},\n");
+        prompt.append("      {\"id\": \"ans2\", \"value\": \"France\", \"isCorrect\": true, \"positionId\": \"d4e5f6\"},\n");
+        prompt.append("      {\"id\": \"dist1\", \"value\": \"Berlin\", \"isCorrect\": false, \"positionId\": null},\n");
+        prompt.append("      {\"id\": \"dist2\", \"value\": \"Spain\", \"isCorrect\": false, \"positionId\": null}\n");
+        prompt.append("    ]\n");
+        prompt.append("  }\n");
+        prompt.append("}\n\n");
+
+        // MULTIPLE_SELECT
+        prompt.append("7️⃣ MULTIPLE_SELECT\n");
+        prompt.append("IDENTIFICATION: Question with multiple correct answers to select\n");
+        prompt.append("FORMAT REQUIREMENTS:\n");
+        prompt.append("- 4-6 options total\n");
+        prompt.append("- 2-3 options with isCorrect=true\n");
+        prompt.append("- All options have positionId=null\n\n");
+        prompt.append("EXAMPLE:\n");
+        prompt.append("{\n");
+        prompt.append("  \"questionText\": \"Which of the following are fruits?\",\n");
+        prompt.append("  \"orderNumber\": 1,\n");
+        prompt.append("  \"score\": 1.0,\n");
+        prompt.append("  \"questionType\": \"MULTIPLE_SELECT\",\n");
+        prompt.append("  \"content\": {\n");
+        prompt.append("    \"data\": [\n");
+        prompt.append("      {\"id\": \"opt1\", \"value\": \"Apple\", \"isCorrect\": true, \"positionId\": null},\n");
+        prompt.append("      {\"id\": \"opt2\", \"value\": \"Carrot\", \"isCorrect\": false, \"positionId\": null},\n");
+        prompt.append("      {\"id\": \"opt3\", \"value\": \"Banana\", \"isCorrect\": true, \"positionId\": null},\n");
+        prompt.append("      {\"id\": \"opt4\", \"value\": \"Potato\", \"isCorrect\": false, \"positionId\": null},\n");
+        prompt.append("      {\"id\": \"opt5\", \"value\": \"Orange\", \"isCorrect\": true, \"positionId\": null}\n");
+        prompt.append("    ]\n");
+        prompt.append("  }\n");
+        prompt.append("}\n\n");
+
+        // REWRITE
+        prompt.append("8️⃣ REWRITE\n");
+        prompt.append("IDENTIFICATION: Sentence transformation or rewriting task\n");
+        prompt.append("FORMAT REQUIREMENTS:\n");
+        prompt.append("- Can have multiple correct answers (all with isCorrect=true)\n");
+        prompt.append("- All options have positionId=null\n");
+        prompt.append("- No incorrect answers (no isCorrect=false)\n\n");
+        prompt.append("EXAMPLE:\n");
+        prompt.append("{\n");
+        prompt.append("  \"questionText\": \"Rewrite in passive voice: 'The teacher explained the lesson.'\",\n");
+        prompt.append("  \"orderNumber\": 1,\n");
+        prompt.append("  \"score\": 1.0,\n");
+        prompt.append("  \"questionType\": \"REWRITE\",\n");
+        prompt.append("  \"content\": {\n");
+        prompt.append("    \"data\": [\n");
+        prompt.append("      {\"id\": \"ans1\", \"value\": \"The lesson was explained by the teacher.\", \"isCorrect\": true, \"positionId\": null},\n");
+        prompt.append("      {\"id\": \"ans2\", \"value\": \"The lesson has been explained by the teacher.\", \"isCorrect\": true, \"positionId\": null}\n");
+        prompt.append("    ]\n");
+        prompt.append("  }\n");
+        prompt.append("}\n\n");
+
+        prompt.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n");
     }
 
     private List<SectionWithQuestionsDto> parseMultipleSectionsResponse(String jsonResponse) {
@@ -1901,6 +2136,7 @@ public class OpenAiServiceImpl implements OpenAiService {
                     JsonNode titleNode = sectionInfoNode.get("sectionTitle");
                     section.setSectionTitle(titleNode != null ? titleNode.asText() : null);
                 }
+                section.setResourceType("NONE");
 
                 JsonNode questionsNode = sectionNode.get("questions");
                 if (questionsNode != null && questionsNode.isArray()) {

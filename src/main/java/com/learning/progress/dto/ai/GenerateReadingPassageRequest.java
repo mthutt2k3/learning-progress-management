@@ -28,9 +28,5 @@ public class GenerateReadingPassageRequest {
     @NotBlank(message = "Level is required")
     private String level;
 
-    private List<LessonFocus> lessonFocus; // Enum: GRAMMAR_TENSES, VOCABULARY_THEMATIC, etc.
-
-    private String customLessonFocus; // Custom focus if not using enum
-
     private String vocabularyList; // Optional: AI will prioritize using these words
 }
