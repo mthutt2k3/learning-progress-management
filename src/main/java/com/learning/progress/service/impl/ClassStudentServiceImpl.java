@@ -78,6 +78,10 @@ public class ClassStudentServiceImpl implements ClassStudentService {
     @Autowired
     private com.learning.progress.service.SubmissionChallengeService submissionChallengeService;
 
+    // NEW: notification service
+    @Autowired
+    private com.learning.progress.service.NotificationService notificationService;
+
     @Value("${azure.storage.student-to-class-template}")
     private String studentToClassTemplate;
 
@@ -312,12 +316,26 @@ public class ClassStudentServiceImpl implements ClassStudentService {
             String names = newlyAdded.stream().map(User::getFullName).collect(Collectors.joining(", "));
             String detail = String.format(Const.CLASS_STUDENT.ADD_STUDENT_SUCCESSFULLY, newlyAdded.size(), clazz.getClassName(), names);
             classHistoryService.saveClassHistory(classId, detail, actionBy, ActionType.CREATE_STUDENT.name(), visibleRoles);
+
+            // send notification to newly added students
+            for (User u : newlyAdded) {
+                String title = "Bạn đã được thêm vào lớp " + clazz.getClassName();
+                String message = "Bạn vừa được thêm vào lớp " + clazz.getClassName() + " bởi " + jwtUtil.extractUsernameFromCurrentRequest();
+                notificationService.createNotification(u.getId(), null, title, message, null, null);
+            }
         }
 
         if (!reactivated.isEmpty()) {
             String names = reactivated.stream().map(User::getFullName).collect(Collectors.joining(", "));
             String detail = String.format(Const.CLASS_STUDENT.REACTIVE_STUDENT_SUCCESSFULLY, reactivated.size(), clazz.getClassName(), names);
             classHistoryService.saveClassHistory(classId, detail, actionBy, ActionType.REACTIVATE_STUDENT.name(), visibleRoles);
+
+            // send notification to reactivated students
+            for (User u : reactivated) {
+                String title = "Tài khoản của bạn đã được kích hoạt lại trong lớp " + clazz.getClassName();
+                String message = "Bạn vừa được kích hoạt lại trong lớp " + clazz.getClassName() + " bởi " + jwtUtil.extractUsernameFromCurrentRequest();
+                notificationService.createNotification(u.getId(), null, title, message, null, null);
+            }
         }
 
         log.info("Successfully added {} new + {} reactivated students to classId={}", newlyAdded.size(), reactivated.size(), classId);
@@ -392,6 +410,15 @@ public class ClassStudentServiceImpl implements ClassStudentService {
                 ActionType.DELETE_STUDENT.name(),
                 visibleToRoles
         );
+
+        // send notification to removed student
+        try {
+            String title = "Bạn đã rời lớp " + clazz.getClassName();
+            String message = "Bạn đã được gỡ khỏi lớp " + clazz.getClassName() + " bởi " + jwtUtil.extractUsernameFromCurrentRequest();
+            notificationService.createNotification(user.getId(), null, title, message, null, null);
+        } catch (Exception ex) {
+            log.warn("Failed to send notification to removed student userId={} error={}", userId, ex.getMessage());
+        }
 
         // soft-delete submissions for this user in the class
         try {

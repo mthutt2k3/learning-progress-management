@@ -28,6 +28,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.beans.factory.annotation.Autowired;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
@@ -62,6 +63,10 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
     private final UserRepository userRepository;
     @PersistenceContext
     private final EntityManager entityManager;
+
+    // NEW: notification service
+    @Autowired
+    private com.learning.progress.service.NotificationService notificationService;
 
     public SubmissionChallengeServiceImpl(
             SubmissionDailyChallengeRepository submissionDailyChallengeRepository,
@@ -134,6 +139,17 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
                 submissionDailyChallengeRepository.saveAll(newSubs);
                 cacheService.clearSubmissionsCacheForChallenge(challenge.getId());
                 log.info("createTemporarySubmissionsAsync: created {} temp submissions for challengeId={}", newSubs.size(), challenge.getId());
+
+                // notify users created
+                for (SubmissionDailyChallenge s : newSubs) {
+                    try {
+                        String title = "Bạn có bài tập mới";
+                        String message = "Một bài tập mới đã được tạo: " + challenge.getChallengeName();
+                        notificationService.createNotification(s.getUser().getId(), null, title, message, null, null);
+                    } catch (Exception ex) {
+                        log.debug("Failed to send temp submission notification userId={} error={}", s.getUser().getId(), ex.getMessage());
+                    }
+                }
             }
 
             pageable = pageable.next();
@@ -280,6 +296,15 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
         cacheService.clearSubmissionCache(userId, submissionId);
         cacheService.clearSubmissionsCacheForChallenge(submission.getChallenge().getId());
         log.info("[{}] exit started submissionId={} userId={}", action, submissionId, userId);
+
+        // notify student (self) that submission started
+        try {
+            String title = "Bạn đã bắt đầu làm bài";
+            String message = "Bạn đã bắt đầu bài: " + submission.getChallenge().getChallengeName();
+            notificationService.createNotification(userId, null, title, message, null, null);
+        } catch (Exception ex) {
+            log.debug("Failed to send startSubmission notification userId={} error={}", userId, ex.getMessage());
+        }
     }
 
     /**
@@ -588,6 +613,18 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
                     .distinct()
                     .forEach(cacheService::clearSubmissionsCacheForChallenge);
 
+            // notify users for restored/created
+            for (SubmissionDailyChallenge s : toRestore) {
+                try {
+                    notificationService.createNotification(s.getUser().getId(), null, "Submission phục hồi", "Submission của bạn đã được phục hồi cho bài " + s.getChallenge().getChallengeName(), null, null);
+                } catch (Exception ex) { log.debug("notify restore error: {}", ex.getMessage()); }
+            }
+            for (SubmissionDailyChallenge s : toCreate) {
+                try {
+                    notificationService.createNotification(s.getUser().getId(), null, "Submission tạm tạo", "Submission tạm đã được tạo cho bài " + s.getChallenge().getChallengeName(), null, null);
+                } catch (Exception ex) { log.debug("notify create error: {}", ex.getMessage()); }
+            }
+
             log.info("[{}] completed: restored={} created={} total={} for classId={}",
                     action, restoredCount, createdCount, restoredCount + createdCount, classId);
         } else {
@@ -625,6 +662,15 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
 
         submissionDailyChallengeRepository.saveAllAndFlush(proxies);
         log.info("[{}] soft-deleted {} submissions for classId={} userId={}", action, submissionIds.size(), classId, userId);
+
+        // notify user
+        try {
+            String title = "Các bài nộp của bạn đã bị ẩn";
+            String message = "Một số submission của bạn trong lớp đã bị ẩn/gỡ bởi " + deletedBy;
+            notificationService.createNotification(userId, null, title, message, null, null);
+        } catch (Exception ex) {
+            log.debug("Failed to send soft-delete notification to userId={} error={}", userId, ex.getMessage());
+        }
     }
 
 
@@ -697,6 +743,18 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
         challengeIds.forEach(cacheService::clearSubmissionsCacheForChallenge);
 
         log.info("[{}] completed: updated={} submissions", action, toUpdate.size());
+
+        // notify affected students
+        for (SubmissionDailyChallenge s : toUpdate) {
+            try {
+                String title = "Thời hạn nộp bài đã được gia hạn";
+                String message = "Thời hạn nộp bài cho \"" + s.getChallenge().getChallengeName() + "\" đã được gia hạn tới " + request.getNewExpiredAt();
+                notificationService.createNotification(s.getUser().getId(), null, title, message, null, null);
+            } catch (Exception ex) {
+                log.debug("Failed to send extend deadline notification userId={} error={}", s.getUser().getId(), ex.getMessage());
+            }
+        }
+
         return "Extended deadline for " + toUpdate.size() + " submissions.";
     }
 
@@ -783,6 +841,18 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
 
         log.info("[{}] completed: reset {} submissions | new period: {} → {}",
                 action, newSubmissions.size(), newStart, newEnd);
+
+        // notify affected students
+        for (SubmissionDailyChallenge s : newSubmissions) {
+            try {
+                String title = "Bài đã được reset";
+                String message = "Bài \"" + s.getChallenge().getChallengeName() + "\" đã được reset. Thời gian mới: " + newStart + " → " + newEnd;
+                notificationService.createNotification(s.getUser().getId(), null, title, message, null, null);
+            } catch (Exception ex) {
+                log.debug("Failed to send reset notification userId={} error={}", s.getUser().getId(), ex.getMessage());
+            }
+        }
+
         return "Reset " + newSubmissions.size() + " submissions.";
     }
 
