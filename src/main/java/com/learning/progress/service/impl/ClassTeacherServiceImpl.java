@@ -57,6 +57,10 @@ public class ClassTeacherServiceImpl implements ClassTeacherService {
     @Autowired
     private AppValidator appValidator;
 
+    // NEW: notification service
+    @Autowired
+    private com.learning.progress.service.NotificationService notificationService;
+
     @Value("${env.class.max-teaching-assistant-in-class}")
     private int maxTeachingAssistantInClass;
 
@@ -115,14 +119,11 @@ public class ClassTeacherServiceImpl implements ClassTeacherService {
         Clazz clazz = classRepository.findById(classId)
                 .orElseThrow(() -> new ApiException(Const.CLASS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
-        if (clazz.getStatus() == ClassStatus.INACTIVE) {
-            throw new ApiException(Const.CLASS.INACTIVE, HttpStatus.BAD_REQUEST.value());
-        }
-
         if (clazz.getDeletedAt() != null) {
             throw new ApiException(Const.CLASS.DELETED, HttpStatus.BAD_REQUEST.value());
         }
 
+        appValidator.validateClassIsActive(clazz.getId());
         // 2️⃣ Extract user IDs and validate roles
         List<Long> userIds = request.getTeachers().stream()
                 .map(TeacherWithRole::getUserId)
@@ -332,6 +333,13 @@ public class ClassTeacherServiceImpl implements ClassTeacherService {
                     ActionType.ADD_TEACHER.name(),
                     visibleToRoles
             );
+
+            // notify newly added teachers
+            for (User u : newTeachers) {
+                String title = "Bạn đã được thêm làm giáo viên lớp " + clazz.getClassName();
+                String message = "Bạn vừa được gán vai trò trong lớp " + clazz.getClassName() + " bởi " + jwtUtil.extractUsernameFromCurrentRequest();
+                notificationService.createNotification(u.getId(), null, title, message, null, null);
+            }
         }
 
         // Log history for newly added teaching assistants
@@ -354,6 +362,12 @@ public class ClassTeacherServiceImpl implements ClassTeacherService {
                     ActionType.ADD_TEACHING_ASSISTANT.name(),
                     visibleToRoles
             );
+
+            for (User u : newTAs) {
+                String title = "Bạn đã được thêm làm trợ giảng lớp " + clazz.getClassName();
+                String message = "Bạn vừa được gán vai trò trợ giảng trong lớp " + clazz.getClassName() + " bởi " + jwtUtil.extractUsernameFromCurrentRequest();
+                notificationService.createNotification(u.getId(), null, title, message, null, null);
+            }
         }
 
         // Log history for reactivated teachers
@@ -376,6 +390,12 @@ public class ClassTeacherServiceImpl implements ClassTeacherService {
                     ActionType.REACTIVATE_TEACHER.name(),
                     visibleToRoles
             );
+
+            for (User u : reactivatedTeachers) {
+                String title = "Bạn đã được kích hoạt lại với vai trò giáo viên lớp " + clazz.getClassName();
+                String message = "Tài khoản của bạn đã được kích hoạt lại trong lớp " + clazz.getClassName();
+                notificationService.createNotification(u.getId(), null, title, message, null, null);
+            }
         }
 
         // Log history for reactivated teaching assistants
@@ -398,6 +418,12 @@ public class ClassTeacherServiceImpl implements ClassTeacherService {
                     ActionType.REACTIVATE_TEACHING_ASSISTANT.name(),
                     visibleToRoles
             );
+
+            for (User u : reactivatedTAs) {
+                String title = "Bạn đã được kích hoạt lại với vai trò trợ giảng lớp " + clazz.getClassName();
+                String message = "Tài khoản của bạn đã được kích hoạt lại trong lớp " + clazz.getClassName();
+                notificationService.createNotification(u.getId(), null, title, message, null, null);
+            }
         }
     }
 
@@ -407,13 +433,11 @@ public class ClassTeacherServiceImpl implements ClassTeacherService {
         Clazz clazz = classRepository.findById(classId)
                 .orElseThrow(() -> new ApiException(Const.CLASS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
-        if (clazz.getStatus() == ClassStatus.INACTIVE) {
-            throw new ApiException(Const.CLASS.INACTIVE, HttpStatus.BAD_REQUEST.value());
-        }
-
         if (clazz.getDeletedAt() != null) {
             throw new ApiException(Const.CLASS.DELETED, HttpStatus.BAD_REQUEST.value());
         }
+
+        appValidator.validateClassIsActive(clazz.getId());
 
         User user = userRepository.findByIdAndDeletedAtIsNull(userId)
                 .orElseThrow(() -> new ApiException(Const.USER.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
@@ -468,6 +492,15 @@ public class ClassTeacherServiceImpl implements ClassTeacherService {
                 actionType.name(),
                 visibleToRoles
         );
+
+        // notify removed teacher/TA
+        try {
+            String title = "Bạn đã bị gỡ khỏi lớp " + clazz.getClassName();
+            String message = "Vai trò của bạn trong lớp " + clazz.getClassName() + " đã bị gỡ bởi " + jwtUtil.extractUsernameFromCurrentRequest();
+            notificationService.createNotification(user.getId(), null, title, message, null, null);
+        } catch (Exception ex) {
+            // swallow to avoid breaking flow
+        }
     }
 
     @Override
@@ -494,3 +527,4 @@ public class ClassTeacherServiceImpl implements ClassTeacherService {
         return report;
     }
 }
+

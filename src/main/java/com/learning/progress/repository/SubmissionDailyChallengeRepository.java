@@ -1,6 +1,6 @@
 package com.learning.progress.repository;
 
-import com.learning.progress.common.ChallengeMethod;
+import com.learning.progress.common.ChallengeType;
 import com.learning.progress.common.SubmissionStatus;
 import com.learning.progress.entity.SubmissionDailyChallenge;
 import org.springframework.data.domain.Page;
@@ -10,13 +10,26 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.OffsetDateTime;
-import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.Collection;
 
 public interface SubmissionDailyChallengeRepository extends JpaRepository<SubmissionDailyChallenge, Long> {
-    List<SubmissionDailyChallenge> findAllByDeletedAtIsNull();
+    @Query("""
+    SELECT s FROM SubmissionDailyChallenge s
+    JOIN s.challenge c
+    LEFT JOIN FETCH s.gradingDailyChallenge g
+    WHERE c.challengeType IN :types
+      AND s.submissionStatus IN :submissionStatuses
+      AND (g IS NULL OR g.isFinalized = false)
+      AND s.deletedAt IS NULL
+    """)
+    Page<SubmissionDailyChallenge> findPendingAutoGradeSubmissions(
+            @Param("types") Set<ChallengeType> types,
+            @Param("submissionStatuses") Set<SubmissionStatus> submissionStatuses,
+            Pageable pageable
+    );
 
     Optional<SubmissionDailyChallenge> findByUserIdAndChallengeIdAndDeletedAtIsNull(Long userId, Long challengeId);
 
@@ -28,6 +41,17 @@ public interface SubmissionDailyChallengeRepository extends JpaRepository<Submis
     Page<SubmissionDailyChallenge> findByChallengeIdAndDeletedAtIsNull(Long challengeId, String text, Pageable pageable);
 
     List<SubmissionDailyChallenge> findBySubmissionStatusAndExpiredAtBeforeAndDeletedAtIsNull(SubmissionStatus submissionStatus, OffsetDateTime now);
+
+    @Query("""
+    SELECT s 
+    FROM SubmissionDailyChallenge s
+    WHERE s.deletedAt IS NULL
+      AND (
+            (s.submittedAt IS NULL AND s.expiredAt < :now)
+         OR (s.expiredAt < s.submittedAt)
+      )
+    """)
+    List<SubmissionDailyChallenge> findLateSubmissions(@Param("now") OffsetDateTime now);
 
     @Query("""
     SELECT s FROM SubmissionDailyChallenge s
@@ -46,13 +70,11 @@ public interface SubmissionDailyChallengeRepository extends JpaRepository<Submis
     List<SubmissionDailyChallenge> findByChallengeIdAndDeletedAtIsNull(Long challengeId);
 
     long countByChallengeIdAndSubmittedAtIsNotNullAndDeletedAtIsNull(Long id);
-
-    @Query("SELECT s.id FROM SubmissionDailyChallenge s WHERE s.challenge.id = :challengeId AND s.deletedAt IS NULL")
-    List<Long> findIdsByChallengeIdAndDeletedAtIsNull(@Param("challengeId") Long challengeId);
-
-    List<SubmissionDailyChallenge> findByUserIdInAndDeletedAtIsNotNull(List<Long> userIds);
-
-    List<SubmissionDailyChallenge> findByUserIdInAndChallengeIdInAndDeletedAtIsNull(Set<Long> validUserIds, List<Long> challengeIds);
+    /**
+     * Fetch submissions for given user ids and challenge ids (includes both active and soft-deleted records).
+     * Useful for sync/restore operations where we need to detect existing soft-deleted submissions.
+     */
+    List<SubmissionDailyChallenge> findByUserIdInAndChallengeIdIn(Collection<Long> userIds, Collection<Long> challengeIds);
 
     @Query("""
     SELECT s.id FROM SubmissionDailyChallenge s
@@ -66,15 +88,5 @@ public interface SubmissionDailyChallengeRepository extends JpaRepository<Submis
     """)
     List<Long> findSubmissionIdsByUserAndClass(Long userId, Long classId);
 
-    @Query("""
-    SELECT s.id FROM SubmissionDailyChallenge s
-    JOIN s.challenge ch
-    JOIN ch.classLesson cl
-    JOIN cl.classChapter cc
-    JOIN cc.clazz c
-    WHERE s.user.id IN :userIds
-      AND c.id = :classId
-      AND s.deletedAt IS NOT NULL
-    """)
-    List<Long> findSubmissionIdsByUserIdsAndClassIdAndDeletedAtIsNotNull(List<Long> userIds, Long classId);
+    List<SubmissionDailyChallenge> findByIdInAndDeletedAtIsNull(List<Long> submissionIds);
 }

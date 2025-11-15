@@ -5,6 +5,8 @@ import com.learning.progress.common.*;
 import com.learning.progress.dto.DataResponse;
 import com.learning.progress.dto.challenge.DailyChallengeListDTO;
 import com.learning.progress.dto.challenge.StudentChallengeListDTO;
+import com.learning.progress.dto.submission.ExtendSubmissionDeadlineRequest;
+import com.learning.progress.dto.submission.ResetSubmissionRequest;
 import com.learning.progress.dto.submission.StudentSubmissionDTO;
 import com.learning.progress.entity.*;
 import com.learning.progress.exception.ApiException;
@@ -14,104 +16,155 @@ import com.learning.progress.repository.*;
 import com.learning.progress.cache.CacheService;
 import com.learning.progress.service.SubmissionChallengeService;
 import com.learning.progress.util.AppValidator;
-import com.learning.progress.util.DataUtil;
 import com.learning.progress.util.JwtUtil;
+import com.learning.progress.util.JsonUtil;
+import com.learning.progress.dto.submission.AnswerContent;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.*;
 import org.springframework.data.util.Pair;
 import org.springframework.http.HttpStatus;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.beans.factory.annotation.Autowired;
 
 import java.math.BigDecimal;
-import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
+/**
+ * SubmissionChallengeServiceImpl
+ * Clean, testable, and focused implementation for submission-related operations.
+ * - Uses constructor injection for dependencies
+ * - Extracts small helpers to avoid duplication and N+1 issues
+ * - Respects business rule: scores visible only after effective end-date
+ */
 @Service
 @Slf4j
 public class SubmissionChallengeServiceImpl implements SubmissionChallengeService {
 
-    @Autowired
-    private SubmissionDailyChallengeRepository submissionDailyChallengeRepository;
-    @Autowired
-    private ClassStudentRepository classStudentRepository;
-    @Autowired
-    private AppValidator appValidator;
-    @Autowired
-    private JwtUtil jwtUtil;
-    @Autowired
-    private DailyChallengeRepository dailyChallengeRepository;
-    @Autowired
-    private GradingDailyChallengeRepository gradingDailyChallengeRepository;
-    @Autowired
-    private GradingQuestionRepository gradingQuestionRepository;
-    @Autowired
-    private CacheService cacheService;
-    @Autowired
-    private QuestionRepository questionRepository;
-    @Autowired
-    private DailyChallengeMapper dailyChallengeMapper;
-    @Autowired
-    private SubmissionMapper submissionMapper;
-    @Autowired
-    private UserRepository userRepository;
+    private final SubmissionDailyChallengeRepository submissionDailyChallengeRepository;
+    private final ClassStudentRepository classStudentRepository;
+    private final AppValidator appValidator;
+    private final JwtUtil jwtUtil;
+    private final DailyChallengeRepository dailyChallengeRepository;
+    private final GradingDailyChallengeRepository gradingDailyChallengeRepository;
+    private final GradingQuestionRepository gradingQuestionRepository;
+    private final CacheService cacheService;
+    private final QuestionRepository questionRepository;
+    private final SubmissionQuestionRepository submissionQuestionRepository;
+    private final DailyChallengeMapper dailyChallengeMapper;
+    private final SubmissionMapper submissionMapper;
+    private final UserRepository userRepository;
     @PersistenceContext
-    private EntityManager entityManager;
+    private final EntityManager entityManager;
+
+    // NEW: notification service
+    @Autowired
+    private com.learning.progress.service.NotificationService notificationService;
+
+    public SubmissionChallengeServiceImpl(
+            SubmissionDailyChallengeRepository submissionDailyChallengeRepository,
+            ClassStudentRepository classStudentRepository,
+            AppValidator appValidator,
+            JwtUtil jwtUtil,
+            DailyChallengeRepository dailyChallengeRepository,
+            GradingDailyChallengeRepository gradingDailyChallengeRepository,
+            GradingQuestionRepository gradingQuestionRepository,
+            CacheService cacheService,
+            QuestionRepository questionRepository,
+            SubmissionQuestionRepository submissionQuestionRepository,
+            DailyChallengeMapper dailyChallengeMapper,
+            SubmissionMapper submissionMapper,
+            UserRepository userRepository,
+            EntityManager entityManager
+    ) {
+        this.submissionDailyChallengeRepository = submissionDailyChallengeRepository;
+        this.classStudentRepository = classStudentRepository;
+        this.appValidator = appValidator;
+        this.jwtUtil = jwtUtil;
+        this.dailyChallengeRepository = dailyChallengeRepository;
+        this.gradingDailyChallengeRepository = gradingDailyChallengeRepository;
+        this.gradingQuestionRepository = gradingQuestionRepository;
+        this.cacheService = cacheService;
+        this.questionRepository = questionRepository;
+        this.submissionQuestionRepository = submissionQuestionRepository;
+        this.dailyChallengeMapper = dailyChallengeMapper;
+        this.submissionMapper = submissionMapper;
+        this.userRepository = userRepository;
+        this.entityManager = entityManager;
+    }
+
+    // ----------------------- Public API -----------------------
+
+    /**
+     * Create temporary submissions for a newly created challenge asynchronously.
+     */
     @Override
     @Async("taskExecutor")
     @Transactional
     public void createTemporarySubmissionsAsync(DailyChallenge challenge) {
-        Long classId = challenge.getClassLesson().getClassChapter().getClazz().getId();
+        Long classId = Optional.ofNullable(challenge)
+                .map(c -> c.getClassLesson().getClassChapter().getClazz().getId())
+                .orElse(null);
+        if (classId == null) {
+            log.warn("createTemporarySubmissionsAsync aborted: missing classId on challenge");
+            return;
+        }
 
         int pageSize = 100;
         Pageable pageable = PageRequest.of(0, pageSize);
-        Page<ClassStudent> studentPage;
-
+        Page<ClassStudent> page;
         do {
-            studentPage = classStudentRepository.findByClassIdAndStatus(
-                    classId, List.of(ClassStudentStatus.ACTIVE), pageable);
+            page = classStudentRepository.findByClassIdAndStatus(classId, List.of(ClassStudentStatus.ACTIVE), pageable);
+            List<SubmissionDailyChallenge> newSubs = page.getContent().stream()
+                    .map(ClassStudent::getUser)
+                    .filter(Objects::nonNull)
+                    .filter(user -> submissionDailyChallengeRepository.findByUserIdAndChallengeIdAndDeletedAtIsNull(user.getId(), challenge.getId()).isEmpty())
+                    .map(user -> SubmissionDailyChallenge.builder()
+                            .user(user)
+                            .challenge(challenge)
+                            .submissionStatus(SubmissionStatus.PENDING)
+                            .startedAt(challenge.getStartDate())
+                            .expiredAt(challenge.getEndDate())
+                            .build())
+                    .collect(Collectors.toList());
 
-            List<SubmissionDailyChallenge> submissions = new ArrayList<>();
-            for (ClassStudent classStudent : studentPage.getContent()) {
-                User student = classStudent.getUser();
-                if (submissionDailyChallengeRepository.findByUserIdAndChallengeIdAndDeletedAtIsNull(
-                        student.getId(), challenge.getId()).isEmpty()) {
-                    SubmissionDailyChallenge submission = new SubmissionDailyChallenge();
-                    submission.setUser(student);
-                    submission.setChallenge(challenge);
-                    submission.setSubmissionStatus(SubmissionStatus.PENDING);
-                    submission.setStartedAt(challenge.getStartDate());
-                    submission.setExpiredAt(challenge.getEndDate());
-                    submissions.add(submission);
+            if (!newSubs.isEmpty()) {
+                submissionDailyChallengeRepository.saveAll(newSubs);
+                cacheService.clearSubmissionsCacheForChallenge(challenge.getId());
+                log.info("createTemporarySubmissionsAsync: created {} temp submissions for challengeId={}", newSubs.size(), challenge.getId());
+
+                // notify users created
+                for (SubmissionDailyChallenge s : newSubs) {
+                    try {
+                        String title = "Bạn có bài tập mới";
+                        String message = "Một bài tập mới đã được tạo: " + challenge.getChallengeName();
+                        notificationService.createNotification(s.getUser().getId(), null, title, message, null, null);
+                    } catch (Exception ex) {
+                        log.debug("Failed to send temp submission notification userId={} error={}", s.getUser().getId(), ex.getMessage());
+                    }
                 }
             }
 
-            if (!submissions.isEmpty()) {
-                submissionDailyChallengeRepository.saveAll(submissions);
-
-                // Clear submissions list cache for the challenge (new)
-                cacheService.clearSubmissionsCacheForChallenge(challenge.getId());
-            }
-
             pageable = pageable.next();
-        } while (studentPage.hasNext());
+        } while (page.hasNext());
     }
 
+    /**
+     * Return lessons with student's challenges and their submission summary.
+     */
     @Override
     @Transactional(readOnly = true)
-    public DataResponse<List<StudentChallengeListDTO>> getAllChallengesForStudent(
-            Long classId, int page, int size, String text) {
-
-        final String method = "getAllChallengesForStudent";
+    public DataResponse<List<StudentChallengeListDTO>> getAllChallengesForStudent(Long classId, int page, int size, String text) {
+        final String action = "getAllChallengesForStudent";
         Long studentId = jwtUtil.extractUserIdFromCurrentRequest();
-        log.info("[{}] start classId={} studentId={} page={} size={} text={}", method, classId, studentId, page, size, text);
+        log.info("[{}] enter classId={} studentId={} page={} size={} text={}", action, classId, studentId, page, size, text);
 
         appValidator.validatePaginationParams(page, size);
         appValidator.validateUserAccessToClass(classId);
@@ -119,117 +172,51 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
         Pageable pageable = PageRequest.of(page, size);
         Page<ClassLesson> lessonPage = dailyChallengeRepository.findLessonsWithChallengesByClassId(classId, text, false, pageable);
 
-        // batch loads to avoid N+1
-        List<Long> lessonIds = lessonPage.getContent().stream().map(ClassLesson::getId).toList();
-        List<DailyChallenge> allChallenges = lessonIds.isEmpty() ? List.of()
-                : dailyChallengeRepository.findByClassLessonIdInAndDeletedAtIsNull(lessonIds);
-        Map<Long, List<DailyChallenge>> challengesByLessonId = allChallenges.stream()
-                .collect(Collectors.groupingBy(ch -> ch.getClassLesson().getId()));
-        List<Long> challengeIds = allChallenges.stream().map(DailyChallenge::getId).toList();
+        List<Long> lessonIds = lessonPage.getContent().stream().map(ClassLesson::getId).collect(Collectors.toList());
+        List<DailyChallenge> challenges = loadChallengesByLessonIds(lessonIds);
+        Map<Long, List<DailyChallenge>> challengesByLesson = groupChallengesByLesson(challenges);
 
-        List<SubmissionDailyChallenge> submissionsForStudent = challengeIds.isEmpty() ? List.of()
-                : submissionDailyChallengeRepository.findByUserIdAndChallengeIdInAndDeletedAtIsNull(studentId, challengeIds);
-        Map<Long, SubmissionDailyChallenge> submissionByChallengeId = submissionsForStudent.stream()
-                .filter(Objects::nonNull)
-                .collect(Collectors.toMap(s -> s.getChallenge().getId(), Function.identity(), (a, b) -> a));
+        // Load submissions + gradings + precomputed achieved totals + max weights
+        List<Long> challengeIds = challenges.stream().map(DailyChallenge::getId).collect(Collectors.toList());
+        List<SubmissionDailyChallenge> studentSubs = loadSubmissionsForStudent(studentId, challengeIds);
+        Map<Long, SubmissionDailyChallenge> submissionByChallengeId = studentSubs.stream()
+                .collect(Collectors.toMap(s -> s.getChallenge().getId(), Function.identity(), (a,b)->a));
 
-        List<Long> submissionIds = submissionsForStudent.stream().map(SubmissionDailyChallenge::getId).toList();
-        Map<Long, GradingDailyChallenge> gradingBySubmissionId = submissionIds.isEmpty() ? Map.of()
-                : gradingDailyChallengeRepository.findBySubmissionDailyIdInAndDeletedAtIsNull(submissionIds)
-                        .stream().collect(Collectors.toMap(g -> g.getSubmissionDaily().getId(), Function.identity(), (a,b)->a));
-
-        // NEW: batch compute achieved totals for all gradings referenced on this page to avoid per-grade DB calls
-        List<Long> gradingIds = gradingBySubmissionId.values().stream().map(GradingDailyChallenge::getId).filter(Objects::nonNull).toList();
+        List<Long> submissionIds = studentSubs.stream().map(SubmissionDailyChallenge::getId).collect(Collectors.toList());
+        Map<Long, GradingDailyChallenge> gradingBySubmissionId = loadGradingsBySubmissionIds(submissionIds);
+        List<Long> gradingIds = gradingBySubmissionId.values().stream().map(GradingDailyChallenge::getId).filter(Objects::nonNull).collect(Collectors.toList());
         Map<Long, Double> achievedByGradingId = gradingQuestionRepository.sumReceivedWeightMapByGradingIds(gradingIds);
-
-        Map<Long, Double> maxWeightByChallengeId = questionRepository.getMaxWeightByChallengeIds(challengeIds);
+        Map<Long, Double> maxWeightByChallengeId = Optional.ofNullable(questionRepository.getMaxWeightByChallengeIds(challengeIds))
+                .orElse(Collections.emptyMap());
 
         OffsetDateTime now = OffsetDateTime.now();
 
         List<StudentChallengeListDTO> result = lessonPage.getContent().stream()
-                .map(lesson -> {
-                    List<DailyChallenge> challenges = challengesByLessonId.getOrDefault(lesson.getId(), List.of());
-                    List<StudentChallengeListDTO.StudentChallengeDTO> dtoChallenges = new ArrayList<>(challenges.size());
+                .map(lesson -> buildLessonDto(lesson, challengesByLesson.getOrDefault(lesson.getId(), List.of()),
+                        submissionByChallengeId, gradingBySubmissionId, achievedByGradingId, maxWeightByChallengeId, now))
+                .collect(Collectors.toList());
 
-                    for (DailyChallenge ch : challenges) {
-                        if (ch.getChallengeStatus() == ChallengeStatus.DRAFT) continue;
-
-                        if (text != null && !text.isBlank()) {
-                            String ltext = text.toLowerCase();
-                            boolean matches = (ch.getChallengeName() != null && ch.getChallengeName().toLowerCase().contains(ltext))
-                                    || (ch.getDescription() != null && ch.getDescription().toLowerCase().contains(ltext))
-                                    || (lesson.getClassLessonName() != null && lesson.getClassLessonName().toLowerCase().contains(ltext));
-                            if (!matches) continue;
-                        }
-
-                        SubmissionDailyChallenge submission = submissionByChallengeId.get(ch.getId());
-                        GradingDailyChallenge grading = (submission != null) ? gradingBySubmissionId.get(submission.getId()) : null;
-
-                        // compute visible scores based on endDate
-                        Double totalWeight = null;
-                        Double maxPossibleWeight = maxWeightByChallengeId.getOrDefault(ch.getId(), 0.0);
-                        Double finalScore = null;
-
-                        if (grading != null) {
-                            // use precomputed achieved total
-                            double achieved = achievedByGradingId.getOrDefault(grading.getId(), 0.0);
-
-                            OffsetDateTime effectiveEnd = (submission != null && submission.getExpiredAt() != null) ? submission.getExpiredAt() : ch.getEndDate();
-                            if (effectiveEnd != null && now.isBefore(effectiveEnd)) {
-                                if (submission != null) submission.setSubmissionStatus(SubmissionStatus.SUBMITTED);
-                            } else {
-                                totalWeight = achieved;
-                                finalScore = DataUtil.getFinalScore(totalWeight, maxPossibleWeight);
-                                if (submission != null) submission.setSubmissionStatus(SubmissionStatus.GRADED);
-                            }
-                        }
-
-                        DailyChallengeListDTO.DailyChallengeInLessonDTO challengeDTO =
-                                dailyChallengeMapper.dailyChallengeToDailyChallengeInLessonDTO(ch);
-
-                        StudentSubmissionDTO studentSubmissionDTO = submissionMapper.toStudentSubmissionDTO(
-                                submission, grading, totalWeight, maxPossibleWeight, finalScore
-                        );
-
-                        StudentChallengeListDTO.StudentChallengeDTO dto = StudentChallengeListDTO.StudentChallengeDTO.builder()
-                                .dailyChallenge(challengeDTO)
-                                .studentSubmission(studentSubmissionDTO)
-                                .build();
-                        dtoChallenges.add(dto);
-                    }
-
-                    return new StudentChallengeListDTO(
-                            lesson.getId(),
-                            lesson.getClassLessonName(),
-                            lesson.getClassLessonContent(),
-                            lesson.getOrderNumber(),
-                            dtoChallenges
-                    );
-                })
-                .toList();
-
-        log.info("[{}] completed classId={} studentId={} lessonsReturned={} totalLessons={}",
-                method, classId, studentId, result.size(), lessonPage.getTotalElements());
-
+        log.info("[{}] exit classId={} lessonsReturned={} totalLessons={}", action, classId, result.size(), lessonPage.getTotalElements());
         return DataResponse.success(result, Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL)
-                .page(page).size(size)
-                .totalElements(lessonPage.getTotalElements())
-                .totalPages(lessonPage.getTotalPages());
+                .page(page).size(size).totalElements(lessonPage.getTotalElements()).totalPages(lessonPage.getTotalPages());
     }
 
+    /**
+     * Teacher/TA view: list submissions for a challenge with computed scores.
+     */
     @Override
     @Transactional(readOnly = true)
     public DataResponse<List<StudentSubmissionDTO>> getSubmissionsByChallenge(Long challengeId, int page, int size,
                                                                               String text, String sortBy, String sortDir) {
-        final String method = "getSubmissionsByChallenge";
-        log.info("[{}] start challengeId={} page={} size={} sortBy={} sortDir={}", method, challengeId, page, size, sortBy, sortDir);
+        final String action = "getSubmissionsByChallenge";
+        log.info("[{}] enter challengeId={} page={} size={} sortBy={} sortDir={}", action, challengeId, page, size, sortBy, sortDir);
 
         String cacheKey = cacheService.buildSubmissionsByChallengeCacheKey(challengeId, page, size, text, sortBy, sortDir);
-        List<StudentSubmissionDTO> cachedData = cacheService.getCachedObject(cacheKey, new TypeReference<>() {});
-        if (cachedData != null) {
-            log.debug("[{}] cache hit key={}", method, cacheKey);
-            return DataResponse.success(cachedData, Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL)
-                    .page(page).size(size).totalElements(cachedData.size()).totalPages((cachedData.size()+size-1)/size);
+        List<StudentSubmissionDTO> cached = cacheService.getCachedObject(cacheKey, new TypeReference<>() {});
+        if (cached != null) {
+            log.debug("[{}] cache hit key={}", action, cacheKey);
+            return DataResponse.success(cached, Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL)
+                    .page(page).size(size).totalElements(cached.size()).totalPages((cached.size()+size-1)/size);
         }
 
         appValidator.validatePaginationParams(page, size);
@@ -237,81 +224,68 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
 
         DailyChallenge challenge = dailyChallengeRepository.findByIdAndDeletedAtIsNull(challengeId)
                 .orElseThrow(() -> {
-                    log.error("[{}] challenge not found id={}", method, challengeId);
+                    log.error("[{}] challenge not found id={}", action, challengeId);
                     return new ApiException(Const.CHALLENGE.NOT_FOUND, HttpStatus.NOT_FOUND.value());
                 });
 
         Long classId = challenge.getClassLesson().getClassChapter().getClazz().getId();
         appValidator.validateUserAccessToClass(classId);
-
         String role = jwtUtil.extractRoleFromCurrentRequest();
-        if (!"TEACHER".equals(role) && !"TEACHING_ASSISTANT".equals(role)) {
-            log.warn("[{}] unauthorized role={} for challengeId={}", method, role, challengeId);
+        if (!RoleName.TEACHER.name().equals(role) && !RoleName.TEACHING_ASSISTANT.name().equals(role)) {
+            log.warn("[{}] unauthorized role={} for challengeId={}", action, role, challengeId);
             throw new ApiException(Const.SUBMISSION.UNAUTHORIZED_VIEW_SUBMISSIONS, HttpStatus.FORBIDDEN.value());
         }
 
         Sort sort = Sort.by(sortDir.equalsIgnoreCase("asc") ? Sort.Direction.ASC : Sort.Direction.DESC, sortBy);
         Pageable pageable = PageRequest.of(page, size, sort);
+        Page<SubmissionDailyChallenge> submissionPage = submissionDailyChallengeRepository.findByChallengeIdAndDeletedAtIsNull(challengeId, text == null ? "" : text, pageable);
 
-        Page<SubmissionDailyChallenge> submissionPage = submissionDailyChallengeRepository
-                .findByChallengeIdAndDeletedAtIsNull(challengeId, text == null ? "" : text, pageable);
-
-        List<Long> submissionIds = submissionPage.getContent().stream().map(SubmissionDailyChallenge::getId).toList();
-
-        Map<Long, GradingDailyChallenge> gradingMap = submissionIds.isEmpty() ? Map.of()
-                : gradingDailyChallengeRepository.findBySubmissionDailyIdInAndDeletedAtIsNull(submissionIds)
-                    .stream().collect(Collectors.toMap(g -> g.getSubmissionDaily().getId(), Function.identity(), (a,b)->a));
-
-        Map<Long, Double> totalReceivedByGradingId = gradingQuestionRepository.sumReceivedWeightMapByGradingIds(gradingMap.values().stream().map(GradingDailyChallenge::getId).toList());
+        List<Long> submissionIds = submissionPage.getContent().stream().map(SubmissionDailyChallenge::getId).collect(Collectors.toList());
+        Map<Long, GradingDailyChallenge> gradingBySubmissionId = loadGradingsBySubmissionIds(submissionIds);
+        Map<Long, Double> totalReceivedByGradingId = gradingQuestionRepository.sumReceivedWeightMapByGradingIds(
+                gradingBySubmissionId.values().stream().map(GradingDailyChallenge::getId).filter(Objects::nonNull).collect(Collectors.toList())
+        );
 
         double challengeMaxPossibleWeight = questionRepository.findByChallengeIdAndDeletedAtIsNull(challengeId)
-                .stream()
-                .mapToDouble(q -> q.getWeight() == null ? 0.0 : q.getWeight().doubleValue())
-                .sum();
+                .stream().mapToDouble(q -> Optional.ofNullable(q.getWeight()).orElse(0.0)).sum();
 
-        List<StudentSubmissionDTO> data = submissionPage.getContent().stream()
-                .map(sub -> {
-                    GradingDailyChallenge g = gradingMap.get(sub.getId());
-                    Double totalWeight = null;
-                    Double finalScore = null;
-                    if (g != null) {
-                        totalWeight = totalReceivedByGradingId.getOrDefault(g.getId(), 0.0);
-                        finalScore = DataUtil.getFinalScore(totalWeight, Double.valueOf(challengeMaxPossibleWeight));
-                    }
-                    return submissionMapper.toStudentSubmissionDTO(sub, g, totalWeight, Double.valueOf(challengeMaxPossibleWeight), finalScore);
+        List<StudentSubmissionDTO> dtoList = submissionPage.getContent().stream()
+                .map(s -> {
+                    GradingDailyChallenge grading = gradingBySubmissionId.get(s.getId());
+                    Double achieved = grading == null ? null : totalReceivedByGradingId.getOrDefault(grading.getId(), 0.0);
+                    return submissionMapper.toStudentSubmissionDTO(s, grading, achieved, Double.valueOf(challengeMaxPossibleWeight), true);
                 })
-                .toList();
+                .collect(Collectors.toList());
 
-        cacheService.cacheObject(cacheKey, data, 5);
-        log.info("[{}] completed challengeId={} returned={} totalElements={}", method, challengeId, data.size(), submissionPage.getTotalElements());
-
-        return DataResponse.success(data, Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL)
-                .page(page).size(size)
-                .totalElements(submissionPage.getTotalElements())
-                .totalPages(submissionPage.getTotalPages());
+        cacheService.cacheObject(cacheKey, dtoList, 5);
+        log.info("[{}] exit challengeId={} returned={} totalElements={}", action, challengeId, dtoList.size(), submissionPage.getTotalElements());
+        return DataResponse.success(dtoList, Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL)
+                .page(page).size(size).totalElements(submissionPage.getTotalElements()).totalPages(submissionPage.getTotalPages());
     }
 
+    /**
+     * Mark the submission as started by the student (transition PENDING -> DRAFT).
+     */
     @Override
     @Transactional
     public void startSubmission(Long submissionId) {
-        final String method = "startSubmission";
+        final String action = "startSubmission";
         Long userId = jwtUtil.extractUserIdFromCurrentRequest();
-        log.info("[{}] start submissionId={} by userId={}", method, submissionId, userId);
+        log.info("[{}] enter submissionId={} userId={}", action, submissionId, userId);
 
-        SubmissionDailyChallenge submission = submissionDailyChallengeRepository
-                .findByIdAndDeletedAtIsNull(submissionId)
+        SubmissionDailyChallenge submission = submissionDailyChallengeRepository.findByIdAndDeletedAtIsNull(submissionId)
                 .orElseThrow(() -> {
-                    log.warn("[{}] submission not found id={}", method, submissionId);
+                    log.warn("[{}] submission not found id={}", action, submissionId);
                     return new ApiException(Const.SUBMISSION.NOT_FOUND, HttpStatus.NOT_FOUND.value());
                 });
 
         if (!Objects.equals(submission.getUser().getId(), userId)) {
-            log.warn("[{}] forbidden owner mismatch submissionOwner={} caller={}", method, submission.getUser().getId(), userId);
+            log.warn("[{}] forbidden owner mismatch submissionOwner={} caller={}", action, submission.getUser().getId(), userId);
             throw new ApiException(Const.SUBMISSION.FORBIDDEN_NOT_OWNER, HttpStatus.FORBIDDEN.value());
         }
 
         if (submission.getSubmissionStatus() != SubmissionStatus.PENDING) {
-            log.debug("[{}] invalid status submissionId={} currentStatus={}", method, submissionId, submission.getSubmissionStatus());
+            log.debug("[{}] invalid status submissionId={} currentStatus={}", action, submissionId, submission.getSubmissionStatus());
             throw new ApiException(Const.SUBMISSION.CANNOT_START_IN_CURRENT_STATUS, HttpStatus.BAD_REQUEST.value());
         }
 
@@ -321,312 +295,653 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
 
         cacheService.clearSubmissionCache(userId, submissionId);
         cacheService.clearSubmissionsCacheForChallenge(submission.getChallenge().getId());
-        log.info("[{}] completed submission started submissionId={} by userId={}", method, submissionId, userId);
+        log.info("[{}] exit started submissionId={} userId={}", action, submissionId, userId);
+
+        // notify student (self) that submission started
+        try {
+            String title = "Bạn đã bắt đầu làm bài";
+            String message = "Bạn đã bắt đầu bài: " + submission.getChallenge().getChallengeName();
+            notificationService.createNotification(userId, null, title, message, null, null);
+        } catch (Exception ex) {
+            log.debug("Failed to send startSubmission notification userId={} error={}", userId, ex.getMessage());
+        }
     }
 
+    /**
+     * Return submission details including grading totals and challenge-level deadlines.
+     */
     @Override
     @Transactional(readOnly = true)
     public StudentSubmissionDTO getSubmissionInfo(Long submissionId) {
-        final String method = "getSubmissionInfo";
-        log.info("[{}] start submissionId={}", method, submissionId);
+        final String action = "getSubmissionInfo";
+        log.info("[{}] enter submissionId={}", action, submissionId);
 
         if (submissionId == null) {
-            log.warn("[{}] invalid id null", method);
+            log.warn("[{}] invalid id null", action);
             throw new ApiException(Const.SUBMISSION.INVALID_ID, HttpStatus.BAD_REQUEST.value());
         }
 
-        // Use centralized validator which returns the loaded submission if allowed
         SubmissionDailyChallenge submission = appValidator.validateUserAccessToSubmission(submissionId);
 
-        // existing grading lookup and computations (unchanged)
-        GradingDailyChallenge grading = gradingDailyChallengeRepository.findBySubmissionDailyIdAndDeletedAtIsNull(submissionId)
-                .orElse(null);
+        GradingDailyChallenge grading = gradingDailyChallengeRepository.findBySubmissionDailyIdAndDeletedAtIsNull(submissionId).orElse(null);
 
         Double achievedTotal = null;
-        Double challengeMaxPossibleWeight = null;
-        Double finalScore = null;
-
+        Double challengeMaxPossible = null;
         if (grading != null) {
             Double sumReceived = gradingDailyChallengeRepository.sumReceivedWeightBySubmissionDailyId(submissionId);
-            achievedTotal = sumReceived == null ? 0.0 : sumReceived;
+            achievedTotal = Optional.ofNullable(sumReceived).orElse(0.0);
 
             BigDecimal maxBig = dailyChallengeRepository.sumQuestionWeightByChallengeId(submission.getChallenge().getId());
-            challengeMaxPossibleWeight = (maxBig == null) ? 0.0 : maxBig.doubleValue();
-
-            finalScore = DataUtil.getFinalScore(achievedTotal, challengeMaxPossibleWeight);
+            challengeMaxPossible = maxBig == null ? 0.0 : maxBig.doubleValue();
         }
 
-        StudentSubmissionDTO dto = submissionMapper.toStudentSubmissionDTO(
-                submission,
-                grading,
-                achievedTotal,
-                challengeMaxPossibleWeight,
-                finalScore
-        );
-
-        log.info("[{}] completed submissionId={} gradingPresent={}", method, submissionId, grading != null);
+        StudentSubmissionDTO dto = submissionMapper.toStudentSubmissionDTO(submission, grading, achievedTotal, challengeMaxPossible, true);
+        log.info("[{}] exit submissionId={} gradingPresent={}", action, submissionId, grading != null);
         return dto;
     }
 
-    // --------------------- private helpers ---------------------
+    // ----------------------- Maintenance / Async helpers -----------------------
 
     @Override
     @Transactional
     public void autoSubmitExpiredSubmissions() {
-        log.info("Processing auto-submit for expired TEST submissions");
-
+        log.info("autoSubmitExpiredSubmissions: start");
         int pageSize = 100;
         Pageable pageable = PageRequest.of(0, pageSize);
-        Page<SubmissionDailyChallenge> submissionPage;
+        Page<SubmissionDailyChallenge> page;
 
         do {
-            submissionPage = submissionDailyChallengeRepository.findExpiredTestSubmissionsForAutoSubmit(
+            page = submissionDailyChallengeRepository.findExpiredTestSubmissionsForAutoSubmit(
                     SubmissionStatus.PENDING, OffsetDateTime.now(), pageable);
 
-            List<SubmissionDailyChallenge> toUpdate = submissionPage.getContent();
-            if (!toUpdate.isEmpty()) {
-                toUpdate.forEach(submission -> {
-                    submission.setSubmissionStatus(SubmissionStatus.SUBMITTED);
-                    submission.setSubmittedAt(OffsetDateTime.now());
-                });
-                submissionDailyChallengeRepository.saveAll(toUpdate);
-                log.debug("Auto-submitted {} TEST submissions", toUpdate.size());
-
-                // Clear caches for updated submissions and affected challenges (new)
-                Set<Long> affectedChallenges = new HashSet<>();
-                toUpdate.forEach(s -> {
-                    cacheService.clearSubmissionCache(s.getUser().getId(), s.getId());
-                    affectedChallenges.add(s.getChallenge().getId());
-                });
-                affectedChallenges.forEach(cacheService::clearSubmissionsCacheForChallenge);
+            List<SubmissionDailyChallenge> toProcess = page.getContent();
+            if (toProcess.isEmpty()) {
+                pageable = pageable.next();
+                continue;
             }
 
-            pageable = pageable.next();
-        } while (submissionPage.hasNext());
+            // 1. Lấy tất cả challengeId bị ảnh hưởng để load questions một lần
+            Set<Long> affectedChallengeIds = toProcess.stream()
+                    .map(s -> s.getChallenge().getId())
+                    .collect(Collectors.toSet());
 
-        log.info("Auto-submit task for TEST challenges completed");
+            Map<Long, List<Question>> questionsByChallenge = affectedChallengeIds.stream()
+                    .collect(Collectors.toMap(
+                            Function.identity(),
+                            cid -> questionRepository.findByChallengeIdAndDeletedAtIsNull(cid)
+                    ));
+
+            // 2. Lấy tất cả existing SubmissionQuestion của các submission đang xử lý
+            List<Long> submissionIds = toProcess.stream()
+                    .map(SubmissionDailyChallenge::getId)
+                    .collect(Collectors.toList());
+
+            List<SubmissionQuestion> existingSQs = submissionQuestionRepository
+                    .findBySubmissionDailyIdInAndDeletedAtIsNull(submissionIds);
+
+            // Map: submissionId -> list SubmissionQuestion
+            Map<Long, List<SubmissionQuestion>> existingSQMap = existingSQs.stream()
+                    .collect(Collectors.groupingBy(sq -> sq.getSubmissionDaily().getId()));
+
+            // 3. Danh sách cần tạo mới và danh sách cần cập nhật trạng thái
+            List<SubmissionQuestion> sqToCreate = new ArrayList<>();
+            List<SubmissionDailyChallenge> toSubmit = new ArrayList<>();   // sẽ thành SUBMITTED
+            List<SubmissionDailyChallenge> toMiss = new ArrayList<>();     // sẽ thành MISSED
+
+            OffsetDateTime now = OffsetDateTime.now();
+
+            for (SubmissionDailyChallenge submission : toProcess) {
+                Long submissionId = submission.getId();
+                Long challengeId = submission.getChallenge().getId();
+                List<Question> challengeQuestions = questionsByChallenge.getOrDefault(challengeId, List.of());
+                List<SubmissionQuestion> existingForThis = existingSQMap.getOrDefault(submissionId, List.of());
+
+                // Nếu không có bất kỳ SubmissionQuestion nào → MISSED
+                if (existingForThis.isEmpty()) {
+                    submission.setSubmissionStatus(SubmissionStatus.MISSED);
+                    toMiss.add(submission);
+                    continue;
+                }
+
+                // Có ít nhất 1 SubmissionQuestion → SUBMITTED
+                submission.setSubmissionStatus(SubmissionStatus.SUBMITTED);
+                submission.setSubmittedAt(now);
+                toSubmit.add(submission);
+
+                // Tìm các question còn thiếu để tạo placeholder
+                Set<Long> existingQuestionIds = existingForThis.stream()
+                        .filter(sq -> sq.getQuestion() != null)
+                        .map(sq -> sq.getQuestion().getId())
+                        .collect(Collectors.toSet());
+
+                for (Question q : challengeQuestions) {
+                    if (!existingQuestionIds.contains(q.getId())) {
+                        SubmissionQuestion newSq = new SubmissionQuestion();
+                        newSq.setSubmissionDaily(submission);
+                        newSq.setQuestion(q);
+                        newSq.setSubmissionContentJson(JsonUtil.objectToMap(new AnswerContent()));
+                        sqToCreate.add(newSq);
+                    }
+                }
+            }
+
+            // 4. Persist tất cả thay đổi
+            // Thay thế 2 khối if riêng biệt bằng:
+            List<SubmissionDailyChallenge> allToUpdate = new ArrayList<>();
+            allToUpdate.addAll(toSubmit);
+            allToUpdate.addAll(toMiss);
+
+            if (!allToUpdate.isEmpty()) {
+                submissionDailyChallengeRepository.saveAll(allToUpdate);
+            }
+            if (!sqToCreate.isEmpty()) {
+                submissionQuestionRepository.saveAll(sqToCreate);
+                log.debug("autoSubmitExpiredSubmissions: created {} missing SubmissionQuestion placeholders", sqToCreate.size());
+            }
+
+            // 5. Clear cache
+            Stream.concat(toSubmit.stream(), toMiss.stream()).forEach(s -> {
+                cacheService.clearSubmissionCache(s.getUser().getId(), s.getId());
+            });
+
+            Set<Long> affectedChallengeIdsFinal = Stream.concat(toSubmit.stream(), toMiss.stream())
+                    .map(s -> s.getChallenge().getId())
+                    .collect(Collectors.toSet());
+            affectedChallengeIdsFinal.forEach(cacheService::clearSubmissionsCacheForChallenge);
+
+            log.debug("autoSubmitExpiredSubmissions: processed {} items ({} SUBMITTED, {} MISSED)",
+                    toProcess.size(), toSubmit.size(), toMiss.size());
+
+            pageable = pageable.next();
+        } while (page.hasNext());
+
+        log.info("autoSubmitExpiredSubmissions: completed");
     }
+
     @Override
     @Transactional
     public int detectAndMarkLateSubmissions() {
-
         OffsetDateTime now = OffsetDateTime.now();
-        List<SubmissionDailyChallenge> lateSubmissions =
-                submissionDailyChallengeRepository.findBySubmissionStatusAndExpiredAtBeforeAndDeletedAtIsNull(
-                        SubmissionStatus.PENDING, now);
-
-        if (lateSubmissions.isEmpty()) {
-            log.debug("No late submissions found.");
+        List<SubmissionDailyChallenge> late = submissionDailyChallengeRepository.findLateSubmissions(now);
+        if (late.isEmpty()) {
+            log.debug("detectAndMarkLateSubmissions: none found");
             return 0;
         }
-
-        lateSubmissions.forEach(s -> s.setIsLate(true));
-        log.info("Marked {} submission(s) as LATE", lateSubmissions.size());
-
-        return lateSubmissions.size();
+        late.forEach(s -> s.setIsLate(true));
+        log.info("detectAndMarkLateSubmissions: marked {} submissions as late", late.size());
+        return late.size();
     }
 
     @Override
     @Async("taskExecutor")
     @Transactional
     public void updateSubmissionsDatesForChallenge(Long challengeId, OffsetDateTime newStart, OffsetDateTime newEnd) {
-        log.info("Updating related submissions' dates for challenge {} (start={}, end={})", challengeId, newStart, newEnd);
-
+        log.info("updateSubmissionsDatesForChallenge: challengeId={} start={} end={}", challengeId, newStart, newEnd);
         List<SubmissionDailyChallenge> submissions = submissionDailyChallengeRepository.findByChallengeIdAndDeletedAtIsNull(challengeId);
         if (submissions == null || submissions.isEmpty()) {
-            log.debug("No submissions found for challenge {}", challengeId);
+            log.debug("updateSubmissionsDatesForChallenge: none found");
             return;
         }
 
-        List<SubmissionDailyChallenge> toSave = new ArrayList<>();
-        for (SubmissionDailyChallenge s : submissions) {
-            // Only update submissions that are still pending/draft (not yet submitted/graded)
-            if (s.getSubmissionStatus() == SubmissionStatus.PENDING || s.getSubmissionStatus() == SubmissionStatus.DRAFT) {
-                boolean changed = false;
-                if (newStart != null && (s.getStartedAt() == null || !newStart.equals(s.getStartedAt()))) {
-                    s.setStartedAt(newStart);
-                    changed = true;
-                }
-                if (newEnd != null && (s.getExpiredAt() == null || !newEnd.equals(s.getExpiredAt()))) {
-                    s.setExpiredAt(newEnd);
-                    changed = true;
-                }
-                if (changed) toSave.add(s);
-            }
-        }
+        List<SubmissionDailyChallenge> toSave = submissions.stream()
+                .filter(s -> s.getSubmissionStatus() == SubmissionStatus.PENDING || s.getSubmissionStatus() == SubmissionStatus.DRAFT)
+                .map(s -> {
+                    boolean changed = false;
+                    if (newStart != null && !Objects.equals(s.getStartedAt(), newStart)) {
+                        s.setStartedAt(newStart);
+                        changed = true;
+                    }
+                    if (newEnd != null && !Objects.equals(s.getExpiredAt(), newEnd)) {
+                        s.setExpiredAt(newEnd);
+                        changed = true;
+                    }
+                    return changed ? s : null;
+                })
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
 
         if (!toSave.isEmpty()) {
             submissionDailyChallengeRepository.saveAll(toSave);
-            log.info("Updated {} submissions for challenge {}", toSave.size(), challengeId);
-
-            // Clear caches for updated submissions and the challenge listing
-            Set<Long> affectedChallenges = new HashSet<>();
             toSave.forEach(s -> {
                 cacheService.clearSubmissionCache(s.getUser().getId(), s.getId());
-                affectedChallenges.add(challengeId);
+                cacheService.clearSubmissionsCacheForChallenge(challengeId);
             });
-            affectedChallenges.forEach(cacheService::clearSubmissionsCacheForChallenge);
+            log.info("updateSubmissionsDatesForChallenge: updated {} submissions for challengeId={}", toSave.size(), challengeId);
         }
     }
 
+    // ----------------------- Bulk user submission helpers -----------------------
+
     /**
-     * Create temporary submissions for provided users for all existing (non-draft, non-deleted) challenges in the class.
-     * Avoid creating duplicates by checking existing submissions per user/challenge.
+     * Khi thêm hoặc kích hoạt lại học sinh trong lớp:
+     * - Khôi phục các submission bị soft-delete (restore)
+     * - Tạo mới temporary submission cho các DailyChallenge còn thiếu
+     *
+     * Đảm bảo: 1 query, 1 saveAll, 1 clear cache, atomic trong 1 transaction.
      */
     @Override
     @Transactional
-    public void createTemporarySubmissionsForUsers(Long classId, List<Long> userIds) {
-        final String method = "createTemporarySubmissionsForUsers";
-        if (classId == null || userIds.isEmpty()) {
-            log.debug("[{}] Invalid input: classId={}, userIds={}", method, classId, userIds);
+    public void syncSubmissionsForUsersInClass(Long classId, List<Long> userIds) {
+        final String action = "syncSubmissionsForUsersInClass";
+        if (classId == null || userIds == null || userIds.isEmpty()) {
+            log.debug("[{}] invalid input classId={}, userIds={}", action, classId, userIds);
             return;
         }
 
-        log.info("[{}] Starting: classId={}, userCount={}", method, classId, userIds.size());
+        log.info("[{}] start classId={} userCount={}", action, classId, userIds.size());
 
-        // 1. Fetch active challenges (non-draft) for class
+        // 1. Lấy tất cả DailyChallenge đang active (non-draft)
         List<DailyChallenge> challenges = dailyChallengeRepository.findNonDraftByClassId(classId);
         if (challenges.isEmpty()) {
-            log.debug("[{}] No active challenges found for classId={}", method, classId);
+            log.debug("[{}] no active challenges for classId={}", action, classId);
             return;
         }
+        List<Long> challengeIds = challenges.stream()
+                .map(DailyChallenge::getId)
+                .toList();
 
-        // 2. Fetch valid users
-        List<User> validUsers = userRepository.findAllByIdInAndDeletedAtIsNull(userIds);
-        if (validUsers.isEmpty()) {
-            log.debug("[{}] No valid users found for userIds={}", method, userIds);
+        // 2. Lấy user hợp lệ
+        List<User> users = userRepository.findAllByIdInAndDeletedAtIsNull(userIds);
+        if (users.isEmpty()) {
+            log.debug("[{}] no valid users", action);
             return;
         }
+        Set<Long> validUserIds = users.stream().map(User::getId).collect(Collectors.toSet());
 
-        Set<Long> validUserIds = validUsers.stream().map(User::getId).collect(Collectors.toSet());
-        List<Long> challengeIds = challenges.stream().map(DailyChallenge::getId).toList();
+        // 3. Lấy tất cả submission HIỆN TẠI (cả deleted lẫn không) của user + challenge này
+        List<SubmissionDailyChallenge> allExisting = submissionDailyChallengeRepository
+                .findByUserIdInAndChallengeIdIn(validUserIds, challengeIds);
 
-        // 3. Batch load existing submissions (userId + challengeId) → avoid N+1
-        List<SubmissionDailyChallenge> existingSubs = submissionDailyChallengeRepository
-                .findByUserIdInAndChallengeIdInAndDeletedAtIsNull(validUserIds, challengeIds);
+        // Map: (userId, challengeId) → submission (có thể deleted hoặc không)
+        Map<Pair<Long, Long>, SubmissionDailyChallenge> existingMap = allExisting.stream()
+                .collect(Collectors.toMap(
+                        s -> Pair.of(s.getUser().getId(), s.getChallenge().getId()),
+                        Function.identity(),
+                        (a, b) -> a // không trùng
+                ));
 
-        // Build lookup: (userId, challengeId) → exists
-        Set<Pair<Long, Long>> existingPairs = existingSubs.stream()
-                .map(s -> Pair.of(s.getUser().getId(), s.getChallenge().getId()))
-                .collect(Collectors.toSet());
-
-        // 4. Build new submissions
+        // 4. Chuẩn bị danh sách cần xử lý
+        List<SubmissionDailyChallenge> toRestore = new ArrayList<>();
         List<SubmissionDailyChallenge> toCreate = new ArrayList<>();
-
-        for (User user : validUsers) {
-            for (DailyChallenge challenge : challenges) {
-                if (existingPairs.contains(Pair.of(user.getId(), challenge.getId()))) {
-                    continue;
-                }
-
-                SubmissionDailyChallenge sub = SubmissionDailyChallenge.builder()
-                        .user(user)
-                        .challenge(challenge)
-                        .submissionStatus(SubmissionStatus.PENDING)
-                        .startedAt(challenge.getStartDate())
-                        .expiredAt(challenge.getEndDate())
-                        .build();
-
-                toCreate.add(sub);
-            }
-        }
-
-        // 5. Save & clear cache
-        if (!toCreate.isEmpty()) {
-            submissionDailyChallengeRepository.saveAll(toCreate);
-
-            Set<Long> affectedChallengeIds = toCreate.stream()
-                    .map(s -> s.getChallenge().getId())
-                    .collect(Collectors.toSet());
-
-            affectedChallengeIds.forEach(cacheService::clearSubmissionsCacheForChallenge);
-
-            log.info("[{}] Created {} temporary submissions for classId={}, users={}",
-                    method, toCreate.size(), classId, validUserIds.size());
-        } else {
-            log.debug("[{}] No new submissions needed (all exist) for classId={}", method, classId);
-        }
-    }
-
-    @Override
-    @Transactional
-    public void restoreSubmissionsForUsers(Long classId, List<Long> userIds) {
-        final String method = "restoreSubmissionsForUsers";
-        if (classId == null || userIds.isEmpty()) {
-            log.debug("[{}] Invalid input: classId={}, userIds={}", method, classId, userIds);
-            return;
-        }
-
-        log.info("[{}] Starting: classId={}, userCount={}", method, classId, userIds.size());
-
-        // 1. Lấy CHỈ ID của submission bị soft-delete trong class
-        List<Long> submissionIdsToRestore = submissionDailyChallengeRepository
-                .findSubmissionIdsByUserIdsAndClassIdAndDeletedAtIsNotNull(userIds, classId);
-
-        if (submissionIdsToRestore.isEmpty()) {
-            log.debug("[{}] No soft-deleted submissions to restore for classId={}", method, classId);
-            return;
-        }
-
-        // 2. Dùng getReferenceById → proxy, không load entity
         OffsetDateTime now = OffsetDateTime.now();
 
-        List<SubmissionDailyChallenge> proxies = submissionIdsToRestore.stream()
-                .map(submissionDailyChallengeRepository::getReferenceById)
-                .peek(sub -> {
+        for (User user : users) {
+            for (DailyChallenge challenge : challenges) {
+                Pair<Long, Long> key = Pair.of(user.getId(), challenge.getId());
+                SubmissionDailyChallenge sub = existingMap.get(key);
+
+                if (sub == null) {
+                    // Không tồn tại → tạo mới
+                    toCreate.add(SubmissionDailyChallenge.builder()
+                            .user(user)
+                            .challenge(challenge)
+                            .submissionStatus(SubmissionStatus.PENDING)
+                            .startedAt(challenge.getStartDate())
+                            .expiredAt(challenge.getEndDate())
+                            .build());
+                } else if (sub.getDeletedAt() != null) {
+                    // Đã bị soft-delete → khôi phục
                     sub.setDeletedAt(null);
                     sub.setDeletedBy(null);
+                    sub.setUpdatedAt(now);
                     if (sub.getSubmissionStatus() == null) {
                         sub.setSubmissionStatus(SubmissionStatus.PENDING);
                     }
-                    sub.setUpdatedAt(now);
-                })
-                .toList();
+                    toRestore.add(sub);
+                }
+                // else: đã tồn tại và active → bỏ qua
+            }
+        }
 
-        // 3. saveAll → batch UPDATE
-        submissionDailyChallengeRepository.saveAllAndFlush(proxies);
+        // 5. Batch save
+        int restoredCount = toRestore.size();
+        int createdCount = toCreate.size();
 
-        log.info("[{}] Restored {} submissions for classId={}, users={}",
-                method, submissionIdsToRestore.size(), classId, userIds.size());
+        if (restoredCount > 0) {
+            submissionDailyChallengeRepository.saveAllAndFlush(toRestore);
+            log.info("[{}] restored {} submissions", action, restoredCount);
+        }
+        if (createdCount > 0) {
+            submissionDailyChallengeRepository.saveAllAndFlush(toCreate);
+            log.info("[{}] created {} temporary submissions", action, createdCount);
+        }
+
+        if (restoredCount > 0 || createdCount > 0) {
+            // Clear cache cho tất cả challenge bị ảnh hưởng
+            challenges.stream()
+                    .map(DailyChallenge::getId)
+                    .distinct()
+                    .forEach(cacheService::clearSubmissionsCacheForChallenge);
+
+            // notify users for restored/created
+            for (SubmissionDailyChallenge s : toRestore) {
+                try {
+                    notificationService.createNotification(s.getUser().getId(), null, "Submission phục hồi", "Submission của bạn đã được phục hồi cho bài " + s.getChallenge().getChallengeName(), null, null);
+                } catch (Exception ex) { log.debug("notify restore error: {}", ex.getMessage()); }
+            }
+            for (SubmissionDailyChallenge s : toCreate) {
+                try {
+                    notificationService.createNotification(s.getUser().getId(), null, "Submission tạm tạo", "Submission tạm đã được tạo cho bài " + s.getChallenge().getChallengeName(), null, null);
+                } catch (Exception ex) { log.debug("notify create error: {}", ex.getMessage()); }
+            }
+
+            log.info("[{}] completed: restored={} created={} total={} for classId={}",
+                    action, restoredCount, createdCount, restoredCount + createdCount, classId);
+        } else {
+            log.debug("[{}] nothing to sync", action);
+        }
     }
 
     @Override
     @Transactional
     public void softDeleteSubmissionsForUser(Long classId, Long userId) {
-        final String method = "softDeleteSubmissionsForUser";
+        final String action = "softDeleteSubmissionsForUser";
         if (classId == null || userId == null) {
-            log.debug("[{}] Invalid input: classId={}, userId={}", method, classId, userId);
+            log.debug("[{}] invalid input", action);
             return;
         }
+        log.info("[{}] start classId={} userId={}", action, classId, userId);
 
-        log.info("[{}] Starting: classId={}, userId={}", method, classId, userId);
-
-        // 1. Lấy CHỈ ID (1 query, không load entity)
-        List<Long> submissionIds = submissionDailyChallengeRepository
-                .findSubmissionIdsByUserAndClass(userId, classId);
-
+        List<Long> submissionIds = submissionDailyChallengeRepository.findSubmissionIdsByUserAndClass(userId, classId);
         if (submissionIds.isEmpty()) {
-            log.debug("[{}] No submissions to soft-delete for classId={}, userId={}", method, classId, userId);
+            log.debug("[{}] nothing to soft-delete", action);
             return;
         }
 
-        // 2. Dùng getReference() → proxy, không SELECT
         OffsetDateTime now = OffsetDateTime.now();
         String deletedBy = jwtUtil.extractEmailPrefixFromCurrentRequest();
 
         List<SubmissionDailyChallenge> proxies = submissionIds.stream()
                 .map(id -> {
-                    SubmissionDailyChallenge proxy = entityManager.getReference(SubmissionDailyChallenge.class, id);
-                    proxy.setDeletedAt(now);
-                    proxy.setDeletedBy(deletedBy);
-                    return proxy;
+                    SubmissionDailyChallenge p = entityManager.getReference(SubmissionDailyChallenge.class, id);
+                    p.setDeletedAt(now);
+                    p.setDeletedBy(deletedBy);
+                    return p;
                 })
-                .toList();
+                .collect(Collectors.toList());
 
-        // 3. saveAll → batch update (Hibernate gom thành batch nếu bật batch_size)
         submissionDailyChallengeRepository.saveAllAndFlush(proxies);
+        log.info("[{}] soft-deleted {} submissions for classId={} userId={}", action, submissionIds.size(), classId, userId);
 
-        log.info("[{}] Soft-deleted {} submissions for classId={}, userId={}",
-                method, submissionIds.size(), classId, userId);
+        // notify user
+        try {
+            String title = "Các bài nộp của bạn đã bị ẩn";
+            String message = "Một số submission của bạn trong lớp đã bị ẩn/gỡ bởi " + deletedBy;
+            notificationService.createNotification(userId, null, title, message, null, null);
+        } catch (Exception ex) {
+            log.debug("Failed to send soft-delete notification to userId={} error={}", userId, ex.getMessage());
+        }
+    }
+
+
+    @Override
+    @Transactional
+    public String extendSubmissionDeadline(ExtendSubmissionDeadlineRequest request) {
+        final String action = "extendSubmissionDeadline";
+        String teacherEmail = jwtUtil.extractEmailFromCurrentRequest();
+
+        List<Long> submissionIds = request.getSubmissionIds();
+        OffsetDateTime newExpiredAt = request.getNewExpiredAt();
+
+        if (submissionIds == null || submissionIds.isEmpty()) {
+            log.warn("[{}] empty submissionIds", action);
+            throw new ApiException(Const.SUBMISSION.EMPTY_SUBMISSION_IDS, HttpStatus.BAD_REQUEST.value());
+        }
+        if (newExpiredAt == null || newExpiredAt.isBefore(OffsetDateTime.now())) {
+            log.warn("[{}] invalid newExpiredAt={}", action, newExpiredAt);
+            throw new ApiException(Const.SUBMISSION.INVALID_EXTEND_TIME, HttpStatus.BAD_REQUEST.value());
+        }
+
+        log.info("[{}] start: teacher={} submissions={} newExpiredAt={}",
+                action, teacherEmail, submissionIds.size(), newExpiredAt);
+
+        // Lấy submissions + validate quyền truy cập lớp
+        List<SubmissionDailyChallenge> submissions = submissionDailyChallengeRepository
+                .findByIdInAndDeletedAtIsNull(submissionIds);
+
+        if (submissions.isEmpty()) {
+            log.debug("[{}] no valid submissions found", action);
+            throw new ApiException(Const.SUBMISSION.NOT_FOUND, HttpStatus.NOT_FOUND.value());
+        }
+
+        Set<Long> classIds = submissions.stream()
+                .map(s -> s.getChallenge().getClassLesson().getClassChapter().getClazz().getId())
+                .collect(Collectors.toSet());
+
+        for (Long classId : classIds) {
+            appValidator.validateUserAccessToClass(classId);
+        }
+
+        // Chỉ gia hạn nếu chưa SUBMITTED/GRADED hoặc đã MISSED
+        List<SubmissionDailyChallenge> toUpdate = submissions.stream()
+                .filter(s -> {
+                    SubmissionStatus status = s.getSubmissionStatus();
+                    return status == SubmissionStatus.PENDING ||
+                            status == SubmissionStatus.DRAFT ||
+                            status == SubmissionStatus.MISSED;
+                })
+                .peek(s -> {
+//                    s.setS(newExpiredAt);
+                    s.setExpiredAt(newExpiredAt);
+                    s.setIsLate(false);
+                })
+                .collect(Collectors.toList());
+
+        if (toUpdate.isEmpty()) {
+            log.debug("[{}] no submissions eligible for extension", action);
+            throw new ApiException(Const.SUBMISSION.NO_ELIGIBLE_FOR_EXTENSION, HttpStatus.BAD_REQUEST.value());
+        }
+
+        submissionDailyChallengeRepository.saveAll(toUpdate);
+
+        // Clear cache
+        Set<Long> challengeIds = toUpdate.stream()
+                .map(s -> s.getChallenge().getId())
+                .collect(Collectors.toSet());
+
+        toUpdate.forEach(s -> cacheService.clearSubmissionCache(s.getUser().getId(), s.getId()));
+        challengeIds.forEach(cacheService::clearSubmissionsCacheForChallenge);
+
+        log.info("[{}] completed: updated={} submissions", action, toUpdate.size());
+
+        // notify affected students
+        for (SubmissionDailyChallenge s : toUpdate) {
+            try {
+                String title = "Thời hạn nộp bài đã được gia hạn";
+                String message = "Thời hạn nộp bài cho \"" + s.getChallenge().getChallengeName() + "\" đã được gia hạn tới " + request.getNewExpiredAt();
+                notificationService.createNotification(s.getUser().getId(), null, title, message, null, null);
+            } catch (Exception ex) {
+                log.debug("Failed to send extend deadline notification userId={} error={}", s.getUser().getId(), ex.getMessage());
+            }
+        }
+
+        return "Extended deadline for " + toUpdate.size() + " submissions.";
+    }
+
+    /**
+     * @param request
+     * @return
+     */
+    @Override
+    public String resetSubmissions(ResetSubmissionRequest request) {
+        final String action = "resetSubmissions";
+        String teacherEmail = jwtUtil.extractEmailFromCurrentRequest();
+        OffsetDateTime now = OffsetDateTime.now();
+
+        List<Long> oldSubmissionIds = request.getSubmissionIds();
+        OffsetDateTime newStart = request.getNewStartDate();
+        OffsetDateTime newEnd = request.getNewEndDate();
+
+        // Validate thời gian
+        if (newStart == null || newEnd == null || newEnd.isBefore(newStart)) {
+            log.warn("[{}] invalid dates: start={} end={}", action, newStart, newEnd);
+            throw new ApiException(Const.SUBMISSION.INVALID_RESET_DATES, HttpStatus.BAD_REQUEST.value());
+        }
+
+        if (oldSubmissionIds == null || oldSubmissionIds.isEmpty()) {
+            log.warn("[{}] empty submissionIds", action);
+            throw new ApiException(Const.SUBMISSION.EMPTY_SUBMISSION_IDS, HttpStatus.BAD_REQUEST.value());
+        }
+
+        log.info("[{}] start: teacher={} submissions={} newStart={} newEnd={}",
+                action, teacherEmail, oldSubmissionIds.size(), newStart, newEnd);
+
+        // 1. Lấy submission cũ
+        List<SubmissionDailyChallenge> oldSubmissions = submissionDailyChallengeRepository
+                .findByIdInAndDeletedAtIsNull(oldSubmissionIds);
+
+        if (oldSubmissions.isEmpty()) {
+            log.debug("[{}] no valid submissions found", action);
+            throw new ApiException(Const.SUBMISSION.NOT_FOUND, HttpStatus.NOT_FOUND.value());
+        }
+
+        // Validate quyền truy cập
+        request.getSubmissionIds().forEach(appValidator::validateUserAccessToSubmission);
+
+        // 2. Soft-delete submission cũ
+        oldSubmissions.forEach(old -> {
+            old.setDeletedAt(now);
+            old.setDeletedBy(teacherEmail + " (reset)");
+            old.setUpdatedAt(now);
+        });
+        submissionDailyChallengeRepository.saveAll(oldSubmissions);
+
+        // 3. Tạo submission mới với thời gian mới
+        List<SubmissionDailyChallenge> newSubmissions = new ArrayList<>();
+
+        // Load questions cho các challenge
+        Set<Long> challengeIds = oldSubmissions.stream()
+                .map(s -> s.getChallenge().getId())
+                .collect(Collectors.toSet());
+
+        for (SubmissionDailyChallenge old : oldSubmissions) {
+            DailyChallenge challenge = old.getChallenge();
+            User user = old.getUser();
+
+            SubmissionDailyChallenge newSub = SubmissionDailyChallenge.builder()
+                    .user(user)
+                    .challenge(challenge)
+                    .submissionStatus(SubmissionStatus.PENDING)
+                    .startedAt(newStart)
+                    .expiredAt(newEnd)
+                    .actualStartAt(null)
+                    .submittedAt(null)
+                    .isLate(false)
+                    .build();
+
+            newSubmissions.add(newSub);
+        }
+
+        // 4. Save tất cả
+        submissionDailyChallengeRepository.saveAllAndFlush(newSubmissions);
+
+        // 5. Clear cache
+        newSubmissions.forEach(s -> cacheService.clearSubmissionCache(s.getUser().getId(), s.getId()));
+        challengeIds.forEach(cacheService::clearSubmissionsCacheForChallenge);
+
+        log.info("[{}] completed: reset {} submissions | new period: {} → {}",
+                action, newSubmissions.size(), newStart, newEnd);
+
+        // notify affected students
+        for (SubmissionDailyChallenge s : newSubmissions) {
+            try {
+                String title = "Bài đã được reset";
+                String message = "Bài \"" + s.getChallenge().getChallengeName() + "\" đã được reset. Thời gian mới: " + newStart + " → " + newEnd;
+                notificationService.createNotification(s.getUser().getId(), null, title, message, null, null);
+            } catch (Exception ex) {
+                log.debug("Failed to send reset notification userId={} error={}", s.getUser().getId(), ex.getMessage());
+            }
+        }
+
+        return "Reset " + newSubmissions.size() + " submissions.";
+    }
+
+    // ----------------------- Private helpers -----------------------
+
+    private List<DailyChallenge> loadChallengesByLessonIds(List<Long> lessonIds) {
+        if (lessonIds == null || lessonIds.isEmpty()) return List.of();
+        return dailyChallengeRepository.findByClassLessonIdInAndDeletedAtIsNull(lessonIds);
+    }
+
+    private Map<Long, List<DailyChallenge>> groupChallengesByLesson(List<DailyChallenge> challenges) {
+        if (challenges == null || challenges.isEmpty()) return Collections.emptyMap();
+        return challenges.stream().collect(Collectors.groupingBy(c -> c.getClassLesson().getId()));
+    }
+
+    private List<SubmissionDailyChallenge> loadSubmissionsForStudent(Long studentId, List<Long> challengeIds) {
+        if (challengeIds == null || challengeIds.isEmpty()) return List.of();
+        return submissionDailyChallengeRepository.findByUserIdAndChallengeIdInAndDeletedAtIsNull(studentId, challengeIds);
+    }
+
+    private Map<Long, GradingDailyChallenge> loadGradingsBySubmissionIds(List<Long> submissionIds) {
+        if (submissionIds == null || submissionIds.isEmpty()) return Collections.emptyMap();
+        return gradingDailyChallengeRepository.findBySubmissionDailyIdInAndDeletedAtIsNull(submissionIds)
+                .stream().collect(Collectors.toMap(g -> g.getSubmissionDaily().getId(), Function.identity(), (a,b)->a));
+    }
+
+    private StudentChallengeListDTO buildLessonDto(
+            ClassLesson lesson,
+            List<DailyChallenge> challenges,
+            Map<Long, SubmissionDailyChallenge> submissionByChallengeId,
+            Map<Long, GradingDailyChallenge> gradingBySubmissionId,
+            Map<Long, Double> achievedByGradingId,
+            Map<Long, Double> maxWeightByChallengeId,
+            OffsetDateTime now
+    ) {
+        List<StudentChallengeListDTO.StudentChallengeDTO> dtoChallenges = new ArrayList<>();
+        for (DailyChallenge challenge : challenges) {
+            if (challenge.getChallengeStatus() == ChallengeStatus.DRAFT) continue;
+            StudentSubmissionDTO studentSubmission = buildStudentSubmissionForChallenge(
+                    challenge, submissionByChallengeId, gradingBySubmissionId, achievedByGradingId, maxWeightByChallengeId, now
+            );
+            DailyChallengeListDTO.DailyChallengeInLessonDTO challengeDto = dailyChallengeMapper.dailyChallengeToDailyChallengeInLessonDTO(challenge);
+            dtoChallenges.add(StudentChallengeListDTO.StudentChallengeDTO.builder()
+                    .dailyChallenge(challengeDto)
+                    .studentSubmission(studentSubmission)
+                    .build());
+        }
+        return new StudentChallengeListDTO(
+                lesson.getId(),
+                lesson.getClassLessonName(),
+                lesson.getClassLessonContent(),
+                lesson.getOrderNumber(),
+                dtoChallenges
+        );
+    }
+
+    private StudentSubmissionDTO buildStudentSubmissionForChallenge(
+            DailyChallenge challenge,
+            Map<Long, SubmissionDailyChallenge> submissionByChallengeId,
+            Map<Long, GradingDailyChallenge> gradingBySubmissionId,
+            Map<Long, Double> achievedByGradingId,
+            Map<Long, Double> maxWeightByChallengeId,
+            OffsetDateTime now
+    ) {
+        SubmissionDailyChallenge submission = submissionByChallengeId.get(challenge.getId());
+        if (submission == null) return null;
+
+        GradingDailyChallenge grading = gradingBySubmissionId.get(submission.getId());
+        boolean visibleScore = false;
+
+        Double totalWeight = null;
+        Double maxPossible = maxWeightByChallengeId.getOrDefault(challenge.getId(), 0.0);
+
+        if (grading != null) {
+            double achieved = achievedByGradingId.getOrDefault(grading.getId(), 0.0);
+            OffsetDateTime effectiveEnd = Optional.ofNullable(submission.getExpiredAt()).orElse(challenge.getEndDate());
+            if(submission.getSubmissionStatus() == SubmissionStatus.GRADED){
+                if (effectiveEnd != null && now.isBefore(effectiveEnd)) {
+                    // Hide scores until end date; display as SUBMITTED if before effective end
+                    submission.setSubmissionStatus(SubmissionStatus.SUBMITTED);
+                } else {
+                    visibleScore = true;
+                    totalWeight = achieved;
+                    submission.setSubmissionStatus(SubmissionStatus.GRADED);
+                }
+            }
+
+        }
+
+        return submissionMapper.toStudentSubmissionDTO(submission, grading, totalWeight, maxPossible, visibleScore);
     }
 }

@@ -2,9 +2,14 @@
 package com.learning.progress.messaging;
 
 import com.learning.progress.config.RedisChannelProperties;
+import com.learning.progress.dto.notification.DeviceMismatchNotification;
+import com.learning.progress.dto.notification.NotificationDTO;
+import com.learning.progress.service.SseService;
 import com.learning.progress.util.JsonUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Component;
 
@@ -13,13 +18,29 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class RedisPublisher {
 
-    private final RedisTemplate<String, Object> redisTemplate;
+    @Autowired(required = false)
+    private RedisTemplate<String, Object> redisTemplate;
     private final RedisChannelProperties channelProps;
+    private final SseService sseService;
+
+    @Value("${app.redis.enabled:true}")
+    private boolean enabled;
 
     /**
      * Gửi noti cho user cụ thể
      */
     public void publishNotificationToUser(Long userId, Object payload) {
+        if (!enabled) {
+            log.debug("Redis messaging disabled, sending notification directly for userId={}", userId);
+            try {
+                NotificationDTO dto = (NotificationDTO) payload;
+                sseService.sendNotification(dto);
+            } catch (Exception e) {
+                log.error("Failed to send notification directly for userId={}", userId, e);
+            }
+            return;
+        }
+
         String channel = channelProps.getNotificationToUser()+ userId;
 
         publish(channel, payload, "notificationToUser");
@@ -29,6 +50,16 @@ public class RedisPublisher {
      * Gửi cảnh báo mismatch
      */
     public void publishWarningDeviceMismatchToUser(Long submissionId, Object payload) {
+        if (!enabled) {
+            log.debug("Redis messaging disabled, sending device mismatch warning directly for submissionId={}", submissionId);
+            try {
+                DeviceMismatchNotification dto = (DeviceMismatchNotification) payload;
+                sseService.sendWarningDeviceMismatch(dto);
+            } catch (Exception e) {
+                log.error("Failed to send device mismatch warning directly for submissionId={}", submissionId, e);
+            }
+            return;
+        }
         String channel = channelProps.getDeviceMismatch() + submissionId;
 
         publish(channel, payload, "deviceMismatch");

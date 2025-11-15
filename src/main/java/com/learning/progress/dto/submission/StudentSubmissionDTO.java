@@ -23,10 +23,12 @@ public class StudentSubmissionDTO {
     private OffsetDateTime submittedAt;
     private Duration challengeDuration;
     private Duration actualDuration;
-    private boolean isLate;
+    private Boolean isLate;
 
     private Double totalWeight;
     private Double maxPossibleWeight;
+    private Double rawScore;
+    private Double penaltyApplied;
     private Double finalScore;
 
     private String overallFeedback;

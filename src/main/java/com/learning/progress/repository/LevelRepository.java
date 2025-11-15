@@ -20,10 +20,6 @@ public interface LevelRepository extends JpaRepository<Level, Long> {
     @Query("SELECT l FROM Level l WHERE l.deletedAt IS NULL ORDER BY l.orderNumber ASC")
     List<Level> findAllActiveOrderByOrderNumberAsc();
 
-
-    @Query("SELECT MAX(l.orderNumber) FROM Level l WHERE l.deletedAt IS NULL")
-    Optional<Integer> findMaxOrderNumber();
-
     Optional<Level> findByLevelCodeIgnoreCase(String levelCode);
 
     @Query("""
@@ -61,10 +57,6 @@ public interface LevelRepository extends JpaRepository<Level, Long> {
     @Query("SELECT l FROM Level l LEFT JOIN FETCH l.prerequisite WHERE l.id = :id AND l.deletedAt IS NULL")
     Optional<Level> findByIdWithPrerequisite(@Param("id") Long id);
 
-    @Query("SELECT CASE WHEN COUNT(l) > 0 THEN true ELSE false END FROM Level l " +
-            "WHERE l.levelName = :levelName AND l.deletedAt IS NULL AND l.id <> :id")
-    boolean existsActiveLevelNameExceptId(@Param("levelName") String levelName, @Param("id") Long id);
-
     Collection<Level> findByLevelNameAndDeletedAtIsNull(String levelName);
 
     List<Level> findAllByStatus(LevelEnum levelEnum);
@@ -75,5 +67,7 @@ public interface LevelRepository extends JpaRepository<Level, Long> {
         WHERE LOWER(l.levelCode) IN :codes
     """)
     List<Level> findByLevelCodeInIgnoreCase(@Param("codes") List<String> codes);
+
+    Optional<Level> findByIdAndDeletedAtIsNull(Long levelId);
 
 }

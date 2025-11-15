@@ -165,8 +165,8 @@ public class SubmissionQuestionValidator {
                 break;
 
             case REWRITE:
-                if (submissionContent.size() != 1) {
-                    throw new ApiException("REWRITE must have exactly one answer", HttpStatus.BAD_REQUEST.value());
+                if (submissionContent.size() < 1) {
+                    throw new ApiException("REWRITE must have at least one answer", HttpStatus.BAD_REQUEST.value());
                 }
                 validateDataItem(submissionContent.get(0), false, true, questionType);
                 break;

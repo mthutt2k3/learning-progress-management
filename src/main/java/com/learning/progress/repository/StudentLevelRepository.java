@@ -1,5 +1,6 @@
 package com.learning.progress.repository;
 
+import com.learning.progress.common.CommonStatus;
 import com.learning.progress.entity.StudentLevel;
 import org.springframework.data.jpa.repository.JpaRepository;
 

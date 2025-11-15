@@ -11,13 +11,11 @@ import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 @Repository
 public interface ClassRepository extends JpaRepository<Clazz, Long> {
-
-    @Query("SELECT c FROM Clazz c WHERE c.deletedAt IS NULL AND (:searchText IS NULL OR c.className LIKE %:searchText%)")
-    Page<Clazz> findBySearchText(String searchText, Pageable pageable);
 
     @Query("""
    SELECT c FROM Clazz c
@@ -51,8 +49,6 @@ public interface ClassRepository extends JpaRepository<Clazz, Long> {
             @Param("classIds") List<Long> classIds,
             Pageable pageable);
 
-    Optional<Clazz> findByClassCodeIgnoreCase(String classCode);
-
     @Query("SELECT c FROM Clazz c WHERE LOWER(c.classCode) IN :classCodes")
     List<Clazz> findByClassCodeInIgnoreCase(@Param("classCodes") List<String> classCodes);
 
@@ -62,6 +58,27 @@ public interface ClassRepository extends JpaRepository<Clazz, Long> {
 
     List<Clazz> findByStatusAndEndDateLessThanEqualAndDeletedAtIsNull(ClassStatus classStatus, LocalDate upcomingThreshold);
 
-    Optional<Clazz> findByIdAndDeletedAtIsNullAndStatusNot(Long id, ClassStatus status);
+    boolean existsByClassNameAndDeletedAtIsNull(String className);
 
+    boolean existsBySyllabusIdAndStatusNotAndDeletedAtIsNull(Long syllabusId, ClassStatus status);
+
+    @Query(value = """
+    SELECT 
+        c.id as class_id,
+        c.class_name,
+        c.class_code,
+        l.id as level_id,
+        l.level_name,
+        l.level_code,
+        l.description
+    FROM classes c
+    LEFT JOIN syllabuses s ON c.syllabus_id = s.id
+    LEFT JOIN levels l ON s.level_id = l.id
+    WHERE c.id = :classId
+    AND c.deleted_at IS NULL
+    """, nativeQuery = true)
+    Map<String, Object> getClassWithLevelInfo(@Param("classId") Long classId);
+
+    @Query("SELECT COUNT(cs) FROM ClassStudent cs WHERE cs.clazz.id = :classId AND cs.status = 'ACTIVE' AND cs.deletedAt IS NULL")
+    Long countActiveStudentsByClassId(@Param("classId") Long classId);
 }

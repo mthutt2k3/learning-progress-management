@@ -76,6 +76,7 @@ public class ClassChapterServiceImpl implements ClassChapterService {
                 .filter(c -> c.getDeletedAt() == null)
                 .orElseThrow(() -> new ApiException(Const.CLASS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
+        appValidator.validateClassIsActive(classEntity.getId());
         appValidator.validateUserAccessToClass(classEntity.getId());
 
         if (classEntity.getStatus() == ClassStatus.FINISHED) {
@@ -370,6 +371,8 @@ public class ClassChapterServiceImpl implements ClassChapterService {
                 .filter(c -> c.getDeletedAt() == null)
                 .orElseThrow(() -> new ApiException(Const.CLASS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
+        appValidator.validateClassIsActive(classId);
+        appValidator.validateUserAccessToClass(classId);
         // Validate teacher assignment
         Long currentUserId = jwtUtil.extractUserIdFromCurrentRequest();
         if (!classTeacherRepository.existsByClazz_IdAndUser_IdAndStatus(classId, currentUserId, ClassTeacherStatus.ACTIVE)) {
@@ -491,6 +494,8 @@ public class ClassChapterServiceImpl implements ClassChapterService {
             classEntity = classRepository.findById(classId)
                     .filter(c -> c.getDeletedAt() == null)
                     .orElseThrow(() -> new ApiException("Class không tồn tại", HttpStatus.NOT_FOUND.value()));
+            appValidator.validateClassIsActive(classId);
+            appValidator.validateUserAccessToClass(classId);
         } catch (ApiException e) {
             result.setTotalRows(0);
             result.setValidRows(0);

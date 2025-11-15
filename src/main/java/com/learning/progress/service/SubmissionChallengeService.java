@@ -2,6 +2,8 @@ package com.learning.progress.service;
 
 import com.learning.progress.dto.DataResponse;
 import com.learning.progress.dto.challenge.StudentChallengeListDTO;
+import com.learning.progress.dto.submission.ExtendSubmissionDeadlineRequest;
+import com.learning.progress.dto.submission.ResetSubmissionRequest;
 import com.learning.progress.dto.submission.StudentSubmissionDTO;
 import com.learning.progress.entity.DailyChallenge;
 
@@ -25,9 +27,11 @@ public interface SubmissionChallengeService {
 
     StudentSubmissionDTO getSubmissionInfo(Long submissionId);
 
-    void createTemporarySubmissionsForUsers(Long classId, List<Long> userIds);
-
-    void restoreSubmissionsForUsers(Long classId, List<Long> userIds);
+    void syncSubmissionsForUsersInClass(Long classId, List<Long> userIds);
 
     void softDeleteSubmissionsForUser(Long classId, Long userId);
+
+    String extendSubmissionDeadline(ExtendSubmissionDeadlineRequest request);
+
+    String resetSubmissions(ResetSubmissionRequest request);
 }

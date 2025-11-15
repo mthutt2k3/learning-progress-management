@@ -50,13 +50,11 @@ public class SubmissionLogServiceImpl implements SubmissionLogService {
     public void appendLogs(Long submissionId, @Valid AppendSubmissionLogRequest logs) {
         Long userId = jwtUtil.extractUserIdFromCurrentRequest();
 
-        String clientIp = jwtUtil.getClientIpFromCurrentRequest();
-
         // 1. Validate đồng bộ (chỉ đọc)
         validateAppendLogs(submissionId, userId, logs);
 
         // 2. Gọi async để ghi log (ngoài transaction hiện tại)
-        appendLogsAsync(submissionId, userId, clientIp, logs);
+        appendLogsAsync(submissionId, userId, logs);
     }
 
     /**
@@ -95,7 +93,7 @@ public class SubmissionLogServiceImpl implements SubmissionLogService {
 
     @Async("taskExecutor")
     @Transactional
-    public void appendLogsAsync(Long submissionId, Long userId, String clientIp, @Valid AppendSubmissionLogRequest logRequest) {
+    public void appendLogsAsync(Long submissionId, Long userId, @Valid AppendSubmissionLogRequest logRequest) {
         List<AppendSubmissionLogRequest.SubmissionLogEvent> newLogs = logRequest.getLogs();
         if (newLogs.isEmpty()) return;
 
@@ -113,7 +111,6 @@ public class SubmissionLogServiceImpl implements SubmissionLogService {
                 return;
             }
 
-            newLogs.forEach(ev -> ev.setIpAddress(clientIp));
             // PHÁT HIỆN 2 MÁY
             List<AppendSubmissionLogRequest.SubmissionLogEvent> startSessionEvents = newLogs.stream()
                     .filter(ev -> Const.SUBMISSION_EVENT.SESSION_START.equals(ev.getEvent()))
@@ -177,6 +174,10 @@ public class SubmissionLogServiceImpl implements SubmissionLogService {
             noti.setSubmissionId(submission.getId());
             noti.setUserId(userId);
             noti.setWarningCount(warningCount);
+            noti.setTargetDevice(new DeviceMismatchNotification.TargetDevice(
+                    lastStart.getDeviceFingerprint(),
+                    lastStart.getIpAddress()
+            ));
             noti.setMessage("Cảnh báo: Chỉ được dùng 1 thiết bị!");
 
             redisPublisher.publishWarningDeviceMismatchToUser(submission.getId(), noti);

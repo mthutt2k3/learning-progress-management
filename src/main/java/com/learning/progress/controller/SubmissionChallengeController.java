@@ -3,9 +3,7 @@ package com.learning.progress.controller;
 import com.learning.progress.common.Const;
 import com.learning.progress.dto.DataResponse;
 import com.learning.progress.dto.challenge.StudentChallengeListDTO;
-import com.learning.progress.dto.submission.AppendSubmissionLogRequest;
-import com.learning.progress.dto.submission.SubmissionLogsResponse;
-import com.learning.progress.dto.submission.StudentSubmissionDTO;
+import com.learning.progress.dto.submission.*;
 import com.learning.progress.service.SubmissionChallengeService;
 import com.learning.progress.service.SubmissionLogService;
 import com.learning.progress.util.JwtUtil;
@@ -97,5 +95,35 @@ public class SubmissionChallengeController {
 
         StudentSubmissionDTO dto = submissionChallengeService.getSubmissionInfo(submissionChallengeId);
         return ResponseEntity.ok(DataResponse.success(dto, Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL));
+    }
+    @PostMapping("/extend-deadline")
+    @PreAuthorize("hasAnyRole('TEACHER', 'TEACHING_ASSISTANT')")
+    @Operation(
+            summary = "Gia hạn thời gian nộp bài cho học sinh",
+            description = "Chỉ teacher/TA mới được gia hạn. Có thể gia hạn cho nhiều submission cùng lúc."
+    )
+    public ResponseEntity<DataResponse<Integer>> extendSubmissionDeadline(
+            @Valid @RequestBody ExtendSubmissionDeadlineRequest request) {
+        return ResponseEntity.ok(DataResponse.success(
+                null,
+                submissionChallengeService.extendSubmissionDeadline(request)));
+    }
+    @PostMapping("/reset")
+    @PreAuthorize("hasAnyRole('TEACHER', 'TEACHING_ASSISTANT')")
+    @Operation(
+            summary = "Reset bài làm cho học sinh (tạo submission mới với thời gian tùy chỉnh)",
+            description = """
+        Tạo submission mới cho học sinh với startDate và endDate mới. 
+        Submission cũ sẽ được soft-delete. 
+        Hỗ trợ reset nhiều học sinh cùng lúc.
+        """
+    )
+    public ResponseEntity<DataResponse<Integer>> resetSubmissions(
+            @Valid @RequestBody ResetSubmissionRequest request) {
+
+        return ResponseEntity.ok(DataResponse.success(
+                null,
+                submissionChallengeService.resetSubmissions(request)
+        ));
     }
 }

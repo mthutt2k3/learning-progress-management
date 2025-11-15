@@ -62,6 +62,10 @@ public class LessonServiceImpl implements LessonService {
     @Autowired
     private AppValidator appValidator;
 
+    // NEW: notification service
+    @Autowired
+    private com.learning.progress.service.NotificationService notificationService;
+
     @Value("${azure.storage.lesson-template}")
     private String lessonTemplate;
 
@@ -251,6 +255,16 @@ public class LessonServiceImpl implements LessonService {
             result.add(lessonMapper.toLessonDTO(lessonRepository.save(newLesson)));
         }
 
+        // after processing and persisting changes, notify caller (confirmation)
+        try {
+            Long actor = jwtUtil.extractUserIdFromCurrentRequest();
+            String title = "Đồng bộ lessons hoàn tất";
+            String message = "Đồng bộ lessons cho chapterId=" + chapterId + " đã hoàn tất.";
+            notificationService.createNotification(actor, null, title, message, null, null);
+        } catch (Exception ex) {
+            log.debug("Failed to send syncLessons notification: {}", ex.getMessage());
+        }
+
         return result;
     }
 
@@ -427,6 +441,16 @@ public class LessonServiceImpl implements LessonService {
                 Lesson saved = lessonRepository.save(newLesson);
                 result.add(lessonMapper.toLessonDTO(saved));
             }
+        }
+
+        // notify caller about import completion
+        try {
+            Long actor = jwtUtil.extractUserIdFromCurrentRequest();
+            String title = "Import lessons hoàn tất";
+            String message = "Bạn đã import " + result.size() + " lessons thành công.";
+            notificationService.createNotification(actor, null, title, message, null, null);
+        } catch (Exception ex) {
+            log.debug("Failed to send importLessons notification: {}", ex.getMessage());
         }
 
         return result;
@@ -665,3 +689,4 @@ public class LessonServiceImpl implements LessonService {
         );
     }
 }
+

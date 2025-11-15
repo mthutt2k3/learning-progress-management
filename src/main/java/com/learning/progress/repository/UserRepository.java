@@ -12,6 +12,7 @@ import org.springframework.stereotype.Repository;
 import org.springframework.data.domain.Pageable;
 
 import java.time.OffsetDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -87,49 +88,5 @@ public interface UserRepository extends JpaRepository<User, Long> {
     Page<User> findAllByDeletedAtIsNull(Pageable pageable);
 
     List<User> findAllByIdInAndDeletedAtIsNull(List<Long> userIds);
-
-    // COUNT
-    long countByStatus(UserStatus status);
-    long countByRole_Name(RoleName role);
-    long countByCreatedAtAfter(OffsetDateTime date);
-
-    // RECENT
-    List<User> findTop5ByOrderByCreatedAtDesc();
-
-    // TREND: ROLE (daily)
-    @Query(value = """
-    SELECT DATE(u.created_at) as d, r.name, COUNT(*) 
-    FROM users u 
-    JOIN roles r ON u.role_id = r.id
-    WHERE u.created_at >= :start 
-      AND u.deleted_at IS NULL 
-    GROUP BY DATE(u.created_at), r.name 
-    ORDER BY DATE(u.created_at), r.name
-    """, nativeQuery = true)
-    List<Object[]> findRoleByDay(@Param("start") OffsetDateTime start);
-
-    // TREND: ROLE (monthly) - returns rows (YYYY-MM, roleName, count)
-    @Query(value = """
-    SELECT TO_CHAR(u.created_at, 'YYYY-MM') as m, r.name, COUNT(*) 
-    FROM users u 
-    JOIN roles r ON u.role_id = r.id
-    WHERE u.created_at >= :start 
-      AND u.deleted_at IS NULL 
-    GROUP BY TO_CHAR(u.created_at, 'YYYY-MM'), r.name 
-    ORDER BY TO_CHAR(u.created_at, 'YYYY-MM'), r.name
-    """, nativeQuery = true)
-    List<Object[]> findRoleByMonth(@Param("start") OffsetDateTime start);
-
-    // TREND: ROLE (yearly) - returns rows (YYYY, roleName, count)
-    @Query(value = """
-    SELECT TO_CHAR(u.created_at, 'YYYY') as y, r.name, COUNT(*) 
-    FROM users u 
-    JOIN roles r ON u.role_id = r.id
-    WHERE u.created_at >= :start 
-      AND u.deleted_at IS NULL 
-    GROUP BY TO_CHAR(u.created_at, 'YYYY'), r.name 
-    ORDER BY TO_CHAR(u.created_at, 'YYYY'), r.name
-    """, nativeQuery = true)
-    List<Object[]> findRoleByYear(@Param("start") OffsetDateTime start);
 
 }

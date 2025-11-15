@@ -75,40 +75,52 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
                 .findById(request.getSubmissionQuestionId())
                 .orElseThrow(() -> new ApiException("Submission question not found", HttpStatus.NOT_FOUND.value()));
 
-        // 2. Extract student's writing (có thể là text hoặc URL ảnh)
-        String rawContent = extractWritingFromSubmission(submissionQuestion.getSubmissionContentJson());
-        if (rawContent == null || rawContent.trim().isEmpty()) {
+        // 2. Extract ALL content (text + images)
+        List<String> rawContents = extractAllWritingContent(submissionQuestion.getSubmissionContentJson());
+        if (rawContents.isEmpty()) {
             throw new ApiException("No writing content found in submission", HttpStatus.BAD_REQUEST.value());
         }
 
-        // 3. Determine if content is an image URL or plain text
-        String studentWriting;
+        // 3. Separate images and text
+        List<String> imageUrls = new ArrayList<>();
+        List<String> textContents = new ArrayList<>();
 
-        if (isImageUrl(rawContent)) {
-            // ✅ Content is an image URL → Download and OCR
-            log.info("[{}] Detected image URL, performing OCR...", traceId);
-            studentWriting = extractTextFromImageUrl(rawContent, traceId);
-
-            if (studentWriting == null || studentWriting.trim().isEmpty()) {
-                throw new ApiException("No text could be extracted from the image", HttpStatus.BAD_REQUEST.value());
+        for (String content : rawContents) {
+            if (isImageUrl(content)) {
+                imageUrls.add(content);
+            } else if (content != null && !content.trim().isEmpty()) {
+                textContents.add(content);
             }
-
-            log.info("[{}] Successfully extracted text from image: {}", traceId, studentWriting);
-        } else {
-            // ✅ Content is plain text
-            studentWriting = rawContent;
         }
 
-        // 4. Load context
+        // 4. Process all images with OCR
+        if (!imageUrls.isEmpty()) {
+            log.info("[{}] Detected {} images, performing OCR on all...", traceId, imageUrls.size());
+            String extractedText = extractAllImagesText(imageUrls, traceId);
+            if (extractedText != null && !extractedText.trim().isEmpty()) {
+                textContents.add(extractedText);
+            }
+        }
+
+        // 5. Combine all text
+        String studentWriting = String.join("\n\n", textContents);
+        if (studentWriting.trim().isEmpty()) {
+            throw new ApiException("No text could be extracted from submission", HttpStatus.BAD_REQUEST.value());
+        }
+
+        log.info("[{}] Successfully extracted text (from {} images + {} text blocks): {}",
+                traceId, imageUrls.size(), textContents.size() - (imageUrls.isEmpty() ? 0 : 1), studentWriting);
+
+        // 6. Load context
         Question question = submissionQuestion.getQuestion();
         ChallengeSection section = question.getSection();
         DailyChallenge challenge = section.getChallenge();
         OpenAiServiceImpl.ChallengeContext context = openAiServiceImpl.eagerLoadChallengeContext(challenge);
 
-        // 5. Build prompt
+        // 7. Build prompt
         String prompt = buildWritingGradingPrompt(context, question.getQuestionText(), studentWriting);
 
-        // 6. Call OpenAI with retry
+        // 8. Call OpenAI with retry
         String aiResponse = null;
         int maxRetries = 3;
         Exception lastException = null;
@@ -142,11 +154,68 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
                     HttpStatus.INTERNAL_SERVER_ERROR.value());
         }
 
-        // 7. Parse response
+        // 9. Parse response
         GradingWritingResponse result = parseGradingResponse(aiResponse, studentWriting);
         log.info("[{}] Successfully graded writing. Overall score: {}", traceId, result.getSuggestedScore());
 
         return result;
+    }
+
+    /**
+     * ✅ NEW: Extract ALL writing content (both text and image URLs)
+     */
+    private List<String> extractAllWritingContent(Map<String, Object> submissionContentJson) {
+        List<String> allContent = new ArrayList<>();
+
+        try {
+            Object dataObj = submissionContentJson.get("data");
+            if (dataObj instanceof List<?> dataList) {
+                for (Object item : dataList) {
+                    if (item instanceof Map<?, ?> itemMap) {
+                        Object value = itemMap.get("value");
+                        if (value != null && !value.toString().trim().isEmpty()) {
+                            allContent.add(value.toString().trim());
+                        }
+                    }
+                }
+            }
+
+            return allContent;
+
+        } catch (Exception e) {
+            log.error("Failed to extract writing content: {}", e.getMessage());
+            throw new RuntimeException("Invalid submission content format", e);
+        }
+    }
+
+    /**
+     * ✅ NEW: Extract text from multiple images
+     */
+    private String extractAllImagesText(List<String> imageUrls, String traceId) {
+        List<String> extractedTexts = new ArrayList<>();
+
+        for (int i = 0; i < imageUrls.size(); i++) {
+            String imageUrl = imageUrls.get(i);
+            log.info("[{}] Processing image {}/{}: {}", traceId, i + 1, imageUrls.size(), imageUrl);
+
+            try {
+                String extractedText = extractTextFromImageUrl(imageUrl, traceId);
+                if (extractedText != null && !extractedText.trim().isEmpty()) {
+                    extractedTexts.add(extractedText);
+                    log.info("[{}] Successfully extracted text from image {}/{}", traceId, i + 1, imageUrls.size());
+                }
+            } catch (Exception e) {
+                log.error("[{}] Failed to extract text from image {}/{}: {}",
+                        traceId, i + 1, imageUrls.size(), e.getMessage());
+                // Continue with other images instead of failing completely
+            }
+        }
+
+        // Join all extracted texts with double newline
+        String combinedText = String.join("\n\n", extractedTexts);
+        log.info("[{}] Combined text from {} images: {}", traceId, extractedTexts.size(), combinedText);
+
+        return combinedText;
     }
 
     /**
@@ -187,9 +256,8 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
 
             // 2. Extract text using OpenAI Vision
             log.info("[{}] Extracting text from image using OCR...", traceId);
-            String extractedText = extractTextFromImage(imageFile);
 
-            return extractedText;
+            return extractTextFromImage(imageFile);
 
         } catch (Exception e) {
             log.error("[{}] Failed to extract text from image URL: {}", traceId, e.getMessage(), e);
@@ -248,6 +316,7 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
 
     /**
      * Extract text from handwritten image using OpenAI Vision API
+     * Returns JSON response with status and extracted text
      */
     private String extractTextFromImage(File imageFile) {
         try {
@@ -287,12 +356,112 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
                         + (lastException != null ? lastException.getMessage() : "unknown error"));
             }
 
-            return extractedText.trim();
+            // Parse JSON response from AI
+            return parseOCRResponse(extractedText.trim());
 
+        } catch (ApiException e) {
+            throw e;
         } catch (Exception e) {
             log.error("Failed to extract text from image: {}", e.getMessage(), e);
             throw new RuntimeException("Failed to extract text from image", e);
         }
+    }
+
+    /**
+     * Parse OCR JSON response and handle different status codes
+     */
+    private String parseOCRResponse(String jsonResponse) {
+        try {
+            String cleaned = openAiServiceImpl.cleanJsonResponse(jsonResponse);
+            JsonNode root = objectMapper.readTree(cleaned);
+
+            String status = root.hasNonNull("status") ? root.get("status").asText() : "UNKNOWN";
+
+            switch (status) {
+                case "SUCCESS":
+                    // Trả về text nguyên văn, giữ nguyên mọi lỗi chính tả, ngữ pháp
+                    String extractedText = root.hasNonNull("text") ? root.get("text").asText() : "";
+                    if (extractedText.isEmpty()) {
+                        throw new ApiException("OCR returned empty text", HttpStatus.BAD_REQUEST.value());
+                    }
+                    return extractedText;
+
+                case "ILLEGIBLE_HANDWRITING":
+                    throw new ApiException("Chữ viết tay không rõ ràng, không thể đọc được", HttpStatus.BAD_REQUEST.value());
+
+                case "NO_TEXT_FOUND":
+                    throw new ApiException("Không tìm thấy văn bản trong ảnh", HttpStatus.BAD_REQUEST.value());
+
+                case "BLANK_IMAGE":
+                    throw new ApiException("Ảnh trống hoặc không hợp lệ", HttpStatus.BAD_REQUEST.value());
+
+                default:
+                    throw new ApiException("Lỗi OCR: Trạng thái không xác định - " + status, HttpStatus.INTERNAL_SERVER_ERROR.value());
+            }
+
+        } catch (ApiException e) {
+            // Re-throw ApiException as is
+            throw e;
+        } catch (Exception e) {
+            log.error("Failed to parse OCR response: {}", e.getMessage(), e);
+            throw new ApiException("Không thể xử lý kết quả OCR: " + e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR.value());
+        }
+    }
+
+    /**
+     * Build prompt for OCR extraction - instructs AI to return JSON
+     */
+    private String buildOCRPrompt() {
+        StringBuilder prompt = new StringBuilder();
+
+        prompt.append("You are an expert OCR system specialized in reading handwritten English text.\n\n");
+
+        prompt.append("CRITICAL: You MUST respond with ONLY valid JSON in this exact format, no markdown, no extra text:\n\n");
+        prompt.append("{\n");
+        prompt.append("  \"status\": \"SUCCESS\" | \"ILLEGIBLE_HANDWRITING\" | \"NO_TEXT_FOUND\" | \"BLANK_IMAGE\",\n");
+        prompt.append("  \"text\": \"extracted text here (only if status is SUCCESS)\"\n");
+        prompt.append("}\n\n");
+
+        prompt.append("TASK: Extract ALL text from the handwritten image with high accuracy.\n\n");
+
+        prompt.append("DECISION RULES:\n");
+        prompt.append("1. If the image is blank or contains no content:\n");
+        prompt.append("   → Return: {\"status\": \"BLANK_IMAGE\"}\n\n");
+
+        prompt.append("2. If the image has no text or is not a handwriting sample:\n");
+        prompt.append("   → Return: {\"status\": \"NO_TEXT_FOUND\"}\n\n");
+
+        prompt.append("3. If the handwriting is too messy, unclear, or illegible (you can't confidently read at least 70% of the text):\n");
+        prompt.append("   → Return: {\"status\": \"ILLEGIBLE_HANDWRITING\"}\n\n");
+
+        prompt.append("4. If the handwriting is readable (even if not perfect):\n");
+        prompt.append("   → Return: {\"status\": \"SUCCESS\", \"text\": \"exact transcription\"}\n\n");
+
+        prompt.append("TRANSCRIPTION RULES (when status is SUCCESS):\n");
+        prompt.append("- Transcribe EXACTLY what is written, character by character\n");
+        prompt.append("- DO NOT correct any spelling mistakes\n");
+        prompt.append("- DO NOT correct any grammar errors\n");
+        prompt.append("- DO NOT add punctuation that isn't in the original\n");
+        prompt.append("- DO NOT add or remove spaces\n");
+        prompt.append("- Preserve line breaks with \\n\n");
+        prompt.append("- Preserve paragraph structure\n");
+        prompt.append("- If a word is unclear but readable, transcribe your best interpretation\n");
+        prompt.append("- Keep everything as written, including mistakes\n\n");
+
+        prompt.append("EXAMPLES OF ILLEGIBLE:\n");
+        prompt.append("- Extremely messy scribbles where most words are unreadable\n");
+        prompt.append("- Blurry or low-quality images where text cannot be distinguished\n");
+        prompt.append("- Overlapping text that makes it impossible to separate words\n");
+        prompt.append("- Handwriting so poor that fewer than 70% of words can be confidently identified\n\n");
+
+        prompt.append("REMEMBER: Return ONLY the JSON object, nothing else. No markdown code blocks, no explanations.\n");
+
+        prompt.append("IMPORTANT: You MUST respond with ONLY valid JSON in this exact format, no markdown, no extra text:\n\n");
+        prompt.append("{\n");
+        prompt.append("  \"status\": \"SUCCESS\" | \"ILLEGIBLE_HANDWRITING\" | \"NO_TEXT_FOUND\" | \"BLANK_IMAGE\",\n");
+        prompt.append("  \"text\": \"extracted text here (only if status is SUCCESS)\"\n");
+        prompt.append("}\n\n");
+        return prompt.toString();
     }
 
     /**
@@ -302,60 +471,6 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
         try (FileInputStream fis = new FileInputStream(imageFile)) {
             byte[] imageBytes = fis.readAllBytes();
             return Base64.getEncoder().encodeToString(imageBytes);
-        }
-    }
-
-    /**
-     * Build prompt for OCR extraction
-     */
-    private String buildOCRPrompt() {
-        StringBuilder prompt = new StringBuilder();
-
-        prompt.append("You are an expert OCR system specialized in reading handwritten English text.\n\n");
-
-        prompt.append("TASK: Extract ALL text from the handwritten image with high accuracy.\n\n");
-
-        prompt.append("CRITICAL: First, assess if the handwriting is legible enough to transcribe accurately.\n\n");
-
-        prompt.append("RULES:\n");
-        prompt.append("1. If the handwriting is too messy, unclear, or illegible (you can't confidently read at least 70% of the text), respond ONLY with: ILLEGIBLE_HANDWRITING\n");
-        prompt.append("2. If the image is blank, contains no text, or is not a handwriting sample, respond with: NO_TEXT_FOUND\n");
-        prompt.append("3. If the handwriting is readable (even if not perfect), transcribe EXACTLY what is written, including spelling mistakes\n");
-        prompt.append("4. Preserve line breaks and paragraph structure\n");
-        prompt.append("5. If a word is unclear but you can make a reasonable guess, transcribe it with your best guess\n");
-        prompt.append("6. Do NOT add punctuation that isn't in the original\n");
-        prompt.append("7. Do NOT correct grammar or spelling errors\n\n");
-
-        prompt.append("EXAMPLES OF ILLEGIBLE:\n");
-        prompt.append("- Extremely messy scribbles where most words are unreadable\n");
-        prompt.append("- Blurry or low-quality images where text cannot be distinguished\n");
-        prompt.append("- Overlapping text that makes it impossible to separate words\n");
-        prompt.append("- Handwriting so poor that fewer than 70% of words can be confidently identified\n\n");
-
-        prompt.append("OUTPUT:\n");
-        prompt.append("- If illegible → ILLEGIBLE_HANDWRITING\n");
-        prompt.append("- If no text → NO_TEXT_FOUND\n");
-        prompt.append("- If readable → Plain text only, exactly as written in the image\n");
-
-        return prompt.toString();
-    }
-
-
-    // Helper method: Extract writing text from JSON
-    private String extractWritingFromSubmission(Map<String, Object> submissionContentJson) {
-        try {
-            Object dataObj = submissionContentJson.get("data");
-            if (dataObj instanceof List<?> dataList && !dataList.isEmpty()) {
-                Object firstItem = dataList.get(0);
-                if (firstItem instanceof Map<?, ?> firstMap) {
-                    Object value = firstMap.get("value");
-                    return value != null ? value.toString() : null;
-                }
-            }
-            return null;
-        } catch (Exception e) {
-            log.error("Failed to extract writing: {}", e.getMessage());
-            throw new RuntimeException("Invalid submission content format", e);
         }
     }
 
@@ -417,9 +532,6 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
         prompt.append("STUDENT'S WRITING:\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
         prompt.append(studentWriting).append("\n");
         prompt.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n");
-
-//        String ageInstructions = openAiServiceImpl.getAgeBasedLevelInstructions(age);
-//        prompt.append(ageInstructions).append("\n\n");
 
         prompt.append("OUTPUT (exact JSON only, no extra text). Note: ALL textual values must be in Vietnamese:\n");
         prompt.append("{\n");
@@ -514,12 +626,8 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
                 }
             }
 
-            // Prioritize comments
-            int minKeep = 7;
             int maxKeep = 20;
-            if (comments.size() < minKeep) {
-                // if AI returned fewer, keep all
-            } else if (comments.size() > maxKeep) {
+            if (comments.size() > maxKeep) {
                 comments = comments.subList(0, maxKeep);
             }
 
@@ -557,10 +665,8 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
                 .build();
     }
 
-    // Thay thế method assessPronunciation() trong AiFeedbackServiceImpl.java
-
     @Override
-    public PronunciationAssessmentResponse assessPronunciation(PronunciationAssessmentRequest request) {
+    public PronunciationAssessmentResponse assessPronunciation(PronunciationAssessmentRequest request, String questionText) {
         String traceId = TraceUtil.getTraceId();
         log.info("[{}] Starting pronunciation assessment", traceId);
 
@@ -569,7 +675,6 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
         }
 
         // Retry logic - max 3 attempts
-        PronunciationAssessmentResponse result = null;
         Exception lastException = null;
         int maxAttempts = 3;
 
@@ -600,7 +705,7 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
                         } else {
                             // Use continuous recognition WITHOUT pronunciation assessment
                             log.info("[{}] Free-form assessment", traceId);
-                            response = assessFreeForm(wavFile);
+                            response = assessFreeForm(wavFile, questionText);
                         }
 
                         log.info("[{}] Assessment completed on attempt {}. Score: {}",
@@ -683,7 +788,6 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
                             Thread.currentThread().interrupt();
                             throw new ApiException("Assessment retry interrupted", HttpStatus.INTERNAL_SERVER_ERROR.value());
                         }
-                        continue; // Retry
                     }
                 } else {
                     // Non-retryable runtime exception
@@ -712,7 +816,6 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
                             Thread.currentThread().interrupt();
                             throw new ApiException("Assessment retry interrupted", HttpStatus.INTERNAL_SERVER_ERROR.value());
                         }
-                        continue; // Retry
                     }
                 } else {
                     // Non-retryable exception
@@ -728,7 +831,7 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
         throw new ApiException(
                 String.format("Failed to assess pronunciation after %d attempts: %s",
                         maxAttempts,
-                        lastException != null ? lastException.getMessage() : "Unknown error"),
+                        lastException.getMessage()),
                 HttpStatus.INTERNAL_SERVER_ERROR.value()
         );
     }
@@ -955,12 +1058,9 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
     }
 
     /**
-     * Assess free-form (no reference text)
+     * Assess free-form WITH GPT grammar correction AND content assessment
      */
-    /**
-     * Assess free-form WITH GPT grammar correction
-     */
-    private PronunciationAssessmentResponse assessFreeForm(File wavFile) throws Exception {
+    private PronunciationAssessmentResponse assessFreeForm(File wavFile, String questionText) throws Exception {
         String traceId = TraceUtil.getTraceId();
 
         // Step 1: Perform speech recognition
@@ -980,13 +1080,255 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
 
         // Step 3: Re-run Azure Pronunciation Assessment with corrected reference
         log.info("[{}] Step 3: Running pronunciation assessment with corrected reference...", traceId);
-        PronunciationAssessmentResponse response = assessWithCorrectedReference(
+        PronunciationAssessmentResponse technicalAssessment = assessWithCorrectedReference(
                 wavFile,
                 correctedText,
                 analysis.getRecognizedText()
         );
 
-        return response;
+        // Step 4: ✅ NEW - Assess content quality if questionText provided
+        if (questionText != null && !questionText.trim().isEmpty()) {
+            log.info("[{}] Step 4: Assessing content quality against question...", traceId);
+            ContentAssessmentResult contentAssessment = assessContentQuality(
+                    analysis.getRecognizedText(),
+                    questionText
+            );
+
+            // Step 5: Merge technical + content assessments
+            log.info("[{}] Step 5: Merging technical and content assessments...", traceId);
+            return mergeAssessments(technicalAssessment, contentAssessment, questionText);
+        }
+
+        // No questionText → return technical assessment only
+        return technicalAssessment;
+    }
+
+    /**
+     * ✅ NEW: Assess content quality against the question
+     */
+    private ContentAssessmentResult assessContentQuality(String recognizedText, String questionText) {
+        try {
+            String prompt = buildContentAssessmentPrompt(recognizedText, questionText);
+
+            // Call OpenAI with retry logic
+            String aiResponse = null;
+            int maxRetries = 3;
+
+            for (int attempt = 1; attempt <= maxRetries; attempt++) {
+                try {
+                    log.info("Calling OpenAI for content assessment (attempt {}/{})...", attempt, maxRetries);
+                    aiResponse = openAiServiceImpl.callOpenAIForFeedback(prompt);
+                    break;
+                } catch (Exception e) {
+                    log.warn("Content assessment failed on attempt {}/{}: {}", attempt, maxRetries, e.getMessage());
+
+                    if (attempt < maxRetries) {
+                        try {
+                            Thread.sleep(1000L * attempt);
+                        } catch (InterruptedException ie) {
+                            Thread.currentThread().interrupt();
+                        }
+                    }
+                }
+            }
+
+            if (aiResponse == null) {
+                log.warn("Failed to assess content after {} attempts, using default", maxRetries);
+                return createDefaultContentAssessment();
+            }
+
+            return parseContentAssessmentResponse(aiResponse);
+
+        } catch (Exception e) {
+            log.error("Error in content assessment: {}", e.getMessage(), e);
+            return createDefaultContentAssessment();
+        }
+    }
+
+    /**
+     * ✅ NEW: Build prompt for content assessment
+     */
+    private String buildContentAssessmentPrompt(String recognizedText, String questionText) {
+        StringBuilder prompt = new StringBuilder();
+
+        prompt.append("You are an expert English speaking assessment coach. ");
+        prompt.append("Evaluate how well the student's spoken response answers the given question/topic.\n\n");
+
+        prompt.append("QUESTION/TOPIC:\n");
+        prompt.append(questionText).append("\n\n");
+
+        prompt.append("STUDENT'S RESPONSE:\n");
+        prompt.append(recognizedText).append("\n\n");
+
+        prompt.append("ASSESSMENT TASK:\n");
+        prompt.append("Evaluate the content quality on these criteria (0-10 scale):\n\n");
+
+        prompt.append("1. **taskAchievementScore** (0-10): Did they answer the question?\n");
+        prompt.append("   - 0-3: Completely off-topic or irrelevant\n");
+        prompt.append("   - 4-6: Partially answers, missing key points\n");
+        prompt.append("   - 7-8: Answers well, minor gaps\n");
+        prompt.append("   - 9-10: Fully addresses all aspects\n\n");
+
+        prompt.append("2. **contentQualityScore** (0-10): Is the content detailed and well-developed?\n");
+        prompt.append("   - 0-3: Very brief, lacks detail\n");
+        prompt.append("   - 4-6: Some details but underdeveloped\n");
+        prompt.append("   - 7-8: Good details and examples\n");
+        prompt.append("   - 9-10: Rich, well-developed content\n\n");
+
+        prompt.append("3. **relevanceScore** (0-10): Is everything said relevant to the topic?\n");
+        prompt.append("   - 0-3: Mostly irrelevant or confused\n");
+        prompt.append("   - 4-6: Some relevant, some off-track\n");
+        prompt.append("   - 7-8: Mostly relevant\n");
+        prompt.append("   - 9-10: Everything is on-topic\n\n");
+
+        prompt.append("4. **coherenceScore** (0-10): Is the response logical and organized?\n");
+        prompt.append("   - 0-3: Disorganized, hard to follow\n");
+        prompt.append("   - 4-6: Some organization, but jumpy\n");
+        prompt.append("   - 7-8: Well-organized, clear flow\n");
+        prompt.append("   - 9-10: Excellent structure and logic\n\n");
+
+        prompt.append("5. **contentFeedback** (string): Brief feedback in Vietnamese (100-150 words)\n");
+        prompt.append("   - What did they do well?\n");
+        prompt.append("   - What's missing or could be improved?\n");
+        prompt.append("   - 2-3 specific suggestions\n\n");
+
+        prompt.append("IMPORTANT: All feedback content MUST be in Vietnamese with HTML formatting without \\n.\n");
+        prompt.append("Use these HTML tags for formatting:\n");
+        prompt.append("- <p>paragraph text</p> for paragraphs\n");
+        prompt.append("- <ul><li>item</li></ul> for bullet lists\n");
+        prompt.append("- <strong>text</strong> for bold emphasis\n\n");
+
+        prompt.append("Return ONLY valid JSON (no markdown, no extra text):\n");
+        prompt.append("{\n");
+        prompt.append("  \"taskAchievementScore\": 8.0,\n");
+        prompt.append("  \"contentQualityScore\": 7.5,\n");
+        prompt.append("  \"relevanceScore\": 9.0,\n");
+        prompt.append("  \"coherenceScore\": 8.5,\n");
+        prompt.append("  \"contentFeedback\": \"Phản hồi bằng tiếng Việt với HTML...\"\n");
+        prompt.append("}\n");
+
+        return prompt.toString();
+    }
+
+    /**
+     * ✅ NEW: Parse content assessment response
+     */
+    private ContentAssessmentResult parseContentAssessmentResponse(String jsonResponse) {
+        try {
+            String cleaned = openAiServiceImpl.cleanJsonResponse(jsonResponse);
+            JsonNode root = objectMapper.readTree(cleaned);
+
+            double taskAchievementScore = root.has("taskAchievementScore")
+                    ? root.get("taskAchievementScore").asDouble() : 0.0;
+            double contentQualityScore = root.has("contentQualityScore")
+                    ? root.get("contentQualityScore").asDouble() : 0.0;
+            double relevanceScore = root.has("relevanceScore")
+                    ? root.get("relevanceScore").asDouble() : 0.0;
+            double coherenceScore = root.has("coherenceScore")
+                    ? root.get("coherenceScore").asDouble() : 0.0;
+            String contentFeedback = root.has("contentFeedback")
+                    ? root.get("contentFeedback").asText() : "";
+
+            // Clamp scores
+            taskAchievementScore = clampScore(taskAchievementScore);
+            contentQualityScore = clampScore(contentQualityScore);
+            relevanceScore = clampScore(relevanceScore);
+            coherenceScore = clampScore(coherenceScore);
+
+            return ContentAssessmentResult.builder()
+                    .taskAchievementScore(taskAchievementScore)
+                    .contentQualityScore(contentQualityScore)
+                    .relevanceScore(relevanceScore)
+                    .coherenceScore(coherenceScore)
+                    .contentFeedback(contentFeedback)
+                    .build();
+
+        } catch (Exception e) {
+            log.error("Failed to parse content assessment: {}", e.getMessage());
+            return createDefaultContentAssessment();
+        }
+    }
+
+    /**
+     * ✅ NEW: Create default content assessment on failure
+     */
+    private ContentAssessmentResult createDefaultContentAssessment() {
+        return ContentAssessmentResult.builder()
+                .taskAchievementScore(50.0)
+                .contentQualityScore(50.0)
+                .relevanceScore(50.0)
+                .coherenceScore(50.0)
+                .contentFeedback("<p>Không thể đánh giá nội dung chi tiết.</p>")
+                .build();
+    }
+
+    /**
+     * ✅ NEW: Merge technical and content assessments
+     */
+    private PronunciationAssessmentResponse mergeAssessments(
+            PronunciationAssessmentResponse technicalAssessment,
+            ContentAssessmentResult contentAssessment,
+            String questionText) {
+
+        // Calculate weighted overall score: 50% technical + 50% content
+        double contentAverage = (contentAssessment.getTaskAchievementScore() +
+                contentAssessment.getContentQualityScore() +
+                contentAssessment.getRelevanceScore() +
+                contentAssessment.getCoherenceScore()) / 4.0;
+
+        double technicalAverage = (technicalAssessment.getPronunciationScore() +
+                technicalAssessment.getAccuracyScore() +
+                technicalAssessment.getFluencyScore() +
+                technicalAssessment.getCompletenessScore() +
+                (technicalAssessment.getProsodyScore() != null ? technicalAssessment.getProsodyScore() : 0)) / 5.0;
+
+        // Merge feedback: Technical first, then Content
+        String mergedFeedback = mergeFeedbackSections(
+                technicalAssessment.getFeedback(),
+                contentAssessment.getContentFeedback(),
+                questionText
+        );
+
+        // Keep technical scores, add content feedback
+        technicalAssessment.setFeedback(mergedFeedback);
+
+        return technicalAssessment;
+    }
+
+    /**
+     * ✅ NEW: Merge feedback sections
+     */
+    private String mergeFeedbackSections(
+            String technicalFeedback,
+            String contentFeedback,
+            String questionText) {
+
+        StringBuilder merged = new StringBuilder();
+
+        // Header about the question
+        merged.append("<h3><strong>📋 Đánh giá dựa trên câu hỏi</strong></h3>");
+        merged.append("<p><em>Câu hỏi: ").append(questionText).append("</em></p>");
+
+        // Section 1: Content Assessment
+        merged.append("<h3><strong>📝 Đánh giá nội dung</strong></h3>");
+        merged.append(contentFeedback);
+
+        // Section 2: Technical Assessment
+        merged.append("<h3><strong>🎤 Đánh giá kỹ thuật phát âm</strong></h3>");
+        merged.append(technicalFeedback);
+
+        return merged.toString();
+    }
+
+    // ✅ NEW: Supporting class for content assessment
+    @Data
+    @Builder
+    private static class ContentAssessmentResult {
+        private double taskAchievementScore;
+        private double contentQualityScore;
+        private double relevanceScore;
+        private double coherenceScore;
+        private String contentFeedback;
     }
 
     /**
@@ -999,7 +1341,6 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
             // Call OpenAI with retry logic
             String aiResponse = null;
             int maxRetries = 3;
-            Exception lastException = null;
 
             for (int attempt = 1; attempt <= maxRetries; attempt++) {
                 try {
@@ -1007,7 +1348,6 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
                     aiResponse = openAiServiceImpl.callOpenAI(prompt);
                     break;
                 } catch (Exception e) {
-                    lastException = e;
                     log.warn("Grammar correction failed on attempt {}/{}: {}", attempt, maxRetries, e.getMessage());
 
                     if (attempt < maxRetries) {
@@ -1129,13 +1469,13 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
         PronunciationAssessmentResponse response = assessWithReferenceTextContinuous(wavFile, request);
 
         // Add note in feedback that reference was auto-generated
-        String enhancedFeedback = enhanceFeedbackWithCorrectionNote(
-                response.getFeedback(),
-                originalRecognizedText,
-                correctedReferenceText
-        );
+//        String enhancedFeedback = enhanceFeedbackWithCorrectionNote(
+//                response.getFeedback(),
+//                originalRecognizedText,
+//                correctedReferenceText
+//        );
 
-        response.setFeedback(enhancedFeedback);
+        response.setFeedback(response.getFeedback());
 
         log.info("[{}] Assessment with corrected reference completed. Score: {}",
                 traceId, response.getPronunciationScore());
@@ -1307,14 +1647,11 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
      * Map granularity string to enum
      */
     private PronunciationAssessmentGranularity mapGranularity(String granularity) {
-        switch (granularity.toLowerCase()) {
-            case "word":
-                return PronunciationAssessmentGranularity.Word;
-            case "fulltext":
-                return PronunciationAssessmentGranularity.FullText;
-            default:
-                return PronunciationAssessmentGranularity.Phoneme;
-        }
+        return switch (granularity.toLowerCase()) {
+            case "word" -> PronunciationAssessmentGranularity.Word;
+            case "fulltext" -> PronunciationAssessmentGranularity.FullText;
+            default -> PronunciationAssessmentGranularity.Phoneme;
+        };
     }
 
     /**
@@ -1331,7 +1668,7 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
             JsonNode rootNode = objectMapper.readTree(jsonResult);
             JsonNode nBestArray = rootNode.get("NBest");
 
-            if (nBestArray != null && nBestArray.isArray() && nBestArray.size() > 0) {
+            if (nBestArray != null && nBestArray.isArray() && !nBestArray.isEmpty()) {
                 JsonNode nBestItem = nBestArray.get(0);
                 JsonNode wordsArray = nBestItem.get("Words");
 
@@ -1476,12 +1813,23 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
             String aiFeedback = openAiServiceImpl.callOpenAIForFeedback(prompt);
 
             // Clean and return
-            return aiFeedback.trim();
+            return extractFeedbackFromJson(aiFeedback.trim());
 
         } catch (Exception e) {
             log.error("Failed to generate AI feedback, using fallback: {}", e.getMessage());
             // Fallback to basic feedback if AI fails
             return generateBasicFeedback(pronunciationScore, accuracyScore, fluencyScore, completenessScore, prosodyScore, words);
+        }
+    }
+
+    private String extractFeedbackFromJson(String jsonResponse) {
+        try {
+            ObjectMapper mapper = new ObjectMapper();
+            JsonNode node = mapper.readTree(jsonResponse);
+            return node.get("feedback").asText();
+        } catch (Exception e) {
+            log.warn("Failed to parse JSON feedback, returning raw response: {}", e.getMessage());
+            return jsonResponse.trim(); // fallback to original if parse fails
         }
     }
 
@@ -1546,7 +1894,7 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
         prompt.append("- Give an overall impression first (confidence, clarity, tone, etc.) with a friendly and encouraging tone.\n");
         prompt.append("- Mention what the student did well (correct sounds, clear rhythm, natural speaking, etc.).\n");
         prompt.append("- Briefly point out the main pronunciation or fluency issues (e.g., unclear endings, missing sounds, wrong stress, hesitation).\n");
-        prompt.append("- For each main issue, give simple, practical advice on how to fix it (don’t over-explain).\n");
+        prompt.append("- For each main issue, give simple, practical advice on how to fix it (don't over-explain).\n");
         prompt.append("- End with 2–3 short, clear tips for improvement and a motivational closing.\n\n");
 
         prompt.append("STYLE REQUIREMENTS:\n");
@@ -1565,9 +1913,6 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
         prompt.append("- <strong>text</strong> for bold emphasis\n");
         prompt.append("- <em>text</em> for italic emphasis\n");
         prompt.append("- Multiple spaces/newlines will be preserved as-is\n\n");
-
-//        String ageInstructions = openAiServiceImpl.getAgeBasedLevelInstructions(age);
-//        prompt.append(ageInstructions).append("\n\n");
 
         prompt.append("Now, write the feedback in Vietnamese below:\n");
 
@@ -1938,9 +2283,6 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
 
         prompt.append("You are an expert English pronunciation coach. Analyze the following speech recognition results and provide a comprehensive pronunciation assessment.\n\n");
 
-//        String ageInstructions = openAiServiceImpl.getAgeBasedLevelInstructions(age);
-//        prompt.append(ageInstructions).append("\n\n");
-
         prompt.append("SPEECH ANALYSIS DATA:\n");
         prompt.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
         prompt.append(String.format("Recognized Text: \"%s\"\n", analysis.getRecognizedText()));
@@ -2189,88 +2531,89 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
     @Override
     @Transactional(readOnly = true)
     public SseEmitter gradeWritingStream(GradingWritingRequest request) {
-        String traceId = TraceUtil.getTraceId();
-        log.info("[{}] Starting streaming AI grading for submissionQuestionId: {}",
-                traceId, request.getSubmissionQuestionId());
-
-        // ✅ CRITICAL: Load TẤT CẢ data TRONG transaction, TRƯỚC khi tạo async task
-
-        // 1. Load submission question
-        SubmissionQuestion submissionQuestion = submissionQuestionRepository
-                .findById(request.getSubmissionQuestionId())
-                .orElseThrow(() -> new ApiException("Submission question not found",
-                        HttpStatus.NOT_FOUND.value()));
-
-        // 2. Extract student writing
-        String studentWriting = extractWritingFromSubmission(
-                submissionQuestion.getSubmissionContentJson());
-
-        if (studentWriting == null || studentWriting.trim().isEmpty()) {
-            throw new ApiException("No writing content found in submission",
-                    HttpStatus.BAD_REQUEST.value());
-        }
-
-        // 3. ✅ FORCE LOAD lazy fields - QUAN TRỌNG!
-        Question question = submissionQuestion.getQuestion();
-        String questionText = question.getQuestionText(); // Load text
-
-        ChallengeSection section = question.getSection(); // Force load proxy
-        section.getSectionTitle(); // Touch để Hibernate load
-
-        DailyChallenge challenge = section.getChallenge(); // Force load proxy
-        challenge.getChallengeName(); // Touch để Hibernate load
-
-        // 4. Load context (phải load trong transaction)
-        OpenAiServiceImpl.ChallengeContext context =
-                openAiServiceImpl.eagerLoadChallengeContext(challenge);
-
-        // 5. Build prompt (sử dụng data đã load)
-        String prompt = buildWritingGradingPrompt(context, questionText, studentWriting);
-
-        // 6. Tạo emitter
-        SseEmitter emitter = new SseEmitter(300_000L);
-
-        // 7. ✅ Pass data vào async - KHÔNG access lazy fields trong async
-        CompletableFuture.runAsync(() -> {
-            try {
-                // Các stage không cần load DB nữa
-                sendProgress(emitter, "load_submission", 10, "Đang tải bài làm...");
-                sendProgress(emitter, "extract_writing", 20, "Đang trích xuất nội dung...");
-                sendProgress(emitter, "load_context", 30, "Đang tải ngữ cảnh...");
-                sendProgress(emitter, "build_prompt", 40, "Đang chuẩn bị prompt...");
-
-                // Call OpenAI (50-80%)
-                sendProgress(emitter, "ai_analysis", 50, "Đang phân tích bài viết với AI...");
-                String aiResponse = callOpenAIWithProgress(prompt, emitter);
-
-                // Parse response (90%)
-                sendProgress(emitter, "parse_result", 90, "Đang xử lý kết quả...");
-                GradingWritingResponse result = parseGradingResponse(aiResponse, studentWriting);
-
-                // Complete (100%)
-                sendProgress(emitter, "done", 100, "Hoàn thành!");
-                sendComplete(emitter, result);
-
-                log.info("[{}] Streaming grading completed. Score: {}", traceId, result.getSuggestedScore());
-
-            } catch (Exception e) {
-                log.error("[{}] Error during streaming grading: {}", traceId, e.getMessage(), e);
-                sendError(emitter, e.getMessage());
-            }
-        });
-
-        // Handle emitter lifecycle
-        emitter.onCompletion(() -> log.info("[{}] SSE emitter completed", traceId));
-        emitter.onTimeout(() -> {
-            log.warn("[{}] SSE emitter timeout", traceId);
-            emitter.complete();
-        });
-        emitter.onError(e -> {
-            log.error("[{}] SSE emitter error: {}", traceId, e.getMessage());
-            emitter.completeWithError(e);
-        });
-
-        return emitter;
+//        String traceId = TraceUtil.getTraceId();
+//        log.info("[{}] Starting streaming AI grading for submissionQuestionId: {}",
+//                traceId, request.getSubmissionQuestionId());
+//
+//        // ✅ CRITICAL: Load TẤT CẢ data TRONG transaction, TRƯỚC khi tạo async task
+//
+//        // 1. Load submission question
+//        SubmissionQuestion submissionQuestion = submissionQuestionRepository
+//                .findById(request.getSubmissionQuestionId())
+//                .orElseThrow(() -> new ApiException("Submission question not found",
+//                        HttpStatus.NOT_FOUND.value()));
+//
+//        // 2. Extract student writing
+//        String studentWriting = extractWritingFromSubmission(
+//                submissionQuestion.getSubmissionContentJson());
+//
+//        if (studentWriting == null || studentWriting.trim().isEmpty()) {
+//            throw new ApiException("No writing content found in submission",
+//                    HttpStatus.BAD_REQUEST.value());
+//        }
+//
+//        // 3. ✅ FORCE LOAD lazy fields - QUAN TRỌNG!
+//        Question question = submissionQuestion.getQuestion();
+//        String questionText = question.getQuestionText(); // Load text
+//
+//        ChallengeSection section = question.getSection(); // Force load proxy
+//        section.getSectionTitle(); // Touch để Hibernate load
+//
+//        DailyChallenge challenge = section.getChallenge(); // Force load proxy
+//        challenge.getChallengeName(); // Touch để Hibernate load
+//
+//        // 4. Load context (phải load trong transaction)
+//        OpenAiServiceImpl.ChallengeContext context =
+//                openAiServiceImpl.eagerLoadChallengeContext(challenge);
+//
+//        // 5. Build prompt (sử dụng data đã load)
+//        String prompt = buildWritingGradingPrompt(context, questionText, studentWriting);
+//
+//        // 6. Tạo emitter
+//        SseEmitter emitter = new SseEmitter(300_000L);
+//
+//        // 7. ✅ Pass data vào async - KHÔNG access lazy fields trong async
+//        CompletableFuture.runAsync(() -> {
+//            try {
+//                // Các stage không cần load DB nữa
+//                sendProgress(emitter, "load_submission", 10, "Đang tải bài làm...");
+//                sendProgress(emitter, "extract_writing", 20, "Đang trích xuất nội dung...");
+//                sendProgress(emitter, "load_context", 30, "Đang tải ngữ cảnh...");
+//                sendProgress(emitter, "build_prompt", 40, "Đang chuẩn bị prompt...");
+//
+//                // Call OpenAI (50-80%)
+//                sendProgress(emitter, "ai_analysis", 50, "Đang phân tích bài viết với AI...");
+//                String aiResponse = callOpenAIWithProgress(prompt, emitter);
+//
+//                // Parse response (90%)
+//                sendProgress(emitter, "parse_result", 90, "Đang xử lý kết quả...");
+//                GradingWritingResponse result = parseGradingResponse(aiResponse, studentWriting);
+//
+//                // Complete (100%)
+//                sendProgress(emitter, "done", 100, "Hoàn thành!");
+//                sendComplete(emitter, result);
+//
+//                log.info("[{}] Streaming grading completed. Score: {}", traceId, result.getSuggestedScore());
+//
+//            } catch (Exception e) {
+//                log.error("[{}] Error during streaming grading: {}", traceId, e.getMessage(), e);
+//                sendError(emitter, e.getMessage());
+//            }
+//        });
+//
+//        // Handle emitter lifecycle
+//        emitter.onCompletion(() -> log.info("[{}] SSE emitter completed", traceId));
+//        emitter.onTimeout(() -> {
+//            log.warn("[{}] SSE emitter timeout", traceId);
+//            emitter.complete();
+//        });
+//        emitter.onError(e -> {
+//            log.error("[{}] SSE emitter error: {}", traceId, e.getMessage());
+//            emitter.completeWithError(e);
+//        });
+//
+//        return emitter;
+        return null;
     }
 
     /**

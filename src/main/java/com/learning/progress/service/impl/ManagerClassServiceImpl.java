@@ -159,6 +159,11 @@ public class ManagerClassServiceImpl implements ClassServiceStrategy {
                 .filter(s -> s.getDeletedAt() == null)
                 .orElseThrow(() -> new ApiException(Const.SYLLABUS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
+        boolean exists = classRepository.existsByClassNameAndDeletedAtIsNull(request.getClassName());
+        if (exists) {
+            throw new ApiException(Const.CLASS.EXIST_NAME, HttpStatus.BAD_REQUEST.value());
+        }
+
         Long actionByUserId = jwtUtil.extractUserIdFromCurrentRequest();
 
         // Create class
@@ -341,7 +346,7 @@ public class ManagerClassServiceImpl implements ClassServiceStrategy {
 
         appValidator.validateAllowedEnumValue(ClassStatus.class,
                 status,
-                Set.of(ClassStatus.ACTIVE, ClassStatus.FINISHED, ClassStatus.INACTIVE));
+                Set.of(ClassStatus.ACTIVE, ClassStatus.FINISHED));
 
         clazz.setStatus(ClassStatus.valueOf(status));
         classRepository.save(clazz);

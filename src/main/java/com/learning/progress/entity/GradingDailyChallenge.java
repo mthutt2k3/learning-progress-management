@@ -1,10 +1,7 @@
 package com.learning.progress.entity;
 
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.*;
 import lombok.experimental.SuperBuilder;
 import org.hibernate.annotations.ColumnDefault;
 import org.hibernate.annotations.OnDelete;
@@ -28,8 +25,12 @@ public class GradingDailyChallenge extends BaseEntity{
     @JoinColumn(name = "grader_id")
     private User grader;
 
-    @Column(name = "final_score")
-    private Double finalScore;
+    @Column(name = "raw_score")
+    private Double rawScore;
+
+    @Column(name = "penalty_applied")
+    @Builder.Default
+    private Double penaltyApplied = 0.0;
 
     @Column(name = "overall_feedback")
     private String overallFeedback;

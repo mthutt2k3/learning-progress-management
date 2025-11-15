@@ -11,7 +11,6 @@ import com.learning.progress.dto.submission.SaveSubmissionRequest;
 import com.learning.progress.dto.submission.SubmissionResultResponse;
 import com.learning.progress.entity.*;
 import com.learning.progress.exception.ApiException;
-import com.learning.progress.job.QuartzJobTriggerService;
 import com.learning.progress.mapper.ChallengeSectionMapper;
 import com.learning.progress.repository.*;
 import com.learning.progress.cache.CacheService;
@@ -48,8 +47,6 @@ public class SubmissionQuestionServiceImpl implements SubmissionQuestionService 
     @Autowired private QuestionRepository questionRepository;
     @Autowired private GradingDailyChallengeService gradingDailyChallengeService;
     @Autowired private CacheService cacheService;
-    @Autowired
-    private QuartzJobTriggerService quartzJobTriggerService;
     @Autowired
     private TransactionTemplate transactionTemplate;
     @Autowired
@@ -181,8 +178,6 @@ public class SubmissionQuestionServiceImpl implements SubmissionQuestionService 
         if (status == SubmissionStatus.PENDING) {
             submission.setSubmissionStatus(SubmissionStatus.DRAFT);
             submissionDailyChallengeRepository.save(submission);
-        } else if (status != SubmissionStatus.DRAFT) {
-            throw new ApiException("Submission is not in draft mode", HttpStatus.BAD_REQUEST.value());
         }
 
         DailyChallenge challenge = submission.getChallenge();
@@ -263,9 +258,15 @@ public class SubmissionQuestionServiceImpl implements SubmissionQuestionService 
         DailyChallenge dailyChallenge = submission.getChallenge();
         Long userId = jwtUtil.extractUserIdFromCurrentRequest();
 
+        appValidator.validateClassIsActive(dailyChallenge.getClassLesson().getClassChapter().getClazz().getId());
+        appValidator.validateUserAccessToClass(dailyChallenge.getClassLesson().getClassChapter().getClazz().getId());
+
         SubmissionStatus status = submission.getSubmissionStatus();
         if (status == SubmissionStatus.SUBMITTED || status == SubmissionStatus.GRADED) {
             throw new ApiException("Submission already completed", HttpStatus.BAD_REQUEST.value());
+        }
+        if (status == SubmissionStatus.MISSED) {
+            throw new ApiException("Submission missed", HttpStatus.BAD_REQUEST.value());
         }
          submissionQuestionValidator.validateSubmissionQuestions(dailyChallenge.getId(), request);
 
@@ -317,15 +318,10 @@ public class SubmissionQuestionServiceImpl implements SubmissionQuestionService 
         }
 
         // === CHỈ KHI NỘP CHÍNH THỨC ===
-        if (!request.getSaveAsDraft()) {
+        if (Boolean.FALSE.equals(request.getSaveAsDraft())) {
             submission.setSubmissionStatus(SubmissionStatus.SUBMITTED);
             submission.setSubmittedAt(OffsetDateTime.now());
             submissionDailyChallengeRepository.saveAndFlush(submission);
-
-            ChallengeType type = dailyChallenge.getChallengeType();
-            if (type == ChallengeType.GV || type == ChallengeType.RE || type == ChallengeType.LI) {
-                quartzJobTriggerService.triggerAutoGrade(submission.getId());
-            }
 
             String title = Const.NOTIFICATION.SUBMISSION_TITLE;
             String message = String.format(Const.NOTIFICATION.SUBMISSION_MESSAGE_TEMPLATE, dailyChallenge.getChallengeName());

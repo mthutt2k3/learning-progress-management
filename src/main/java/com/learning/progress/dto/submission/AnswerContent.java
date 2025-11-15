@@ -5,6 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.ArrayList;
 import java.util.List;
 
 @Data
@@ -12,5 +13,5 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 public class AnswerContent {
-    private List<AnswerItem> data; // Danh sách các lựa chọn hoặc câu trả lời
+    private List<AnswerItem> data = new ArrayList<>(); // Danh sách các lựa chọn hoặc câu trả lời
 }
