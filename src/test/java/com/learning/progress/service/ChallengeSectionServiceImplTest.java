@@ -3,14 +3,14 @@ package com.learning.progress.service;
 import com.learning.progress.cache.CacheService;
 import com.learning.progress.common.ChallengeStatus;
 import com.learning.progress.common.Const;
+import com.learning.progress.common.QuestionType;
 import com.learning.progress.common.ResourceType;
 import com.learning.progress.dto.challenge.section.*;
 import com.learning.progress.entity.*;
 import com.learning.progress.exception.ApiException;
-import com.learning.progress.job.QuartzJobTriggerService;
+import com.learning.progress.job.QuartzJobTrigger;
 import com.learning.progress.mapper.ChallengeSectionMapper;
 import com.learning.progress.repository.*;
-import com.learning.progress.service.QuestionService;
 import com.learning.progress.service.impl.ChallengeSectionServiceImpl;
 import com.learning.progress.util.AppValidator;
 import com.learning.progress.util.JwtUtil;
@@ -40,7 +40,7 @@ class ChallengeSectionServiceImplTest {
     @Mock private Validator validator;
     @Mock private CacheService cacheService;
     @Mock private SubmissionDailyChallengeRepository submissionRepo;
-    @Mock private QuartzJobTriggerService quartzJobTriggerService;
+    @Mock private GradingDailyChallengeRepository gradingDailyChallengeRepository;
 
     @InjectMocks
     private ChallengeSectionServiceImpl sectionService;
@@ -76,6 +76,77 @@ class ChallengeSectionServiceImplTest {
     // =====================================================================
     // 1. CREATE NEW SECTION - DRAFT CHALLENGE → SUCCESS
     // =====================================================================
+    @Test
+    @DisplayName("13. Question validation fails → 400")
+    void saveSection_questionValidationFails_400() {
+        SectionDto sectionDto = SectionDto.builder().sectionTitle("Test").resourceType(ResourceType.NONE.name()).build();
+        QuestionDto invalidQ = QuestionDto.builder()
+                .questionText("") // invalid
+                .orderNumber(1)
+                .questionType(QuestionType.MULTIPLE_CHOICE.toString())
+                .weight(1.0)
+                .content(new DataContent(List.of()))
+                .build();
+
+        SectionWithQuestionsDto dto = new SectionWithQuestionsDto(sectionDto, List.of(invalidQ));
+
+        ChallengeSection section = ChallengeSection.builder().id(200L).challenge(draftChallenge).build();
+
+        when(challengeRepository.findByIdAndDeletedAtIsNull(CHALLENGE_ID)).thenReturn(Optional.of(draftChallenge));
+        doNothing().when(appValidator).validateUserAccessToClass(CLASS_ID);
+        doNothing().when(appValidator).validateEnumValue(eq(ResourceType.class), anyString());
+        when(challengeSectionMapper.toChallengeSectionEntity(any(), any())).thenReturn(section);
+        when(sectionRepository.save(any())).thenReturn(section);
+
+        when(questionService.bulkQuestion(anyList(), eq(200L)))
+                .thenThrow(new ApiException("Question text is empty", 400));
+
+        ApiException ex = assertThrows(ApiException.class, () -> sectionService.saveSection(CHALLENGE_ID, dto));
+
+        assertEquals(400, ex.getStatus());
+        verify(cacheService, never()).clearCacheForChallenge(anyLong());
+    }
+
+    @Test
+    @DisplayName("12. Class not active → 400")
+    void saveSection_classNotActive_400() {
+        SectionWithQuestionsDto dto = new SectionWithQuestionsDto(
+                SectionDto.builder().sectionTitle("Test").resourceType("TEXT").build(),
+                List.of(QuestionDto.builder().questionText("Q").orderNumber(1).questionType("MCQ").weight(1.0)
+                        .content(new DataContent(List.of(new DataItem("1", "A", true, null)))).build())
+        );
+
+        when(challengeRepository.findByIdAndDeletedAtIsNull(CHALLENGE_ID)).thenReturn(Optional.of(draftChallenge));
+        doThrow(new ApiException("Class is not active", 400))
+                .when(appValidator).validateClassIsActive(CLASS_ID);
+
+        ApiException ex = assertThrows(ApiException.class, () -> sectionService.saveSection(CHALLENGE_ID, dto));
+
+        assertEquals(400, ex.getStatus());
+        verify(sectionRepository, never()).save(any());
+    }
+    @Test
+    @DisplayName("11. Invalid resourceType → 400")
+    void saveSection_invalidResourceType_400() {
+        SectionDto sectionDto = SectionDto.builder()
+                .sectionTitle("Test")
+                .resourceType("INVALID_TYPE")
+                .build();
+
+        SectionWithQuestionsDto dto = new SectionWithQuestionsDto(sectionDto,
+                List.of(QuestionDto.builder().questionText("Q").orderNumber(1).questionType("MCQ").weight(1.0)
+                        .content(new DataContent(List.of(new DataItem("1", "A", true, null)))).build()));
+
+        when(challengeRepository.findByIdAndDeletedAtIsNull(CHALLENGE_ID)).thenReturn(Optional.of(draftChallenge));
+        doNothing().when(appValidator).validateUserAccessToClass(CLASS_ID);
+        doThrow(new ApiException("Invalid enum value", 400))
+                .when(appValidator).validateEnumValue(eq(ResourceType.class), eq("INVALID_TYPE"));
+
+        ApiException ex = assertThrows(ApiException.class, () -> sectionService.saveSection(CHALLENGE_ID, dto));
+
+        assertEquals(400, ex.getStatus());
+        verify(sectionRepository, never()).save(any());
+    }
     @Test
     @DisplayName("1. Create new section - DRAFT challenge → 200")
     void saveSection_createNew_draft_success() {
@@ -134,7 +205,7 @@ class ChallengeSectionServiceImplTest {
         verify(sectionRepository).save(any());
         verify(questionService).bulkQuestion(anyList(), eq(200L));
         verify(cacheService).clearCacheForChallenge(CHALLENGE_ID);
-        verify(quartzJobTriggerService, never()).triggerAutoGrade(anyLong());
+        verify(gradingDailyChallengeRepository, never()).reopenGradingForChallenge(anyLong());
     }
 
     // =====================================================================
@@ -217,18 +288,20 @@ class ChallengeSectionServiceImplTest {
         when(questionService.hasUpdates(anyList(), eq(200L))).thenReturn(true);
 
         SubmissionDailyChallenge sub = SubmissionDailyChallenge.builder().id(500L).build();
-        when(submissionRepo.findIdsByChallengeIdAndDeletedAtIsNull(CHALLENGE_ID))
-                .thenReturn(List.of(500L));
+//        when(submissionRepo.findIdsByChallengeIdAndDeletedAtIsNull(CHALLENGE_ID))
+//                .thenReturn(List.of(500L));
 
         when(challengeSectionMapper.toSectionWithQuestionsDto(any(), anyList()))
                 .thenReturn(dto);
+
+        when(gradingDailyChallengeRepository.reopenGradingForChallenge(CHALLENGE_ID)).thenReturn(1);
 
         // When
         SectionWithQuestionsDto result = sectionService.saveSection(CHALLENGE_ID, dto);
 
         // Then
         assertNotNull(result);
-        verify(quartzJobTriggerService).triggerAutoGrade(500L);
+        verify(gradingDailyChallengeRepository).reopenGradingForChallenge(CHALLENGE_ID);
         verify(cacheService).clearCacheForChallenge(CHALLENGE_ID);
     }
 
@@ -288,18 +361,20 @@ class ChallengeSectionServiceImplTest {
         when(questionService.hasUpdates(List.of(q), 200L))
                 .thenReturn(true);
 
-        when(submissionRepo.findIdsByChallengeIdAndDeletedAtIsNull(CHALLENGE_ID))
-                .thenReturn(List.of(500L));
+//        when(submissionRepo.findIdsByChallengeIdAndDeletedAtIsNull(CHALLENGE_ID))
+//                .thenReturn(List.of(500L));
 
         // mapper trả về DTO
         when(challengeSectionMapper.toSectionWithQuestionsDto(any(), anyList()))
                 .thenReturn(dto);
 
+        when(gradingDailyChallengeRepository.reopenGradingForChallenge(CHALLENGE_ID)).thenReturn(1);
+
         // When
         sectionService.saveSection(CHALLENGE_ID, dto);
 
         // Then
-        verify(quartzJobTriggerService).triggerAutoGrade(500L);
+        verify(gradingDailyChallengeRepository).reopenGradingForChallenge(CHALLENGE_ID);
         verify(cacheService).clearCacheForChallenge(CHALLENGE_ID);
     }
 
@@ -357,7 +432,7 @@ class ChallengeSectionServiceImplTest {
         sectionService.saveSection(CHALLENGE_ID, dto);
 
         // Then
-        verify(quartzJobTriggerService, never()).triggerAutoGrade(anyLong());
+        verify(gradingDailyChallengeRepository, never()).reopenGradingForChallenge(anyLong());
         verify(cacheService).clearCacheForChallenge(CHALLENGE_ID);
     }
 
@@ -451,3 +526,4 @@ class ChallengeSectionServiceImplTest {
         assertEquals(403, ex.getStatus());
     }
 }
+

@@ -7,12 +7,9 @@ import com.learning.progress.dto.challenge.section.DataContent;
 import com.learning.progress.dto.challenge.section.DataItem;
 import com.learning.progress.dto.submission.*;
 import com.learning.progress.entity.*;
-import com.learning.progress.exception.ApiException;
-import com.learning.progress.job.QuartzJobTriggerService;
+import com.learning.progress.job.QuartzJobTrigger;
 import com.learning.progress.mapper.ChallengeSectionMapper;
 import com.learning.progress.repository.*;
-import com.learning.progress.service.GradingDailyChallengeService;
-import com.learning.progress.service.NotificationService;
 import com.learning.progress.service.impl.SubmissionQuestionServiceImpl;
 import com.learning.progress.service.validator.SubmissionQuestionValidator;
 import com.learning.progress.util.AppValidator;
@@ -27,11 +24,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.transaction.support.TransactionTemplate;
 
-import java.math.BigDecimal;
-import java.time.OffsetDateTime;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -49,7 +42,7 @@ class SubmissionQuestionServiceImplTest {
     @Mock private QuestionRepository questionRepository;
     @Mock private GradingDailyChallengeService gradingDailyChallengeService;
     @Mock private CacheService cacheService;
-    @Mock private QuartzJobTriggerService quartzJobTriggerService;
+    @Mock private QuartzJobTrigger quartzJobTriggerService;
     @Mock private TransactionTemplate transactionTemplate;
     @Mock private ChallengeSectionRepository challengeSectionRepository;
     @Mock private GradingQuestionRepository gradingQuestionRepository;
