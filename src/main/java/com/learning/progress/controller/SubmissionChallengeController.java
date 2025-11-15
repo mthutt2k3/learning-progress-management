@@ -26,9 +26,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class SubmissionChallengeController {
 
-    @Autowired
-    private SubmissionChallengeService submissionChallengeService;
-
+    private final SubmissionChallengeService submissionChallengeService;
     private final SubmissionLogService submissionLogService;
 
     @GetMapping("/class/{classId}")

@@ -3,6 +3,7 @@ package com.learning.progress.dto.challenge;
 import com.learning.progress.common.ChallengeMethod;
 import com.learning.progress.common.ChallengeStatus;
 import com.learning.progress.common.ChallengeType;
+import lombok.Builder;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -11,6 +12,7 @@ import java.util.List;
 
 @Getter
 @Setter
+@Builder
 public class DailyChallengeListDTO {
     private Long id;
     private String classLessonName;
@@ -21,6 +23,7 @@ public class DailyChallengeListDTO {
 
     @Getter
     @Setter
+    @Builder
     public static class DailyChallengeInLessonDTO {
         private Long id;
 

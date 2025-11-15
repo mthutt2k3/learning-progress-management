@@ -5,8 +5,7 @@ import com.learning.progress.dto.challenge.section.DataContent;
 import com.learning.progress.dto.challenge.section.QuestionDto;
 import com.learning.progress.dto.challenge.section.SectionDto;
 import com.learning.progress.entity.User;
-import lombok.Getter;
-import lombok.Setter;
+import lombok.*;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -14,6 +13,9 @@ import java.util.List;
 
 @Getter
 @Setter
+@Builder
+@AllArgsConstructor
+@NoArgsConstructor
 public class SubmissionResultResponse {
     private Long challengeId;
     private Long submissionChallengeId;
@@ -27,6 +29,9 @@ public class SubmissionResultResponse {
     }
     @Getter
     @Setter
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
     public static class QuestionResult {
         private Long questionId;
         private Long submissionQuestionId;
