@@ -1,5 +1,6 @@
 package com.learning.progress.service;
 
+import com.learning.progress.common.ChallengeType;
 import com.learning.progress.dto.report.ChallengeReportDTO;
 import com.learning.progress.dto.report.ClassReportDTO;
 import com.learning.progress.dto.report.StudentPerformanceDTO;
@@ -14,9 +15,9 @@ public interface ReportService {
 
     ClassReportDTO.ClassOverview getClassOverview(Long classId);
 
-    ClassReportDTO.MembersDetail getMembersDetail(Long classId, String sortBy);
+    ClassReportDTO.MembersDetail getMembersDetail(Long classId);
 
-    ClassReportDTO.ChallengeStatsBySkill getChallengeStatsBySkill(Long classId, String skill);
+    ClassReportDTO.ChallengeStatsBySkill getChallengeStatsBySkill(Long classId, ChallengeType skill);
 
     ClassReportDTO.ChallengeProgressBySkill getChallengeProgressBySkill(Long classId);
 

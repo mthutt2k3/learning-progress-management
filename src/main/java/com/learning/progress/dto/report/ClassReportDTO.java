@@ -90,7 +90,7 @@ public class ClassReportDTO {
         private Long totalSubmissions;
         private Long lateSubmissions;
         private Long onTimeSubmissions;
-        private BigDecimal diligenceScore; // Điểm chuyên cần
+        private BigDecimal improvementScore;    // FE có thể sort theo này
     }
 
     /* --------------------------------------------------------
