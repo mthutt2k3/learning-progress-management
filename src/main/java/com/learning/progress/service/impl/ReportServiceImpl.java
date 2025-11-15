@@ -149,9 +149,13 @@ public class ReportServiceImpl implements ReportService {
         Map<String, List<Map<String, Object>>> groupedBySkill = progressData.stream()
                 .collect(Collectors.groupingBy(m -> (String) m.get("skill")));
 
-        List<ClassReportDTO.SkillProgress> skills = SKILL_TYPES.stream()
-                .map(skillType -> buildSkillProgress(skillType, groupedBySkill.get(skillType)))
+        List<ClassReportDTO.SkillProgress> skills = Arrays.stream(ChallengeType.values())
+                .map(skillType -> buildSkillProgress(
+                        skillType.toString(),
+                        groupedBySkill.getOrDefault(skillType.toString(), Collections.emptyList())
+                ))
                 .collect(Collectors.toList());
+
 
         return ClassReportDTO.ChallengeProgressBySkill.builder()
                 .skills(skills)
@@ -176,7 +180,7 @@ public class ReportServiceImpl implements ReportService {
         BigDecimal highestScore = getBigDecimalValue(stats, "highest_score");
         BigDecimal lowestScore = getBigDecimalValue(stats, "lowest_score");
         Long completedCount = getLongValue(stats, "completed_count");
-        Long lateCount = getLongValue(stats, "late_count");
+        Long inProgressCount = getLongValue(stats, "in_progress_count");
         Long notStartedCount = getLongValue(stats, "not_started_count");
 
         // Get total students in class
@@ -186,7 +190,7 @@ public class ReportServiceImpl implements ReportService {
 
         ChallengeReportDTO.SubmissionStats submissionStats = ChallengeReportDTO.SubmissionStats.builder()
                 .completedCount(completedCount)
-                .lateCount(lateCount)
+                .inProgressCount(inProgressCount)
                 .notStartedCount(notStartedCount)
                 .totalStudents(totalStudents)
                 .build();
@@ -244,10 +248,21 @@ public class ReportServiceImpl implements ReportService {
 
     @Override
     @Transactional(readOnly = true)
-    public StudentPerformanceDTO.StudentOverview getStudentOverview() {
+    public StudentPerformanceDTO.StudentOverview getStudentOverview(Long userId) {
         String traceId = TraceUtil.getTraceId();
-        Long userId = jwtUtil.extractUserIdFromCurrentRequest();
-        log.info("[{}] Getting student overview for userId: {}", traceId, userId);
+        String currentUserRole = jwtUtil.extractRoleFromCurrentRequest();
+
+        Long targetUserId;
+        if ("STUDENT".equals(currentUserRole) || "TEST_TAKER".equals(currentUserRole)) {
+            targetUserId = jwtUtil.extractUserIdFromCurrentRequest();
+        } else {
+            if (userId == null) {
+                throw badRequest("userId is required for teachers");
+            }
+            targetUserId = userId;
+        }
+
+        log.info("[{}] Getting student overview for userId: {}", traceId, targetUserId);
 
         // Get first class joined date
         Instant instant = reportRepository.getFirstClassJoinedDate(userId);
@@ -294,20 +309,33 @@ public class ReportServiceImpl implements ReportService {
 
     @Override
     @Transactional(readOnly = true)
-    public StudentPerformanceDTO.LevelHistory getStudentLevelHistory() {
+    public StudentPerformanceDTO.LevelHistory getStudentLevelHistory(Long userId) {
         String traceId = TraceUtil.getTraceId();
-        Long userId = jwtUtil.extractUserIdFromCurrentRequest();
-        log.info("[{}] Getting student level history for userId: {}", traceId, userId);
+        String currentUserRole = jwtUtil.extractRoleFromCurrentRequest();
 
-        List<Map<String, Object>> historyData = reportRepository.getStudentLevelHistory(userId);
+        Long targetUserId;
+        if ("STUDENT".equals(currentUserRole) || "TEST_TAKER".equals(currentUserRole)) {
+            targetUserId = jwtUtil.extractUserIdFromCurrentRequest();
+        } else {
+            if (userId == null) {
+                throw badRequest("userId is required for teachers");
+            }
+            targetUserId = userId;
+        }
+
+        log.info("[{}] Getting student level history for userId: {}", traceId, targetUserId);
+
+        // FIX 1: Dùng targetUserId thay vì userId
+        List<Map<String, Object>> historyData = reportRepository.getStudentLevelHistory(targetUserId);
 
         // Group by level and then by class
         Map<Long, List<Map<String, Object>>> groupedByLevel = historyData.stream()
                 .filter(m -> m.get("level_id") != null)
                 .collect(Collectors.groupingBy(m -> getLongValue(m, "level_id")));
 
+        // FIX 2: TRUYỀN targetUserId vào buildLevelDetail
         List<StudentPerformanceDTO.LevelDetail> levels = groupedByLevel.entrySet().stream()
-                .map(entry -> buildLevelDetail(entry.getKey(), entry.getValue()))
+                .map(entry -> buildLevelDetail(entry.getKey(), entry.getValue(), targetUserId))  // ← THÊM targetUserId
                 .sorted(Comparator.comparing(ld ->
                                 ld.getClasses().isEmpty() ? OffsetDateTime.MIN :
                                         ld.getClasses().get(0).getJoinedAt(),
@@ -321,13 +349,23 @@ public class ReportServiceImpl implements ReportService {
 
     @Override
     @Transactional(readOnly = true)
-    public StudentPerformanceDTO.ClassChallengeDetail getStudentClassChallengeDetail(Long classId) {
+    public StudentPerformanceDTO.ClassChallengeDetail getStudentClassChallengeDetail(Long classId, Long userId) {
         String traceId = TraceUtil.getTraceId();
-        Long userId = jwtUtil.extractUserIdFromCurrentRequest();
-        log.info("[{}] Getting student class challenge detail for userId: {}, classId: {}", traceId, userId, classId);
+        String currentUserRole = jwtUtil.extractRoleFromCurrentRequest();
+
+        Long targetUserId;
+        if ("STUDENT".equals(currentUserRole) || "TEST_TAKER".equals(currentUserRole)) {
+            targetUserId = jwtUtil.extractUserIdFromCurrentRequest();
+        } else {
+            if (userId == null) {
+                throw badRequest("userId is required for teachers");
+            }
+            targetUserId = userId;
+        }
+        log.info("[{}] Getting student class challenge detail for userId: {}, classId: {}", traceId, targetUserId, classId);
 
         // Validate student is/was in this class
-        validateStudentClassAccess(userId, classId);
+        validateStudentClassAccess(targetUserId, classId);
 
         // Get class and level info
         Map<String, Object> classData = classRepository.getClassWithLevelInfo(classId);
@@ -343,18 +381,28 @@ public class ReportServiceImpl implements ReportService {
                 .build();
 
         // Get challenge data
-        List<Map<String, Object>> challengeData = reportRepository.getStudentChallengesByClass(userId, classId);
+        List<Map<String, Object>> challengeData = reportRepository.getStudentChallengesByClass(targetUserId, classId);
         List<StudentPerformanceDTO.ChallengeScore> challenges = challengeData.stream()
                 .map(this::buildChallengeScore)
                 .collect(Collectors.toList());
 
         // Calculate on-time completion rate
+        // FIX: Đổi từ "COMPLETED" sang "SUBMITTED" hoặc "GRADED"
         long onTimeCount = challenges.stream()
-                .filter(c -> Boolean.FALSE.equals(c.getIsLate()) && "COMPLETED".equals(c.getSubmissionStatus()))
+                .filter(c -> Boolean.FALSE.equals(c.getIsLate())
+                        && (c.getSubmissionStatus() != null)
+                        && ("SUBMITTED".equals(c.getSubmissionStatus()) || "GRADED".equals(c.getSubmissionStatus())))
                 .count();
-        BigDecimal onTimeRate = challenges.isEmpty() ? BigDecimal.ZERO :
+
+        // FIX: Chỉ đếm challenges đã submit (không phải NULL status)
+        long submittedCount = challenges.stream()
+                .filter(c -> c.getSubmissionStatus() != null
+                        && ("SUBMITTED".equals(c.getSubmissionStatus()) || "GRADED".equals(c.getSubmissionStatus())))
+                .count();
+
+        BigDecimal onTimeRate = submittedCount == 0 ? BigDecimal.ZERO :
                 BigDecimal.valueOf(onTimeCount)
-                        .divide(BigDecimal.valueOf(challenges.size()), 4, RoundingMode.HALF_UP)
+                        .divide(BigDecimal.valueOf(submittedCount), 4, RoundingMode.HALF_UP)
                         .multiply(BigDecimal.valueOf(100))
                         .setScale(2, RoundingMode.HALF_UP);
 
@@ -524,6 +572,7 @@ public class ReportServiceImpl implements ReportService {
                 .avatarUrl((String) data.get("avatar_url"))
                 .score(getBigDecimalValue(data, "score").setScale(2, RoundingMode.HALF_UP))
                 .completionTimeMinutes(getLongValue(data, "completion_time_minutes"))
+                .completionTimeSeconds(getLongValue(data, "completion_time_seconds"))
                 .submissionStatus((String) data.get("submission_status"))
                 .isLate((Boolean) data.get("is_late"))
                 .submittedAt(
@@ -545,6 +594,7 @@ public class ReportServiceImpl implements ReportService {
                 .fullName((String) data.get("full_name"))
                 .score(getBigDecimalValue(data, "score").setScale(2, RoundingMode.HALF_UP))
                 .completionTimeMinutes(getLongValue(data, "completion_time_minutes"))
+                .completionTimeSeconds(getLongValue(data, "completion_time_seconds"))
                 .build();
     }
 
@@ -578,7 +628,8 @@ public class ReportServiceImpl implements ReportService {
                 .build();
     }
 
-    private StudentPerformanceDTO.LevelDetail buildLevelDetail(Long levelId, List<Map<String, Object>> classesData) {
+    // FIX: THÊM parameter userId
+    private StudentPerformanceDTO.LevelDetail buildLevelDetail(Long levelId, List<Map<String, Object>> classesData, Long userId) {
         if (classesData.isEmpty()) {
             return StudentPerformanceDTO.LevelDetail.builder()
                     .levelId(levelId)
@@ -593,8 +644,9 @@ public class ReportServiceImpl implements ReportService {
                 .filter(m -> m.get("class_id") != null)
                 .collect(Collectors.groupingBy(m -> getLongValue(m, "class_id")));
 
+        // FIX: TRUYỀN userId vào buildClassDetail
         List<StudentPerformanceDTO.ClassDetail> classes = groupedByClass.entrySet().stream()
-                .map(entry -> buildClassDetail(entry.getKey(), entry.getValue()))
+                .map(entry -> buildClassDetail(entry.getKey(), entry.getValue(), userId))  // ← THÊM userId
                 .sorted(Comparator.comparing(StudentPerformanceDTO.ClassDetail::getJoinedAt, Comparator.reverseOrder()))
                 .collect(Collectors.toList());
 
@@ -606,30 +658,34 @@ public class ReportServiceImpl implements ReportService {
                 .build();
     }
 
-    private StudentPerformanceDTO.ClassDetail buildClassDetail(Long classId, List<Map<String, Object>> challengeData) {
-        if (challengeData.isEmpty()) {
+    // FIX: THÊM parameter userId và GỌI QUERY RIÊNG
+    private StudentPerformanceDTO.ClassDetail buildClassDetail(Long classId, List<Map<String, Object>> classData, Long userId) {
+        if (classData.isEmpty()) {
             return StudentPerformanceDTO.ClassDetail.builder()
                     .classId(classId)
                     .scoreByType(new StudentPerformanceDTO.ScoreByType())
                     .build();
         }
 
-        Map<String, Object> firstData = challengeData.get(0);
+        Map<String, Object> firstData = classData.get(0);
 
-        // Calculate average score by challenge type
-        Map<String, List<BigDecimal>> scoresByType = challengeData.stream()
-                .filter(m -> m.get("challenge_type") != null)
-                .collect(Collectors.groupingBy(
+        // FIX: GỌI QUERY RIÊNG để lấy điểm thay vì dùng data từ classData
+        // Vì query getStudentLevelHistory KHÔNG có challenge_type và average_score!
+        List<Map<String, Object>> scoresData = reportRepository.getScoresByClassAndType(userId, classId);
+
+        Map<String, BigDecimal> scoresByType = scoresData.stream()
+                .collect(Collectors.toMap(
                         m -> (String) m.get("challenge_type"),
-                        Collectors.mapping(m -> getBigDecimalValue(m, "average_score"), Collectors.toList())
+                        m -> getBigDecimalValue(m, "average_score").setScale(2, RoundingMode.HALF_UP),
+                        (a, b) -> a
                 ));
 
         StudentPerformanceDTO.ScoreByType scoreByType = StudentPerformanceDTO.ScoreByType.builder()
-                .vocabularyAvg(calculateAverage(scoresByType.get("VOCABULARY")))
-                .readingAvg(calculateAverage(scoresByType.get("READING")))
-                .listeningAvg(calculateAverage(scoresByType.get("LISTENING")))
-                .writingAvg(calculateAverage(scoresByType.get("WRITING")))
-                .speakingAvg(calculateAverage(scoresByType.get("SPEAKING")))
+                .vocabularyAvg(scoresByType.getOrDefault("GV", BigDecimal.ZERO))
+                .readingAvg(scoresByType.getOrDefault("RE", BigDecimal.ZERO))
+                .listeningAvg(scoresByType.getOrDefault("LI", BigDecimal.ZERO))
+                .writingAvg(scoresByType.getOrDefault("WR", BigDecimal.ZERO))
+                .speakingAvg(scoresByType.getOrDefault("SP", BigDecimal.ZERO))
                 .build();
 
         return StudentPerformanceDTO.ClassDetail.builder()

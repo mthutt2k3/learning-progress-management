@@ -154,8 +154,10 @@ public class ReportController {
             summary = "Student Overview",
             description = "Tổng quan của học sinh: thời gian bắt đầu học, level hiện tại, lớp hiện tại, tỷ lệ làm DC"
     )
-    public ResponseEntity<DataResponse<StudentPerformanceDTO.StudentOverview>> getStudentOverview() {
-        StudentPerformanceDTO.StudentOverview overview = reportService.getStudentOverview();
+    public ResponseEntity<DataResponse<StudentPerformanceDTO.StudentOverview>> getStudentOverview(
+            @RequestParam(required = false) Long userId
+    ) {
+        StudentPerformanceDTO.StudentOverview overview = reportService.getStudentOverview(userId);
         return new ResponseEntity<>(
                 DataResponse.success(overview, Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL),
                 HttpStatus.OK
@@ -168,8 +170,10 @@ public class ReportController {
             summary = "Student Level History",
             description = "Lịch sử các level đã học: thông tin level, các lớp đã học, điểm TB theo từng loại DC"
     )
-    public ResponseEntity<DataResponse<StudentPerformanceDTO.LevelHistory>> getStudentLevelHistory() {
-        StudentPerformanceDTO.LevelHistory levelHistory = reportService.getStudentLevelHistory();
+    public ResponseEntity<DataResponse<StudentPerformanceDTO.LevelHistory>> getStudentLevelHistory(
+            @RequestParam(required = false) Long userId
+    ) {
+        StudentPerformanceDTO.LevelHistory levelHistory = reportService.getStudentLevelHistory(userId);
         return new ResponseEntity<>(
                 DataResponse.success(levelHistory, Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL),
                 HttpStatus.OK
@@ -183,9 +187,10 @@ public class ReportController {
             description = "Chi tiết DC của học sinh trong 1 lớp: list DC kèm điểm, type, status, tỷ lệ hoàn thành đúng hạn"
     )
     public ResponseEntity<DataResponse<StudentPerformanceDTO.ClassChallengeDetail>> getStudentClassChallengeDetail(
-            @PathVariable @Parameter(description = "ID của lớp") Long classId
+            @PathVariable @Parameter(description = "ID của lớp") Long classId,
+            @RequestParam(required = false) Long userId
     ) {
-        StudentPerformanceDTO.ClassChallengeDetail detail = reportService.getStudentClassChallengeDetail(classId);
+        StudentPerformanceDTO.ClassChallengeDetail detail = reportService.getStudentClassChallengeDetail(classId, userId);
         return new ResponseEntity<>(
                 DataResponse.success(detail, Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL),
                 HttpStatus.OK

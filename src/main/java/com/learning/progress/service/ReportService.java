@@ -35,9 +35,9 @@ public interface ReportService {
      * STUDENT PERFORMANCE APIs
      * -------------------------------------------------------- */
 
-    StudentPerformanceDTO.StudentOverview getStudentOverview();
+    StudentPerformanceDTO.StudentOverview getStudentOverview(Long userId);
 
-    StudentPerformanceDTO.LevelHistory getStudentLevelHistory();
+    StudentPerformanceDTO.LevelHistory getStudentLevelHistory(Long userId);
 
-    StudentPerformanceDTO.ClassChallengeDetail getStudentClassChallengeDetail(Long classId);
+    StudentPerformanceDTO.ClassChallengeDetail getStudentClassChallengeDetail(Long classId, Long userId);
 }
