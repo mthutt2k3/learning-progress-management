@@ -1,5 +1,6 @@
 package com.learning.progress.controller;
 
+import com.learning.progress.common.ChallengeType;
 import com.learning.progress.common.Const;
 import com.learning.progress.dto.DataResponse;
 import com.learning.progress.dto.report.ChallengeReportDTO;
@@ -50,10 +51,8 @@ public class ReportController {
             description = "Chi tiết thành viên: biểu đồ tròn phân bố role, hoạt động của teacher/TA (giao bài, chấm bài), danh sách học sinh xếp hạng"
     )
     public ResponseEntity<DataResponse<ClassReportDTO.MembersDetail>> getMembersDetail(
-            @PathVariable @Parameter(description = "ID của lớp") Long classId,
-            @RequestParam(defaultValue = "score") @Parameter(description = "Sắp xếp theo: 'score' (điểm) hoặc 'diligence' (chuyên cần)") String sortBy
-    ) {
-        ClassReportDTO.MembersDetail membersDetail = reportService.getMembersDetail(classId, sortBy);
+            @PathVariable @Parameter(description = "ID của lớp") Long classId) {
+        ClassReportDTO.MembersDetail membersDetail = reportService.getMembersDetail(classId);
         return new ResponseEntity<>(
                 DataResponse.success(membersDetail, Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL),
                 HttpStatus.OK
@@ -68,7 +67,7 @@ public class ReportController {
     )
     public ResponseEntity<DataResponse<ClassReportDTO.ChallengeStatsBySkill>> getChallengeStatsBySkill(
             @PathVariable @Parameter(description = "ID của lớp") Long classId,
-            @RequestParam @Parameter(description = "Loại skill: VOCABULARY, READING, LISTENING, WRITING, SPEAKING") String skill
+            @RequestParam @Parameter(description = "Loại skill: GV, RE, LI, WR, SP") ChallengeType skill
     ) {
         ClassReportDTO.ChallengeStatsBySkill stats = reportService.getChallengeStatsBySkill(classId, skill);
         return new ResponseEntity<>(

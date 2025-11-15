@@ -1,5 +1,6 @@
 package com.learning.progress.service.impl;
 
+import com.learning.progress.common.ChallengeType;
 import com.learning.progress.common.Const;
 import com.learning.progress.dto.report.ChallengeReportDTO;
 import com.learning.progress.dto.report.ClassReportDTO;
@@ -86,15 +87,11 @@ public class ReportServiceImpl implements ReportService {
 
     @Override
     @Transactional(readOnly = true)
-    public ClassReportDTO.MembersDetail getMembersDetail(Long classId, String sortBy) {
+    public ClassReportDTO.MembersDetail getMembersDetail(Long classId) {
         String traceId = TraceUtil.getTraceId();
-        log.info("[{}] Getting members detail for classId: {}, sortBy: {}", traceId, classId, sortBy);
+        log.info("[{}] Getting members detail for classId: {}", traceId, classId);
 
         validateClassAccess(classId);
-
-        if (sortBy == null || sortBy.isBlank()) {
-            sortBy = "score";
-        }
 
         // Role distribution
         List<Map<String, Object>> memberCounts = reportRepository.getMemberCountByRole(classId);
@@ -107,7 +104,7 @@ public class ReportServiceImpl implements ReportService {
                 .collect(Collectors.toList());
 
         // Student rankings
-        List<Map<String, Object>> studentRankingsData = reportRepository.getStudentRankings(classId, sortBy);
+        List<Map<String, Object>> studentRankingsData = reportRepository.getStudentRankings(classId);
         List<ClassReportDTO.StudentRanking> studentRankings = studentRankingsData.stream()
                 .map(this::buildStudentRanking)
                 .collect(Collectors.toList());
@@ -121,23 +118,19 @@ public class ReportServiceImpl implements ReportService {
 
     @Override
     @Transactional(readOnly = true)
-    public ClassReportDTO.ChallengeStatsBySkill getChallengeStatsBySkill(Long classId, String skill) {
+    public ClassReportDTO.ChallengeStatsBySkill getChallengeStatsBySkill(Long classId, ChallengeType skill) {
         String traceId = TraceUtil.getTraceId();
         log.info("[{}] Getting challenge stats by skill for classId: {}, skill: {}", traceId, classId, skill);
 
         validateClassAccess(classId);
 
-        if (skill == null || skill.isBlank() || !SKILL_TYPES.contains(skill.toUpperCase())) {
-            throw badRequest("Invalid skill type. Must be one of: " + String.join(", ", SKILL_TYPES));
-        }
-
-        List<Map<String, Object>> challengeData = reportRepository.getChallengeStatsBySkill(classId, skill.toUpperCase());
+        List<Map<String, Object>> challengeData = reportRepository.getChallengeStatsBySkill(classId, skill.toString());
         List<ClassReportDTO.ChallengeData> challenges = challengeData.stream()
                 .map(this::buildChallengeData)
                 .collect(Collectors.toList());
 
         return ClassReportDTO.ChallengeStatsBySkill.builder()
-                .skill(skill.toUpperCase())
+                .skill(skill.toString())
                 .challenges(challenges)
                 .build();
     }
@@ -464,10 +457,6 @@ public class ReportServiceImpl implements ReportService {
         Long lateSubmissions = getLongValue(data, "late_submissions");
         Long onTimeSubmissions = getLongValue(data, "ontime_submissions");
 
-        // Calculate diligence score: (total * 100 - late * 50) / 100
-        BigDecimal diligenceScore = BigDecimal.valueOf(totalSubmissions * 100 - lateSubmissions * 50)
-                .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
-
         return ClassReportDTO.StudentRanking.builder()
                 .userId(getLongValue(data, "user_id"))
                 .fullName((String) data.get("full_name"))
@@ -477,7 +466,7 @@ public class ReportServiceImpl implements ReportService {
                 .totalSubmissions(totalSubmissions)
                 .lateSubmissions(lateSubmissions)
                 .onTimeSubmissions(onTimeSubmissions)
-                .diligenceScore(diligenceScore)
+                .improvementScore(getBigDecimalValue(data, "improvement_score").setScale(2, RoundingMode.HALF_UP))
                 .build();
     }
 
