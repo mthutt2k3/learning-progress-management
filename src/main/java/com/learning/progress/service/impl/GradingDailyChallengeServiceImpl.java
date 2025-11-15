@@ -470,8 +470,6 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
         User grader = loadCurrentUser();
         log.debug("[{}] graderId={}", method, grader.getId());
 
-        validateManualGradeInput(request);
-
         GradingDailyChallenge grading = gradingRepo
                 .findBySubmissionDailyIdAndDeletedAtIsNull(submissionId)
                 .orElseGet(() -> {
@@ -667,19 +665,6 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
         }
         log.trace("[getClassId] challengeId={} classId={}", challenge != null ? challenge.getId() : null, classId);
         return classId;
-    }
-
-    private void validateManualGradeInput(GradeSummaryRequest request) {
-        final String method = "validateManualGradeInput";
-        log.debug("[{}] validating rawScore={} penalty={}", method, request.getRawScore(), request.getPenaltyApplied());
-        if (request.getRawScore() != null && (request.getRawScore() < 0 || request.getRawScore() > 10)) {
-            log.warn("[{}] invalid rawScore={}", method, request.getRawScore());
-            throw new ApiException("Raw score must be 0-10", HttpStatus.BAD_REQUEST.value());
-        }
-        if (request.getPenaltyApplied() != null && (request.getPenaltyApplied() < 0  | request.getPenaltyApplied() > 1)) {
-            log.warn("[{}] invalid penalty={}", method, request.getPenaltyApplied());
-            throw new ApiException("Penalty must be 0.0-1.0", HttpStatus.BAD_REQUEST.value());
-        }
     }
 
     private GradingDailyChallenge ensureGradingHeader(SubmissionDailyChallenge submission) {

@@ -1,14 +1,12 @@
 package com.learning.progress.dto.challenge.section;
 
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.*;
 
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
+@Builder
 public class DataItem {
     private String id; // ID của lựa chọn hoặc câu trả lời
     private String value; // Nội dung lựa chọn hoặc câu trả lời
