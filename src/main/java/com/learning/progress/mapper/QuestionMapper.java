@@ -25,7 +25,6 @@ public interface QuestionMapper {
 
     Question toQuestionDtos(QuestionDto dto);
 
-    // Object <-> Map<String,Object> for question content
     default Map<String, Object> map(Object content) {
         return JsonUtil.objectToMap(content);
     }
@@ -33,13 +32,11 @@ public interface QuestionMapper {
     default Object map(Map<String, Object> map) {
         return JsonUtil.responseToObject(map, Object.class); // hoặc DataContent.class nếu có
     }
-    // Chuyển Object (thường là List hoặc Map) sang List<DataItem>
     default List<DataItem> mapToDataItemList(Object value) {
         if (value == null) return Collections.emptyList();
         return JsonUtil.responseToListObject(value, DataItem.class);
     }
 
-    // Ngược lại: List<DataItem> -> Object (Map hoặc JSON)
     default Object mapFromDataItemList(List<DataItem> list) {
         return JsonUtil.responseToObject(list, Object.class);
     }
