@@ -10,6 +10,7 @@ import java.util.List;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
+@Builder
 public class AppendSubmissionLogRequest {
     private List<SubmissionLogEvent> logs;
     @Data

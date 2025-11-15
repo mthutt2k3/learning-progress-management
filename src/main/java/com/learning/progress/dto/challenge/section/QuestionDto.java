@@ -3,15 +3,13 @@ package com.learning.progress.dto.challenge.section;
 import com.learning.progress.common.Const;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.*;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.*;
 
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
+@Builder
 public class QuestionDto {
     @NotNull(message = Const.QUESTION.ID_REQUIRED, groups = Deleted.class)
     private Long id;
