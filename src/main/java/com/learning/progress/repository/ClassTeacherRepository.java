@@ -30,6 +30,8 @@ public interface ClassTeacherRepository extends JpaRepository<ClassTeacher, Long
 
     Page<ClassTeacher> findByClazzIdAndStatusIn(Long classId, List<ClassTeacherStatus> statuses, Pageable pageable);
 
+    List<ClassTeacher> findByClazzIdAndStatusIn(Long classId, List<ClassTeacherStatus> statuses);
+
     Optional<ClassTeacher> findByClazzIdAndUserId(Long classId, Long userId);
 
     boolean existsByClazz_IdAndUser_IdAndStatus(Long classId, Long userId, ClassTeacherStatus status);
@@ -99,4 +101,5 @@ public interface ClassTeacherRepository extends JpaRepository<ClassTeacher, Long
     // Trong ClassUserRepository
     List<ClassTeacher> findByClazzIdAndRoleInClassAndDeletedAtIsNull(Long clazzId, RoleInClass role);
 
+    List<Long> findUserIdsByClazzIdAndStatusIn(Long classId, Collection<ClassTeacherStatus> statuses);
 }

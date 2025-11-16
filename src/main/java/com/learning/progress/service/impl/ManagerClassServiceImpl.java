@@ -59,6 +59,8 @@ public class ManagerClassServiceImpl implements ClassServiceStrategy {
     private ClassTeacherRepository classTeacherRepository;
     @Autowired
     private ClassStudentRepository classStudentRepository;
+    @Autowired
+    private NotificationServiceImpl notificationServiceImpl;
 
     @Override
     public boolean supports(RoleName role) {
@@ -364,6 +366,41 @@ public class ManagerClassServiceImpl implements ClassServiceStrategy {
                 ActionType.TOGGLE_CLASS_ACTIVATION.name(),
                 RoleName.MANAGER.name()
         );
+
+        // === SAU KHI SAVE CLASS + SAVE HISTORY ===
+        OffsetDateTime now = OffsetDateTime.now();
+        String action = clazz.getStatus() == ClassStatus.ACTIVE ? "activated" : "deactivated";
+        String title = "Lớp học đã được " + (clazz.getStatus() == ClassStatus.ACTIVE ? "kích hoạt" : "tạm dừng");
+        String message = "Lớp " + clazz.getClassName() + " đã được " + action + " bởi quản lý.";
+
+// Lấy tất cả học sinh
+        List<User> students = classStudentRepository
+                .findUsersByClazzIdAndStatus(clazz.getId(), ClassStudentStatus.ACTIVE);
+
+// Lấy tất cả giáo viên + trợ giảng
+        List<ClassTeacher> teachers = classTeacherRepository
+                .findByClazzIdAndStatusIn(clazz.getId(), List.of(ClassTeacherStatus.ACTIVE));
+
+// Gửi cho học sinh
+        for (User student : students) {
+            String basePath = RoleName.TEST_TAKER.equals(student.getRole().getName())
+                    ? "/test-taker/classes/menu/"
+                    : "/student/classes/menu/";
+            String url = basePath + clazz.getId();
+
+            notificationServiceImpl.createNotification(student.getId(), clazz.getId(), title, message, url, null);
+        }
+
+// Gửi cho giáo viên + trợ giảng
+        for (ClassTeacher ct : teachers) {
+            String basePath = RoleInClass.TEACHER.equals(ct.getRoleInClass())
+                    ? "/teacher/classes/menu/"
+                    : "/teaching-assistant/classes/menu/";
+            String url = basePath + clazz.getId();
+
+            notificationServiceImpl.createNotification(ct.getUser().getId(), clazz.getId(), title, message, url, null);
+        }
+// === KẾT THÚC ===
 
         return actionDetails;
     }

@@ -117,7 +117,7 @@ public interface ReportRepository extends JpaRepository<com.learning.progress.en
             COUNT(DISTINCT gdc.id) as graded_submissions
         FROM users u
         JOIN class_teachers ct ON u.id = ct.user_id
-        LEFT JOIN daily_challenges dc ON dc.created_by = u.email
+        LEFT JOIN daily_challenges dc ON dc.created_by = split_part(u.email, '@', 1)
         LEFT JOIN grading_daily_challenges gdc ON gdc.grader_id = u.id
         WHERE ct.class_id = :classId
         AND ct.status = 'ACTIVE'
@@ -235,8 +235,8 @@ public interface ReportRepository extends JpaRepository<com.learning.progress.en
             COALESCE(MAX(gdc.raw_score * (1 - gdc.penalty_applied)), 0) as highest_score,
             COALESCE(MIN(gdc.raw_score * (1 - gdc.penalty_applied)), 0) as lowest_score,
             COUNT(DISTINCT CASE WHEN sdc.submission_status IN ('SUBMITTED', 'GRADED') THEN sdc.id END) as completed_count,
-            COUNT(DISTINCT CASE WHEN sdc.is_late = true THEN sdc.id END) as late_count,
-            COUNT(DISTINCT CASE WHEN sdc.submission_status IN ('PENDING', 'NOT_STARTED', 'MISSED') THEN sdc.id END) as not_started_count
+            COUNT(DISTINCT CASE WHEN sdc.submission_status IN ('DRAFT') THEN sdc.id END) as in_progress_count,
+            COUNT(DISTINCT CASE WHEN sdc.submission_status IN ('PENDING', 'MISSED') THEN sdc.id END) as not_started_count
         FROM daily_challenges dc
         LEFT JOIN submission_daily_challenges sdc ON dc.id = sdc.challenge_id AND sdc.deleted_at IS NULL
         LEFT JOIN grading_daily_challenges gdc ON sdc.id = gdc.submission_daily_id AND gdc.deleted_at IS NULL
@@ -249,35 +249,40 @@ public interface ReportRepository extends JpaRepository<com.learning.progress.en
      * FIXED: Student performance by challenge using grading_daily_challenges
      */
     @Query(value = """
-        SELECT 
-            u.id as user_id,
-            u.full_name,
-            u.email,
-            u.avatar_url,
-            COALESCE(gdc.raw_score * (1 - gdc.penalty_applied), 0) as score,
-            CASE 
-                WHEN sdc.actual_start_at IS NOT NULL AND sdc.submitted_at IS NOT NULL 
-                THEN EXTRACT(EPOCH FROM (sdc.submitted_at - sdc.actual_start_at)) / 60
-                ELSE NULL 
-            END as completion_time_minutes,
-            sdc.submission_status,
-            sdc.is_late,
-            sdc.submitted_at,
-            sdc.started_at
-        FROM users u
-        JOIN class_students cs ON u.id = cs.user_id
-        JOIN class_chapters cc ON cs.class_id = cc.class_id
-        JOIN class_lessons cl ON cc.id = cl.class_chapter_id
-        JOIN daily_challenges dc ON cl.id = dc.class_lesson_id
-        LEFT JOIN submission_daily_challenges sdc ON u.id = sdc.user_id AND dc.id = sdc.challenge_id AND sdc.deleted_at IS NULL
-        LEFT JOIN grading_daily_challenges gdc ON sdc.id = gdc.submission_daily_id AND gdc.deleted_at IS NULL
-        WHERE dc.id = :challengeId
-        AND cs.status = 'ACTIVE'
-        AND cs.deleted_at IS NULL
-        AND u.deleted_at IS NULL
-        AND dc.deleted_at IS NULL
-        ORDER BY score DESC
-        """, nativeQuery = true)
+    SELECT 
+        u.id as user_id,
+        u.full_name,
+        u.email,
+        u.avatar_url,
+        COALESCE(gdc.raw_score * (1 - gdc.penalty_applied), 0) as score,
+        CASE 
+            WHEN sdc.actual_start_at IS NOT NULL AND sdc.submitted_at IS NOT NULL 
+            THEN EXTRACT(EPOCH FROM (sdc.submitted_at - sdc.actual_start_at)) / 60
+            ELSE NULL 
+        END as completion_time_minutes,
+        CASE 
+            WHEN sdc.actual_start_at IS NOT NULL AND sdc.submitted_at IS NOT NULL 
+            THEN EXTRACT(EPOCH FROM (sdc.submitted_at - sdc.actual_start_at))
+            ELSE NULL 
+        END as completion_time_seconds,
+        sdc.submission_status,
+        sdc.is_late,
+        sdc.submitted_at,
+        sdc.started_at
+    FROM users u
+    JOIN class_students cs ON u.id = cs.user_id
+    JOIN class_chapters cc ON cs.class_id = cc.class_id
+    JOIN class_lessons cl ON cc.id = cl.class_chapter_id
+    JOIN daily_challenges dc ON cl.id = dc.class_lesson_id
+    LEFT JOIN submission_daily_challenges sdc ON u.id = sdc.user_id AND dc.id = sdc.challenge_id AND sdc.deleted_at IS NULL
+    LEFT JOIN grading_daily_challenges gdc ON sdc.id = gdc.submission_daily_id AND gdc.deleted_at IS NULL
+    WHERE dc.id = :challengeId
+    AND cs.status = 'ACTIVE'
+    AND cs.deleted_at IS NULL
+    AND u.deleted_at IS NULL
+    AND dc.deleted_at IS NULL
+    ORDER BY score DESC
+    """, nativeQuery = true)
     List<Map<String, Object>> getStudentPerformanceByChallenge(@Param("challengeId") Long challengeId);
 
     /* --------------------------------------------------------
@@ -319,7 +324,7 @@ public interface ReportRepository extends JpaRepository<com.learning.progress.en
         SELECT 
             COUNT(DISTINCT CASE WHEN sdc.submission_status IN ('SUBMITTED', 'GRADED') AND sdc.is_late = false THEN sdc.id END) as completed_count,
             COUNT(DISTINCT CASE WHEN sdc.is_late = true THEN sdc.id END) as late_count,
-            COUNT(DISTINCT CASE WHEN sdc.submission_status IN ('PENDING', 'NOT_STARTED', 'MISSED') THEN sdc.id END) as not_started_count,
+            COUNT(DISTINCT CASE WHEN sdc.submission_status IN ('PENDING', 'MISSED', 'DRAFT') THEN sdc.id END) as not_started_count,
             COUNT(DISTINCT dc.id) as total_challenges
         FROM daily_challenges dc
         JOIN class_lessons cl ON dc.class_lesson_id = cl.id
@@ -376,22 +381,25 @@ public interface ReportRepository extends JpaRepository<com.learning.progress.en
      * FIXED: Student challenges by class using grading_daily_challenges
      */
     @Query(value = """
-        SELECT 
-            dc.id as challenge_id,
-            dc.challenge_name,
-            dc.challenge_type,
-            COALESCE(gdc.raw_score * (1 - gdc.penalty_applied), 0) as score,
-            sdc.is_late,
-            sdc.submission_status,
-            sdc.submitted_at
-        FROM daily_challenges dc
-        JOIN class_lessons cl ON dc.class_lesson_id = cl.id
-        JOIN class_chapters cc ON cl.class_chapter_id = cc.id
-        LEFT JOIN submission_daily_challenges sdc ON dc.id = sdc.challenge_id AND sdc.user_id = :userId AND sdc.deleted_at IS NULL
-        LEFT JOIN grading_daily_challenges gdc ON sdc.id = gdc.submission_daily_id AND gdc.deleted_at IS NULL
-        WHERE cc.class_id = :classId
-        AND dc.deleted_at IS NULL
-        ORDER BY dc.created_at
-        """, nativeQuery = true)
+    SELECT 
+        dc.id as challenge_id,
+        dc.challenge_name,
+        dc.challenge_type,
+        COALESCE(gdc.raw_score * (1 - gdc.penalty_applied), 0) as score,
+        sdc.is_late,
+        sdc.submission_status,
+        sdc.submitted_at
+    FROM daily_challenges dc
+    JOIN class_lessons cl ON dc.class_lesson_id = cl.id
+    JOIN class_chapters cc ON cl.class_chapter_id = cc.id
+    LEFT JOIN submission_daily_challenges sdc ON dc.id = sdc.challenge_id 
+        AND sdc.deleted_at IS NULL
+    LEFT JOIN grading_daily_challenges gdc ON sdc.id = gdc.submission_daily_id 
+        AND gdc.deleted_at IS NULL
+    WHERE cc.class_id = :classId
+    AND dc.deleted_at IS NULL
+    AND (sdc.user_id = :userId OR sdc.user_id IS NULL)
+    ORDER BY dc.created_at
+    """, nativeQuery = true)
     List<Map<String, Object>> getStudentChallengesByClass(@Param("userId") Long userId, @Param("classId") Long classId);
 }
