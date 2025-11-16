@@ -319,9 +319,14 @@ public class ClassStudentServiceImpl implements ClassStudentService {
 
             // send notification to newly added students
             for (User u : newlyAdded) {
+                String url = "/student/classes/menu/" + clazz.getId();
+                if(u.getRole().getName().equals(RoleName.TEST_TAKER)) {
+                    url = "/test-taker/classes/menu/" + clazz.getId();
+                }
+
                 String title = "Bạn đã được thêm vào lớp " + clazz.getClassName();
                 String message = "Bạn vừa được thêm vào lớp " + clazz.getClassName() + " bởi " + jwtUtil.extractUsernameFromCurrentRequest();
-                notificationService.createNotification(u.getId(), null, title, message, null, null);
+                notificationService.createNotification(u.getId(), null, title, message, url, null);
             }
         }
 
@@ -415,10 +420,12 @@ public class ClassStudentServiceImpl implements ClassStudentService {
         try {
             String title = "Bạn đã rời lớp " + clazz.getClassName();
             String message = "Bạn đã được gỡ khỏi lớp " + clazz.getClassName() + " bởi " + jwtUtil.extractUsernameFromCurrentRequest();
-            notificationService.createNotification(user.getId(), null, title, message, null, null);
+
+            notificationService.createNotification(user.getId(), clazz.getId(), title, message, null, null);
         } catch (Exception ex) {
             log.warn("Failed to send notification to removed student userId={} error={}", userId, ex.getMessage());
         }
+
 
         // soft-delete submissions for this user in the class
         try {

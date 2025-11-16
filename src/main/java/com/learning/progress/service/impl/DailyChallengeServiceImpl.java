@@ -44,6 +44,8 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
     // NEW: notification service
     @Autowired
     private com.learning.progress.service.NotificationService notificationService;
+    @Autowired
+    private ClassTeacherRepository classTeacherRepository;
 
     /* --------------------------------------------------------
      * CREATE
@@ -318,14 +320,33 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
 
         log.info("[{}] Challenge {} set to PUBLISHED", traceId, id);
 
-        // notify actor
-        try {
-            Long actor = jwtUtil.extractUserIdFromCurrentRequest();
-            String title = "Đã công bố bài tập";
-            String message = "Bài tập \"" + challenge.getChallengeName() + "\" đã được công bố.";
-            notificationService.createNotification(actor, null, title, message, null, null);
-        } catch (Exception ex) {
-            log.debug("Failed to send publishChallenge notification: {}", ex.getMessage());
+        // Sau khi publish thành công
+        // Lấy danh sách học sinh + role
+        List<User> students = classStudentRepository
+                .findUsersByClazzIdAndStatus(
+                        challenge.getClassLesson().getClassChapter().getClazz().getId(),
+                        ClassStudentStatus.ACTIVE
+                );
+
+        String classId = challenge.getClassLesson().getClassChapter().getClazz().getId().toString();
+
+        for (User student : students) {
+            String basePath = RoleName.TEST_TAKER.equals(student.getRole().getName())
+                    ? "/test-taker/classes/daily-challenge/"
+                    : "/student/classes/daily-challenge/";
+            String url = basePath + classId;
+
+            String title = "Bài tập mới: " + challenge.getChallengeName();
+            String message = "Bài tập mới đã được công bố trong lớp.";
+
+            notificationService.createNotification(
+                    student.getId(),
+                    challenge.getId(),
+                    title,
+                    message,
+                    url,
+                    null
+            );
         }
 
         return dailyChallengeMapper.mapToDTO(challenge);
@@ -517,11 +538,33 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
                 }
 
                 // PUBLISHED|IN_PROGRESS -> CLOSED when endDate reached
+                // Trong vòng lặp, sau khi set FINISHED
                 if ((current == ChallengeStatus.PUBLISHED || current == ChallengeStatus.IN_PROGRESS)
                         && end != null && !end.isAfter(now)) {
+
                     ch.setChallengeStatus(ChallengeStatus.FINISHED);
                     changed = true;
-                    log.info("Scheduled transition: challenge {} -> CLOSED", ch.getId());
+
+                    // === THÊM NOTIFICATION CHO GIÁO VIÊN ===
+                    Long classId = ch.getClassLesson().getClassChapter().getClazz().getId();
+                    List<Long> teacherIds = classTeacherRepository
+                            .findUserIdsByClazzIdAndStatusIn(classId, List.of(ClassTeacherStatus.ACTIVE));
+
+                    long submitted = submissionDailyChallengeRepository
+                            .countByChallengeIdAndSubmittedAtIsNotNullAndDeletedAtIsNull(ch.getId());
+                    long late = submissionDailyChallengeRepository
+                            .countByChallengeIdAndSubmittedAtAfterAndDeletedAtIsNull(ch.getId(), ch.getEndDate());
+                    long totalStudents = classStudentRepository.countByClassIdAndStatus(classId, ClassStudentStatus.ACTIVE);
+                    long missing = totalStudents - submitted;
+
+                    String url = "/teacher/daily-challenges/detail/" + ch.getId() + "/submissions";
+
+                    for (Long teacherId : teacherIds) {
+                        String title = "Bài tập kết thúc: " + ch.getChallengeName();
+                        String message = String.format("Kết thúc: %d nộp, %d muộn, %d thiếu", submitted, late, missing);
+                        notificationService.createNotification(teacherId, ch.getId(), title, message, url, null);
+                    }
+                    // === KẾT THÚC ===
                 }
 
                 if (changed) toSave.add(ch);

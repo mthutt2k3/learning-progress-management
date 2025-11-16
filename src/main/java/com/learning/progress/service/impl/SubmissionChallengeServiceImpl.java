@@ -67,6 +67,8 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
     // NEW: notification service
     @Autowired
     private com.learning.progress.service.NotificationService notificationService;
+    @Autowired
+    private ClassTeacherRepository classTeacherRepository;
 
     public SubmissionChallengeServiceImpl(
             SubmissionDailyChallengeRepository submissionDailyChallengeRepository,
@@ -297,14 +299,31 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
         cacheService.clearSubmissionsCacheForChallenge(submission.getChallenge().getId());
         log.info("[{}] exit started submissionId={} userId={}", action, submissionId, userId);
 
-        // notify student (self) that submission started
-        try {
-            String title = "Bạn đã bắt đầu làm bài";
-            String message = "Bạn đã bắt đầu bài: " + submission.getChallenge().getChallengeName();
-            notificationService.createNotification(userId, null, title, message, null, null);
-        } catch (Exception ex) {
-            log.debug("Failed to send startSubmission notification userId={} error={}", userId, ex.getMessage());
+        // === SAU KHI SAVE SUBMISSION + CLEAR CACHE ===
+        Long challengeId = submission.getChallenge().getId();
+        Long classId = submission.getChallenge().getClassLesson().getClassChapter().getClazz().getId();
+
+// Lấy danh sách giáo viên + trợ giảng
+        List<ClassTeacher> teachers = classTeacherRepository
+                .findByClazzIdAndStatusIn(classId, List.of(ClassTeacherStatus.ACTIVE));
+
+        long submittedCount = submissionDailyChallengeRepository
+                .countByChallengeIdAndSubmittedAtIsNotNullAndDeletedAtIsNull(challengeId);
+        long totalStudents = classStudentRepository
+                .countByClassIdAndStatus(classId, ClassStudentStatus.ACTIVE);
+
+        for (ClassTeacher ct : teachers) {
+            String basePath = RoleInClass.TEACHER.equals(ct.getRoleInClass())
+                    ? "/teacher/daily-challenges/detail/"
+                    : "/teaching-assistant/daily-challenges/detail/";
+            String teacherUrl = basePath + challengeId + "/submissions";
+
+            String title = "Cập nhật nộp bài";
+            String message = String.format("Submissions: %d/%d students", submittedCount, totalStudents);
+
+            notificationService.createNotification(ct.getUser().getId(), challengeId, title, message, teacherUrl, null);
         }
+// === KẾT THÚC ===
     }
 
     /**
