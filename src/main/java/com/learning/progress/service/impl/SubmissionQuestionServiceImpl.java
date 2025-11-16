@@ -57,6 +57,10 @@ public class SubmissionQuestionServiceImpl implements SubmissionQuestionService 
     private ChallengeSectionMapper challengeSectionMapper;
     @Autowired
     private NotificationService notificationService;
+    @Autowired
+    private ClassStudentRepository classStudentRepository;
+    @Autowired
+    private ClassTeacherRepository classTeacherRepository;
 
     @Override
     @Transactional(readOnly = true)
@@ -331,6 +335,32 @@ public class SubmissionQuestionServiceImpl implements SubmissionQuestionService 
         }
         // XÓA CACHE
         cacheService.clearSubmissionCache(userId, submissionChallengeId);
+
+        // === SAU KHI SAVE SUBMISSION + CLEAR CACHE ===
+        Long challengeId = dailyChallenge.getId();
+        Long classId = dailyChallenge.getClassLesson().getClassChapter().getClazz().getId();
+
+// Lấy danh sách giáo viên + trợ giảng
+        List<ClassTeacher> teachers = classTeacherRepository
+                .findByClazzIdAndStatusIn(classId, List.of(ClassTeacherStatus.ACTIVE));
+
+        long submittedCount = submissionDailyChallengeRepository
+                .countByChallengeIdAndSubmittedAtIsNotNullAndDeletedAtIsNull(challengeId);
+        long totalStudents = classStudentRepository
+                .countByClassIdAndStatus(classId, ClassStudentStatus.ACTIVE);
+
+        for (ClassTeacher ct : teachers) {
+            String basePath = RoleInClass.TEACHER.equals(ct.getRoleInClass())
+                    ? "/teacher/daily-challenges/detail/"
+                    : "/teaching-assistant/daily-challenges/detail/";
+            String url = basePath + challengeId + "/submissions";
+
+            String title = "Cập nhật nộp bài";
+            String message = String.format("Submissions: %d/%d students", submittedCount, totalStudents);
+
+            notificationService.createNotification(ct.getUser().getId(), challengeId, title, message, url, null);
+        }
+// === KẾT THÚC ===
     }
 
     @Override

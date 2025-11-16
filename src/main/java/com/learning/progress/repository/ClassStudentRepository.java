@@ -2,6 +2,7 @@ package com.learning.progress.repository;
 
 import com.learning.progress.common.ClassStudentStatus;
 import com.learning.progress.entity.ClassStudent;
+import com.learning.progress.entity.User;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -87,4 +88,6 @@ public interface ClassStudentRepository extends JpaRepository<ClassStudent, Long
 
     int countByClazzIdAndDeletedAtIsNull(Long classId);
 
+    @Query("SELECT cs.user FROM ClassStudent cs WHERE cs.clazz.id = :classId AND cs.status = :status")
+    List<User> findUsersByClazzIdAndStatus(@Param("classId") Long classId, @Param("status") ClassStudentStatus status);
 }
