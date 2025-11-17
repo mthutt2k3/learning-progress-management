@@ -21,6 +21,7 @@ public interface ReportService {
 
     ClassReportDTO.ChallengeProgressBySkill getChallengeProgressBySkill(Long classId);
 
+    ClassReportDTO.AtRiskReport getAtRiskStudents(Long classId);
     /* --------------------------------------------------------
      * CHALLENGE REPORT APIs
      * -------------------------------------------------------- */
@@ -31,6 +32,7 @@ public interface ReportService {
 
     ChallengeReportDTO.ChallengeChartData getChallengeChartData(Long challengeId);
 
+    ChallengeReportDTO.QuestionStatsReport getQuestionStats(Long challengeId);
     /* --------------------------------------------------------
      * STUDENT PERFORMANCE APIs
      * -------------------------------------------------------- */
@@ -40,4 +42,5 @@ public interface ReportService {
     StudentPerformanceDTO.LevelHistory getStudentLevelHistory(Long userId);
 
     StudentPerformanceDTO.ClassChallengeDetail getStudentClassChallengeDetail(Long classId, Long userId);
+
 }
