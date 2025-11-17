@@ -90,7 +90,7 @@ public class ClassReportDTO {
         private Long totalSubmissions;
         private Long lateSubmissions;
         private Long onTimeSubmissions;
-        private BigDecimal diligenceScore; // Điểm chuyên cần
+        private BigDecimal improvementScore;    // FE có thể sort theo này
     }
 
     /* --------------------------------------------------------
@@ -152,5 +152,36 @@ public class ClassReportDTO {
         private BigDecimal inProgressPercentage;
         private Integer finished;
         private BigDecimal finishedPercentage;
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class AtRiskStudent {
+        private Long userId;
+        private String fullName;
+        private String email;
+        private String avatarUrl;
+
+        private List<String> riskTypes;
+        private Integer riskScore;
+
+        private Integer recentChallengesAnalyzed;
+        private BigDecimal recentAverageScore;
+        private Integer lateSubmissionsCount;
+        private Integer totalTabSwitches;
+        private Integer totalCopyAttempts;  // Đổi tên cho rõ: copy + paste
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class AtRiskReport {
+        private Long classId;
+        private String className;
+        private Integer minChallengesRequired;  // Min số bài để phân tích
+        private List<AtRiskStudent> students;
     }
 }

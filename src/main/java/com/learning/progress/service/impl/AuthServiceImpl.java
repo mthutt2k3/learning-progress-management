@@ -30,6 +30,7 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 import org.thymeleaf.spring6.SpringTemplateEngine;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 
 @Service
@@ -63,6 +64,8 @@ public class AuthServiceImpl implements AuthService {
 
     @Autowired
     private EmailService emailService;
+    @Autowired
+    private NotificationServiceImpl notificationServiceImpl;
 
     /**
      * Authenticates a user and generates access and refresh tokens.
@@ -145,6 +148,7 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     public String requestTeacherResetPassword(RequestTeacherResetPassword request) {
+        String traceId = TraceUtil.getTraceId();
         // Fetch user by username
         User user = userRepository.findByUserNameAndDeletedAtIsNull(request.getUserName())
                 .orElseThrow(() -> {
@@ -169,6 +173,52 @@ public class AuthServiceImpl implements AuthService {
         user.setRequestResetPasswordByTeacher(true);
         user.setResetPasswordTokenUsed(false);
         userRepository.save(user);
+
+        try {
+            // 1. Get all teachers of this student
+            List<Long> teacherIds = userRepository.findTeacherIdsByStudentId(user.getId());
+
+            // 2. Get all managers
+            List<Long> managerIds = userRepository.findAllManagerIds();
+
+            // 3. Prepare notification content
+            String studentName = user.getFullName() != null ? user.getFullName() : user.getUserName();
+            String title = "Password Reset Request";
+            String message = studentName + " requested password reset.";
+            String avatarUrl = user.getAvatarUrl();
+
+            // 4. Send to teachers with teacher URL
+            if (!teacherIds.isEmpty()) {
+                String teacherUrl = "/teacher/student/" + user.getId() + "/profile";
+                notificationServiceImpl.createNotification(
+                        teacherIds,
+                        user.getId(),  // creatorId = student
+                        title,
+                        message,
+                        teacherUrl,
+                        avatarUrl
+                );
+                log.info("[{}] Sent password reset notification to {} teachers", traceId, teacherIds.size());
+            }
+
+            // 5. Send to managers with manager URL
+            if (!managerIds.isEmpty()) {
+                String managerUrl = "/manager/student/" + user.getId() + "/profile";
+                notificationServiceImpl.createNotification(
+                        managerIds,
+                        user.getId(),  // creatorId = student
+                        title,
+                        message,
+                        managerUrl,
+                        avatarUrl
+                );
+                log.info("[{}] Sent password reset notification to {} managers", traceId, managerIds.size());
+            }
+
+        } catch (Exception e) {
+            log.error("[{}] Failed to send password reset notifications: {}", traceId, e.getMessage(), e);
+            // Don't throw - notification failure shouldn't break the password reset request
+        }
         return Const.RESULT_MESSAGE_CODE.PASSWORD_RESET_TEACHER_SENT;
     }
 

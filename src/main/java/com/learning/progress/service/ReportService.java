@@ -1,5 +1,6 @@
 package com.learning.progress.service;
 
+import com.learning.progress.common.ChallengeType;
 import com.learning.progress.dto.report.ChallengeReportDTO;
 import com.learning.progress.dto.report.ClassReportDTO;
 import com.learning.progress.dto.report.StudentPerformanceDTO;
@@ -14,12 +15,13 @@ public interface ReportService {
 
     ClassReportDTO.ClassOverview getClassOverview(Long classId);
 
-    ClassReportDTO.MembersDetail getMembersDetail(Long classId, String sortBy);
+    ClassReportDTO.MembersDetail getMembersDetail(Long classId);
 
-    ClassReportDTO.ChallengeStatsBySkill getChallengeStatsBySkill(Long classId, String skill);
+    ClassReportDTO.ChallengeStatsBySkill getChallengeStatsBySkill(Long classId, ChallengeType skill);
 
     ClassReportDTO.ChallengeProgressBySkill getChallengeProgressBySkill(Long classId);
 
+    ClassReportDTO.AtRiskReport getAtRiskStudents(Long classId);
     /* --------------------------------------------------------
      * CHALLENGE REPORT APIs
      * -------------------------------------------------------- */
@@ -30,13 +32,15 @@ public interface ReportService {
 
     ChallengeReportDTO.ChallengeChartData getChallengeChartData(Long challengeId);
 
+    ChallengeReportDTO.QuestionStatsReport getQuestionStats(Long challengeId);
     /* --------------------------------------------------------
      * STUDENT PERFORMANCE APIs
      * -------------------------------------------------------- */
 
-    StudentPerformanceDTO.StudentOverview getStudentOverview();
+    StudentPerformanceDTO.StudentOverview getStudentOverview(Long userId);
 
-    StudentPerformanceDTO.LevelHistory getStudentLevelHistory();
+    StudentPerformanceDTO.LevelHistory getStudentLevelHistory(Long userId);
 
-    StudentPerformanceDTO.ClassChallengeDetail getStudentClassChallengeDetail(Long classId);
+    StudentPerformanceDTO.ClassChallengeDetail getStudentClassChallengeDetail(Long classId, Long userId);
+
 }

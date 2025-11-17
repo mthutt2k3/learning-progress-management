@@ -89,4 +89,35 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     List<User> findAllByIdInAndDeletedAtIsNull(List<Long> userIds);
 
+    @Query(value = """
+    SELECT DISTINCT ct.user_id
+    FROM class_students cs
+    JOIN class_teachers ct ON cs.class_id = ct.class_id
+    WHERE cs.user_id = :studentId
+    AND cs.status = 'ACTIVE'
+    AND cs.deleted_at IS NULL
+    AND ct.status = 'ACTIVE'
+    AND ct.deleted_at IS NULL
+    """, nativeQuery = true)
+    List<Long> findTeacherIdsByStudentId(@Param("studentId") Long studentId);
+
+    @Query(value = """
+    SELECT u.id
+    FROM users u
+    JOIN roles r ON u.role_id = r.id
+    WHERE r.name IN ('MANAGER')
+    AND u.status = 'ACTIVE'
+    AND u.deleted_at IS NULL
+    """, nativeQuery = true)
+    List<Long> findAllManagerIds();
+
+    @Query(value = """
+    SELECT u.id
+    FROM users u
+    JOIN roles r ON u.role_id = r.id
+    WHERE r.name IN ('ADMIN')
+    AND u.status = 'ACTIVE'
+    AND u.deleted_at IS NULL
+    """, nativeQuery = true)
+    List<Long> findAllAdminIds();
 }

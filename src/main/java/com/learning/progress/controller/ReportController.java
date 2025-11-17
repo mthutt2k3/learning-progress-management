@@ -1,5 +1,6 @@
 package com.learning.progress.controller;
 
+import com.learning.progress.common.ChallengeType;
 import com.learning.progress.common.Const;
 import com.learning.progress.dto.DataResponse;
 import com.learning.progress.dto.report.ChallengeReportDTO;
@@ -50,10 +51,8 @@ public class ReportController {
             description = "Chi tiết thành viên: biểu đồ tròn phân bố role, hoạt động của teacher/TA (giao bài, chấm bài), danh sách học sinh xếp hạng"
     )
     public ResponseEntity<DataResponse<ClassReportDTO.MembersDetail>> getMembersDetail(
-            @PathVariable @Parameter(description = "ID của lớp") Long classId,
-            @RequestParam(defaultValue = "score") @Parameter(description = "Sắp xếp theo: 'score' (điểm) hoặc 'diligence' (chuyên cần)") String sortBy
-    ) {
-        ClassReportDTO.MembersDetail membersDetail = reportService.getMembersDetail(classId, sortBy);
+            @PathVariable @Parameter(description = "ID của lớp") Long classId) {
+        ClassReportDTO.MembersDetail membersDetail = reportService.getMembersDetail(classId);
         return new ResponseEntity<>(
                 DataResponse.success(membersDetail, Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL),
                 HttpStatus.OK
@@ -68,7 +67,7 @@ public class ReportController {
     )
     public ResponseEntity<DataResponse<ClassReportDTO.ChallengeStatsBySkill>> getChallengeStatsBySkill(
             @PathVariable @Parameter(description = "ID của lớp") Long classId,
-            @RequestParam @Parameter(description = "Loại skill: VOCABULARY, READING, LISTENING, WRITING, SPEAKING") String skill
+            @RequestParam @Parameter(description = "Loại skill: GV, RE, LI, WR, SP") ChallengeType skill
     ) {
         ClassReportDTO.ChallengeStatsBySkill stats = reportService.getChallengeStatsBySkill(classId, skill);
         return new ResponseEntity<>(
@@ -155,8 +154,10 @@ public class ReportController {
             summary = "Student Overview",
             description = "Tổng quan của học sinh: thời gian bắt đầu học, level hiện tại, lớp hiện tại, tỷ lệ làm DC"
     )
-    public ResponseEntity<DataResponse<StudentPerformanceDTO.StudentOverview>> getStudentOverview() {
-        StudentPerformanceDTO.StudentOverview overview = reportService.getStudentOverview();
+    public ResponseEntity<DataResponse<StudentPerformanceDTO.StudentOverview>> getStudentOverview(
+            @RequestParam(required = false) Long userId
+    ) {
+        StudentPerformanceDTO.StudentOverview overview = reportService.getStudentOverview(userId);
         return new ResponseEntity<>(
                 DataResponse.success(overview, Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL),
                 HttpStatus.OK
@@ -169,8 +170,10 @@ public class ReportController {
             summary = "Student Level History",
             description = "Lịch sử các level đã học: thông tin level, các lớp đã học, điểm TB theo từng loại DC"
     )
-    public ResponseEntity<DataResponse<StudentPerformanceDTO.LevelHistory>> getStudentLevelHistory() {
-        StudentPerformanceDTO.LevelHistory levelHistory = reportService.getStudentLevelHistory();
+    public ResponseEntity<DataResponse<StudentPerformanceDTO.LevelHistory>> getStudentLevelHistory(
+            @RequestParam(required = false) Long userId
+    ) {
+        StudentPerformanceDTO.LevelHistory levelHistory = reportService.getStudentLevelHistory(userId);
         return new ResponseEntity<>(
                 DataResponse.success(levelHistory, Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL),
                 HttpStatus.OK
@@ -184,11 +187,44 @@ public class ReportController {
             description = "Chi tiết DC của học sinh trong 1 lớp: list DC kèm điểm, type, status, tỷ lệ hoàn thành đúng hạn"
     )
     public ResponseEntity<DataResponse<StudentPerformanceDTO.ClassChallengeDetail>> getStudentClassChallengeDetail(
-            @PathVariable @Parameter(description = "ID của lớp") Long classId
+            @PathVariable @Parameter(description = "ID của lớp") Long classId,
+            @RequestParam(required = false) Long userId
     ) {
-        StudentPerformanceDTO.ClassChallengeDetail detail = reportService.getStudentClassChallengeDetail(classId);
+        StudentPerformanceDTO.ClassChallengeDetail detail = reportService.getStudentClassChallengeDetail(classId, userId);
         return new ResponseEntity<>(
                 DataResponse.success(detail, Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL),
+                HttpStatus.OK
+        );
+    }
+
+    @GetMapping("/challenge/{challengeId}/question-stats")
+    @PreAuthorize("hasAnyRole('TEACHER', 'TEACHING_ASSISTANT')")
+    @Operation(
+            summary = "Question Statistics",
+            description = "Thống kê từng câu hỏi: số lần làm và tỷ lệ đúng"
+    )
+    public ResponseEntity<DataResponse<ChallengeReportDTO.QuestionStatsReport>> getQuestionStats(
+            @PathVariable Long challengeId
+    ) {
+        ChallengeReportDTO.QuestionStatsReport report = reportService.getQuestionStats(challengeId);
+        return new ResponseEntity<>(
+                DataResponse.success(report, Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL),
+                HttpStatus.OK
+        );
+    }
+
+    @GetMapping("/class/{classId}/at-risk")
+    @PreAuthorize("hasAnyRole('TEACHER', 'TEACHING_ASSISTANT')")
+    @Operation(
+            summary = "At-Risk Students Alert",
+            description = "Cảnh báo học sinh có nguy cơ: 3 bài liền < 6đ, nộp muộn >= 50%, cheat nhiều, giảm điểm liên tục theo skill"
+    )
+    public ResponseEntity<DataResponse<ClassReportDTO.AtRiskReport>> getAtRiskStudents(
+            @PathVariable Long classId
+    ) {
+        ClassReportDTO.AtRiskReport report = reportService.getAtRiskStudents(classId);
+        return new ResponseEntity<>(
+                DataResponse.success(report, Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL),
                 HttpStatus.OK
         );
     }
