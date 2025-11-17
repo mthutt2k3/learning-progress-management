@@ -329,7 +329,6 @@ public class ReportServiceImpl implements ReportService {
 
         log.info("[{}] Getting student level history for userId: {}", traceId, targetUserId);
 
-        // FIX 1: Dùng targetUserId thay vì userId
         List<Map<String, Object>> historyData = reportRepository.getStudentLevelHistory(targetUserId);
 
         // Group by level and then by class
@@ -337,9 +336,8 @@ public class ReportServiceImpl implements ReportService {
                 .filter(m -> m.get("level_id") != null)
                 .collect(Collectors.groupingBy(m -> getLongValue(m, "level_id")));
 
-        // FIX 2: TRUYỀN targetUserId vào buildLevelDetail
         List<StudentPerformanceDTO.LevelDetail> levels = groupedByLevel.entrySet().stream()
-                .map(entry -> buildLevelDetail(entry.getKey(), entry.getValue(), targetUserId))  // ← THÊM targetUserId
+                .map(entry -> buildLevelDetail(entry.getKey(), entry.getValue(), targetUserId))
                 .sorted(Comparator.comparing(ld ->
                                 ld.getClasses().isEmpty() ? OffsetDateTime.MIN :
                                         ld.getClasses().get(0).getJoinedAt(),
@@ -349,6 +347,174 @@ public class ReportServiceImpl implements ReportService {
         return StudentPerformanceDTO.LevelHistory.builder()
                 .levels(levels)
                 .build();
+    }
+
+    private StudentPerformanceDTO.LevelDetail buildLevelDetail(
+            Long levelId,
+            List<Map<String, Object>> classData,
+            Long userId) {
+
+        Map<String, Object> firstRow = classData.get(0);
+
+        // Group by class_id
+        Map<Long, List<Map<String, Object>>> groupedByClass = classData.stream()
+                .filter(m -> m.get("class_id") != null)
+                .collect(Collectors.groupingBy(m -> getLongValue(m, "class_id")));
+
+        // SỬA: Dùng buildClassDetail thay vì mapToClassDetail
+        List<StudentPerformanceDTO.ClassDetail> classes = groupedByClass.entrySet().stream()
+                .map(entry -> buildClassDetail(entry.getKey(), entry.getValue(), userId))
+                .sorted(Comparator.comparing(StudentPerformanceDTO.ClassDetail::getJoinedAt,
+                        Comparator.reverseOrder()))
+                .collect(Collectors.toList());
+
+        // Check late pattern cho level này
+        StudentPerformanceDTO.LateSubmissionWarning warning = checkLatePatternForLevel(userId, levelId);
+
+        return StudentPerformanceDTO.LevelDetail.builder()
+                .levelId(levelId)
+                .levelName(getStringValue(firstRow, "level_name"))
+                .levelCode(getStringValue(firstRow, "level_code"))
+                .classes(classes)
+                .lateSubmissionWarning(warning)
+                .build();
+    }
+
+    private StudentPerformanceDTO.LateSubmissionWarning checkLatePatternForLevel(Long userId, Long levelId) {
+        List<Map<String, Object>> recentChallenges = reportRepository.getRecentChallengesByLevel(userId, levelId);
+
+        if (recentChallenges.isEmpty()) {
+            return StudentPerformanceDTO.LateSubmissionWarning.builder()
+                    .hasHighLateRate(false)
+                    .windowSize(0)
+                    .lateCount(0)
+                    .lateRate(BigDecimal.ZERO)
+                    .build();
+        }
+
+        // Convert to boolean array để dễ xử lý
+        List<Boolean> isLateList = recentChallenges.stream()
+                .map(data -> {
+                    Object isLate = data.get("is_late");
+                    return isLate != null && ((Number) isLate).intValue() == 1;
+                })
+                .collect(Collectors.toList());
+
+        // Check các window size từ nhỏ đến lớn: 3, 5, 7, 10
+        // Window nhỏ hơn = gần đây hơn = ưu tiên cao hơn
+        int[] windowSizes = {3, 5, 7, 10};
+
+        for (int windowSize : windowSizes) {
+            if (isLateList.size() < windowSize) {
+                continue; // Không đủ data cho window này
+            }
+
+            // Lấy N bài gần nhất
+            List<Boolean> window = isLateList.subList(0, Math.min(windowSize, isLateList.size()));
+            long lateCount = window.stream().filter(late -> late).count();
+
+            // Check nếu >= 50% là muộn
+            if (lateCount * 2 >= windowSize) {
+                BigDecimal lateRate = BigDecimal.valueOf(lateCount)
+                        .multiply(BigDecimal.valueOf(100))
+                        .divide(BigDecimal.valueOf(windowSize), 2, RoundingMode.HALF_UP);
+
+                return StudentPerformanceDTO.LateSubmissionWarning.builder()
+                        .hasHighLateRate(true)
+                        .windowSize(windowSize)
+                        .lateCount((int) lateCount)
+                        .lateRate(lateRate)
+                        .build();
+            }
+        }
+
+        // Không có window nào vượt 50%
+        return StudentPerformanceDTO.LateSubmissionWarning.builder()
+                .hasHighLateRate(false)
+                .windowSize(isLateList.size())
+                .lateCount((int) isLateList.stream().filter(late -> late).count())
+                .lateRate(calculateRate(
+                        (int) isLateList.stream().filter(late -> late).count(),
+                        isLateList.size()
+                ))
+                .build();
+    }
+
+    private StudentPerformanceDTO.ClassDetail mapToClassDetail(Map<String, Object> data) {
+        Integer totalChallenges = getIntValue(data, "total_challenges");
+        Integer completedChallenges = getIntValue(data, "completed_challenges");
+        Integer lateChallenges = getIntValue(data, "late_challenges");
+        Integer notStartedChallenges = getIntValue(data, "not_started_challenges");
+
+        // Calculate rates
+        BigDecimal completionRate = calculateRate(completedChallenges, totalChallenges);
+        BigDecimal lateSubmissionRate = calculateRate(lateChallenges, totalChallenges);
+        BigDecimal notStartedRate = calculateRate(notStartedChallenges, totalChallenges);
+
+        return StudentPerformanceDTO.ClassDetail.builder()
+                .classId(getLongValue(data, "class_id"))
+                .className(getStringValue(data, "class_name"))
+                .classCode(getStringValue(data, "class_code"))
+                .startDate(getLocalDateValue(data, "start_date"))
+                .endDate(getLocalDateValue(data, "end_date"))
+                .joinedAt(getOffsetDateTimeValue(data, "joined_at"))
+                .leftAt(getOffsetDateTimeValue(data, "left_at"))
+
+                // Performance metrics
+                .ranking(getIntValue(data, "ranking"))
+                .studentAverageScore(getBigDecimalValue(data, "student_avg_score"))
+                .classAverageScore(getBigDecimalValue(data, "class_avg_score"))
+
+                // Completion stats
+                .completionRate(completionRate)
+                .lateSubmissionRate(lateSubmissionRate)
+                .notStartedRate(notStartedRate)
+                .totalChallenges(totalChallenges)
+                .completedChallenges(completedChallenges)
+                .lateChallenges(lateChallenges)
+                .notStartedChallenges(notStartedChallenges)
+
+                // Score by type
+                .scoreByType(StudentPerformanceDTO.ScoreByType.builder()
+                        .vocabularyAvg(getBigDecimalValue(data, "vocabulary_avg"))
+                        .readingAvg(getBigDecimalValue(data, "reading_avg"))
+                        .listeningAvg(getBigDecimalValue(data, "listening_avg"))
+                        .writingAvg(getBigDecimalValue(data, "writing_avg"))
+                        .speakingAvg(getBigDecimalValue(data, "speaking_avg"))
+                        .build())
+                .build();
+    }
+
+    // Thêm helper method này nếu chưa có
+    private String getStringValue(Map<String, Object> map, String key) {
+        Object value = map.get(key);
+        return value != null ? value.toString() : null;
+    }
+
+    private OffsetDateTime getOffsetDateTimeValue(Map<String, Object> map, String key) {
+        Object value = map.get(key);
+        if (value == null) return null;
+        if (value instanceof OffsetDateTime) return (OffsetDateTime) value;
+        if (value instanceof Instant) return ((Instant) value).atOffset(ZoneOffset.UTC);
+        return null;
+    }
+
+    private BigDecimal calculateRate(Integer count, Integer total) {
+        if (total == null || total == 0) {
+            return BigDecimal.ZERO;
+        }
+        return BigDecimal.valueOf(count != null ? count : 0)
+                .multiply(BigDecimal.valueOf(100))
+                .divide(BigDecimal.valueOf(total), 2, RoundingMode.HALF_UP);
+    }
+
+    // Helper methods (nếu chưa có)
+    private LocalDate getLocalDateValue(Map<String, Object> map, String key) {
+        Object value = map.get(key);
+        if (value == null) return null;
+        if (value instanceof LocalDate) return (LocalDate) value;
+        if (value instanceof java.sql.Date) return ((java.sql.Date) value).toLocalDate();
+        return null;
     }
 
     @Override
@@ -632,36 +798,6 @@ public class ReportServiceImpl implements ReportService {
                 .build();
     }
 
-    // FIX: THÊM parameter userId
-    private StudentPerformanceDTO.LevelDetail buildLevelDetail(Long levelId, List<Map<String, Object>> classesData, Long userId) {
-        if (classesData.isEmpty()) {
-            return StudentPerformanceDTO.LevelDetail.builder()
-                    .levelId(levelId)
-                    .classes(Collections.emptyList())
-                    .build();
-        }
-
-        Map<String, Object> firstClass = classesData.get(0);
-
-        // Group by class
-        Map<Long, List<Map<String, Object>>> groupedByClass = classesData.stream()
-                .filter(m -> m.get("class_id") != null)
-                .collect(Collectors.groupingBy(m -> getLongValue(m, "class_id")));
-
-        // FIX: TRUYỀN userId vào buildClassDetail
-        List<StudentPerformanceDTO.ClassDetail> classes = groupedByClass.entrySet().stream()
-                .map(entry -> buildClassDetail(entry.getKey(), entry.getValue(), userId))  // ← THÊM userId
-                .sorted(Comparator.comparing(StudentPerformanceDTO.ClassDetail::getJoinedAt, Comparator.reverseOrder()))
-                .collect(Collectors.toList());
-
-        return StudentPerformanceDTO.LevelDetail.builder()
-                .levelId(levelId)
-                .levelName((String) firstClass.get("level_name"))
-                .levelCode((String) firstClass.get("level_code"))
-                .classes(classes)
-                .build();
-    }
-
     private StudentPerformanceDTO.ClassDetail buildClassDetail(
             Long classId,
             List<Map<String, Object>> classData,
@@ -794,10 +930,20 @@ public class ReportServiceImpl implements ReportService {
 
         DailyChallenge challenge = validateChallengeAccess(challengeId);
 
-        List<Map<String, Object>> data = reportRepository.getQuestionStats(challengeId);
+        // Lấy stats tổng quan của từng question (như cũ)
+        List<Map<String, Object>> questionStatsData = reportRepository.getQuestionStats(challengeId);
 
-        List<ChallengeReportDTO.QuestionStats> questions = data.stream()
+        // Lấy performance của từng student trên từng question (MỚI)
+        List<Map<String, Object>> studentPerformancesData = reportRepository.getStudentQuestionPerformances(challengeId);
+
+        // Group student performances by question_id
+        Map<Long, List<Map<String, Object>>> performancesByQuestion = studentPerformancesData.stream()
+                .collect(Collectors.groupingBy(m -> getLongValue(m, "question_id")));
+
+        // Build question stats với student performances
+        List<ChallengeReportDTO.QuestionStats> questions = questionStatsData.stream()
                 .map(row -> {
+                    Long questionId = getLongValue(row, "question_id");
                     Long totalAttempts = getLongValue(row, "total_attempts");
                     Long correctCount = getLongValue(row, "correct_count");
 
@@ -808,17 +954,25 @@ public class ReportServiceImpl implements ReportService {
                             .setScale(2, RoundingMode.HALF_UP)
                             : BigDecimal.ZERO;
 
+                    // Build student performances cho question này
+                    List<ChallengeReportDTO.StudentQuestionPerformance> studentPerformances =
+                            performancesByQuestion.getOrDefault(questionId, Collections.emptyList())
+                                    .stream()
+                                    .map(this::buildStudentQuestionPerformance)
+                                    .collect(Collectors.toList());
+
                     return ChallengeReportDTO.QuestionStats.builder()
                             .sectionId(getLongValue(row, "section_id"))
                             .sectionTitle((String) row.get("section_title"))
                             .sectionOrder(getIntValue(row, "section_order"))
-                            .questionId(getLongValue(row, "question_id"))
+                            .questionId(questionId)
                             .questionText((String) row.get("question_text"))
                             .questionType((String) row.get("question_type"))
                             .questionOrder(getIntValue(row, "question_order"))
                             .totalAttempts(totalAttempts)
                             .correctCount(correctCount)
                             .correctRate(correctRate)
+                            .studentPerformances(studentPerformances) // ← THÊM MỚI
                             .build();
                 })
                 .collect(Collectors.toList());
@@ -827,6 +981,33 @@ public class ReportServiceImpl implements ReportService {
                 .challengeId(challenge.getId())
                 .challengeName(challenge.getChallengeName())
                 .questions(questions)
+                .build();
+    }
+
+    // Thêm helper method mới
+    private ChallengeReportDTO.StudentQuestionPerformance buildStudentQuestionPerformance(Map<String, Object> data) {
+        BigDecimal receivedWeight = getBigDecimalValue(data, "received_weight");
+        BigDecimal totalWeight = getBigDecimalValue(data, "total_weight");
+
+        // Tính tỷ lệ đúng %
+        BigDecimal correctRate = totalWeight.compareTo(BigDecimal.ZERO) > 0
+                ? receivedWeight.divide(totalWeight, 4, RoundingMode.HALF_UP)
+                .multiply(BigDecimal.valueOf(100))
+                .setScale(2, RoundingMode.HALF_UP)
+                : BigDecimal.ZERO;
+
+        // Check xem có đúng hoàn toàn không
+        Boolean isCorrect = receivedWeight.compareTo(totalWeight) == 0 && totalWeight.compareTo(BigDecimal.ZERO) > 0;
+
+        return ChallengeReportDTO.StudentQuestionPerformance.builder()
+                .userId(getLongValue(data, "user_id"))
+                .fullName((String) data.get("full_name"))
+                .email((String) data.get("email"))
+                .avatarUrl((String) data.get("avatar_url"))
+                .receivedWeight(receivedWeight.setScale(2, RoundingMode.HALF_UP))
+                .totalWeight(totalWeight.setScale(2, RoundingMode.HALF_UP))
+                .correctRate(correctRate)
+                .isCorrect(isCorrect)
                 .build();
     }
 
@@ -841,8 +1022,6 @@ public class ReportServiceImpl implements ReportService {
     private static final double LOW_SCORE_THRESHOLD = 6.0; // Điểm < 6.0 = thấp
     private static final int CONSECUTIVE_LOW_COUNT = 3;     // 3 bài liền
     private static final int LATE_SUBMISSION_COUNT = 3;     // ĐỔI: ≥3 bài late trong 5 bài
-    private static final int TAB_SWITCH_THRESHOLD = 6;     // > 20 tab switches
-    private static final int COPY_PASTE_THRESHOLD = 5;      // ĐỔI: > 5 copy+paste attempts
     private static final double SKILL_DROP_THRESHOLD = 2.0; // Giảm > 2 điểm
 
     @Override
@@ -883,13 +1062,14 @@ public class ReportServiceImpl implements ReportService {
     ) {
         Long userId = getLongValue(studentData, "user_id");
         Integer totalSubmissions = getIntValue(studentData, "total_submissions");
-        BigDecimal avgScore = getBigDecimalValue(studentData, "avg_score");  // ĐÃ CÓ SẴN
+        BigDecimal avgScore = getBigDecimalValue(studentData, "avg_score");
         Integer lateCount = getIntValue(studentData, "late_count");
 
         List<String> riskTypes = new ArrayList<>();
+        List<ClassReportDTO.DecliningSkillDetail> decliningSkills = new ArrayList<>();
         int riskScore = 0;
 
-        // 1. CHECK: 3 bài liền < 6 điểm (trong 5 bài)
+        // 1. CHECK: 3 bài liền < 6 điểm
         List<Map<String, Object>> recentScores = reportRepository.getRecentScores(
                 userId, classId, RECENT_CHALLENGES_COUNT
         );
@@ -898,38 +1078,38 @@ public class ReportServiceImpl implements ReportService {
             riskScore += 40;
         }
 
-        // 2. CHECK: ≥3 bài nộp muộn trong 5 bài
+        // 2. CHECK: ≥3 bài nộp muộn
         if (lateCount >= LATE_SUBMISSION_COUNT) {
             riskTypes.add(RiskType.FREQUENT_LATE_SUBMISSIONS.name());
             riskScore += 25;
         }
 
-        // 3. CHECK: Cheat (nhiều TAB_SWITCH hoặc COPY+PASTE)
-        List<String> logs = reportRepository.getSubmissionLogs(
-                userId, classId, RECENT_CHALLENGES_COUNT
-        );
-        CheatStats cheatStats = analyzeCheatBehavior(logs);
-        if (cheatStats.tabSwitches > TAB_SWITCH_THRESHOLD ||
-                cheatStats.copyPasteAttempts > COPY_PASTE_THRESHOLD) {
-            riskTypes.add(RiskType.SUSPECTED_CHEATING.name());
-            riskScore += 30;
-        }
+        // 3. CHECK: Giảm điểm theo từng skill - LOGIC MỚI
+        List<Map<String, Object>> skillStats = reportRepository.getSkillAverageAndLatestScore(userId, classId);
 
-        // 4. CHECK: Giảm điểm theo từng skill
-        List<Map<String, Object>> skillScores = reportRepository.getRecentScoresBySkill(
-                userId, classId, RECENT_CHALLENGES_COUNT
-        );
-        Map<String, List<BigDecimal>> scoresBySkill = groupScoresBySkill(skillScores);
+        for (Map<String, Object> stat : skillStats) {
+            String skillType = (String) stat.get("challenge_type");
+            BigDecimal averageScore = getBigDecimalValue(stat, "average_score");
+            BigDecimal latestScore = getBigDecimalValue(stat, "latest_score");
 
-        for (Map.Entry<String, List<BigDecimal>> entry : scoresBySkill.entrySet()) {
-            String skillType = entry.getKey();
-            List<BigDecimal> scores = entry.getValue();
+            // Check nếu điểm mới nhất kém điểm TB >= 2.0 điểm
+            BigDecimal scoreDrop = averageScore.subtract(latestScore);
 
-            if (isDecliningSkill(scores)) {
+            if (scoreDrop.compareTo(BigDecimal.valueOf(SKILL_DROP_THRESHOLD)) >= 0) {
                 RiskType riskType = mapSkillToRiskType(skillType);
                 if (riskType != null) {
                     riskTypes.add(riskType.name());
                     riskScore += 15;
+
+                    ClassReportDTO.DecliningSkillDetail skillDetail = ClassReportDTO.DecliningSkillDetail.builder()
+                            .skillType(skillType)
+                            .skillName(getSkillName(skillType))
+                            .latestScore(latestScore.setScale(2, RoundingMode.HALF_UP))
+                            .averageScore(averageScore.setScale(2, RoundingMode.HALF_UP))
+                            .scoreDrop(scoreDrop.setScale(2, RoundingMode.HALF_UP))
+                            .build();
+
+                    decliningSkills.add(skillDetail);
                 }
             }
         }
@@ -942,10 +1122,9 @@ public class ReportServiceImpl implements ReportService {
                 .riskTypes(riskTypes)
                 .riskScore(Math.min(riskScore, 100))
                 .recentChallengesAnalyzed(totalSubmissions)
-                .recentAverageScore(avgScore.setScale(2, RoundingMode.HALF_UP))  // THÊM LẠI
+                .recentAverageScore(avgScore.setScale(2, RoundingMode.HALF_UP))
                 .lateSubmissionsCount(lateCount)
-                .totalTabSwitches(cheatStats.tabSwitches)
-                .totalCopyAttempts(cheatStats.copyPasteAttempts)
+                .decliningSkills(decliningSkills)
                 .build();
     }
 
@@ -1099,6 +1278,17 @@ public class ReportServiceImpl implements ReportService {
         if (value instanceof Integer) return BigDecimal.valueOf((Integer) value);
         if (value instanceof Long) return BigDecimal.valueOf((Long) value);
         return new BigDecimal(value.toString());
+    }
+
+    private String getSkillName(String skillType) {
+        switch (skillType) {
+            case "GV": return "Grammar & Vocabulary";
+            case "RE": return "Reading";
+            case "LI": return "Listening";
+            case "WR": return "Writing";
+            case "SP": return "Speaking";
+            default: return skillType;
+        }
     }
 
     private ApiException badRequest(String msg) {

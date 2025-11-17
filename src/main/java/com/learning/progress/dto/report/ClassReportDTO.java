@@ -154,6 +154,20 @@ public class ClassReportDTO {
         private BigDecimal finishedPercentage;
     }
 
+    // Thêm vào ClassReportDTO.java
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class DecliningSkillDetail {
+        private String skillType;          // "GV", "RE", etc
+        private String skillName;           // "Grammar & Vocabulary", etc
+        private BigDecimal latestScore;     // Điểm bài mới nhất
+        private BigDecimal averageScore;    // Điểm TB toàn bộ bài
+        private BigDecimal scoreDrop;       // averageScore - latestScore (số dương = giảm)
+    }
+
+    // Sửa AtRiskStudent
     @Data
     @Builder
     @NoArgsConstructor
@@ -163,15 +177,12 @@ public class ClassReportDTO {
         private String fullName;
         private String email;
         private String avatarUrl;
-
         private List<String> riskTypes;
         private Integer riskScore;
-
         private Integer recentChallengesAnalyzed;
         private BigDecimal recentAverageScore;
         private Integer lateSubmissionsCount;
-        private Integer totalTabSwitches;
-        private Integer totalCopyAttempts;  // Đổi tên cho rõ: copy + paste
+        private List<DecliningSkillDetail> decliningSkills; // THÊM MỚI
     }
 
     @Data

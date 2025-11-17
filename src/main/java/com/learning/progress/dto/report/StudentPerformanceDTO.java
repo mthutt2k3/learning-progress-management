@@ -84,6 +84,18 @@ public class StudentPerformanceDTO {
         private String levelName;
         private String levelCode;
         private List<ClassDetail> classes;
+        private LateSubmissionWarning lateSubmissionWarning;
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class LateSubmissionWarning {
+        private Boolean hasHighLateRate;      // Có pattern nộp muộn không
+        private Integer windowSize;           // Window nào trigger (3, 5, 7, 10)
+        private Integer lateCount;            // Bao nhiêu bài muộn trong window đó
+        private BigDecimal lateRate;          // Tỷ lệ % để FE hiển thị
     }
 
     @Data
