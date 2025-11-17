@@ -1,0 +1,379 @@
+package com.learning.progress.controller;
+
+import com.learning.progress.common.Const;
+import com.learning.progress.common.UserStatus;
+import com.learning.progress.dto.user.*;
+import com.learning.progress.dto.DataResponse;
+import com.learning.progress.service.UserService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.io.ByteArrayResource;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.List;
+
+@RestController
+@RequestMapping("/api/v1/user")
+@Tag(name = "User", description = "User information APIs")
+public class UserController {
+
+    @Autowired
+    private UserService userService;
+
+    @PostMapping("students")
+    @PreAuthorize("hasRole('MANAGER')")
+    @Operation(summary = "Create a new student", description = "Create a new user student profile (MANAGER only)")
+    public ResponseEntity<DataResponse<StudentProfileDTO>> createStudent(@Valid @RequestBody CreateStudentRequest request) {
+        var response = userService.createStudent(request);
+        return new ResponseEntity<>(DataResponse.success(response, Const.RESULT_MESSAGE_CODE.CREATE_SUCCESSFUL), HttpStatus.CREATED);
+    }
+
+    @PutMapping("students/{userId}")
+    @PreAuthorize("hasRole('MANAGER')")
+    @Operation(summary = "Update a student", description = "Update an existing student profile (MANAGER only)")
+    public ResponseEntity<DataResponse<StudentProfileDTO>> updateStudent(
+            @Parameter(description = "User ID of the student to update") @PathVariable Long userId,
+            @Valid @RequestBody UpdateStudentRequest request) {
+        var response = userService.updateStudent(userId, request);
+        return new ResponseEntity<>(DataResponse.success(response, Const.RESULT_MESSAGE_CODE.UPDATE_SUCCESSFUL), HttpStatus.OK);
+    }
+
+    @PatchMapping("students/{userId}/status")
+    @PreAuthorize("hasRole('MANAGER')")
+    @Operation(summary = "Update student status", description = "Update status of an existing student profile (MANAGER only)")
+    public ResponseEntity<DataResponse<StudentProfileDTO>> updateStudentStatus(
+            @Parameter(description = "User ID of the student to update status") @PathVariable Long userId,
+            @Parameter(description = "New status (e.g., ACTIVE, INACTIVE)") @RequestParam UserStatus status) {
+        var response = userService.updateStudentStatus(userId, status);
+        return new ResponseEntity<>(DataResponse.success(response, Const.RESULT_MESSAGE_CODE.UPDATE_SUCCESSFUL), HttpStatus.OK);
+    }
+
+    @PostMapping("teachers")
+    @PreAuthorize("hasRole('MANAGER')")
+    @Operation(summary = "Create a new teacher", description = "Create a new user teacher profile (MANAGER only)")
+    public ResponseEntity<DataResponse<TeacherProfileDTO>> createTeacher(@Valid @RequestBody CreateUserRequest request) {
+        var response = userService.createTeacher(request);
+        return new ResponseEntity<>(DataResponse.success(response, Const.RESULT_MESSAGE_CODE.CREATE_SUCCESSFUL), HttpStatus.CREATED);
+    }
+
+    @PutMapping("teachers/{userId}")
+    @PreAuthorize("hasRole('MANAGER')")
+    @Operation(summary = "Update a teacher", description = "Update an existing teacher profile (MANAGER only)")
+    public ResponseEntity<DataResponse<TeacherProfileDTO>> updateTeacher(
+            @Parameter(description = "User ID of the teacher to update") @PathVariable Long userId,
+            @Valid @RequestBody UpdateUserRequest request) {
+        var response = userService.updateTeacher(userId, request);
+        return new ResponseEntity<>(DataResponse.success(response, Const.RESULT_MESSAGE_CODE.UPDATE_SUCCESSFUL), HttpStatus.OK);
+    }
+
+    @PatchMapping("teachers/{userId}/status")
+    @PreAuthorize("hasRole('MANAGER')")
+    @Operation(summary = "Update teacher status", description = "Update status of an existing teacher profile (MANAGER only)")
+    public ResponseEntity<DataResponse<TeacherProfileDTO>> updateTeacherStatus(
+            @Parameter(description = "User ID of the teacher to update status") @PathVariable Long userId,
+            @Parameter(description = "New status (e.g., ACTIVE, INACTIVE)") @RequestParam String status) {
+        var response = userService.updateTeacherStatus(userId, status);
+        return new ResponseEntity<>(DataResponse.success(response, Const.RESULT_MESSAGE_CODE.UPDATE_SUCCESSFUL), HttpStatus.OK);
+    }
+
+    @GetMapping("students")
+    @Operation(summary = "View Student/Test Taker List", description = "Retrieves a paginated list of students/test takers with optional filtering by text, statuses, roles, and sorting")
+    @PreAuthorize("hasRole('MANAGER') or hasRole('TEACHER') or hasRole('TEACHING_ASSISTANT')")
+    public ResponseEntity<DataResponse<List<StudentProfileDTO>>> getStudentList(
+            @Parameter(description = "Page number, starting from 0") @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "Page size") @RequestParam(defaultValue = "10") int size,
+            @Parameter(description = "Search keyword (email, fullName)") @RequestParam(required = false) String text,
+            @Parameter(description = "Filter by status (e.g., ACTIVE, INACTIVE)") @RequestParam(required = false) List<String> status,
+            @Parameter(description = "Filter by role (e.g., STUDENT, TEST_TAKER)") @RequestParam(required = false) List<String> roleName,
+            @Parameter(description = "Sort by field (e.g., createdAt, fullName)") @RequestParam(defaultValue = "createdAt") String sortBy,
+            @Parameter(description = "Sort direction (asc/desc)") @RequestParam(defaultValue = "asc") String sortDir) {
+        return ResponseEntity.ok(userService.getStudentList(page, size, text, status, roleName, sortBy, sortDir));
+    }
+
+    @GetMapping("teachers")
+    @Operation(summary = "View Teacher/Assistant List", description = "Retrieves a paginated list of Teacher/Assistant with optional filtering by text, statuses, roles, and sorting")
+    @PreAuthorize("hasRole('MANAGER') or hasRole('TEACHER') or hasRole('TEACHING_ASSISTANT')")
+    public ResponseEntity<DataResponse<List<TeacherProfileDTO>>> getTeacherList(
+            @Parameter(description = "Page number, starting from 0") @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "Page size") @RequestParam(defaultValue = "10") int size,
+            @Parameter(description = "Search keyword (email, fullName)") @RequestParam(required = false) String text,
+            @Parameter(description = "Filter by status (e.g., ACTIVE, INACTIVE)") @RequestParam(required = false) List<String> status,
+            @Parameter(description = "Filter by role (e.g., TEACHER, TEACHING_ASSISTANT)") @RequestParam(required = false) List<String> roleName,
+            @Parameter(description = "Sort by field (e.g., createdAt, fullName)") @RequestParam(defaultValue = "createdAt") String sortBy,
+            @Parameter(description = "Sort direction (asc/desc)") @RequestParam(defaultValue = "asc") String sortDir) {
+        return ResponseEntity.ok(userService.getTeacherList(page, size, text, status, roleName, sortBy, sortDir));
+    }
+
+    @GetMapping("profile/{userId}")
+    @PreAuthorize("hasRole('MANAGER') or hasRole('TEACHER') or hasRole('TEACHING_ASSISTANT') or @jwtUtil.isCurrentUser(#userId)")
+    @Operation(summary = "Get user profile", description = "Retrieve profile of a specific user by user ID or current user if userId is not provided")
+    public ResponseEntity<DataResponse<?>> getUserProfile(
+            @Parameter(description = "User ID of the user (optional, defaults to current user)") @PathVariable(required = false) Long userId) {
+        boolean isCurrentUser = userId == null;
+        var response = userService.getUserProfile(userId, isCurrentUser);
+        return ResponseEntity.ok(DataResponse.success(response, Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL));
+    }
+
+    @PutMapping("profile/{userId}")
+    @PreAuthorize("@jwtUtil.isCurrentUser(#userId)")
+    @Operation(summary = "Update current user profile", description = "Update profile of the currently authenticated user")
+    public ResponseEntity<DataResponse<?>> updateUserProfile(
+            @Parameter(description = "User ID of the current user") @PathVariable Long userId,
+            @RequestBody @Valid UpdateProfileDTO updateProfileDTO) {
+        var response = userService.updateUserProfile(userId, updateProfileDTO);
+        return ResponseEntity.ok(DataResponse.success(response, Const.RESULT_MESSAGE_CODE.UPDATE_SUCCESSFUL));
+    }
+
+    @PostMapping("/change-email")
+    @PreAuthorize("hasRole('MANAGER') or hasRole('TEACHER') or @jwtUtil.isCurrentUser(#userId)")
+    @Operation(summary = "Request change email", description = "Request to change the email address of the current user")
+    public ResponseEntity<DataResponse<String>> requestChangeEmail(
+            @Parameter(description = "User ID of the current user") @RequestParam Long userId,
+            @Valid @RequestBody ChangeEmailRequest request) {
+        userService.requestChangeEmail(userId, request);
+        return new ResponseEntity<>(DataResponse.success("Email change confirmation sent", Const.RESULT_MESSAGE_CODE.REQUEST_SENT), HttpStatus.OK);
+    }
+
+    @GetMapping("/confirm-email-change")
+    @Operation(summary = "Confirm email change", description = "Confirm the email change using the token sent in the email")
+    public ResponseEntity<DataResponse<UserProfileDTO>> confirmChangeEmail(
+            @Parameter(description = "JWT token for email change confirmation") @RequestParam String token) {
+        UserProfileDTO response = userService.confirmChangeEmail(token);
+        return new ResponseEntity<>(DataResponse.success(response, Const.RESULT_MESSAGE_CODE.UPDATE_SUCCESSFUL), HttpStatus.OK);
+    }
+
+    @PatchMapping("profile/{userId}/avatar")
+    @PreAuthorize("@jwtUtil.isCurrentUser(#userId) or hasRole('MANAGER')")
+    @Operation(
+            summary = "Update user avatar",
+            description = "Upload or update avatar for the specified user"
+    )
+    public ResponseEntity<DataResponse<String>> updateUserAvatar(
+            @Parameter(description = "User ID to update avatar")
+            @PathVariable Long userId,
+            @RequestParam("file") MultipartFile file) {
+
+        String response = userService.updateUserAvatar(userId, file);
+        return ResponseEntity.ok(DataResponse.success(response, Const.RESULT_MESSAGE_CODE.UPDATE_SUCCESSFUL));
+    }
+
+
+    @GetMapping("/students/upload-template")
+    @PreAuthorize("hasRole('MANAGER')")
+    @Operation(summary = "upload Student Import Template", description = "upload Excel template for importing students")
+    public ResponseEntity<ByteArrayResource> uploadStudentImportTemplate() {
+        byte[] template = userService.generateStudentImportTemplate();
+        ByteArrayResource resource = new ByteArrayResource(template);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=student_import_template.xlsx")
+                .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                .contentLength(template.length)
+                .body(resource);
+    }
+
+    @PreAuthorize("hasRole('MANAGER')")
+    @GetMapping("/students/download-template")
+    @Operation(summary = "Download Student Import Template", description = "Get SAS URL for downloading student import template")
+    public ResponseEntity<String> downloadStudentImportTemplate() {
+        try {
+            String sasUrl = userService.getStudentTemplateSasUrl();
+            return ResponseEntity.ok(sasUrl);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("Error generating SAS URL: " + e.getMessage());
+        }
+    }
+
+    @PostMapping("/students/import")
+    @PreAuthorize("hasRole('MANAGER')")
+    @Operation(summary = "Import Students from Excel", description = "Import multiple students from an Excel file")
+    public ResponseEntity<DataResponse<String>> importStudentsFromExcel(
+            @Parameter(description = "Excel file containing student data") @RequestParam("file") MultipartFile file) {
+        userService.importStudentsFromExcel(file);
+        return new ResponseEntity<>(DataResponse.success("Students imported successfully", Const.RESULT_MESSAGE_CODE.IMPORT_SUCCESSFUL), HttpStatus.OK);
+    }
+
+    @GetMapping("/teachers/upload-template")
+    @PreAuthorize("hasRole('MANAGER')")
+    @Operation(summary = "upload Teacher Import Template", description = "upload Excel template for importing teachers")
+    public ResponseEntity<ByteArrayResource> uploadTeacherImportTemplate() {
+        byte[] template = userService.generateTeacherImportTemplate();
+        ByteArrayResource resource = new ByteArrayResource(template);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=teacher_import_template.xlsx")
+                .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                .contentLength(template.length)
+                .body(resource);
+    }
+
+    @PreAuthorize("hasRole('MANAGER')")
+    @GetMapping("/teachers/download-template")
+    @Operation(summary = "Download Student Import Template", description = "Get SAS URL for downloading student import template")
+    public ResponseEntity<String> downloadImportTemplate() {
+        try {
+            String sasUrl = userService.getTeacherTemplateSasUrl();
+            return ResponseEntity.ok(sasUrl);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("Error generating SAS URL: " + e.getMessage());
+        }
+    }
+
+    @PostMapping("/teachers/import")
+    @PreAuthorize("hasRole('MANAGER')")
+    @Operation(summary = "Import Teachers from Excel", description = "Import multiple teachers from an Excel file")
+    public ResponseEntity<DataResponse<String>> importTeachersFromExcel(
+            @Parameter(description = "Excel file containing teacher data") @RequestParam("file") MultipartFile file) {
+        userService.importTeachersFromExcel(file);
+        return new ResponseEntity<>(DataResponse.success("Teachers imported successfully", Const.RESULT_MESSAGE_CODE.IMPORT_SUCCESSFUL), HttpStatus.OK);
+    }
+
+    @GetMapping("/students/export")
+    @PreAuthorize("hasRole('MANAGER') or hasRole('TEACHER') or hasRole('TEACHING_ASSISTANT')")
+    @Operation(
+            summary = "Export Students to Excel",
+            description = "Export students to Excel. Can filter by class (TEACHER/TA must be teaching that class)"
+    )
+    public ResponseEntity<ByteArrayResource> exportStudents(
+            @Parameter(description = "Search keyword (email, fullName)")
+            @RequestParam(required = false) String text,
+            @Parameter(description = "Filter by status (e.g., ACTIVE, INACTIVE)")
+            @RequestParam(required = false) List<String> status,
+            @Parameter(description = "Filter by role (e.g., STUDENT, TEST_TAKER)")
+            @RequestParam(required = false) List<String> roleName,
+            @Parameter(description = "Filter by class IDs (if empty, export all)")
+            @RequestParam(required = false) List<Long> classIds) {
+
+        byte[] excelFile = userService.exportStudents(text, status, roleName, classIds);
+        ByteArrayResource resource = new ByteArrayResource(excelFile);
+
+        String filename = "Students_Export_" +
+                new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date()) +
+                ".xlsx";
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=" + filename)
+                .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                .contentLength(excelFile.length)
+                .body(resource);
+    }
+
+    @GetMapping("/teachers/export")
+    @PreAuthorize("hasRole('MANAGER')")
+    @Operation(
+            summary = "Export Teachers to Excel",
+            description = "Export all teachers or filtered teachers to Excel file with beautiful formatting"
+    )
+    public ResponseEntity<ByteArrayResource> exportTeachers(
+            @Parameter(description = "Search keyword (email, fullName)")
+            @RequestParam(required = false) String text,
+            @Parameter(description = "Filter by status (e.g., ACTIVE, INACTIVE)")
+            @RequestParam(required = false) List<String> status,
+            @Parameter(description = "Filter by role (e.g., TEACHER, TEACHING_ASSISTANT)")
+            @RequestParam(required = false) List<String> roleName) {
+
+        byte[] excelFile = userService.exportAllTeachers(text, status, roleName);
+        ByteArrayResource resource = new ByteArrayResource(excelFile);
+
+        String filename = "Teachers_Export_" +
+                new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date()) +
+                ".xlsx";
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=" + filename)
+                .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                .contentLength(excelFile.length)
+                .body(resource);
+    }
+
+    @PatchMapping("students/bulk-status")
+    @PreAuthorize("hasRole('MANAGER')")
+    @Operation(
+            summary = "Bulk update student status",
+            description = "Update status for multiple students at once. Cannot change from PENDING to ACTIVE. Only ACTIVE/INACTIVE can be changed."
+    )
+    public ResponseEntity<DataResponse<List<StudentProfileDTO>>> bulkUpdateStudentStatus(
+            @Valid @RequestBody BulkUpdateStatusRequest request) {
+
+        List<StudentProfileDTO> response = userService.bulkUpdateStudentStatus(request);
+
+        return ResponseEntity.ok(
+                DataResponse.success(response, Const.RESULT_MESSAGE_CODE.UPDATE_SUCCESSFUL)
+        );
+    }
+
+    @PatchMapping("teachers/bulk-status")
+    @PreAuthorize("hasRole('MANAGER')")
+    @Operation(
+            summary = "Bulk update teacher status",
+            description = "Update status for multiple teachers at once. Cannot change from PENDING to ACTIVE. Only ACTIVE/INACTIVE can be changed."
+    )
+    public ResponseEntity<DataResponse<List<TeacherProfileDTO>>> bulkUpdateTeacherStatus(
+            @Valid @RequestBody BulkUpdateStatusRequest request) {
+
+        List<TeacherProfileDTO> response = userService.bulkUpdateTeacherStatus(request);
+
+        return ResponseEntity.ok(
+                DataResponse.success(response, Const.RESULT_MESSAGE_CODE.UPDATE_SUCCESSFUL)
+        );
+    }
+
+    @PostMapping("/students/validate-import")
+    @PreAuthorize("hasRole('MANAGER')")
+    @Operation(
+            summary = "Validate Student Import File",
+            description = "Validate Excel file without importing. Returns validation result file."
+    )
+    public ResponseEntity<ByteArrayResource> validateStudentImport(
+            @Parameter(description = "Excel file to validate")
+            @RequestParam("file") MultipartFile file) {
+
+        byte[] validationFile = userService.validateStudentImportFile(file);
+        ByteArrayResource resource = new ByteArrayResource(validationFile);
+
+        String filename = "Student_Validation_" +
+                new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date()) +
+                ".xlsx";
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=" + filename)
+                .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                .contentLength(validationFile.length)
+                .body(resource);
+    }
+
+    @PostMapping("/teachers/validate-import")
+    @PreAuthorize("hasRole('MANAGER')")
+    @Operation(
+            summary = "Validate Teacher Import File",
+            description = "Validate Excel file without importing. Returns validation result file."
+    )
+    public ResponseEntity<ByteArrayResource> validateTeacherImport(
+            @Parameter(description = "Excel file to validate")
+            @RequestParam("file") MultipartFile file) {
+
+        byte[] validationFile = userService.validateTeacherImportFile(file);
+        ByteArrayResource resource = new ByteArrayResource(validationFile);
+
+        String filename = "Teacher_Validation_" +
+                new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date()) +
+                ".xlsx";
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=" + filename)
+                .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                .contentLength(validationFile.length)
+                .body(resource);
+    }
+}

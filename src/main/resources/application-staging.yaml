@@ -1,0 +1,187 @@
+spring:
+  application:
+    name: learning-progress-management
+
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: none
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        show_sql: false
+        format_sql: false
+        generate_statistics: false
+        jdbc.batch_size: 500
+        order_inserts: false
+        order_updates: false
+        jdbc.time_zone: Asia/Ho_Chi_Minh
+  #  data:
+  #    redis:
+  #      host: ${REDIS_HOST}
+  #      port: ${REDIS_PORT}
+  #      password: ${REDIS_PASSWORD}
+  #      timeout: 400
+  #      connect-timeout: 400ms
+  #      lettuce: # Sử dụng Lettuce làm client Redis
+  #        pool:
+  #          enabled: true
+  #          max-active: 64 # Số kết nối tối đa
+  #          max-idle: 32 # Số kết nối nhàn rỗi tối đa
+  #          min-idle: 16 # Số kết nối nhàn rỗi tối thiểu
+  #          max-wait: 200 # Thời gian chờ tối đa để lấy kết nối (ms)
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 20MB
+  liquibase:
+    enabled: false
+  jackson:
+    date-format: "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"
+    time-zone: GMT+7
+  zipkin:
+    enabled: false
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: ${MAIL_USERNAME}
+    password: ${MAIL_PASSWORD}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
+  thymeleaf:
+    prefix: classpath:/templates/
+    suffix: .html
+    mode: HTML
+    encoding: UTF-8
+    cache: false
+  quartz:
+    job-store-type: jdbc  # Lưu job vào DB (MySQL/PostgreSQL)
+    jdbc:
+      initialize-schema: embedded  # Auto tạo table Quartz (qrtz_*)
+    properties:
+      org:
+        quartz:
+          scheduler:
+            instanceName: DailyChallengeScheduler
+            instanceId: AUTO
+          threadPool:
+            threadCount: 10  # Số thread chạy job
+          jobStore:
+            class: org.quartz.impl.jdbcjobstore.JobStoreTX
+            driverDelegateClass: org.quartz.impl.jdbcjobstore.StdJDBCDelegate
+            tablePrefix: QRTZ_
+            isClustered: true  # Hỗ trợ cluster
+            clusterCheckinInterval: 20000
+    overwrite-existing-jobs: true  # Overwrite job nếu trùng
+server:
+  port: 8080
+  shutdown: graceful
+  tomcat:
+    threads:
+      max: 500
+      min-spare: 20
+    max-connections: 500
+    accept-count: 200
+    max-http-form-post-size: 20MB
+  servlet:
+    context-path: /learning-progress-management
+
+jwt:
+  secret: ${JWT_SECRET}
+  expiration: 7200000
+  email-change:
+    secret: ${JWT_EMAIL_CHANGE_SECRET}
+    expiration: 86400000
+  reset-pw:
+    secret: ${JWT_RESET_PW_SECRET}
+    expiration: 7200000
+
+logging:
+  level:
+    ROOT: INFO
+    com.learning.progress: DEBUG
+    com.apus.base: INFO
+    org.hibernate.sql: WARN
+    org.hibernate.type: WARN
+    org.springframework.orm.jpa: WARN
+    org.springframework.transaction: WARN
+    org.hibernate.engine.transaction.internal.TransactionImpl: WARN
+#    org.springframework.web.servlet.mvc.method.annotation: DEBUG
+mapping:
+  max-message-per-sub-batch: 1000
+
+azure:
+  storage:
+    connection-string: ${CONNECTION_STRING}
+    container-name: ${CONTAINER_NAME}
+    student-to-class-template: student-to-class-template.xlsx
+    student-template: student-template.xlsx
+    teacher-template: teacher-template.xlsx
+    syllabus-template: syllabus-template.xlsx
+    chapter-template: chapter-template.xlsx
+    lesson-template: lesson-template.xlsx
+    chapter-in-class-template: chapter-in-class-template.xlsx
+    lesson-in-class-template: lesson-in-class-template.xlsx
+  openai:
+    endpoint: ${OPENAI_ENDPOINT}
+    api-key: ${OPENAI_API_KEY}
+    reading-passage:
+      words-per-paragraph: 100
+    batch-size: 10
+    thread-pool-size: 10
+    max-question: 100
+  translator:
+    endpoint: ${TRANSLATOR_ENDPOINT}
+    key: ${TRANSLATOR_API_KEY}
+    region: southeastasia
+  speech:
+    key: ${AZURE_SPEECH_KEY}
+    region: southeastasia
+
+app:
+  redis:
+    enabled: false
+    channels:
+      notification-to-user: "lpms:notification:"
+      device-mismatch: "lpms:submission:device-mismatch:"
+  challenge:
+    max-questions-per-challenge: 100
+  pagination:
+    max-size: 100
+  scheduler:
+    # 1. Job cập nhật trạng thái lớp học (UPCOMING → ONGOING → ENDED, v.v.)
+    class-status-job:
+      enabled: true
+      cron: "0 0 1 * * *"
+      upcoming-end-days: 7
+    # 2. Job cập nhật trạng thái Daily Challenge (UPCOMING → ACTIVE → EXPIRED)
+    challenge-status-job:
+      enabled: true
+      cron: "0 */1 * * * *"
+    # 3. Job AUTO-SUBMIT / AUTO-MISS / đánh dấu LATE (QUAN TRỌNG NHẤT)
+    submission-status-job:
+      enabled: true
+      fixed-delay-ms: 60000
+    auto-grade-job:
+      enabled: true
+      use-quartz: true
+      fixed-delay-ms: 60000
+  # New: limits for sync operations (defaults can be overridden in environment / other profiles)
+  limits:
+    max-chapters-per-syllabus: 100
+    max-lessons-per-chapter: 100
+env:
+  class:
+    max-teaching-assistant-in-class: 2
+    max-teacher-in-class: 1
+    max-student-in-class: 15

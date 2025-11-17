@@ -1,0 +1,49 @@
+package com.learning.progress.service;
+
+import com.learning.progress.dto.excel.*;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.util.List;
+import java.util.Map;
+
+public interface FileService {
+    byte[] generateTeacherImportTemplate();
+    byte[] generateStudentImportTemplate();
+    byte[] generateStudentToClassImportTemplate();
+    byte[] generateSyllabusImportTemplate();
+    byte[] generateChapterImportTemplate();
+    byte[] generateLessonImportTemplate();
+    byte[] generateChapterInClassImportTemplate();
+    byte[] generateClassLessonImportTemplate();
+    <T> List<T> readExcelData(MultipartFile file, String sheetName, Class<T> clazz);
+    <T> byte[] exportToExcel(List<T> data,
+                             List<ExcelColumn> columns,
+                             String title,
+                             Map<String, String> summaryInfo);
+
+    byte[] exportStudentsData(List<ExportStudentDTO> students,
+                              String title,
+                              Map<String, String> summaryInfo);
+
+    byte[] exportTeachersData(List<ExportTeacherDTO> teachers,
+                              String title,
+                              Map<String, String> summaryInfo);
+
+    byte[] exportSyllabusesData(List<ExportSyllabusDTO> syllabuses,
+                                Map<String, String> summaryInfo);
+
+    byte[] exportSyllabusDetailData(ExportSyllabusDTO syllabus,
+                                    Map<String, String> summaryInfo);
+
+    <T> byte[] generateValidationResultFile(MultipartFile originalFile,
+                                            String sheetName,
+                                            ValidationResult<T> validationResult,
+                                            Class<T> clazz);
+
+    <T> byte[] generateValidationResultFile(String originalFileName,
+                                            String sheetName,
+                                            ValidationResult<T> validationResult,
+                                            Class<T> clazz);
+
+    byte[] generateChallengeWorksheet(Long challengeId);
+}
