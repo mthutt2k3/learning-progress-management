@@ -111,6 +111,23 @@ public class ChallengeReportDTO {
         private Long totalAttempts;
         private Long correctCount;
         private BigDecimal correctRate;
+
+        private List<StudentQuestionPerformance> studentPerformances;
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class StudentQuestionPerformance {
+        private Long userId;
+        private String fullName;
+        private String email;
+        private String avatarUrl;
+        private BigDecimal receivedWeight;  // Điểm nhận được (VD: 0.5)
+        private BigDecimal totalWeight;     // Tổng điểm (VD: 1.0)
+        private BigDecimal correctRate;     // Tỷ lệ đúng % (VD: 50.0)
+        private Boolean isCorrect;          // True nếu receivedWeight == totalWeight
     }
 
     @Data

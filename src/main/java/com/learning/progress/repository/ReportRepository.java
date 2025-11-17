@@ -356,6 +356,37 @@ public interface ReportRepository extends JpaRepository<com.learning.progress.en
         """, nativeQuery = true)
     List<Map<String, Object>> getStudentLevelHistory(@Param("userId") Long userId);
 
+    @Query(value = """
+    SELECT 
+        dc.id as challenge_id,
+        dc.challenge_name,
+        sdc.submitted_at,
+        CASE 
+            WHEN sdc.is_late = true THEN 1 
+            ELSE 0 
+        END as is_late
+    FROM daily_challenges dc
+    JOIN class_lessons cl ON dc.class_lesson_id = cl.id
+    JOIN class_chapters cc ON cl.class_chapter_id = cc.id
+    JOIN classes c ON cc.class_id = c.id
+    JOIN syllabuses s ON c.syllabus_id = s.id
+    LEFT JOIN submission_daily_challenges sdc ON dc.id = sdc.challenge_id 
+        AND sdc.user_id = :userId
+        AND sdc.deleted_at IS NULL
+    WHERE s.level_id = :levelId
+        AND sdc.submission_status IN ('SUBMITTED', 'GRADED')
+        AND dc.deleted_at IS NULL
+        AND cl.deleted_at IS NULL
+        AND cc.deleted_at IS NULL
+        AND c.deleted_at IS NULL
+    ORDER BY sdc.submitted_at DESC
+    LIMIT 10
+    """, nativeQuery = true)
+    List<Map<String, Object>> getRecentChallengesByLevel(
+            @Param("userId") Long userId,
+            @Param("levelId") Long levelId
+    );
+
     /**
      * FIXED: Get scores by class and type using grading_daily_challenges
      */
@@ -537,6 +568,40 @@ ORDER BY challenge_type, submitted_at DESC
             @Param("recentCount") Integer recentCount
     );
 
+    // Lấy điểm TB và điểm mới nhất của từng skill trong class
+    @Query(value = """
+WITH skill_scores AS (
+    SELECT 
+        dc.challenge_type,
+        gdc.raw_score * (1 - gdc.penalty_applied) as final_score,
+        sdc.submitted_at,
+        ROW_NUMBER() OVER (PARTITION BY dc.challenge_type ORDER BY sdc.submitted_at DESC) as rn
+    FROM submission_daily_challenges sdc
+    JOIN grading_daily_challenges gdc ON sdc.id = gdc.submission_daily_id
+    JOIN daily_challenges dc ON sdc.challenge_id = dc.id
+    JOIN class_lessons cl ON dc.class_lesson_id = cl.id
+    JOIN class_chapters cc ON cl.class_chapter_id = cc.id
+    WHERE sdc.user_id = :userId
+        AND cc.class_id = :classId
+        AND sdc.deleted_at IS NULL
+        AND gdc.deleted_at IS NULL
+        AND sdc.submission_status IN ('GRADED')
+        AND cc.deleted_at IS NULL
+        AND cl.deleted_at IS NULL
+        AND dc.deleted_at IS NULL
+)
+SELECT 
+    challenge_type,
+    AVG(final_score) as average_score,
+    MAX(CASE WHEN rn = 1 THEN final_score END) as latest_score
+FROM skill_scores
+GROUP BY challenge_type
+""", nativeQuery = true)
+    List<Map<String, Object>> getSkillAverageAndLatestScore(
+            @Param("userId") Long userId,
+            @Param("classId") Long classId
+    );
+
     // Lấy logs của N bài gần nhất
     @Query(value = """
     SELECT submission_logs_json
@@ -653,4 +718,39 @@ WHERE c.id = :classId
     AND c.deleted_at IS NULL
 """, nativeQuery = true)
     Map<String, Object> getClassDates(@Param("classId") Long classId);
+
+    // Query lấy student performance cho từng question
+    @Query(value = """
+SELECT 
+    u.id as user_id,
+    u.full_name,
+    u.email,
+    u.avatar_url,
+    q.id as question_id,
+    q.weight as total_weight,
+    COALESCE(gq.received_weight, 0) as received_weight
+FROM questions q
+JOIN challenge_sections cs ON q.section_id = cs.id
+CROSS JOIN users u
+JOIN class_students cls ON u.id = cls.user_id
+JOIN class_chapters cc ON cls.class_id = cc.class_id
+JOIN class_lessons cl ON cc.id = cl.class_chapter_id
+JOIN daily_challenges dc ON cl.id = dc.class_lesson_id
+LEFT JOIN submission_daily_challenges sdc ON dc.id = sdc.challenge_id 
+    AND u.id = sdc.user_id
+    AND sdc.deleted_at IS NULL
+LEFT JOIN submission_questions sq ON q.id = sq.question_id 
+    AND sdc.id = sq.submission_daily_id
+    AND sq.deleted_at IS NULL
+LEFT JOIN grading_questions gq ON sq.id = gq.submission_question_id
+    AND gq.deleted_at IS NULL
+WHERE dc.id = :challengeId
+    AND cs.deleted_at IS NULL
+    AND q.deleted_at IS NULL
+    AND cls.status = 'ACTIVE'
+    AND cls.deleted_at IS NULL
+    AND u.deleted_at IS NULL
+ORDER BY q.id, u.full_name
+""", nativeQuery = true)
+    List<Map<String, Object>> getStudentQuestionPerformances(@Param("challengeId") Long challengeId);
 }
