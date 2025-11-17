@@ -196,4 +196,36 @@ public class ReportController {
                 HttpStatus.OK
         );
     }
+
+    @GetMapping("/challenge/{challengeId}/question-stats")
+    @PreAuthorize("hasAnyRole('TEACHER', 'TEACHING_ASSISTANT')")
+    @Operation(
+            summary = "Question Statistics",
+            description = "Thống kê từng câu hỏi: số lần làm và tỷ lệ đúng"
+    )
+    public ResponseEntity<DataResponse<ChallengeReportDTO.QuestionStatsReport>> getQuestionStats(
+            @PathVariable Long challengeId
+    ) {
+        ChallengeReportDTO.QuestionStatsReport report = reportService.getQuestionStats(challengeId);
+        return new ResponseEntity<>(
+                DataResponse.success(report, Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL),
+                HttpStatus.OK
+        );
+    }
+
+    @GetMapping("/class/{classId}/at-risk")
+    @PreAuthorize("hasAnyRole('TEACHER', 'TEACHING_ASSISTANT')")
+    @Operation(
+            summary = "At-Risk Students Alert",
+            description = "Cảnh báo học sinh có nguy cơ: 3 bài liền < 6đ, nộp muộn >= 50%, cheat nhiều, giảm điểm liên tục theo skill"
+    )
+    public ResponseEntity<DataResponse<ClassReportDTO.AtRiskReport>> getAtRiskStudents(
+            @PathVariable Long classId
+    ) {
+        ClassReportDTO.AtRiskReport report = reportService.getAtRiskStudents(classId);
+        return new ResponseEntity<>(
+                DataResponse.success(report, Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL),
+                HttpStatus.OK
+        );
+    }
 }
