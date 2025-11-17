@@ -18,5 +18,4 @@ public interface ClassTeacherService {
 
     void removeTeacherFromClass(Long classId, Long userId);
 
-    TeacherPerformanceReport getTeacherPerformanceReport(Long classId, Long userId);
 }
