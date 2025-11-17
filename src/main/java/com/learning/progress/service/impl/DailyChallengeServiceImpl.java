@@ -45,6 +45,8 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
     // NEW: notification service
     @Autowired
     private NotificationService notificationService;
+    @Autowired
+    private ClassTeacherRepository classTeacherRepository;
 
     /* --------------------------------------------------------
      * CREATE
