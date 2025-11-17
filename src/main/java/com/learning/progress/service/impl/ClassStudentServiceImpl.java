@@ -183,11 +183,11 @@ public class ClassStudentServiceImpl implements ClassStudentService {
         appValidator.validateUserAccessToClass(classId);
 
         // 1. Validate class
-        Clazz clazz = classRepository.findById(classId)
+        Clazz clazz = classRepository.findByIdAndDeletedAtIsNull(classId)
                 .orElseThrow(() -> new ApiException(Const.CLASS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
-        if (clazz.getDeletedAt() != null) {
-            throw new ApiException(Const.CLASS.DELETED, HttpStatus.BAD_REQUEST.value());
+        if(clazz.getStatus() == ClassStatus.FINISHED) {
+            throw new ApiException(Const.CLASS.FINISHED_CLASS, HttpStatus.BAD_REQUEST.value());
         }
 
         List<Long> userIds = request.getUserIds();

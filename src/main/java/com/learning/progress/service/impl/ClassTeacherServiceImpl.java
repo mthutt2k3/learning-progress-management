@@ -516,28 +516,5 @@ public class ClassTeacherServiceImpl implements ClassTeacherService {
         }
     }
 
-    @Override
-    public TeacherPerformanceReport getTeacherPerformanceReport(Long classId, Long userId) {
-        appValidator.validateUserAccessToClass(classId);
-        ClassTeacher classTeacher = classTeacherRepository.findByClazzIdAndUserId(classId, userId)
-                .orElseThrow(() -> new ApiException(Const.CLASS_TEACHER.TEACHER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
-
-        // Assuming there's a repository method for teacher performance, similar to student
-        // For example: List<Object[]> performanceData = someRepository.getTeacherPerformance(classId, userId);
-        // Here, placeholder logic; adjust based on actual performance metrics for teachers/assistants
-
-        TeacherPerformanceReport report = new TeacherPerformanceReport();
-        report.setUserId(userId);
-        report.setClassId(classId);
-        report.setTeacherName(classTeacher.getUser().getFullName());
-
-        // Placeholder: Add actual performance metrics
-        // For example:
-        // for (Object[] data : performanceData) {
-        //     report.addPerformanceMetric((Long) data[0], (Double) data[1], (LocalDateTime) data[2]);
-        // }
-
-        return report;
-    }
 }
 
