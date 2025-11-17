@@ -338,7 +338,9 @@ public class ClassTeacherServiceImpl implements ClassTeacherService {
             for (User u : newTeachers) {
                 String title = "Bạn đã được thêm làm giáo viên lớp " + clazz.getClassName();
                 String message = "Bạn vừa được gán vai trò trong lớp " + clazz.getClassName() + " bởi " + jwtUtil.extractUsernameFromCurrentRequest();
-                notificationService.createNotification(u.getId(), null, title, message, null, null);
+                String url = "/teacher/classes/menu/" + clazz.getId();
+
+                notificationService.createNotification(u.getId(), clazz.getId(), title, message, url, null);
             }
         }
 
@@ -366,7 +368,9 @@ public class ClassTeacherServiceImpl implements ClassTeacherService {
             for (User u : newTAs) {
                 String title = "Bạn đã được thêm làm trợ giảng lớp " + clazz.getClassName();
                 String message = "Bạn vừa được gán vai trò trợ giảng trong lớp " + clazz.getClassName() + " bởi " + jwtUtil.extractUsernameFromCurrentRequest();
-                notificationService.createNotification(u.getId(), null, title, message, null, null);
+                String url = "/teaching-assistant/classes/menu/" + clazz.getId();
+
+                notificationService.createNotification(u.getId(), clazz.getId(), title, message, url, null);
             }
         }
 
@@ -391,10 +395,12 @@ public class ClassTeacherServiceImpl implements ClassTeacherService {
                     visibleToRoles
             );
 
-            for (User u : reactivatedTeachers) {
-                String title = "Bạn đã được kích hoạt lại với vai trò giáo viên lớp " + clazz.getClassName();
-                String message = "Tài khoản của bạn đã được kích hoạt lại trong lớp " + clazz.getClassName();
-                notificationService.createNotification(u.getId(), null, title, message, null, null);
+            for (User u : newTeachers) {
+                String title = "Bạn đã được thêm làm giáo viên lớp " + clazz.getClassName();
+                String message = "Bạn vừa được gán vai trò trong lớp " + clazz.getClassName() + " bởi " + jwtUtil.extractUsernameFromCurrentRequest();
+                String url = "/teacher/classes/menu/" + clazz.getId();
+
+                notificationService.createNotification(u.getId(), clazz.getId(), title, message, url, null);
             }
         }
 
@@ -419,10 +425,12 @@ public class ClassTeacherServiceImpl implements ClassTeacherService {
                     visibleToRoles
             );
 
-            for (User u : reactivatedTAs) {
-                String title = "Bạn đã được kích hoạt lại với vai trò trợ giảng lớp " + clazz.getClassName();
-                String message = "Tài khoản của bạn đã được kích hoạt lại trong lớp " + clazz.getClassName();
-                notificationService.createNotification(u.getId(), null, title, message, null, null);
+            for (User u : newTAs) {
+                String title = "Bạn đã được thêm làm trợ giảng lớp " + clazz.getClassName();
+                String message = "Bạn vừa được gán vai trò trợ giảng trong lớp " + clazz.getClassName() + " bởi " + jwtUtil.extractUsernameFromCurrentRequest();
+                String url = "/teaching-assistant/classes/menu/" + clazz.getId();
+
+                notificationService.createNotification(u.getId(), clazz.getId(), title, message, url, null);
             }
         }
     }
@@ -497,9 +505,14 @@ public class ClassTeacherServiceImpl implements ClassTeacherService {
         try {
             String title = "Bạn đã bị gỡ khỏi lớp " + clazz.getClassName();
             String message = "Vai trò của bạn trong lớp " + clazz.getClassName() + " đã bị gỡ bởi " + jwtUtil.extractUsernameFromCurrentRequest();
-            notificationService.createNotification(user.getId(), null, title, message, null, null);
+
+            String url = RoleInClass.TEACHER.equals(classTeacher.getRoleInClass())
+                    ? "/teacher/classes/menu/" + clazz.getId()
+                    : "/teaching-assistant/classes/menu/" + clazz.getId();
+
+            notificationService.createNotification(user.getId(), null, title, message, url, null);
         } catch (Exception ex) {
-            // swallow to avoid breaking flow
+//            log.warn("Failed to send notification to removed teacher userId={} error={}", userId, ex.getMessage());
         }
     }
 

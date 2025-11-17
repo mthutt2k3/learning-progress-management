@@ -37,7 +37,7 @@ public class ChallengeReportDTO {
     @AllArgsConstructor
     public static class SubmissionStats {
         private Long completedCount;
-        private Long lateCount;
+        private Long inProgressCount;
         private Long notStartedCount;
         private Long totalStudents;
     }
@@ -63,7 +63,8 @@ public class ChallengeReportDTO {
         private String email;
         private String avatarUrl;
         private BigDecimal score;
-        private Long completionTimeMinutes; // Thời gian làm bài (phút)
+        private Long completionTimeMinutes;
+        private Long completionTimeSeconds;
         private String submissionStatus;
         private Boolean isLate;
         private OffsetDateTime submittedAt;
@@ -90,5 +91,35 @@ public class ChallengeReportDTO {
         private String fullName;
         private BigDecimal score;
         private Long completionTimeMinutes;
+        private Long completionTimeSeconds;
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class QuestionStats {
+        private Long sectionId;
+        private String sectionTitle;
+        private Integer sectionOrder;
+
+        private Long questionId;
+        private String questionText;
+        private String questionType;
+        private Integer questionOrder;
+
+        private Long totalAttempts;
+        private Long correctCount;
+        private BigDecimal correctRate;
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class QuestionStatsReport {
+        private Long challengeId;
+        private String challengeName;
+        private List<QuestionStats> questions;
     }
 }

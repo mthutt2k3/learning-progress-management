@@ -6,6 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
 
@@ -95,6 +96,27 @@ public class StudentPerformanceDTO {
         private String classCode;
         private OffsetDateTime joinedAt;
         private OffsetDateTime leftAt;
+
+        // NEW: Class dates
+        private LocalDate startDate;
+        private LocalDate endDate;
+
+        // NEW: Performance metrics
+        private Integer ranking;                    // Thứ hạng trong lớp
+        private BigDecimal studentAverageScore;     // Điểm TB của student
+        private BigDecimal classAverageScore;       // Điểm TB của cả lớp
+
+        // NEW: Completion stats
+        private BigDecimal completionRate;          // % bài đã hoàn thành
+        private BigDecimal lateSubmissionRate;      // % bài nộp muộn
+        private BigDecimal notStartedRate;          // % bài chưa làm
+
+        private Integer totalChallenges;
+        private Integer completedChallenges;
+        private Integer lateChallenges;
+        private Integer notStartedChallenges;
+
+        // Original: Score by type
         private ScoreByType scoreByType;
     }
 
