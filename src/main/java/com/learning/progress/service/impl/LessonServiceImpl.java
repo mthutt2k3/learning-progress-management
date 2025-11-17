@@ -69,6 +69,10 @@ public class LessonServiceImpl implements LessonService {
     @Value("${azure.storage.lesson-template}")
     private String lessonTemplate;
 
+    // New: configurable limit for syncLessons
+    @Value("${app.limits.max-lessons-per-chapter:100}")
+    private int maxLessonsPerChapter;
+
     @Override
     @Transactional
     public List<LessonDTO> syncLessons(Long chapterId, List<SyncLessonRequest> request) {
@@ -245,6 +249,15 @@ public class LessonServiceImpl implements LessonService {
         List<SyncLessonRequest> newRequests = nonDeletedRequests.stream()
                 .filter(req -> req.getId() == null)
                 .collect(Collectors.toList());
+
+        // New: check final count will not exceed configured maximum BEFORE any DB changes
+        int finalCount = existingActiveLessons.size() - requestDeleteIds.size() + newRequests.size();
+        if (finalCount > maxLessonsPerChapter) {
+            throw new ApiException(
+                    String.format("Số lượng lesson sau khi sync (%d) vượt quá giới hạn cho phép (%d).", finalCount, maxLessonsPerChapter),
+                    HttpStatus.BAD_REQUEST.value()
+            );
+        }
 
         for (SyncLessonRequest req : newRequests) {
             Lesson newLesson = new Lesson();

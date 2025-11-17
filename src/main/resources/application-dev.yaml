@@ -176,6 +176,10 @@ app:
       enabled: true
       use-quartz: true
       fixed-delay-ms: 60000
+  # New: limits for sync operations (defaults can be overridden in environment / other profiles)
+  limits:
+    max-chapters-per-syllabus: 100
+    max-lessons-per-chapter: 100
 env:
   class:
     max-teaching-assistant-in-class: 2
