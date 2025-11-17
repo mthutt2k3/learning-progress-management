@@ -93,4 +93,33 @@ public class ChallengeReportDTO {
         private Long completionTimeMinutes;
         private Long completionTimeSeconds;
     }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class QuestionStats {
+        private Long sectionId;
+        private String sectionTitle;
+        private Integer sectionOrder;
+
+        private Long questionId;
+        private String questionText;
+        private String questionType;
+        private Integer questionOrder;
+
+        private Long totalAttempts;
+        private Long correctCount;
+        private BigDecimal correctRate;
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class QuestionStatsReport {
+        private Long challengeId;
+        private String challengeName;
+        private List<QuestionStats> questions;
+    }
 }

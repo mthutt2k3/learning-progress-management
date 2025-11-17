@@ -398,8 +398,259 @@ public interface ReportRepository extends JpaRepository<com.learning.progress.en
         AND gdc.deleted_at IS NULL
     WHERE cc.class_id = :classId
     AND dc.deleted_at IS NULL
-    AND (sdc.user_id = :userId OR sdc.user_id IS NULL)
+    AND (sdc.user_id = :userId)
     ORDER BY dc.created_at
     """, nativeQuery = true)
     List<Map<String, Object>> getStudentChallengesByClass(@Param("userId") Long userId, @Param("classId") Long classId);
+
+    // File: ReportRepository.java - SỬA getQuestionStats
+
+    @Query(value = """
+SELECT 
+    cs.id as section_id,
+    cs.section_title,
+    cs.order_number as section_order,
+    q.id as question_id,
+    q.question_text,
+    q.question_type,
+    q.order_number as question_order,
+    COUNT(DISTINCT sq.id) as total_attempts,
+    SUM(CASE WHEN gq.received_weight >= q.weight THEN 1 ELSE 0 END) as correct_count
+FROM questions q
+JOIN challenge_sections cs ON q.section_id = cs.id
+LEFT JOIN submission_questions sq ON q.id = sq.question_id 
+    AND sq.deleted_at IS NULL
+LEFT JOIN grading_questions gq ON sq.id = gq.submission_question_id 
+    AND gq.deleted_at IS NULL
+WHERE cs.challenge_id = :challengeId
+    AND cs.deleted_at IS NULL
+    AND q.deleted_at IS NULL
+GROUP BY cs.id, cs.section_title, cs.order_number, q.id, q.question_text, q.question_type, q.order_number
+ORDER BY cs.order_number, q.order_number
+""", nativeQuery = true)
+    List<Map<String, Object>> getQuestionStats(@Param("challengeId") Long challengeId);
+
+    // File: ReportRepository.java - SỬA LẠI
+
+    // Lấy N bài gần nhất của từng student trong class
+    @Query(value = """
+WITH ranked_submissions AS (
+    SELECT 
+        sdc.user_id,
+        sdc.id as submission_id,
+        gdc.raw_score * (1 - gdc.penalty_applied) as final_score,  -- FIX
+        sdc.is_late,
+        sdc.submission_logs_json,
+        sdc.submitted_at,
+        dc.challenge_type,
+        ROW_NUMBER() OVER (PARTITION BY sdc.user_id ORDER BY sdc.submitted_at DESC) as rn
+    FROM submission_daily_challenges sdc
+    JOIN grading_daily_challenges gdc ON sdc.id = gdc.submission_daily_id
+    JOIN daily_challenges dc ON sdc.challenge_id = dc.id
+    JOIN class_lessons cl ON dc.class_lesson_id = cl.id
+    JOIN class_chapters cc ON cl.class_chapter_id = cc.id
+    WHERE cc.class_id = :classId
+        AND sdc.deleted_at IS NULL
+        AND gdc.deleted_at IS NULL
+        AND sdc.submission_status IN ('GRADED')
+        AND cc.deleted_at IS NULL
+        AND cl.deleted_at IS NULL
+        AND dc.deleted_at IS NULL
+)
+SELECT 
+    u.id as user_id,
+    u.full_name,
+    u.email,
+    u.avatar_url,
+    COUNT(DISTINCT rs.submission_id) as total_submissions,
+    AVG(rs.final_score) as avg_score,
+    SUM(CASE WHEN rs.is_late = true THEN 1 ELSE 0 END) as late_count
+FROM users u
+JOIN class_students cs ON u.id = cs.user_id
+LEFT JOIN ranked_submissions rs ON u.id = rs.user_id AND rs.rn <= :recentCount
+WHERE cs.class_id = :classId
+    AND cs.deleted_at IS NULL
+    AND cs.status = 'ACTIVE'
+GROUP BY u.id, u.full_name, u.email, u.avatar_url
+HAVING COUNT(DISTINCT rs.submission_id) >= :minChallenges
+""", nativeQuery = true)
+    List<Map<String, Object>> getStudentsRecentStats(
+            @Param("classId") Long classId,
+            @Param("recentCount") Integer recentCount,
+            @Param("minChallenges") Integer minChallenges
+    );
+
+    // Lấy N điểm gần nhất của student
+    @Query(value = """
+SELECT 
+    gdc.raw_score * (1 - gdc.penalty_applied) as final_score,  -- FIX
+    sdc.submitted_at
+FROM submission_daily_challenges sdc
+JOIN grading_daily_challenges gdc ON sdc.id = gdc.submission_daily_id
+JOIN daily_challenges dc ON sdc.challenge_id = dc.id
+JOIN class_lessons cl ON dc.class_lesson_id = cl.id
+JOIN class_chapters cc ON cl.class_chapter_id = cc.id
+WHERE sdc.user_id = :userId
+    AND cc.class_id = :classId
+    AND sdc.deleted_at IS NULL
+    AND gdc.deleted_at IS NULL
+    AND sdc.submission_status IN ('GRADED')
+ORDER BY sdc.submitted_at DESC
+LIMIT :recentCount
+""", nativeQuery = true)
+    List<Map<String, Object>> getRecentScores(
+            @Param("userId") Long userId,
+            @Param("classId") Long classId,
+            @Param("recentCount") Integer recentCount
+    );
+
+    // Lấy N điểm gần nhất theo từng skill
+    @Query(value = """
+WITH ranked_scores AS (
+    SELECT 
+        dc.challenge_type,
+        gdc.raw_score * (1 - gdc.penalty_applied) as final_score,  -- FIX
+        sdc.submitted_at,
+        ROW_NUMBER() OVER (PARTITION BY dc.challenge_type ORDER BY sdc.submitted_at DESC) as rn
+    FROM submission_daily_challenges sdc
+    JOIN grading_daily_challenges gdc ON sdc.id = gdc.submission_daily_id
+    JOIN daily_challenges dc ON sdc.challenge_id = dc.id
+    JOIN class_lessons cl ON dc.class_lesson_id = cl.id
+    JOIN class_chapters cc ON cl.class_chapter_id = cc.id
+    WHERE sdc.user_id = :userId
+        AND cc.class_id = :classId
+        AND sdc.deleted_at IS NULL
+        AND gdc.deleted_at IS NULL
+        AND sdc.submission_status IN ('GRADED')
+)
+SELECT 
+    challenge_type,
+    final_score,
+    submitted_at
+FROM ranked_scores
+WHERE rn <= :recentCount
+ORDER BY challenge_type, submitted_at DESC
+""", nativeQuery = true)
+    List<Map<String, Object>> getRecentScoresBySkill(
+            @Param("userId") Long userId,
+            @Param("classId") Long classId,
+            @Param("recentCount") Integer recentCount
+    );
+
+    // Lấy logs của N bài gần nhất
+    @Query(value = """
+    SELECT submission_logs_json
+    FROM submission_daily_challenges sdc
+    JOIN daily_challenges dc ON sdc.challenge_id = dc.id
+    JOIN class_lessons cl ON dc.class_lesson_id = cl.id
+    JOIN class_chapters cc ON cl.class_chapter_id = cc.id
+    WHERE sdc.user_id = :userId
+        AND cc.class_id = :classId
+        AND sdc.deleted_at IS NULL
+        AND sdc.submission_status IN ('GRADED')
+    ORDER BY sdc.submitted_at DESC
+    LIMIT :recentCount
+    """, nativeQuery = true)
+    List<String> getSubmissionLogs(
+            @Param("userId") Long userId,
+            @Param("classId") Long classId,
+            @Param("recentCount") Integer recentCount
+    );
+
+    // Lấy ranking của student trong class - FIX
+    @Query(value = """
+WITH student_rankings AS (
+    SELECT 
+        sdc.user_id,
+        AVG(gdc.raw_score * (1 - gdc.penalty_applied)) as avg_score,
+        RANK() OVER (ORDER BY AVG(gdc.raw_score * (1 - gdc.penalty_applied)) DESC) as rank
+    FROM submission_daily_challenges sdc
+    JOIN grading_daily_challenges gdc ON sdc.id = gdc.submission_daily_id
+    JOIN daily_challenges dc ON sdc.challenge_id = dc.id
+    JOIN class_lessons cl ON dc.class_lesson_id = cl.id
+    JOIN class_chapters cc ON cl.class_chapter_id = cc.id
+    WHERE cc.class_id = :classId
+        AND sdc.deleted_at IS NULL
+        AND gdc.deleted_at IS NULL
+        AND sdc.submission_status IN ('SUBMITTED', 'GRADED')
+        AND cc.deleted_at IS NULL
+        AND cl.deleted_at IS NULL
+        AND dc.deleted_at IS NULL
+    GROUP BY sdc.user_id
+)
+SELECT rank as ranking
+FROM student_rankings
+WHERE user_id = :userId
+""", nativeQuery = true)
+    Integer getStudentRankingInClass(
+            @Param("userId") Long userId,
+            @Param("classId") Long classId
+    );
+
+    // Lấy điểm TB của cả lớp - FIX
+    @Query(value = """
+SELECT AVG(gdc.raw_score * (1 - gdc.penalty_applied)) as class_avg_score
+FROM submission_daily_challenges sdc
+JOIN grading_daily_challenges gdc ON sdc.id = gdc.submission_daily_id
+JOIN daily_challenges dc ON sdc.challenge_id = dc.id
+JOIN class_lessons cl ON dc.class_lesson_id = cl.id
+JOIN class_chapters cc ON cl.class_chapter_id = cc.id
+WHERE cc.class_id = :classId
+    AND sdc.deleted_at IS NULL
+    AND gdc.deleted_at IS NULL
+    AND sdc.submission_status IN ('SUBMITTED', 'GRADED')
+    AND cc.deleted_at IS NULL
+    AND cl.deleted_at IS NULL
+    AND dc.deleted_at IS NULL
+""", nativeQuery = true)
+    BigDecimal getClassAverageScore(@Param("classId") Long classId);
+
+    // Lấy stats của student trong class - FIX: BỎ filter FINISHED, lấy TOÀN BỘ DC
+    @Query(value = """
+SELECT 
+    COUNT(DISTINCT dc.id) as total_challenges,
+    COUNT(DISTINCT CASE 
+        WHEN sdc.submission_status IN ('SUBMITTED', 'GRADED') 
+        THEN sdc.id 
+    END) as completed_challenges,
+    COUNT(DISTINCT CASE 
+        WHEN sdc.is_late = true 
+        THEN sdc.id 
+    END) as late_challenges,
+    COUNT(DISTINCT CASE 
+        WHEN sdc.submission_status IN ('PENDING', 'DRAFT', 'MISSED') OR sdc.id IS NULL
+        THEN dc.id 
+    END) as not_started_challenges,
+    AVG(CASE 
+        WHEN sdc.submission_status = 'GRADED'
+        THEN gdc.raw_score * (1 - gdc.penalty_applied)
+    END) as student_avg_score
+FROM daily_challenges dc
+JOIN class_lessons cl ON dc.class_lesson_id = cl.id
+JOIN class_chapters cc ON cl.class_chapter_id = cc.id
+LEFT JOIN submission_daily_challenges sdc ON dc.id = sdc.challenge_id 
+    AND sdc.user_id = :userId
+    AND sdc.deleted_at IS NULL
+LEFT JOIN grading_daily_challenges gdc ON sdc.id = gdc.submission_daily_id
+    AND gdc.deleted_at IS NULL
+WHERE cc.class_id = :classId
+    AND dc.deleted_at IS NULL
+    AND cl.deleted_at IS NULL
+    AND cc.deleted_at IS NULL
+""", nativeQuery = true)
+    Map<String, Object> getStudentChallengeStats(
+            @Param("userId") Long userId,
+            @Param("classId") Long classId
+    );
+
+    // Lấy class dates - giữ nguyên (không liên quan điểm)
+    @Query(value = """
+SELECT 
+    c.start_date,
+    c.end_date
+FROM classes c
+WHERE c.id = :classId
+    AND c.deleted_at IS NULL
+""", nativeQuery = true)
+    Map<String, Object> getClassDates(@Param("classId") Long classId);
 }
