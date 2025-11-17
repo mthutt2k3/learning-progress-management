@@ -20,6 +20,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -51,14 +52,14 @@ public class ClassHistoryServiceImpl implements ClassHistoryService {
     private JwtUtil jwtUtil;
 
     @Override
-//    @Async("taskExecutor")
+    @Async("taskExecutor")
     @Transactional
     public void saveClassHistory(Long classId, String actionDetails, Long actionByUserId, String actionType, String visibleToRoles) {
         Clazz clazz = clazzRepository.findById(classId)
                 .orElseThrow(() -> new ApiException(Const.CLASS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         User actionBy = userRepository.findById(actionByUserId)
-                .orElseThrow(() -> new ApiException(Const.USER.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+                .orElse(null); // Nếu không tìm thấy user, để trống (hoặc có thể xử lý khác tùy yêu cầu)
 
         if (!EnumUtil.isValidEnum(com.learning.progress.common.ActionType.class, actionType)) {
             throw new ApiException("Invalid action type: " + actionType, HttpStatus.BAD_REQUEST.value());

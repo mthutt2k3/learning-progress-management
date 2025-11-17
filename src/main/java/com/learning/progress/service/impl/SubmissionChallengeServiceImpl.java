@@ -360,137 +360,6 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
     }
 
     // ----------------------- Maintenance / Async helpers -----------------------
-
-    @Override
-    @Transactional
-    public void autoSubmitExpiredSubmissions() {
-        log.info("autoSubmitExpiredSubmissions: start");
-        int pageSize = 100;
-        Pageable pageable = PageRequest.of(0, pageSize);
-        Page<SubmissionDailyChallenge> page;
-
-        do {
-            page = submissionDailyChallengeRepository.findExpiredTestSubmissionsForAutoSubmit(
-                    SubmissionStatus.PENDING, OffsetDateTime.now(), pageable);
-
-            List<SubmissionDailyChallenge> toProcess = page.getContent();
-            if (toProcess.isEmpty()) {
-                pageable = pageable.next();
-                continue;
-            }
-
-            // 1. Lấy tất cả challengeId bị ảnh hưởng để load questions một lần
-            Set<Long> affectedChallengeIds = toProcess.stream()
-                    .map(s -> s.getChallenge().getId())
-                    .collect(Collectors.toSet());
-
-            Map<Long, List<Question>> questionsByChallenge = affectedChallengeIds.stream()
-                    .collect(Collectors.toMap(
-                            Function.identity(),
-                            cid -> questionRepository.findByChallengeIdAndDeletedAtIsNull(cid)
-                    ));
-
-            // 2. Lấy tất cả existing SubmissionQuestion của các submission đang xử lý
-            List<Long> submissionIds = toProcess.stream()
-                    .map(SubmissionDailyChallenge::getId)
-                    .collect(Collectors.toList());
-
-            List<SubmissionQuestion> existingSQs = submissionQuestionRepository
-                    .findBySubmissionDailyIdInAndDeletedAtIsNull(submissionIds);
-
-            // Map: submissionId -> list SubmissionQuestion
-            Map<Long, List<SubmissionQuestion>> existingSQMap = existingSQs.stream()
-                    .collect(Collectors.groupingBy(sq -> sq.getSubmissionDaily().getId()));
-
-            // 3. Danh sách cần tạo mới và danh sách cần cập nhật trạng thái
-            List<SubmissionQuestion> sqToCreate = new ArrayList<>();
-            List<SubmissionDailyChallenge> toSubmit = new ArrayList<>();   // sẽ thành SUBMITTED
-            List<SubmissionDailyChallenge> toMiss = new ArrayList<>();     // sẽ thành MISSED
-
-            OffsetDateTime now = OffsetDateTime.now();
-
-            for (SubmissionDailyChallenge submission : toProcess) {
-                Long submissionId = submission.getId();
-                Long challengeId = submission.getChallenge().getId();
-                List<Question> challengeQuestions = questionsByChallenge.getOrDefault(challengeId, List.of());
-                List<SubmissionQuestion> existingForThis = existingSQMap.getOrDefault(submissionId, List.of());
-
-                // Nếu không có bất kỳ SubmissionQuestion nào → MISSED
-                if (existingForThis.isEmpty()) {
-                    submission.setSubmissionStatus(SubmissionStatus.MISSED);
-                    toMiss.add(submission);
-                    continue;
-                }
-
-                // Có ít nhất 1 SubmissionQuestion → SUBMITTED
-                submission.setSubmissionStatus(SubmissionStatus.SUBMITTED);
-                submission.setSubmittedAt(now);
-                toSubmit.add(submission);
-
-                // Tìm các question còn thiếu để tạo placeholder
-                Set<Long> existingQuestionIds = existingForThis.stream()
-                        .filter(sq -> sq.getQuestion() != null)
-                        .map(sq -> sq.getQuestion().getId())
-                        .collect(Collectors.toSet());
-
-                for (Question q : challengeQuestions) {
-                    if (!existingQuestionIds.contains(q.getId())) {
-                        SubmissionQuestion newSq = new SubmissionQuestion();
-                        newSq.setSubmissionDaily(submission);
-                        newSq.setQuestion(q);
-                        newSq.setSubmissionContentJson(JsonUtil.objectToMap(new AnswerContent()));
-                        sqToCreate.add(newSq);
-                    }
-                }
-            }
-
-            // 4. Persist tất cả thay đổi
-            // Thay thế 2 khối if riêng biệt bằng:
-            List<SubmissionDailyChallenge> allToUpdate = new ArrayList<>();
-            allToUpdate.addAll(toSubmit);
-            allToUpdate.addAll(toMiss);
-
-            if (!allToUpdate.isEmpty()) {
-                submissionDailyChallengeRepository.saveAll(allToUpdate);
-            }
-            if (!sqToCreate.isEmpty()) {
-                submissionQuestionRepository.saveAll(sqToCreate);
-                log.debug("autoSubmitExpiredSubmissions: created {} missing SubmissionQuestion placeholders", sqToCreate.size());
-            }
-
-            // 5. Clear cache
-            Stream.concat(toSubmit.stream(), toMiss.stream()).forEach(s -> {
-                cacheService.clearSubmissionCache(s.getUser().getId(), s.getId());
-            });
-
-            Set<Long> affectedChallengeIdsFinal = Stream.concat(toSubmit.stream(), toMiss.stream())
-                    .map(s -> s.getChallenge().getId())
-                    .collect(Collectors.toSet());
-            affectedChallengeIdsFinal.forEach(cacheService::clearSubmissionsCacheForChallenge);
-
-            log.debug("autoSubmitExpiredSubmissions: processed {} items ({} SUBMITTED, {} MISSED)",
-                    toProcess.size(), toSubmit.size(), toMiss.size());
-
-            pageable = pageable.next();
-        } while (page.hasNext());
-
-        log.info("autoSubmitExpiredSubmissions: completed");
-    }
-
-    @Override
-    @Transactional
-    public int detectAndMarkLateSubmissions() {
-        OffsetDateTime now = OffsetDateTime.now();
-        List<SubmissionDailyChallenge> late = submissionDailyChallengeRepository.findLateSubmissions(now);
-        if (late.isEmpty()) {
-            log.debug("detectAndMarkLateSubmissions: none found");
-            return 0;
-        }
-        late.forEach(s -> s.setIsLate(true));
-        log.info("detectAndMarkLateSubmissions: marked {} submissions as late", late.size());
-        return late.size();
-    }
-
     @Override
     @Async("taskExecutor")
     @Transactional
@@ -874,7 +743,254 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
 
         return "Reset " + newSubmissions.size() + " submissions.";
     }
+    @Override
+    @Transactional
+    public void autoUpdateSubmissionStatus() {
+        final String method = "autoUpdateSubmissionStatus";
+        final int pageSize = 100;
+        final OffsetDateTime now = OffsetDateTime.now();
 
+        log.info("[{}] Starting auto-update expired submissions (pageSize={})", method, pageSize);
+
+        var stats = new ProcessingStats();
+        Pageable pageable = PageRequest.of(0, pageSize);
+
+        while (true) {
+            Page<SubmissionDailyChallenge> page = submissionDailyChallengeRepository
+                    .findExpiredSubmissionsForAutoSubmit(
+                            now,
+                            List.of(SubmissionStatus.PENDING,
+                            SubmissionStatus.DRAFT),
+                            pageable);
+
+            if (page.isEmpty()) {
+                break;
+            }
+
+            processPage(page.getContent(), now, stats);
+
+            if (!page.hasNext()) {
+                break;
+            }
+            pageable = pageable.next();
+        }
+
+        log.info("[{}] Completed → processed={}, submitted={}, missed={}, markedLate={}, sqCreated={}",
+                method, stats.processed, stats.submitted, stats.missed, stats.markedLate, stats.sqCreated);
+    }
+
+    private void processPage(List<SubmissionDailyChallenge> submissions,
+                             OffsetDateTime now,
+                             ProcessingStats stats) {
+
+        if (submissions.isEmpty()) return;
+
+        // Preload related data once per page
+        var challengeQuestions = loadChallengeQuestions(submissions);
+        var existingSubmissionQuestions = loadExistingSubmissionQuestions(submissions);
+
+        // Prepare changes
+        var submissionsToUpdate = new ArrayList<SubmissionDailyChallenge>();
+        var submissionQuestionsToCreate = new ArrayList<SubmissionQuestion>();
+
+        for (SubmissionDailyChallenge submission : submissions) {
+            var processor = SubmissionProcessor.of(submission, now, challengeQuestions, existingSubmissionQuestions);
+            processor.process(submissionsToUpdate, submissionQuestionsToCreate);
+            stats.increment(processor.getAction());
+        }
+
+        // Persist
+        persistChanges(submissionsToUpdate, submissionQuestionsToCreate, stats);
+
+        // Clear caches
+        clearCaches(submissionsToUpdate);
+    }
+
+    // Helper: load all questions for affected challenges
+    private Map<Long, List<Question>> loadChallengeQuestions(List<SubmissionDailyChallenge> submissions) {
+        Set<Long> challengeIds = submissions.stream()
+                .map(s -> s.getChallenge().getId())
+                .collect(Collectors.toUnmodifiableSet());
+
+        return challengeIds.stream()
+                .collect(Collectors.toUnmodifiableMap(
+                        Function.identity(),
+                        questionRepository::findByChallengeIdAndDeletedAtIsNull
+                ));
+    }
+
+    // Helper: load all existing SubmissionQuestion for current page
+    private Map<Long, List<SubmissionQuestion>> loadExistingSubmissionQuestions(List<SubmissionDailyChallenge> submissions) {
+        List<Long> submissionIds = submissions.stream()
+                .map(SubmissionDailyChallenge::getId)
+                .toList();
+
+        return submissionQuestionRepository
+                .findBySubmissionDailyIdInAndDeletedAtIsNull(submissionIds)
+                .stream()
+                .collect(Collectors.groupingBy(sq -> sq.getSubmissionDaily().getId()));
+    }
+
+    // Persist + detailed logging
+    private void persistChanges(List<SubmissionDailyChallenge> submissionsToUpdate,
+                                List<SubmissionQuestion> sqToCreate,
+                                ProcessingStats stats) {
+
+        if (!submissionsToUpdate.isEmpty()) {
+            logSubmissionUpdates(submissionsToUpdate);
+            submissionDailyChallengeRepository.saveAll(submissionsToUpdate);
+            stats.processed += submissionsToUpdate.size();
+        }
+
+        if (!sqToCreate.isEmpty()) {
+            logSubmissionQuestionCreations(sqToCreate);
+            submissionQuestionRepository.saveAll(sqToCreate);
+            stats.sqCreated += sqToCreate.size();
+        }
+    }
+
+    private void logSubmissionUpdates(List<SubmissionDailyChallenge> updates) {
+        String preview = updates.stream()
+                .map(s -> String.format("id=%d → status=%s, late=%s, user=%d, challenge=%d",
+                        s.getId(),
+                        s.getSubmissionStatus(),
+                        s.getIsLate(),
+                        s.getUser() != null ? s.getUser().getId() : -1,
+                        s.getChallenge().getId()))
+                .collect(Collectors.joining("\n"));
+        log.info("Updating {} submissions:\n{}", updates.size(), preview);
+    }
+
+    private void logSubmissionQuestionCreations(List<SubmissionQuestion> creations) {
+        String preview = creations.stream()
+                .map(sq -> String.format("submission=%d, question=%d",
+                        sq.getSubmissionDaily().getId(),
+                        sq.getQuestion().getId()))
+                .collect(Collectors.joining("\n"));
+        log.info("Creating {} missing SubmissionQuestion placeholders:\n{}", creations.size(), preview);
+    }
+
+    private void clearCaches(List<SubmissionDailyChallenge> updatedSubmissions) {
+        updatedSubmissions.forEach(s -> {
+            if (s.getUser() != null) {
+                cacheService.clearSubmissionCache(s.getUser().getId(), s.getId());
+            }
+        });
+
+        updatedSubmissions.stream()
+                .map(s -> s.getChallenge().getId())
+                .distinct()
+                .forEach(cacheService::clearSubmissionsCacheForChallenge);
+    }
+
+    // Simple stats holder
+    private static class ProcessingStats {
+        long processed = 0;
+        long submitted = 0;
+        long missed = 0;
+        long markedLate = 0;
+        long sqCreated = 0;
+
+        void increment(SubmissionAction action) {
+            switch (action) {
+                case SUBMITTED -> submitted++;
+                case MISSED -> missed++;
+                case MARKED_LATE -> markedLate++;
+            }
+        }
+    }
+
+    // Core logic extracted → clean, testable, single responsibility
+    private static class SubmissionProcessor {
+        private final SubmissionDailyChallenge submission;
+        private final OffsetDateTime now;
+        private final Map<Long, List<Question>> challengeQuestions;
+        private final Map<Long, List<SubmissionQuestion>> existingSQs;
+
+        private SubmissionProcessor(SubmissionDailyChallenge submission,
+                                    OffsetDateTime now,
+                                    Map<Long, List<Question>> challengeQuestions,
+                                    Map<Long, List<SubmissionQuestion>> existingSQs) {
+            this.submission = submission;
+            this.now = now;
+            this.challengeQuestions = challengeQuestions;
+            this.existingSQs = existingSQs;
+        }
+
+        public static SubmissionProcessor of(SubmissionDailyChallenge submission,
+                                             OffsetDateTime now,
+                                             Map<Long, List<Question>> challengeQuestions,
+                                             Map<Long, List<SubmissionQuestion>> existingSQs) {
+            return new SubmissionProcessor(submission, now, challengeQuestions, existingSQs);
+        }
+
+        public void process(List<SubmissionDailyChallenge> toUpdate,
+                            List<SubmissionQuestion> sqToCreate) {
+            ChallengeMethod method = Optional.ofNullable(submission.getChallenge())
+                    .map(DailyChallenge::getChallengeMethod)
+                    .orElse(ChallengeMethod.NORMAL);
+
+            if (method == ChallengeMethod.NORMAL) {
+                markAsLateIfNeeded(toUpdate);
+                return;
+            }
+
+            // TEST challenge
+            List<SubmissionQuestion> currentSQs = existingSQs.getOrDefault(submission.getId(), List.of());
+
+            if (currentSQs.isEmpty()) {
+                markAsMissed(toUpdate);
+            } else {
+                autoSubmitAndFillMissingQuestions(toUpdate, sqToCreate, currentSQs);
+            }
+        }
+
+        private void markAsLateIfNeeded(List<SubmissionDailyChallenge> toUpdate) {
+            if (!Boolean.TRUE.equals(submission.getIsLate())) {
+                submission.setIsLate(true);
+                toUpdate.add(submission);
+            }
+        }
+
+        private void markAsMissed(List<SubmissionDailyChallenge> toUpdate) {
+            submission.setSubmissionStatus(SubmissionStatus.MISSED);
+            toUpdate.add(submission);
+        }
+
+        private void autoSubmitAndFillMissingQuestions(List<SubmissionDailyChallenge> toUpdate,
+                                                       List<SubmissionQuestion> sqToCreate,
+                                                       List<SubmissionQuestion> currentSQs) {
+            submission.setSubmissionStatus(SubmissionStatus.SUBMITTED);
+            submission.setSubmittedAt(now);
+            toUpdate.add(submission);
+
+            Long challengeId = submission.getChallenge().getId();
+            List<Question> allQuestions = challengeQuestions.getOrDefault(challengeId, List.of());
+            Set<Long> answeredQuestionIds = currentSQs.stream()
+                    .filter(sq -> sq.getQuestion() != null)
+                    .map(sq -> sq.getQuestion().getId())
+                    .collect(Collectors.toSet());
+
+            for (Question q : allQuestions) {
+                if (!answeredQuestionIds.contains(q.getId())) {
+                    SubmissionQuestion placeholder = SubmissionQuestion.builder()
+                            .submissionDaily(submission)
+                            .question(q)
+                            .submissionContentJson(JsonUtil.objectToMap(new AnswerContent()))
+                            .build();
+                    sqToCreate.add(placeholder);
+                }
+            }
+        }
+
+        public SubmissionAction getAction() {
+            if (submission.getSubmissionStatus() == SubmissionStatus.SUBMITTED) return SubmissionAction.SUBMITTED;
+            if (submission.getSubmissionStatus() == SubmissionStatus.MISSED) return SubmissionAction.MISSED;
+            return Boolean.TRUE.equals(submission.getIsLate()) ? SubmissionAction.MARKED_LATE : SubmissionAction.NONE;
+        }
+    }
+
+    enum SubmissionAction { SUBMITTED, MISSED, MARKED_LATE, NONE }
     // ----------------------- Private helpers -----------------------
 
     private List<DailyChallenge> loadChallengesByLessonIds(List<Long> lessonIds) {

@@ -17,9 +17,7 @@ public interface SubmissionChallengeService {
 
     DataResponse<List<StudentSubmissionDTO>> getSubmissionsByChallenge(Long challengeId, int page, int size, String text, String sortBy, String sortDir);
 
-    void autoSubmitExpiredSubmissions();
-
-    int detectAndMarkLateSubmissions();
+    void autoUpdateSubmissionStatus();
 
     void updateSubmissionsDatesForChallenge(Long challengeId, OffsetDateTime newStart, OffsetDateTime newEnd);
 
