@@ -92,4 +92,5 @@ public interface DailyChallengeRepository extends JpaRepository<DailyChallenge, 
     """)
     List<DailyChallenge> findNonDraftByClassId(@Param("classId") Long classId);
 
+    List<DailyChallenge> findByDeletedAtIsNull();
 }

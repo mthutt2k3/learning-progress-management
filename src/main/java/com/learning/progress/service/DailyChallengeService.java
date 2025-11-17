@@ -1,6 +1,5 @@
 package com.learning.progress.service;
 
-import com.learning.progress.common.ChallengeStatus;
 import com.learning.progress.dto.DataResponse;
 import com.learning.progress.dto.challenge.*;
 import jakarta.validation.Valid;
@@ -26,5 +25,5 @@ public interface DailyChallengeService {
 
     byte[] exportChallengeWorksheet(Long challengeId);
 
-    void processScheduledStatusTransitions(OffsetDateTime now);
+    void autoUpdateChallengeStatus(OffsetDateTime now);
 }

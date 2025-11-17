@@ -54,10 +54,6 @@ public interface ClassRepository extends JpaRepository<Clazz, Long> {
 
     Optional<Clazz> findByIdAndDeletedAtIsNull(Long id);
 
-    List<Clazz> findByStatusAndStartDateLessThanEqualAndDeletedAtIsNull(ClassStatus classStatus, LocalDate today);
-
-    List<Clazz> findByStatusAndEndDateLessThanEqualAndDeletedAtIsNull(ClassStatus classStatus, LocalDate upcomingThreshold);
-
     boolean existsByClassNameAndDeletedAtIsNull(String className);
 
     boolean existsBySyllabusIdAndStatusNotAndDeletedAtIsNull(Long syllabusId, ClassStatus status);
@@ -81,4 +77,6 @@ public interface ClassRepository extends JpaRepository<Clazz, Long> {
 
     @Query("SELECT COUNT(cs) FROM ClassStudent cs WHERE cs.clazz.id = :classId AND cs.status = 'ACTIVE' AND cs.deletedAt IS NULL")
     Long countActiveStudentsByClassId(@Param("classId") Long classId);
+
+    List<Clazz> findByStatusInAndDeletedAtIsNull(List<ClassStatus> statuses);
 }
