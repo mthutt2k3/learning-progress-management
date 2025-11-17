@@ -159,28 +159,23 @@ app:
   pagination:
     max-size: 100
   scheduler:
-    autoSubmit:
-      fixedRate: "60000" # milliseconds (string)
+    # 1. Job cập nhật trạng thái lớp học (UPCOMING → ONGOING → ENDED, v.v.)
     class-status-job:
-      enabled: true               # có thể bật/tắt job nếu cần
-      cron: "0 0 0 * * *"         # chạy mỗi ngày lúc 0h00
-      upcoming-end-days: 7        # số ngày trước endDate để chuyển sang UPCOMING_END
-    # New: separate scheduler configuration for challenge status transitions (IN_PROGRESS/CLOSED)
-    challenge-status-job:
-      enabled: true               # enable/disable challenge status job
-      cron: "0 */15 * * * *"         # schedule for challenge status transitions (default: daily midnight)
-    # Job phát hiện submission quá hạn (LATE)
-    submission-late-detection-job:
       enabled: true
-      cron: "0 */5 * * * *"         # Chạy mỗi 5 phút
-      # Có thể thêm batch-size nếu dùng batch update
-      batch-size: 100
-
-    # Auto-grade scheduler config (used by AutoGradeScheduler / QuartzJobTrigger)
+      cron: "0 0 1 * * *"
+      upcoming-end-days: 7
+    # 2. Job cập nhật trạng thái Daily Challenge (UPCOMING → ACTIVE → EXPIRED)
+    challenge-status-job:
+      enabled: true
+      cron: "0 */1 * * * *"
+    # 3. Job AUTO-SUBMIT / AUTO-MISS / đánh dấu LATE (QUAN TRỌNG NHẤT)
+    submission-status-job:
+      enabled: true
+      fixed-delay-ms: 60000
     auto-grade-job:
-      enabled: true                # master switch to enable/disable auto-grade sweeper
-      use-quartz: true             # when true scheduler will create Quartz jobs, otherwise call service directly
-      fixed-delay-ms: 60000        # how often the sweeper runs (ms)
+      enabled: true
+      use-quartz: true
+      fixed-delay-ms: 60000
 env:
   class:
     max-teaching-assistant-in-class: 2

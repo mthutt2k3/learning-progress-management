@@ -19,20 +19,24 @@ public class ChallengeStatusScheduler {
     @Value("${app.scheduler.challenge-status-job.enabled:true}")
     private boolean enabled;
 
+    // New: method name for logs
+    private static final String METHOD = "updateChallengeStatuses";
+
     @Scheduled(cron = "${app.scheduler.challenge-status-job.cron}")
-    public void updateChallengeStatuses() {
+    public void autoUpdateChallengeStatus() {
         if (!enabled) {
-            log.debug("Challenge status job is disabled.");
+            log.debug("[{}] Challenge status job is disabled.", METHOD);
             return;
         }
         OffsetDateTime now = OffsetDateTime.now();
-        log.debug("Running ChallengeStatusScheduler (challenge-status-job) at {}", now);
+        log.debug("[{}] Running ChallengeStatusScheduler (challenge-status-job) at {}", METHOD, now);
 
         // Delegate all processing to the DailyChallengeService (job MUST NOT call repositories)
         try {
-            dailyChallengeService.processScheduledStatusTransitions(now);
+            dailyChallengeService.autoUpdateChallengeStatus(now);
+            log.info("[{}] DailyChallengeService scheduled processing completed successfully.", METHOD);
         } catch (Exception e) {
-            log.error("DailyChallengeService scheduled processing failed: {}", e.getMessage(), e);
+            log.error("[{}] DailyChallengeService scheduled processing failed: {}", METHOD, e.getMessage(), e);
         }
     }
 }

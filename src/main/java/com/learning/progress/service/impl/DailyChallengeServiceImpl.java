@@ -22,6 +22,7 @@ import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -43,7 +44,8 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
 
     // NEW: notification service
     @Autowired
-    private com.learning.progress.service.NotificationService notificationService;
+    private NotificationService notificationService;
+
 
     /* --------------------------------------------------------
      * CREATE
@@ -490,51 +492,80 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
      * -------------------------------------------------------- */
     @Override
     @Transactional
-    public void processScheduledStatusTransitions(OffsetDateTime now) {
-        log.debug("Processing scheduled challenge status transitions at {}", now);
-        List<DailyChallenge> all = dailyChallengeRepository.findAll();
-        if (all == null || all.isEmpty()) {
-            log.debug("No challenges found for scheduled processing.");
+    public void autoUpdateChallengeStatus(OffsetDateTime now) {
+        // Add METHOD constant for structured logs
+        final String METHOD = "autoUpdateChallengeStatus";
+        log.info("[{}] Starting scheduled challenge status transitions at {}", METHOD, now);
+
+        // Query DB once: only non-deleted challenges
+        List<DailyChallenge> candidates = dailyChallengeRepository.findByDeletedAtIsNull();
+        if (candidates == null || candidates.isEmpty()) {
+            log.debug("[{}] No challenges found for scheduled processing.", METHOD);
             return;
         }
 
+
         List<DailyChallenge> toSave = new ArrayList<>();
-        for (DailyChallenge ch : all) {
-            if (ch.getDeletedAt() != null) continue;
-
-            ChallengeStatus current = ch.getChallengeStatus();
-            OffsetDateTime start = ch.getStartDate();
-            OffsetDateTime end = ch.getEndDate();
-
+        for (DailyChallenge ch : candidates) {
             try {
                 boolean changed = false;
+                ChallengeStatus current = ch.getChallengeStatus();
+                OffsetDateTime start = ch.getStartDate();
+                OffsetDateTime end = ch.getEndDate();
 
                 // PUBLISHED -> IN_PROGRESS when startDate reached
                 if (current == ChallengeStatus.PUBLISHED && start != null && !start.isAfter(now)) {
                     ch.setChallengeStatus(ChallengeStatus.IN_PROGRESS);
                     changed = true;
-                    log.info("Scheduled transition: challenge {} PUBLISHED -> IN_PROGRESS", ch.getId());
+                    log.info("[{}] Scheduled transition: challenge {} PUBLISHED -> IN_PROGRESS (start={}, now={})", METHOD, ch.getId(), start, now);
                 }
 
-                // PUBLISHED|IN_PROGRESS -> CLOSED when endDate reached
+                // PUBLISHED|IN_PROGRESS -> FINISHED when endDate reached
                 if ((current == ChallengeStatus.PUBLISHED || current == ChallengeStatus.IN_PROGRESS)
                         && end != null && !end.isAfter(now)) {
                     ch.setChallengeStatus(ChallengeStatus.FINISHED);
                     changed = true;
-                    log.info("Scheduled transition: challenge {} -> CLOSED", ch.getId());
+                    log.info("[{}] Scheduled transition: challenge {} -> FINISHED (end={}, now={})", METHOD, ch.getId(), end, now);
                 }
 
-                if (changed) toSave.add(ch);
+                if (changed) {
+                    toSave.add(ch);
+                }
             } catch (Exception e) {
-                log.error("Failed to evaluate scheduled transition for challenge {}: {}", ch.getId(), e.getMessage(), e);
+                log.error("[{}] Failed to evaluate scheduled transition for challenge {}: {}", METHOD, ch == null ? "null" : ch.getId(), e.getMessage(), e);
             }
         }
 
+        // Log the exact list of challenges that will be persisted (before save)
+        if (!toSave.isEmpty()) {
+            log.info("[{}] Found {} challenges to evaluate for scheduled transitions", METHOD, toSave.size());
+
+            log.info("[{}] Challenges to be saved ({}):\n{}", METHOD, toSave.size(),
+                    toSave.stream()
+                            .map(ch -> String.format("id=%s,name=%s,oldStatus=%s,newStatus=%s,start=%s,end=%s",
+                                    ch.getId(),
+                                    ch.getChallengeName(),
+                                    // We don't have old status stored here; infer common cases in message if needed or leave null
+                                    ch.getChallengeStatus() == null ? "null" : ch.getChallengeStatus().name(),
+                                    ch.getChallengeStatus() == null ? "null" : ch.getChallengeStatus().name(),
+                                    ch.getStartDate(),
+                                    ch.getEndDate()))
+                            .collect(Collectors.joining("\n"))
+            );
+        } else {
+            log.debug("[{}] No scheduled status transitions necessary at {}", METHOD, now);
+        }
         if (!toSave.isEmpty()) {
             dailyChallengeRepository.saveAll(toSave);
-            log.info("Saved {} challenges after scheduled status transitions", toSave.size());
+            log.info("[{}] Saved {} challenges after scheduled status transitions", METHOD, toSave.size());
+            if (log.isDebugEnabled()) {
+                log.debug("[{}] Saved details:\n{}", METHOD, toSave.stream()
+                        .map(ch -> String.format("id=%s,name=%s,status=%s", ch.getId(), ch.getChallengeName(), ch.getChallengeStatus()))
+                        .collect(Collectors.joining("\n")));
+            }
         } else {
-            log.debug("No scheduled status transitions necessary at {}", now);
+            log.info("[{}] No challenge to update", METHOD);
+
         }
     }
 }

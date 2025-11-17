@@ -40,29 +40,24 @@ public interface SubmissionDailyChallengeRepository extends JpaRepository<Submis
             "OR LOWER(s.user.email) LIKE LOWER(CONCAT('%', :text, '%')))")
     Page<SubmissionDailyChallenge> findByChallengeIdAndDeletedAtIsNull(Long challengeId, String text, Pageable pageable);
 
-    List<SubmissionDailyChallenge> findBySubmissionStatusAndExpiredAtBeforeAndDeletedAtIsNull(SubmissionStatus submissionStatus, OffsetDateTime now);
-
-    @Query("""
-    SELECT s 
-    FROM SubmissionDailyChallenge s
-    WHERE s.deletedAt IS NULL
-      AND (
-            (s.submittedAt IS NULL AND s.expiredAt < :now)
-         OR (s.expiredAt < s.submittedAt)
-      )
-    """)
-    List<SubmissionDailyChallenge> findLateSubmissions(@Param("now") OffsetDateTime now);
-
     @Query("""
     SELECT s FROM SubmissionDailyChallenge s
-    JOIN s.challenge c
-    WHERE s.submissionStatus = :status
-      AND s.expiredAt < :now
-      AND c.challengeMethod = 'TEST'
+    WHERE 
+      (s.expiredAt < :now 
+       AND s.submissionStatus IN :pendingStatuses 
+       AND (s.isLate IS NULL OR s.isLate = false))
+       
+      OR 
+      
+      (s.submittedAt IS NOT NULL 
+       AND s.submittedAt > s.expiredAt 
+       AND (s.isLate IS NULL OR s.isLate = false))
+       
+      AND s.deletedAt IS NULL
     """)
-    Page<SubmissionDailyChallenge> findExpiredTestSubmissionsForAutoSubmit(
-            @Param("status") SubmissionStatus status,
+    Page<SubmissionDailyChallenge> findExpiredSubmissionsForAutoSubmit(
             @Param("now") OffsetDateTime now,
+            @Param("pendingStatuses") List<SubmissionStatus> pendingStatuses,
             Pageable pageable);
 
     List<SubmissionDailyChallenge> findByUserIdAndChallengeIdInAndDeletedAtIsNull(Long studentId, List<Long> challengeIds);
