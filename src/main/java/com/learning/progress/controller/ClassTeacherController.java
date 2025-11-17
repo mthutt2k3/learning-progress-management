@@ -42,7 +42,7 @@ public class ClassTeacherController {
         return ResponseEntity.ok(DataResponse.success(Const.CLASS_TEACHER.TEACHER_REMOVED, Const.CLASS_TEACHER.TEACHER_REMOVED));
     }
 
-    @PreAuthorize("hasAnyRole('MANAGER', 'TEACHER')")
+    @PreAuthorize("hasAnyRole('MANAGER', 'TEACHER', 'TEACHING_ASSISTANT')")
     @GetMapping("/{classId}/teachers")
     @Operation(summary = "View Teacher List in Class", description = "Retrieve list of teachers and assistants in a specific class")
     public ResponseEntity<DataResponse<List<ClassTeacherResponse>>> viewTeacherList(
@@ -57,13 +57,5 @@ public class ClassTeacherController {
                 classTeacherService.getTeachersInClass(classId, page, size, text, status, sortBy, sortDir),
                 HttpStatus.OK
         );
-    }
-
-    @PreAuthorize("hasAnyRole('MANAGER', 'TEACHER')")
-    @GetMapping("/{classId}/teacher/{userId}/performance")
-    @Operation(summary = "View Teacher Performance Report", description = "Retrieve performance report for a teacher or assistant in a class")
-    public ResponseEntity<?> viewTeacherPerformanceReport(@PathVariable Long classId, @PathVariable Long userId) {
-        TeacherPerformanceReport response = classTeacherService.getTeacherPerformanceReport(classId, userId);
-        return ResponseEntity.ok(DataResponse.success(response, Const.CLASS_TEACHER.PERFORMANCE_RETRIEVED));
     }
 }
