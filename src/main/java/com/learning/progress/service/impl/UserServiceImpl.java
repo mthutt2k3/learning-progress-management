@@ -620,7 +620,10 @@ public class UserServiceImpl implements UserService {
         List<ImportStudentDTO> importList = fileService.readExcelData(file, "Import Data", ImportStudentDTO.class);
         for (ImportStudentDTO record : importList) {
             // Kiểm tra các trường bắt buộc
-            if (record.getEmail() == null || !Pattern.matches(Const.VALIDATE_INPUT.regexEmail, record.getEmail())) {
+            if (record.getEmail() == null || record.getEmail().isBlank()) {
+                throw new ApiException("Email is required.", HttpStatus.BAD_REQUEST.value());
+            }
+            if (!Pattern.matches(Const.VALIDATE_INPUT.regexEmail, record.getEmail())) {
                 throw new ApiException("Invalid email format: " + record.getEmail(), HttpStatus.BAD_REQUEST.value());
             }
             if (record.getFullName() == null || record.getFullName().trim().isEmpty()) {
