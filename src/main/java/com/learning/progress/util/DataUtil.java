@@ -44,6 +44,24 @@ import java.util.stream.Collectors;
 @Slf4j
 public class DataUtil {
 
+    /**
+     * Normalize string:
+     * - Trim leading/trailing spaces
+     * - Replace multiple spaces between words with a single space
+     * - Return null if input is null or blank
+     */
+    public static String normalize(String input) {
+        if (input == null) {
+            return null;
+        }
+
+        String trimmed = input.trim();
+        if (trimmed.isEmpty()) {
+            return null;
+        }
+
+        return trimmed.replaceAll("\\s+", " ");
+    }
 
     public static String normalizeText(String text) {
         return Optional.ofNullable(text)
