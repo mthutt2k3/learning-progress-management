@@ -278,9 +278,20 @@ public class SyllabusServiceImpl implements SyllabusService {
 
         for (ImportSyllabusDTO record : importList) {
             // 1. Kiểm tra các trường bắt buộc
-            if (StringUtils.isBlank(record.getSyllabusName()) || record.getSyllabusName().length() > 100) {
-                throw new ApiException("Invalid syllabusName: " + record.getSyllabusName() + ". Must be non-empty and max 100 characters.", HttpStatus.BAD_REQUEST.value());
+            String name = record.getSyllabusName();
+
+            if (name == null) {
+                throw new ApiException("Syllabus name is required.", HttpStatus.BAD_REQUEST.value());
             }
+
+            if (name.isBlank()) {
+                throw new ApiException("Syllabus name must not be empty or blank.", HttpStatus.BAD_REQUEST.value());
+            }
+
+            if (name.length() > 100) {
+                throw new ApiException("Syllabus name must not exceed 100 characters.", HttpStatus.BAD_REQUEST.value());
+            }
+
 
             if (StringUtils.isBlank(record.getLevelCode())) {
                 throw new ApiException("Level code is required", HttpStatus.BAD_REQUEST.value());

@@ -258,8 +258,8 @@ public class UserController {
         byte[] excelFile = userService.exportStudents(text, status, roleName, classIds);
         ByteArrayResource resource = new ByteArrayResource(excelFile);
 
-        String filename = "Students_Export_" +
-                new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date()) +
+        String filename = "Student_List_" +
+                new SimpleDateFormat("yyyy_MM_dd").format(new Date()) +
                 ".xlsx";
 
         return ResponseEntity.ok()
