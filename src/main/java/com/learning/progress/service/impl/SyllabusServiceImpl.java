@@ -111,7 +111,7 @@ public class SyllabusServiceImpl implements SyllabusService {
     @Transactional
     public SyllabusDTO updateSyllabus(Long id, UpdateSyllabusRequest request) {
         String syllabusNameNormalized = DataUtil.normalize(request.getSyllabusName());
-        if (syllabusRepository.existsBySyllabusNameIgnoreCaseAndIdNot(syllabusNameNormalized)) {
+        if (syllabusRepository.existsBySyllabusNameIgnoreCaseAndIdNot(syllabusNameNormalized, id)) {
             throw new ApiException(Const.SYLLABUS.EXIST_NAME, HttpStatus.BAD_REQUEST.value());
         }
 
