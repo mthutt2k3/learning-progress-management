@@ -41,4 +41,5 @@ public interface SyllabusRepository extends JpaRepository<Syllabus, Long> {
     Optional<Syllabus> findByIdAndDeletedAtIsNull(Long id);
 
 
+    boolean existsBySyllabusNameIgnoreCaseAndIdNot(String syllabusNameNormalized);
 }

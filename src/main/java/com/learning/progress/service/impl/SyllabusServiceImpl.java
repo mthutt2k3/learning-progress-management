@@ -77,15 +77,16 @@ public class SyllabusServiceImpl implements SyllabusService {
     @Override
     @Transactional
     public SyllabusDTO createSyllabus(CreateSyllabusRequest request) {
-
-        if (syllabusRepository.existsBySyllabusNameIgnoreCase(request.getSyllabusName())) {
+        String syllabusNameNormalized = DataUtil.normalize(request.getSyllabusName());
+        if (syllabusRepository.existsBySyllabusNameIgnoreCase(syllabusNameNormalized)) {
             throw new ApiException(Const.SYLLABUS.EXIST_NAME, HttpStatus.BAD_REQUEST.value());
         }
 
-        Level level = levelRepository.findById(request.getLevelId())
+        Level level = levelRepository.findByIdAndDeletedAtIsNull(request.getLevelId())
                 .orElseThrow(() -> new ApiException(Const.SYLLABUS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         Syllabus syllabus = syllabusMapper.toSyllabus(request);
+        syllabus.setSyllabusName(syllabusNameNormalized);
         syllabus.setLevel(level);
         syllabusRepository.save(syllabus);
 
@@ -109,6 +110,11 @@ public class SyllabusServiceImpl implements SyllabusService {
     @Override
     @Transactional
     public SyllabusDTO updateSyllabus(Long id, UpdateSyllabusRequest request) {
+        String syllabusNameNormalized = DataUtil.normalize(request.getSyllabusName());
+        if (syllabusRepository.existsBySyllabusNameIgnoreCaseAndIdNot(syllabusNameNormalized)) {
+            throw new ApiException(Const.SYLLABUS.EXIST_NAME, HttpStatus.BAD_REQUEST.value());
+        }
+
         Syllabus syllabus = syllabusRepository.findByIdAndDeletedAtIsNull(id)
                 .orElseThrow(() -> new ApiException(Const.SYLLABUS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
@@ -116,7 +122,7 @@ public class SyllabusServiceImpl implements SyllabusService {
                 .orElseThrow(() -> new ApiException(Const.LEVEL.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         Syllabus updatedSyllabus = syllabusMapper.toSyllabus(request);
-        syllabus.setSyllabusName(updatedSyllabus.getSyllabusName());
+        syllabus.setSyllabusName(syllabusNameNormalized);
         syllabus.setLevel(level);
         syllabus.setDescription(updatedSyllabus.getDescription());
         syllabusRepository.save(syllabus);

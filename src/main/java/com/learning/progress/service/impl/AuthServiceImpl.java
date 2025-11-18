@@ -142,6 +142,10 @@ public class AuthServiceImpl implements AuthService {
                 jwtUtil.generateResetPasswordToken(user.getUserName(), user.getRole().getName().toString(), user.getId()) :
                 jwtUtil.generateAuthToken(user.getUserName(), user.getRole().getName().toString(), user.getId(), user.getEmail());
 
+        if(user.isRequestResetPasswordByTeacher()){
+            user.setRequestResetPasswordByTeacher(false);
+        }
+        userRepository.save(user);
         log.info("[{}] Login successful for username: {}", traceId, loginRequest.getUsername());
         return authMapper.toLoginResponse(user, refreshToken, accessToken, mustChangePassword);
     }
