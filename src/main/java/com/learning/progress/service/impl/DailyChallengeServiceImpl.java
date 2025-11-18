@@ -511,7 +511,7 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
      * SCHEDULED TRANSITIONS
      * -------------------------------------------------------- */
     @Override
-    @Transactional
+//    @Transactional
     public void autoUpdateChallengeStatus(OffsetDateTime now) {
         // Add METHOD constant for structured logs
         final String METHOD = "autoUpdateChallengeStatus";
