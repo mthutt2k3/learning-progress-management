@@ -564,10 +564,10 @@ public class UserServiceImpl implements UserService {
             throw new ApiException("Email mới không được trùng với email hiện tại khi user đang ACTIVE", HttpStatus.BAD_REQUEST.value());
         }
 
-        targetUser.setEmail(newEmail);
         targetUser.setChangeEmailTokenUsed(false);
         switch (targetUser.getStatus()) {
             case PENDING:
+                targetUser.setEmail(newEmail);
                 String password = DataUtil.generateRandomPassword(8);
                 targetUser.setPassword(passwordEncoder.encode(password));
                 userRepository.save(targetUser);
