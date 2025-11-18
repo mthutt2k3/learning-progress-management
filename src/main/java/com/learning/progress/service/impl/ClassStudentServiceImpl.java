@@ -186,7 +186,7 @@ public class ClassStudentServiceImpl implements ClassStudentService {
         Clazz clazz = classRepository.findByIdAndDeletedAtIsNull(classId)
                 .orElseThrow(() -> new ApiException(Const.CLASS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
-        if(clazz.getStatus() == ClassStatus.FINISHED) {
+        if (clazz.getStatus() == ClassStatus.FINISHED) {
             throw new ApiException(Const.CLASS.FINISHED_CLASS, HttpStatus.BAD_REQUEST.value());
         }
 
@@ -320,7 +320,7 @@ public class ClassStudentServiceImpl implements ClassStudentService {
             // send notification to newly added students
             for (User u : newlyAdded) {
                 String url = "/student/classes/menu/" + clazz.getId();
-                if(u.getRole().getName().equals(RoleName.TEST_TAKER)) {
+                if (u.getRole().getName().equals(RoleName.TEST_TAKER)) {
                     url = "/test-taker/classes/menu/" + clazz.getId();
                 }
 
@@ -448,100 +448,121 @@ public class ClassStudentServiceImpl implements ClassStudentService {
     @Override
     @Transactional
     public void importStudentsFromExcel(MultipartFile file) {
-        // 1️⃣ Đọc dữ liệu từ file Excel
-        List<ImportStudentToClass> importList = fileService.readExcelData(file, "Import Data", ImportStudentToClass.class);
+        try {
+            // 1️⃣ Đọc dữ liệu từ file Excel
+            List<ImportStudentToClass> importList = fileService.readExcelData(file, "Import Data", ImportStudentToClass.class);
 
-        if (importList.isEmpty()) {
-            throw new ApiException("Import file is empty", HttpStatus.BAD_REQUEST.value());
-        }
-
-        // 2️⃣ Fetch all classes và users một lần
-        Set<String> classCodes = importList.stream()
-                .map(record -> record.getClassCode().toLowerCase().trim())
-                .collect(Collectors.toSet());
-
-        Set<String> userNames = importList.stream()
-                .map(record -> record.getUserName().toLowerCase().trim())
-                .collect(Collectors.toSet());
-
-        List<Clazz> classes = classRepository.findByClassCodeInIgnoreCase(new ArrayList<>(classCodes));
-        List<User> users = userRepository.findByUserNameInIgnoreCase(new ArrayList<>(userNames));
-
-        Map<String, Clazz> classMap = classes.stream()
-                .collect(Collectors.toMap(c -> c.getClassCode().toLowerCase(), c -> c));
-
-        Map<String, User> userMap = users.stream()
-                .collect(Collectors.toMap(u -> u.getUserName().toLowerCase(), u -> u));
-
-        // 3️⃣ Group theo classId
-        Map<Long, List<Long>> classToUserIds = new HashMap<>();
-        List<String> errors = new ArrayList<>();
-
-        for (int i = 0; i < importList.size(); i++) {
-            ImportStudentToClass record = importList.get(i);
-            int rowNumber = i + 2;
-
-            String classCode = record.getClassCode().toLowerCase().trim();
-            String userName = record.getUserName().toLowerCase().trim();
-
-            Clazz clazz = classMap.get(classCode);
-            User user = userMap.get(userName);
-
-            if (clazz == null) {
-                errors.add(String.format("Row %d: Class code '%s' not found", rowNumber, record.getClassCode()));
-                continue;
+            if (importList.isEmpty()) {
+                throw new ApiException("Import file is empty", HttpStatus.BAD_REQUEST.value());
             }
 
-            if (user == null) {
-                errors.add(String.format("Row %d: Username '%s' not found", rowNumber, record.getUserName()));
-                continue;
+            // 2️⃣ Fetch all classes và users một lần
+            Set<String> classCodes = importList.stream()
+                    .map(record -> record.getClassCode().toLowerCase().trim())
+                    .collect(Collectors.toSet());
+
+            Set<String> userNames = importList.stream()
+                    .map(record -> record.getUserName().toLowerCase().trim())
+                    .collect(Collectors.toSet());
+
+            List<Clazz> classes = classRepository.findByClassCodeInIgnoreCase(new ArrayList<>(classCodes));
+            List<User> users = userRepository.findByUserNameInIgnoreCase(new ArrayList<>(userNames));
+
+            Map<String, Clazz> classMap = classes.stream()
+                    .collect(Collectors.toMap(c -> c.getClassCode().toLowerCase(), c -> c));
+
+            Map<String, User> userMap = users.stream()
+                    .collect(Collectors.toMap(u -> u.getUserName().toLowerCase(), u -> u));
+
+            // 3️⃣ Group theo classId
+            Map<Long, List<Long>> classToUserIds = new HashMap<>();
+            List<String> errors = new ArrayList<>();
+
+            for (int i = 0; i < importList.size(); i++) {
+                ImportStudentToClass record = importList.get(i);
+                int rowNumber = i + 2;
+
+                String classCode = record.getClassCode().toLowerCase().trim();
+                String userName = record.getUserName().toLowerCase().trim();
+
+                // Validate empty classCode
+                if (classCode == null || classCode.trim().isEmpty()) {
+                    errors.add(String.format("Row %d: Class code cannot be empty", rowNumber));
+                    continue;
+                }
+
+                // Validate empty userName
+                if (userName == null || userName.trim().isEmpty()) {
+                    errors.add(String.format("Row %d: Username cannot be empty", rowNumber));
+                    continue;
+                }
+
+                Clazz clazz = classMap.get(classCode);
+                User user = userMap.get(userName);
+
+                if (clazz == null) {
+                    errors.add(String.format("Row %d: Class code '%s' not found", rowNumber, record.getClassCode()));
+                    continue;
+                }
+
+                if (user == null) {
+                    errors.add(String.format("Row %d: Username '%s' not found", rowNumber, record.getUserName()));
+                    continue;
+                }
+
+                classToUserIds.computeIfAbsent(clazz.getId(), k -> new ArrayList<>()).add(user.getId());
             }
 
-            classToUserIds.computeIfAbsent(clazz.getId(), k -> new ArrayList<>()).add(user.getId());
-        }
+            // Nếu có lỗi validation, throw ngay
+            if (!errors.isEmpty()) {
+                throw new ApiException(
+                        String.format("Import validation failed:\n%s", String.join("\n", errors)),
+                        HttpStatus.BAD_REQUEST.value()
+                );
+            }
 
-        // Nếu có lỗi validation, throw ngay
-        if (!errors.isEmpty()) {
+            // 4️⃣ Gọi addStudentsToClass cho từng class
+            Long actionByUserId = jwtUtil.extractUserIdFromCurrentRequest();
+            String visibleToRoles = String.format("%s,%s,%s",
+                    RoleName.MANAGER.name(),
+                    RoleName.TEACHER.name(),
+                    RoleName.TEACHING_ASSISTANT.name());
+
+            for (Map.Entry<Long, List<Long>> entry : classToUserIds.entrySet()) {
+                AddStudentToClassRequest request = new AddStudentToClassRequest();
+                request.setUserIds(entry.getValue());
+
+                addStudentToClass(entry.getKey(), request);
+
+                // Save import history (summary)
+                Clazz clazz = classMap.values().stream()
+                        .filter(c -> c.getId().equals(entry.getKey()))
+                        .findFirst()
+                        .orElse(null);
+
+                if (clazz != null) {
+                    String actionDetails = String.format(
+                            Const.CLASS_STUDENT.IMPORT_STUDENT_SUCCESSFULLY,
+                            entry.getValue().size(),
+                            clazz.getClassName()
+                    );
+
+                    classHistoryService.saveClassHistory(
+                            entry.getKey(),
+                            actionDetails,
+                            actionByUserId,
+                            ActionType.IMPORT_STUDENTS.name(),
+                            visibleToRoles
+                    );
+                }
+            }
+        } catch (ApiException ex) {
+            throw ex;
+        } catch (Exception ex) {
             throw new ApiException(
-                    String.format("Import validation failed:\n%s", String.join("\n", errors)),
-                    HttpStatus.BAD_REQUEST.value()
+                    "An unexpected error occurred during import. Please verify your file.",
+                    HttpStatus.INTERNAL_SERVER_ERROR.value()
             );
-        }
-
-        // 4️⃣ Gọi addStudentsToClass cho từng class
-        Long actionByUserId = jwtUtil.extractUserIdFromCurrentRequest();
-        String visibleToRoles = String.format("%s,%s,%s",
-                RoleName.MANAGER.name(),
-                RoleName.TEACHER.name(),
-                RoleName.TEACHING_ASSISTANT.name());
-
-        for (Map.Entry<Long, List<Long>> entry : classToUserIds.entrySet()) {
-            AddStudentToClassRequest request = new AddStudentToClassRequest();
-            request.setUserIds(entry.getValue());
-
-            addStudentToClass(entry.getKey(), request);
-
-            // Save import history (summary)
-            Clazz clazz = classMap.values().stream()
-                    .filter(c -> c.getId().equals(entry.getKey()))
-                    .findFirst()
-                    .orElse(null);
-
-            if (clazz != null) {
-                String actionDetails = String.format(
-                        Const.CLASS_STUDENT.IMPORT_STUDENT_SUCCESSFULLY,
-                        entry.getValue().size(),
-                        clazz.getClassName()
-                );
-
-                classHistoryService.saveClassHistory(
-                        entry.getKey(),
-                        actionDetails,
-                        actionByUserId,
-                        ActionType.IMPORT_STUDENTS.name(),
-                        visibleToRoles
-                );
-            }
         }
     }
 

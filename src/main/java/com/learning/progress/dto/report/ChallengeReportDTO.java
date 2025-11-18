@@ -107,6 +107,7 @@ public class ChallengeReportDTO {
         private String questionText;
         private String questionType;
         private Integer questionOrder;
+        private BigDecimal totalWeight;     // Tổng điểm (VD: 1.0)
 
         private Long totalAttempts;
         private Long correctCount;
@@ -125,7 +126,6 @@ public class ChallengeReportDTO {
         private String email;
         private String avatarUrl;
         private BigDecimal receivedWeight;  // Điểm nhận được (VD: 0.5)
-        private BigDecimal totalWeight;     // Tổng điểm (VD: 1.0)
         private BigDecimal correctRate;     // Tỷ lệ đúng % (VD: 50.0)
         private Boolean isCorrect;          // True nếu receivedWeight == totalWeight
     }

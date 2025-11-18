@@ -404,6 +404,14 @@ public class ClassChapterServiceImpl implements ClassChapterService {
                         .max(Integer::compare)
                         .orElse(0) + 1;
 
+        int totalChaptersAfterImport = existingChapters.size() + importList.size();
+        if (totalChaptersAfterImport > 100) {
+            throw new ApiException(
+                    String.format("Tổng số chapters sẽ vượt quá giới hạn 100 (hiện tại: %d, file import: %d)",
+                            existingChapters.size(), importList.size()),
+                    HttpStatus.BAD_REQUEST.value()
+            );
+        }
         // Validate chapters
         Set<String> usedChapterNames = new HashSet<>();
         int rowIndex = 2; // Bắt đầu từ dòng 2 (sau header)
