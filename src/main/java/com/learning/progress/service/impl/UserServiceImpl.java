@@ -599,7 +599,7 @@ public class UserServiceImpl implements UserService {
         if(user.isChangeEmailTokenUsed()){
             throw new ApiException("The link change email has already been used.", HttpStatus.BAD_REQUEST.value());
         }
-        user.setChangeEmailTokenUsed(false);
+        user.setChangeEmailTokenUsed(true);
         user.setEmail(newEmail);
         userRepository.save(user);
 
