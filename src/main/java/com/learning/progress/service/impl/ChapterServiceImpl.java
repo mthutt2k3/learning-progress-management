@@ -65,6 +65,10 @@ public class ChapterServiceImpl implements ChapterService {
     @Value("${azure.storage.chapter-template}")
     private String chapterTemplate;
 
+    // New: configurable limit for syncChapters
+    @Value("${app.limits.max-chapters-per-syllabus:100}")
+    private int maxChaptersPerSyllabus;
+
     @Override
     public ChapterDTO getChapter(Long id) {
         Chapter chapter = chapterRepository.findById(id)
@@ -277,6 +281,23 @@ public class ChapterServiceImpl implements ChapterService {
         OffsetDateTime now = OffsetDateTime.now();
         List<ChapterDTO> result = new ArrayList<>();
 
+        List<SyncChapterRequest> updateRequests = nonDeletedRequests.stream()
+                .filter(req -> req.getId() != null)
+                .collect(Collectors.toList());
+
+        List<SyncChapterRequest> newRequests = nonDeletedRequests.stream()
+                .filter(req -> req.getId() == null)
+                .collect(Collectors.toList());
+
+        // New: check final count will not exceed configured maximum BEFORE any DB changes
+        int finalCount = existingActiveChapters.size() - requestDeleteIds.size() + newRequests.size();
+        if (finalCount > maxChaptersPerSyllabus) {
+            throw new ApiException(
+                    String.format("Số lượng chapter sau khi sync (%d) vượt quá giới hạn cho phép (%d).", finalCount, maxChaptersPerSyllabus),
+                    HttpStatus.BAD_REQUEST.value()
+            );
+        }
+
         // 7. Process DELETE (chỉ cần ID)
         for (SyncChapterRequest deleteReq : deleteRequests) {
             Chapter chapter = chapterRepository.findById(deleteReq.getId())
@@ -288,10 +309,6 @@ public class ChapterServiceImpl implements ChapterService {
         }
 
         // 8. Process UPDATE existing
-        List<SyncChapterRequest> updateRequests = nonDeletedRequests.stream()
-                .filter(req -> req.getId() != null)
-                .collect(Collectors.toList());
-
         for (SyncChapterRequest req : updateRequests) {
             Chapter chapter = chapterRepository.findById(req.getId())
                     .filter(c -> c.getDeletedAt() == null)
@@ -304,10 +321,6 @@ public class ChapterServiceImpl implements ChapterService {
         }
 
         // 9. Process CREATE new (id = null)
-        List<SyncChapterRequest> newRequests = nonDeletedRequests.stream()
-                .filter(req -> req.getId() == null)
-                .collect(Collectors.toList());
-
         for (SyncChapterRequest req : newRequests) {
             Chapter newChapter = new Chapter();
             newChapter.setSyllabus(syllabus);
@@ -559,3 +572,4 @@ public class ChapterServiceImpl implements ChapterService {
     }
 
 }
+

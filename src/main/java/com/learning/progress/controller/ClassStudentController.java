@@ -31,7 +31,7 @@ public class ClassStudentController {
     @Autowired
     private ClassStudentService classStudentService;
 
-    @PreAuthorize("hasAnyRole('MANAGER', 'TEACHER')")
+    @PreAuthorize("hasAnyRole('MANAGER', 'TEACHER', 'TEACHING_ASSISTANT')")
     @GetMapping("/{classId}/students")
     @Operation(summary = "View Student List in Class", description = "Retrieve list of students in a specific class")
     public ResponseEntity<DataResponse<List<ClassStudentResponse>>> viewStudentList(
@@ -48,7 +48,7 @@ public class ClassStudentController {
         );
     }
 
-    @PreAuthorize("hasAnyRole('MANAGER', 'TEACHER')")
+    @PreAuthorize("hasAnyRole('MANAGER', 'TEACHER', 'TEACHING_ASSISTANT')")
     @GetMapping("/{classId}/student/{userId}/profile")
     @Operation(summary = "View Student Profile", description = "Retrieve detailed profile of a student in a class")
     public ResponseEntity<?> viewStudentProfile(@PathVariable Long classId, @PathVariable Long userId) {
