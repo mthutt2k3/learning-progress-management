@@ -600,26 +600,34 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
             appValidator.validateUserAccessToClass(classId);
         }
 
-        // Chỉ gia hạn nếu chưa SUBMITTED/GRADED hoặc đã MISSED
+        // Chỉ gia hạn nếu chưa SUBMITTED/GRADED/MISSED
         List<SubmissionDailyChallenge> toUpdate = submissions.stream()
                 .filter(s -> {
                     SubmissionStatus status = s.getSubmissionStatus();
                     return status == SubmissionStatus.PENDING ||
-                            status == SubmissionStatus.DRAFT ||
-                            status == SubmissionStatus.MISSED;
+                            status == SubmissionStatus.DRAFT;
                 })
                 .peek(s -> {
-//                    s.setS(newExpiredAt);
                     s.setExpiredAt(newExpiredAt);
                     s.setIsLate(false);
                 })
                 .collect(Collectors.toList());
 
-        if (toUpdate.isEmpty()) {
-            log.debug("[{}] no submissions eligible for extension", action);
-            throw new ApiException(Const.SUBMISSION.NO_ELIGIBLE_FOR_EXTENSION, HttpStatus.BAD_REQUEST.value());
-        }
+        // Kiểm tra nếu có submission không eligible
+        List<SubmissionDailyChallenge> notEligible = submissions.stream()
+                .filter(s -> s.getSubmissionStatus() == SubmissionStatus.SUBMITTED ||
+                        s.getSubmissionStatus() == SubmissionStatus.GRADED ||
+                        s.getSubmissionStatus() == SubmissionStatus.MISSED)
+                .collect(Collectors.toList());
 
+        if (!notEligible.isEmpty()) {
+            String ids = notEligible.stream()
+                    .map(s -> s.getId().toString())
+                    .collect(Collectors.joining(", "));
+            log.debug("[{}] submissions not eligible for extension: {}", action, ids);
+            throw new ApiException("Submissions with ids [" + ids + "] cannot be extended because they are already submitted/graded/missed",
+                    HttpStatus.BAD_REQUEST.value());
+        }
         submissionDailyChallengeRepository.saveAll(toUpdate);
 
         // Clear cache
@@ -651,6 +659,7 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
      * @return
      */
     @Override
+    @Transactional
     public String resetSubmissions(ResetSubmissionRequest request) {
         final String action = "resetSubmissions";
         String teacherEmail = jwtUtil.extractEmailFromCurrentRequest();
@@ -685,6 +694,21 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
 
         // Validate quyền truy cập
         request.getSubmissionIds().forEach(appValidator::validateUserAccessToSubmission);
+
+        // **Validation trạng thái submission**
+        List<SubmissionDailyChallenge> notEligible = oldSubmissions.stream()
+                .filter(s -> s.getSubmissionStatus() == SubmissionStatus.PENDING ||
+                        s.getSubmissionStatus() == SubmissionStatus.DRAFT)
+                .collect(Collectors.toList());
+
+        if (!notEligible.isEmpty()) {
+            String ids = notEligible.stream()
+                    .map(s -> s.getId().toString())
+                    .collect(Collectors.joining(", "));
+            log.debug("[{}] submissions not eligible for reset: {}", action, ids);
+            throw new ApiException("Submissions with ids [" + ids + "] cannot be reset because they are PENDING or DRAFT",
+                    HttpStatus.BAD_REQUEST.value());
+        }
 
         // 2. Soft-delete submission cũ
         oldSubmissions.forEach(old -> {

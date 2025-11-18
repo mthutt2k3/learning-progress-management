@@ -82,4 +82,8 @@ public class User extends BaseEntity {
     @Builder.Default
     @Column(name = "is_reset_password_token_used", nullable = false)
     private boolean isResetPasswordTokenUsed = false;
+
+    @Builder.Default
+    @Column(name = "is_change_email_token_used", nullable = false)
+    private boolean isChangeEmailTokenUsed = false;
 }
