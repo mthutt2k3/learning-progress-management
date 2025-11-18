@@ -986,6 +986,25 @@ public class ReportServiceImpl implements ReportService {
 
     // Thêm helper method mới
     private ChallengeReportDTO.StudentQuestionPerformance buildStudentQuestionPerformance(Map<String, Object> data) {
+
+        String submissionStatus = (String) data.get("submission_status");
+
+        // CHECK: Nếu chưa submit hoặc chưa graded -> trả về object với null values
+        if (submissionStatus == null ||
+                (!submissionStatus.equals("SUBMITTED") && !submissionStatus.equals("GRADED"))) {
+
+            return ChallengeReportDTO.StudentQuestionPerformance.builder()
+                    .userId(getLongValue(data, "user_id"))
+                    .fullName((String) data.get("full_name"))
+                    .email((String) data.get("email"))
+                    .avatarUrl((String) data.get("avatar_url"))
+                    .receivedWeight(null)  // NULL
+                    .totalWeight(null)     // NULL
+                    .correctRate(null)     // NULL
+                    .isCorrect(null)       // NULL
+                    .build();
+        }
+
         BigDecimal receivedWeight = getBigDecimalValue(data, "received_weight");
         BigDecimal totalWeight = getBigDecimalValue(data, "total_weight");
 
