@@ -375,6 +375,15 @@ public class ChapterServiceImpl implements ChapterService {
         int lastOrderNumber = existingChapters.isEmpty() ? 0 :
                 existingChapters.get(existingChapters.size() - 1).getOrderNumber();
 
+        int totalChaptersAfterImport = existingChapters.size() + importList.size();
+        if (totalChaptersAfterImport > 100) {
+            throw new ApiException(
+                    String.format("Tổng số chapters cho syllabus ID %d sẽ vượt quá giới hạn 100 (hiện tại: %d, file import: %d)",
+                            syllabusId, existingChapters.size(), importList.size()),
+                    HttpStatus.BAD_REQUEST.value()
+            );
+        }
+
         // 3️⃣ Validate dữ liệu trong file
         Set<String> usedNames = new HashSet<>();
         int rowIndex = 2; // dòng bắt đầu sau header
