@@ -969,6 +969,7 @@ public class ReportServiceImpl implements ReportService {
                             .questionText((String) row.get("question_text"))
                             .questionType((String) row.get("question_type"))
                             .questionOrder(getIntValue(row, "question_order"))
+                            .totalWeight(getBigDecimalValue(row, "total_weight").setScale(2, RoundingMode.HALF_UP))
                             .totalAttempts(totalAttempts)
                             .correctCount(correctCount)
                             .correctRate(correctRate)
@@ -999,7 +1000,6 @@ public class ReportServiceImpl implements ReportService {
                     .email((String) data.get("email"))
                     .avatarUrl((String) data.get("avatar_url"))
                     .receivedWeight(null)  // NULL
-                    .totalWeight(null)     // NULL
                     .correctRate(null)     // NULL
                     .isCorrect(null)       // NULL
                     .build();
@@ -1024,7 +1024,6 @@ public class ReportServiceImpl implements ReportService {
                 .email((String) data.get("email"))
                 .avatarUrl((String) data.get("avatar_url"))
                 .receivedWeight(receivedWeight.setScale(2, RoundingMode.HALF_UP))
-                .totalWeight(totalWeight.setScale(2, RoundingMode.HALF_UP))
                 .correctRate(correctRate)
                 .isCorrect(isCorrect)
                 .build();

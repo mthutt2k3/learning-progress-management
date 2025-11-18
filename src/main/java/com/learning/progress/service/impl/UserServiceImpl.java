@@ -564,10 +564,10 @@ public class UserServiceImpl implements UserService {
             throw new ApiException("Email mới không được trùng với email hiện tại khi user đang ACTIVE", HttpStatus.BAD_REQUEST.value());
         }
 
-        targetUser.setEmail(newEmail);
         targetUser.setChangeEmailTokenUsed(false);
         switch (targetUser.getStatus()) {
             case PENDING:
+                targetUser.setEmail(newEmail);
                 String password = DataUtil.generateRandomPassword(8);
                 targetUser.setPassword(passwordEncoder.encode(password));
                 userRepository.save(targetUser);
@@ -618,40 +618,78 @@ public class UserServiceImpl implements UserService {
     @Transactional
     public void importStudentsFromExcel(MultipartFile file) {
         List<ImportStudentDTO> importList = fileService.readExcelData(file, "Import Data", ImportStudentDTO.class);
-        for (ImportStudentDTO record : importList) {
-            // Kiểm tra các trường bắt buộc
+
+        String firstError = null;
+
+        // Validate toàn bộ file trước
+        for (int i = 0; i < importList.size(); i++) {
+            int row = i + 2;
+            ImportStudentDTO record = importList.get(i);
+
+            // Email
             if (record.getEmail() == null || record.getEmail().isBlank()) {
-                throw new ApiException("Email is required.", HttpStatus.BAD_REQUEST.value());
+                firstError = "Row " + row + ": Email is required.";
+                break;
             }
             if (!Pattern.matches(Const.VALIDATE_INPUT.regexEmail, record.getEmail())) {
-                throw new ApiException("Invalid email format: " + record.getEmail(), HttpStatus.BAD_REQUEST.value());
-            }
-            if (record.getFullName() == null || record.getFullName().trim().isEmpty()) {
-                throw new ApiException("Full name is required", HttpStatus.BAD_REQUEST.value());
-            }
-            if (!EnumUtil.isAllowedEnumValue(RoleName.class, record.getRoleName(), Set.of(RoleName.STUDENT, RoleName.TEST_TAKER))) {
-                throw new ApiException("Invalid role name: " + record.getRoleName(), HttpStatus.BAD_REQUEST.value());
-            }
-            // Kiểm tra các trường tùy chọn
-            if (record.getPhoneNumber() != null && !DataUtil.isValidPhoneNumber(record.getPhoneNumber())) {
-                throw new ApiException("Invalid phone number format: " + record.getPhoneNumber(), HttpStatus.BAD_REQUEST.value());
-            }
-            if (record.getGender() != null && !EnumUtil.isValidEnum(Gender.class, record.getGender())) {
-                throw new ApiException("Invalid gender format: " + record.getGender(), HttpStatus.BAD_REQUEST.value());
-            }
-            if (record.getParentEmail() != null && !record.getParentEmail().isEmpty() &&
-                    !Pattern.matches(Const.VALIDATE_INPUT.regexEmail, record.getParentEmail())) {
-                throw new ApiException("Invalid parent email format: " + record.getParentEmail(), HttpStatus.BAD_REQUEST.value());
+                firstError = "Row " + row + ": Invalid email format: " + record.getEmail();
+                break;
             }
 
+            // Full name
+            if (record.getFullName() == null || record.getFullName().trim().isEmpty()) {
+                firstError = "Row " + row + ": Full name is required.";
+                break;
+            }
+
+            // Role
+            if (!EnumUtil.isAllowedEnumValue(RoleName.class, record.getRoleName(),
+                    Set.of(RoleName.STUDENT, RoleName.TEST_TAKER))) {
+                firstError = "Row " + row + ": Invalid role name: " + record.getRoleName();
+                break;
+            }
+
+            // Phone (optional)
+            if (record.getPhoneNumber() != null &&
+                    !DataUtil.isValidPhoneNumber(record.getPhoneNumber())) {
+                firstError = "Row " + row + ": Invalid phone number: " + record.getPhoneNumber();
+                break;
+            }
+
+            // Gender (optional)
+            if (record.getGender() != null &&
+                    !EnumUtil.isValidEnum(Gender.class, record.getGender())) {
+                firstError = "Row " + row + ": Invalid gender: " + record.getGender();
+                break;
+            }
+
+            // Parent email (optional)
+            if (record.getParentEmail() != null && !record.getParentEmail().isEmpty() &&
+                    !Pattern.matches(Const.VALIDATE_INPUT.regexEmail, record.getParentEmail())) {
+                firstError = "Row " + row + ": Invalid parent email: " + record.getParentEmail();
+                break;
+            }
+
+            // Level
+            if (record.getLevelCode() != null && !record.getLevelCode().isBlank()) {
+                boolean levelExists = levelRepository.findByLevelCodeIgnoreCase(record.getLevelCode()).isPresent();
+                if (!levelExists) {
+                    firstError = "Row " + row + ": Level not found with code: " + record.getLevelCode();
+                    break;
+                }
+            }
+        }
+
+        // Nếu có lỗi → dừng import
+        if (firstError != null) {
+            throw new ApiException(firstError, HttpStatus.BAD_REQUEST.value());
+        }
+
+        // Không có lỗi → bắt đầu import
+        for (ImportStudentDTO record : importList) {
             Long levelId = null;
             if (record.getLevelCode() != null && !record.getLevelCode().isBlank()) {
-                Level level = levelRepository.findByLevelCodeIgnoreCase(record.getLevelCode())
-                        .orElseThrow(() -> new ApiException(
-                                "Level not found with code: " + record.getLevelCode(),
-                                HttpStatus.NOT_FOUND.value()
-                        ));
-                levelId = level.getId();
+                levelId = levelRepository.findByLevelCodeIgnoreCase(record.getLevelCode()).get().getId();
             }
 
             CreateStudentRequest request = CreateStudentRequest.builder()
@@ -665,81 +703,89 @@ public class UserServiceImpl implements UserService {
                     .gender(record.getGender())
                     .levelId(levelId)
                     .build();
+
             if (record.getParentEmail() != null && !record.getParentEmail().isEmpty()) {
-                ParentInfo parentInfo = new ParentInfo();
-                parentInfo.setParentEmail(record.getParentEmail());
-                parentInfo.setParentName(record.getParentName());
-                parentInfo.setParentPhone(record.getParentPhone());
-                parentInfo.setRelationship(record.getRelationship());
-                request.setParentInfo(parentInfo);
+                ParentInfo parent = new ParentInfo();
+                parent.setParentEmail(record.getParentEmail());
+                parent.setParentName(record.getParentName());
+                parent.setParentPhone(record.getParentPhone());
+                parent.setRelationship(record.getRelationship());
+                request.setParentInfo(parent);
             }
+
             createStudent(request);
         }
     }
 
+
     @Override
     @Transactional
     public void importTeachersFromExcel(MultipartFile file) {
-        List<ImportTeacherDTO> importList = fileService.readExcelData(file, "Import Data", ImportTeacherDTO.class);
+        List<ImportTeacherDTO> importList =
+                fileService.readExcelData(file, "Import Data", ImportTeacherDTO.class);
 
-        // Map để lưu tất cả lỗi theo từng dòng
-        Map<Integer, List<String>> errorsByRow = new LinkedHashMap<>();
+        String firstError = null;
 
-        // Validate toàn bộ file trước
+        // Validate the entire file first
         for (int i = 0; i < importList.size(); i++) {
-            int rowNumber = i + 2; // +2 vì có header row và index bắt đầu từ 0
+            int row = i + 2; // +2 because of header row
             ImportTeacherDTO record = importList.get(i);
-            List<String> rowErrors = new ArrayList<>();
 
-            // Kiểm tra Email
+            // Email
             if (record.getEmail() == null || record.getEmail().trim().isEmpty()) {
-                rowErrors.add("Email không được để trống");
-            } else if (!Pattern.matches(Const.VALIDATE_INPUT.regexEmail, record.getEmail())) {
-                rowErrors.add("Email không đúng định dạng: " + record.getEmail());
+                firstError = "Row " + row + ": Email cannot be empty";
+                break;
+            }
+            if (!Pattern.matches(Const.VALIDATE_INPUT.regexEmail, record.getEmail())) {
+                firstError = "Row " + row + ": Invalid email format: " + record.getEmail();
+                break;
             }
 
-            // Kiểm tra First Name
+            // Full Name
             if (record.getFullName() == null || record.getFullName().trim().isEmpty()) {
-                rowErrors.add("First Name không được để trống");
+                firstError = "Row " + row + ": Full name cannot be empty";
+                break;
             }
 
-            // Kiểm tra Role Name
+            // Role Name
             if (record.getRoleName() == null || record.getRoleName().trim().isEmpty()) {
-                rowErrors.add("Role Name không được để trống");
-            } else if (!EnumUtil.isAllowedEnumValue(RoleName.class, record.getRoleName(),
+                firstError = "Row " + row + ": Role name cannot be empty";
+                break;
+            }
+
+            if (!EnumUtil.isAllowedEnumValue(RoleName.class, record.getRoleName(),
                     Set.of(RoleName.TEACHER, RoleName.TEACHING_ASSISTANT))) {
-                rowErrors.add("Role Name không hợp lệ: " + record.getRoleName() +
-                        ". Chỉ chấp nhận: TEACHER, TEACHING_ASSISTANT");
+                firstError = "Row " + row + ": Invalid role name: " + record.getRoleName();
+                break;
             }
 
-            // Kiểm tra Phone Number (tùy chọn nhưng phải đúng format nếu có)
-            if (record.getPhoneNumber() != null && !record.getPhoneNumber().trim().isEmpty()) {
-                if (!DataUtil.isValidPhoneNumber(record.getPhoneNumber())) {
-                    rowErrors.add("Số điện thoại không đúng định dạng: " + record.getPhoneNumber());
-                }
+            // Phone Number (optional)
+            if (record.getPhoneNumber() != null &&
+                    !record.getPhoneNumber().trim().isEmpty() &&
+                    !DataUtil.isValidPhoneNumber(record.getPhoneNumber())) {
+
+                firstError = "Row " + row + ": Invalid phone number: " + record.getPhoneNumber();
+                break;
             }
 
-            // Kiểm tra Gender (tùy chọn nhưng phải đúng format nếu có)
-            if (record.getGender() != null && !record.getGender().trim().isEmpty()) {
-                if (!EnumUtil.isValidEnum(Gender.class, record.getGender())) {
-                    rowErrors.add("Giới tính không hợp lệ: " + record.getGender());
-                }
-            }
+            // Gender (optional)
+            if (record.getGender() != null &&
+                    !record.getGender().trim().isEmpty() &&
+                    !EnumUtil.isValidEnum(Gender.class, record.getGender())) {
 
-            // Nếu có lỗi thì thêm vào map
-            if (!rowErrors.isEmpty()) {
-                errorsByRow.put(rowNumber, rowErrors);
+                firstError = "Row " + row + ": Invalid gender: " + record.getGender();
+                break;
             }
         }
 
-        // Nếu có bất kỳ lỗi nào, throw exception với toàn bộ chi tiết
-        if (!errorsByRow.isEmpty()) {
-            String errorMessage = buildDetailedErrorMessage(errorsByRow, importList.size());
-            throw new ApiException(errorMessage, HttpStatus.BAD_REQUEST.value());
+        // If any error exists → stop import
+        if (firstError != null) {
+            throw new ApiException(firstError, HttpStatus.BAD_REQUEST.value());
         }
 
-        // Nếu không có lỗi, tiến hành import
+        // No errors → proceed with import
         for (ImportTeacherDTO record : importList) {
+
             CreateUserRequest request = CreateUserRequest.builder()
                     .email(record.getEmail())
                     .fullName(record.getFullName())
@@ -750,9 +796,12 @@ public class UserServiceImpl implements UserService {
                     .phoneNumber(record.getPhoneNumber())
                     .gender(record.getGender())
                     .build();
+
             createTeacher(request);
         }
     }
+
+
 
     /**
      * Xây dựng thông báo lỗi chi tiết cho toàn bộ file
