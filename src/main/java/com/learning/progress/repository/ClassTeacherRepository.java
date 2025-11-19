@@ -101,5 +101,11 @@ public interface ClassTeacherRepository extends JpaRepository<ClassTeacher, Long
     // Trong ClassUserRepository
     List<ClassTeacher> findByClazzIdAndRoleInClassAndDeletedAtIsNull(Long clazzId, RoleInClass role);
 
+    @Query("""
+    SELECT ct.user.id 
+    FROM ClassTeacher ct 
+    WHERE ct.clazz.id = :classId 
+      AND ct.status IN :statuses
+""")
     List<Long> findUserIdsByClazzIdAndStatusIn(Long classId, Collection<ClassTeacherStatus> statuses);
 }

@@ -728,7 +728,8 @@ SELECT
     u.avatar_url,
     q.id as question_id,
     q.weight as total_weight,
-    COALESCE(gq.received_weight, 0) as received_weight
+    COALESCE(gq.received_weight, 0) as received_weight,
+    sdc.submission_status
 FROM questions q
 JOIN challenge_sections cs ON q.section_id = cs.id
 CROSS JOIN users u

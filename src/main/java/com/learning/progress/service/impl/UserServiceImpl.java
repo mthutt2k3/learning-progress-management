@@ -536,23 +536,20 @@ public class UserServiceImpl implements UserService {
             // 🎯 Validate riêng theo role của người thực hiện
             if (currentRole == RoleName.MANAGER) {
                 // Manager chỉ được đổi email cho TEACHER/ASSISTANT ở trạng thái PENDING
-                if (List.of(RoleName.TEACHER, RoleName.TEACHING_ASSISTANT).contains(targetRole)) {
-                    if (targetUser.getStatus() != UserStatus.PENDING) {
+                if (List.of(RoleName.TEACHER, RoleName.TEACHING_ASSISTANT).contains(targetRole) && (targetUser.getStatus() != UserStatus.PENDING)) {
                         throw new ApiException(
                                 "Manager chỉ được đổi email cho TEACHER/TEACHING_ASSISTANT ở trạng thái PENDING",
                                 HttpStatus.FORBIDDEN.value()
                         );
-                    }
+
                 }
                 // Manager có thể đổi email cho STUDENT/TEST_TAKER bất kỳ trạng thái nào
-            } else if (currentRole == RoleName.TEACHER || currentRole == RoleName.TEACHING_ASSISTANT) {
-                // Teacher/TA chỉ được đổi cho STUDENT/TEST_TAKER
-                if (!List.of(RoleName.STUDENT, RoleName.TEST_TAKER).contains(targetRole)) {
+            } else if (currentRole == RoleName.TEACHER || currentRole == RoleName.TEACHING_ASSISTANT && (!List.of(RoleName.STUDENT, RoleName.TEST_TAKER).contains(targetRole))) {
                     throw new ApiException(
                             "TEACHER/TEACHING_ASSISTANT chỉ được đổi email cho STUDENT/TEST_TAKER",
                             HttpStatus.FORBIDDEN.value()
                     );
-                }
+
             }
         }
 
@@ -567,10 +564,10 @@ public class UserServiceImpl implements UserService {
             throw new ApiException("Email mới không được trùng với email hiện tại khi user đang ACTIVE", HttpStatus.BAD_REQUEST.value());
         }
 
-        targetUser.setEmail(newEmail);
-
+        targetUser.setChangeEmailTokenUsed(false);
         switch (targetUser.getStatus()) {
             case PENDING:
+                targetUser.setEmail(newEmail);
                 String password = DataUtil.generateRandomPassword(8);
                 targetUser.setPassword(passwordEncoder.encode(password));
                 userRepository.save(targetUser);
@@ -599,6 +596,10 @@ public class UserServiceImpl implements UserService {
         User user = userRepository.findByIdAndDeletedAtIsNull(userId)
                 .orElseThrow(() -> new ApiException(Const.USER.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
+        if(user.isChangeEmailTokenUsed()){
+            throw new ApiException("The link change email has already been used.", HttpStatus.BAD_REQUEST.value());
+        }
+        user.setChangeEmailTokenUsed(true);
         user.setEmail(newEmail);
         userRepository.save(user);
 
@@ -619,7 +620,10 @@ public class UserServiceImpl implements UserService {
         List<ImportStudentDTO> importList = fileService.readExcelData(file, "Import Data", ImportStudentDTO.class);
         for (ImportStudentDTO record : importList) {
             // Kiểm tra các trường bắt buộc
-            if (record.getEmail() == null || !Pattern.matches(Const.VALIDATE_INPUT.regexEmail, record.getEmail())) {
+            if (record.getEmail() == null || record.getEmail().isBlank()) {
+                throw new ApiException("Email is required.", HttpStatus.BAD_REQUEST.value());
+            }
+            if (!Pattern.matches(Const.VALIDATE_INPUT.regexEmail, record.getEmail())) {
                 throw new ApiException("Invalid email format: " + record.getEmail(), HttpStatus.BAD_REQUEST.value());
             }
             if (record.getFullName() == null || record.getFullName().trim().isEmpty()) {

@@ -258,8 +258,8 @@ public class UserController {
         byte[] excelFile = userService.exportStudents(text, status, roleName, classIds);
         ByteArrayResource resource = new ByteArrayResource(excelFile);
 
-        String filename = "Students_Export_" +
-                new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date()) +
+        String filename = "Student_List_" +
+                new SimpleDateFormat("yyyy_MM_dd").format(new Date()) +
                 ".xlsx";
 
         return ResponseEntity.ok()
@@ -335,7 +335,7 @@ public class UserController {
             summary = "Validate Student Import File",
             description = "Validate Excel file without importing. Returns validation result file."
     )
-    public ResponseEntity<ByteArrayResource> validateStudentImport(
+    public ResponseEntity<ByteArrayResource> downloadStudentValidationFile(
             @Parameter(description = "Excel file to validate")
             @RequestParam("file") MultipartFile file) {
 
@@ -359,7 +359,7 @@ public class UserController {
             summary = "Validate Teacher Import File",
             description = "Validate Excel file without importing. Returns validation result file."
     )
-    public ResponseEntity<ByteArrayResource> validateTeacherImport(
+    public ResponseEntity<ByteArrayResource> downloadTeacherValidationFile(
             @Parameter(description = "Excel file to validate")
             @RequestParam("file") MultipartFile file) {
 
