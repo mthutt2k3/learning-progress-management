@@ -335,7 +335,7 @@ public class UserController {
             summary = "Validate Student Import File",
             description = "Validate Excel file without importing. Returns validation result file."
     )
-    public ResponseEntity<ByteArrayResource> validateStudentImport(
+    public ResponseEntity<ByteArrayResource> downloadStudentValidationFile(
             @Parameter(description = "Excel file to validate")
             @RequestParam("file") MultipartFile file) {
 
@@ -359,7 +359,7 @@ public class UserController {
             summary = "Validate Teacher Import File",
             description = "Validate Excel file without importing. Returns validation result file."
     )
-    public ResponseEntity<ByteArrayResource> validateTeacherImport(
+    public ResponseEntity<ByteArrayResource> downloadTeacherValidationFile(
             @Parameter(description = "Excel file to validate")
             @RequestParam("file") MultipartFile file) {
 
