@@ -114,7 +114,7 @@ public class LessonController {
             summary = "Validate Lesson Import File",
             description = "Validate Excel file without importing. Returns validation result file."
     )
-    public ResponseEntity<ByteArrayResource> validateLessonImport(
+    public ResponseEntity<ByteArrayResource> downloadLessonValidationFile(
             @Parameter(description = "Excel file to validate")
             @RequestParam("file") MultipartFile file) {
 

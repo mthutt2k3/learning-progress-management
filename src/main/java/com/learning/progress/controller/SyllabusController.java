@@ -146,7 +146,7 @@ public class SyllabusController {
             summary = "Validate Syllabus Import File",
             description = "Validate Excel file without importing. Returns validation result file."
     )
-    public ResponseEntity<ByteArrayResource> validateSyllabusImport(
+    public ResponseEntity<ByteArrayResource> downloadSyllabusValidationFile(
             @Parameter(description = "Excel file to validate")
             @RequestParam("file") MultipartFile file) {
 
