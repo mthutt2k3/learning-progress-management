@@ -445,6 +445,7 @@ SELECT
     q.question_text,
     q.question_type,
     q.order_number as question_order,
+    q.weight as total_weight,
     COUNT(DISTINCT sq.id) as total_attempts,
     SUM(CASE WHEN gq.received_weight >= q.weight THEN 1 ELSE 0 END) as correct_count
 FROM questions q
