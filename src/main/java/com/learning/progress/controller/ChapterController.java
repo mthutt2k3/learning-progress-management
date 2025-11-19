@@ -102,7 +102,7 @@ public class ChapterController {
             summary = "Validate Chapter Import File",
             description = "Validate Excel file without importing. Returns validation result file."
     )
-    public ResponseEntity<ByteArrayResource> validateChapterImport(
+    public ResponseEntity<ByteArrayResource> downloadChapterValidationFile(
             @Parameter(description = "Syllabus ID") @RequestParam("syllabusId") Long syllabusId,
             @Parameter(description = "Excel file to validate")
             @RequestParam("file") MultipartFile file) {

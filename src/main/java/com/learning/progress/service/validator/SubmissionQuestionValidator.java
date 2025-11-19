@@ -16,6 +16,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 
 import java.util.*;
+import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.stream.Collectors;
 
@@ -35,12 +36,25 @@ public class SubmissionQuestionValidator {
         if (questionAnswers == null || questionAnswers.isEmpty()) {
             throw new ApiException("Question answers cannot be null or empty", HttpStatus.BAD_REQUEST.value());
         }
-
-
+        // ==================== 2. VALIDATE TRÙNG LẶP QUESTION ID ====================
         // Get submitted question IDs
         List<Long> submittedQuestionIds = questionAnswers.stream()
                 .map(SaveSubmissionRequest.QuestionAnswer::getQuestionId)
                 .collect(Collectors.toList());
+
+        Set<Long> duplicates = submittedQuestionIds.stream()
+                .collect(Collectors.groupingBy(Function.identity(), Collectors.counting()))
+                .entrySet().stream()
+                .filter(entry -> entry.getValue() > 1)
+                .map(Map.Entry::getKey)
+                .collect(Collectors.toSet());
+
+        if (!duplicates.isEmpty()) {
+            throw new ApiException(
+                    "Duplicate question IDs are not allowed: " + duplicates,
+                    HttpStatus.BAD_REQUEST.value()
+            );
+        }
 
         // Get all questions for the challenge
         List<Question> requiredQuestions = questionRepository.findByChallengeIdAndDeletedAtIsNull(challengeId);

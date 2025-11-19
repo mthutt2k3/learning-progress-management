@@ -511,7 +511,7 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
      * SCHEDULED TRANSITIONS
      * -------------------------------------------------------- */
     @Override
-//    @Transactional
+    @Transactional
     public void autoUpdateChallengeStatus(OffsetDateTime now) {
         // Add METHOD constant for structured logs
         final String METHOD = "autoUpdateChallengeStatus";
@@ -584,11 +584,9 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
 
             log.info("[{}] Challenges to be saved ({}):\n{}", METHOD, toSave.size(),
                     toSave.stream()
-                            .map(ch -> String.format("id=%s,name=%s,oldStatus=%s,newStatus=%s,start=%s,end=%s",
+                            .map(ch -> String.format("id=%s,name=%s,newStatus=%s,start=%s,end=%s",
                                     ch.getId(),
                                     ch.getChallengeName(),
-                                    // We don't have old status stored here; infer common cases in message if needed or leave null
-                                    ch.getChallengeStatus() == null ? "null" : ch.getChallengeStatus().name(),
                                     ch.getChallengeStatus() == null ? "null" : ch.getChallengeStatus().name(),
                                     ch.getStartDate(),
                                     ch.getEndDate()))
