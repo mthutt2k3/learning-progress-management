@@ -716,6 +716,7 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
                         response.setFluencyScore(roundToOneDecimal(response.getFluencyScore() / 10));
                         response.setCompletenessScore(roundToOneDecimal(response.getCompletenessScore() / 10));
                         response.setProsodyScore(roundToOneDecimal(response.getProsodyScore() / 10));
+                        response.setWords(response.getWords());
                         return response;
 
                     } finally {
@@ -1053,6 +1054,7 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
                 .prosodyScore(avgProsody)
                 .recognizedText(result.getFullText())
                 .referenceText(referenceText)
+                .words(allWords)
                 .feedback(feedback)
                 .build();
     }
