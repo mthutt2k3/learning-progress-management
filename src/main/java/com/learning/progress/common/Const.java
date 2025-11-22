@@ -725,6 +725,19 @@ public class Const {
         public static final String NO_SECTIONS_FOR_CHALLENGE = "No sections found for challenge";
         public static final String ALREADY_COMPLETED = "Submission already completed";
         public static final String SUBMISSION_MISSED = "Submission missed";
+
+        // New: DTO validation messages (Vietnamese / specific)
+        public static final String SUBMISSION_IDS_REQUIRED_VN = "Danh sách submission ID không được để trống";
+        public static final String NEW_EXPIRED_AT_REQUIRED_VN = "Thời gian gia hạn không được để trống";
+        public static final String NEW_EXPIRED_AT_FUTURE_VN = "Thời gian gia hạn phải từ hiện tại trở đi";
+
+        public static final String NEW_START_DATE_REQUIRED_VN = "Thời gian bắt đầu mới không được để trống";
+        public static final String NEW_END_DATE_REQUIRED_VN = "Thời gian kết thúc mới không được để trống";
+
+        // New: SaveSubmissionRequest / QuestionAnswer validation messages
+        public static final String QUESTION_ANSWERS_REQUIRED = "Question answers cannot be null";
+        public static final String QUESTION_ID_REQUIRED = "Question ID cannot be null";
+        public static final String SUBMISSION_CONTENT_REQUIRED = "Submission content cannot be null";
     }
 
     public static final class TRANSLATOR {
@@ -819,6 +832,18 @@ public class Const {
 
         public static final String PER_QUESTION_GRADE_NOTIFICATION_TITLE = "Cập nhật điểm câu hỏi";
         public static final String PER_QUESTION_GRADE_NOTIFICATION_TEMPLATE = "Một câu hỏi trong bài làm của bạn đã được chấm. SubmissionId=%d";
+
+        // New validation messages for DTOs (used by Grade* DTOs)
+        public static final String RECEIVED_WEIGHT_REQUIRED = "receivedWeight is required";
+        public static final String RECEIVED_WEIGHT_NON_NEGATIVE = "receivedWeight must be non-negative";
+
+        public static final String RAW_SCORE_RANGE = "Raw score must be 0-10";
+        public static final String PENALTY_RANGE = "Penalty must be 0.0-1.0";
+
+        public static final String HIGHLIGHT_START_REQUIRED = "Start index is required";
+        public static final String HIGHLIGHT_START_NON_NEGATIVE = "Start index must be non-negative";
+        public static final String HIGHLIGHT_END_REQUIRED = "End index is required";
+        public static final String HIGHLIGHT_END_NON_NEGATIVE = "End index must be non-negative";
     }
     public static class SUBMISSION_LOG {
         public static final String INVALID_REQUEST_PARAMS = "Invalid request parameters";

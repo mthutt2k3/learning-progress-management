@@ -1,6 +1,7 @@
 package com.learning.progress.dto.grading;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.learning.progress.common.Const;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 import lombok.*;
@@ -12,12 +13,12 @@ import lombok.*;
 @Builder
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class HighlightComment {
-    @NotNull(message = "Start index is required")
-    @Min(value = 0, message = "Start index must be non-negative")
+    @NotNull(message = Const.GRADING.HIGHLIGHT_START_REQUIRED)
+    @Min(value = 0, message = Const.GRADING.HIGHLIGHT_START_NON_NEGATIVE)
     private Integer startIndex;
 
-    @NotNull(message = "End index is required")
-    @Min(value = 0, message = "End index must be non-negative")
+    @NotNull(message = Const.GRADING.HIGHLIGHT_END_REQUIRED)
+    @Min(value = 0, message = Const.GRADING.HIGHLIGHT_END_NON_NEGATIVE)
     private Integer endIndex;
 
     private String comment;

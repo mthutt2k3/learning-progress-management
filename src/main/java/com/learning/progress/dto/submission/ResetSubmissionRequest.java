@@ -1,5 +1,6 @@
 package com.learning.progress.dto.submission;
 
+import com.learning.progress.common.Const;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
@@ -14,13 +15,13 @@ import java.util.List;
 @AllArgsConstructor
 public class ResetSubmissionRequest {
 
-    @NotEmpty(message = "Danh sách submission ID không được để trống")
+    @NotEmpty(message = Const.SUBMISSION.SUBMISSION_IDS_REQUIRED_VN)
     private List<Long> submissionIds;
 
-    @NotNull(message = "Thời gian bắt đầu mới không được để trống")
+    @NotNull(message = Const.SUBMISSION.NEW_START_DATE_REQUIRED_VN)
     private OffsetDateTime newStartDate;
 
-    @NotNull(message = "Thời gian kết thúc mới không được để trống")
+    @NotNull(message = Const.SUBMISSION.NEW_END_DATE_REQUIRED_VN)
     private OffsetDateTime newEndDate;
 
 }
