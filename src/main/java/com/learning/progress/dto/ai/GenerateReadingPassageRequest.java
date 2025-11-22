@@ -1,31 +1,29 @@
 package com.learning.progress.dto.ai;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.learning.progress.common.DifficultyLevel;
-import com.learning.progress.common.LessonFocus;
+import com.learning.progress.common.Const;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
-import java.util.List;
 
 @Data
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class GenerateReadingPassageRequest {
 
-    @NotNull(message = "Challenge ID is required")
+    @NotNull(message = Const.AI.CHALLENGE_ID_REQUIRED)
     private Long challengeId;
 
-    @NotNull(message = "Number of paragraphs is required")
-    @Min(value = 1, message = "Number of paragraphs must be at least 1")
-    @Max(value = 10, message = "Number of paragraphs cannot exceed 10")
+    @NotNull(message = Const.AI.NUMBER_OF_PARAGRAPHS_REQUIRED)
+    @Min(value = 1, message = Const.AI.NUMBER_OF_PARAGRAPHS_MIN)
+    @Max(value = 10, message = Const.AI.NUMBER_OF_PARAGRAPHS_MAX)
     private Integer numberOfParagraphs;
 
     private String description;
 
-    @NotBlank(message = "Level is required")
+    @NotBlank(message = Const.AI.LEVEL_REQUIRED)
     private String level;
 
     private String vocabularyList; // Optional: AI will prioritize using these words

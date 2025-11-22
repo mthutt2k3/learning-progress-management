@@ -54,8 +54,9 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
     @Override
     @Transactional
     public DailyChallengeResponse createChallenge(@Valid CreateDailyChallengeRequest request) {
+        final String method = "createChallenge";
         String traceId = TraceUtil.getTraceId();
-        log.info("[{}] Creating daily challenge - classLessonId: {}", traceId, request.getClassLessonId());
+        log.info("[{}] enter traceId={} classLessonId={}", method, traceId, request.getClassLessonId());
 
         ClassLesson classLesson = classLessonRepository.findByIdAndDeletedAtIsNull(request.getClassLessonId())
                 .orElseThrow(() -> notFound(traceId, Const.CLASS_LESSON.NOT_FOUND, request.getClassLessonId()));
@@ -83,18 +84,20 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
         challenge.setEndDate(startDate.plusDays(2));
 
         dailyChallengeRepository.save(challenge);
-        log.info("[{}] Created daily challenge id: {}", traceId, challenge.getId());
+        log.info("[{}] Created daily challenge id={} traceId={}", method, challenge.getId(), traceId);
 
         // notify caller (confirmation)
         try {
             Long actor = jwtUtil.extractUserIdFromCurrentRequest();
-            String title = "Tạo bài tập mới thành công";
-            String message = "Bạn đã tạo bài tập \"" + challenge.getChallengeName() + "\" cho lớp.";
+            String title = Const.CHALLENGE.NOTIFY_CREATE_TITLE;
+            String message = String.format(Const.CHALLENGE.NOTIFY_CREATE_MESSAGE, challenge.getChallengeName());
             notificationService.createNotification(actor, null, title, message, null, null);
+            log.debug("[{}] traceId={} sent create notification actor={}", method, traceId, actor);
         } catch (Exception ex) {
-            log.debug("Failed to send createChallenge notification: {}", ex.getMessage());
+            log.debug("[{}] traceId={} Failed to send createChallenge notification: {}", method, traceId, ex.getMessage());
         }
 
+        log.info("[{}] exit traceId={} createdChallengeId={}", method, traceId, challenge.getId());
         return dailyChallengeMapper.mapToDTO(challenge);
     }
 
@@ -105,12 +108,11 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
     public DataResponse<List<DailyChallengeListDTO>> getAllChallenges(
             Long classId, int page, int size, String text, String sortBy, String sortDir) {
 
+        final String method = "getAllChallenges";
         String traceId = TraceUtil.getTraceId();
-        log.info("[{}] Listing daily challenges: classId={}, page={}, size={}, sortBy={}, sortDir={}",
-                traceId, classId, page, size, sortBy, sortDir);
+        log.info("[{}] enter traceId={} classId={} page={} size={} sortBy={} sortDir={}", method, traceId, classId, page, size, sortBy, sortDir);
 
         appValidator.validatePaginationParams(page, size);
-        // sortBy/sortDir không còn dùng – vẫn validate để tránh lỗi cũ
         appValidator.validateSortParams(List.of("createdAt", "challengeName", "classLessonId"), sortBy, sortDir);
         appValidator.validateUserAccessToClass(classId);
 
@@ -118,7 +120,6 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
                 .filter(c -> c.getDeletedAt() == null)
                 .orElseThrow(() -> new ApiException(Const.CLASS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
-        // Không truyền Sort → query sẽ dùng ORDER BY cc.id, cl.orderNumber
         Pageable pageable = PageRequest.of(page, size);
 
         boolean isTeacher = appValidator.hasRole(RoleName.TEACHER);
@@ -150,8 +151,7 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
                 })
                 .toList();
 
-        log.info("[{}] Retrieved {} lessons ({} total)", traceId, data.size(), lessonPage.getTotalElements());
-
+        log.info("[{}] exit traceId={} retrievedLessons={} totalLessons={}", method, traceId, data.size(), lessonPage.getTotalElements());
         return DataResponse.<List<DailyChallengeListDTO>>builder()
                 .traceId(traceId)
                 .success(true)
@@ -167,13 +167,15 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
 
     @Override
     public DailyChallengeResponse getChallengeById(Long id) {
+        final String method = "getChallengeById";
         String traceId = TraceUtil.getTraceId();
-        log.info("[{}] Getting challenge id: {}", traceId, id);
+        log.info("[{}] enter traceId={} id={}", method, traceId, id);
 
         DailyChallenge challenge = dailyChallengeRepository.findByIdAndDeletedAtIsNull(id)
                 .orElseThrow(() -> notFound(traceId, Const.CHALLENGE.NOT_FOUND, id));
 
         appValidator.validateUserAccessToClass(challenge.getClassLesson().getClassChapter().getClazz().getId());
+        log.info("[{}] exit traceId={} id={}", method, traceId, id);
         return dailyChallengeMapper.mapToDTO(challenge);
     }
 
@@ -183,8 +185,9 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
     @Override
     @Transactional
     public DailyChallengeResponse updateChallenge(Long id, @Valid UpdateDailyChallengeDTO dto) {
+        final String method = "updateChallenge";
         String traceId = TraceUtil.getTraceId();
-        log.info("[{}] Updating challenge id: {}", traceId, id);
+        log.info("[{}] enter traceId={} id={}", method, traceId, id);
 
         DailyChallenge challenge = dailyChallengeRepository.findByIdAndDeletedAtIsNull(id)
                 .orElseThrow(() -> notFound(traceId, Const.CHALLENGE.NOT_FOUND, id));
@@ -246,18 +249,20 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
             submissionChallengeService.updateSubmissionsDatesForChallenge(challenge.getId(), dto.getStartDate(), dto.getEndDate());
         }
 
-        log.info("[{}] Updated challenge id: {}", traceId, id);
+        log.info("[{}] Updated challenge id={} traceId={}", method, id, traceId);
 
         // notify actor
         try {
             Long actor = jwtUtil.extractUserIdFromCurrentRequest();
-            String title = "Cập nhật bài tập thành công";
-            String message = "Bạn đã cập nhật bài tập \"" + challenge.getChallengeName() + "\".";
+            String title = Const.CHALLENGE.NOTIFY_UPDATE_TITLE;
+            String message = String.format(Const.CHALLENGE.NOTIFY_UPDATE_MESSAGE, challenge.getChallengeName());
             notificationService.createNotification(actor, null, title, message, null, null);
+            log.debug("[{}] traceId={} sent update notification actor={}", method, traceId, actor);
         } catch (Exception ex) {
-            log.debug("Failed to send updateChallenge notification: {}", ex.getMessage());
+            log.debug("[{}] traceId={} Failed to send updateChallenge notification: {}", method, traceId, ex.getMessage());
         }
 
+        log.info("[{}] exit traceId={} id={}", method, traceId, id);
         return dailyChallengeMapper.mapToDTO(challenge);
     }
 
@@ -268,8 +273,9 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
     @Override
     @Transactional
     public void deleteChallenge(Long id) {
+        final String method = "deleteChallenge";
         String traceId = TraceUtil.getTraceId();
-        log.info("[{}] Deleting challenge id: {}", traceId, id);
+        log.info("[{}] enter traceId={} id={}", method, traceId, id);
 
         DailyChallenge challenge = dailyChallengeRepository.findByIdAndDeletedAtIsNull(id)
                 .orElseThrow(() -> notFound(traceId, Const.CHALLENGE.NOT_FOUND, id));
@@ -280,17 +286,20 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
         challenge.setDeletedAt(OffsetDateTime.now());
 
         dailyChallengeRepository.save(challenge);
-        log.info("[{}] Deleted challenge id: {}", traceId, id);
+        log.info("[{}] Deleted challenge id={} traceId={}", method, id, traceId);
 
         // notify actor
         try {
             Long actor = jwtUtil.extractUserIdFromCurrentRequest();
-            String title = "Xóa bài tập thành công";
-            String message = "Bạn đã xóa bài tập \"" + challenge.getChallengeName() + "\".";
+            String title = Const.CHALLENGE.NOTIFY_DELETE_TITLE;
+            String message = String.format(Const.CHALLENGE.NOTIFY_DELETE_MESSAGE, challenge.getChallengeName());
             notificationService.createNotification(actor, null, title, message, null, null);
+            log.debug("[{}] traceId={} sent delete notification actor={}", method, traceId, actor);
         } catch (Exception ex) {
-            log.debug("Failed to send deleteChallenge notification: {}", ex.getMessage());
+            log.debug("[{}] traceId={} Failed to send deleteChallenge notification: {}", method, traceId, ex.getMessage());
         }
+
+        log.info("[{}] exit traceId={} id={}", method, traceId, id);
     }
 
     /* --------------------------------------------------------
@@ -299,8 +308,9 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
     @Override
     @Transactional
     public DailyChallengeResponse publishChallenge(Long id) {
+        final String method = "publishChallenge";
         String traceId = TraceUtil.getTraceId();
-        log.info("[{}] Publishing challenge id: {}", traceId, id);
+        log.info("[{}] enter traceId={} id={}", method, traceId, id);
 
         DailyChallenge challenge = dailyChallengeRepository.findByIdAndDeletedAtIsNull(id)
                 .orElseThrow(() -> notFound(traceId, Const.CHALLENGE.NOT_FOUND, id));
@@ -319,7 +329,7 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
         submissionChallengeService.createTemporarySubmissionsAsync(challenge);
         dailyChallengeRepository.save(challenge);
 
-        log.info("[{}] Challenge {} set to PUBLISHED", traceId, id);
+        log.info("[{}] Challenge id={} set to PUBLISHED traceId={}", method, id, traceId);
 
         // Sau khi publish thành công
         // Lấy danh sách học sinh + role
@@ -337,8 +347,8 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
                     : "/student/classes/daily-challenge/";
             String url = basePath + classId;
 
-            String title = "Bài tập mới: " + challenge.getChallengeName();
-            String message = "Bài tập mới đã được công bố trong lớp.";
+            String title = String.format(Const.CHALLENGE.NOTIFY_NEW_CHALLENGE_TITLE, challenge.getChallengeName());
+            String message = Const.CHALLENGE.NOTIFY_NEW_CHALLENGE_MESSAGE;
 
             notificationService.createNotification(
                     student.getId(),
@@ -350,6 +360,7 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
             );
         }
 
+        log.info("[{}] exit traceId={} id={}", method, traceId, id);
         return dailyChallengeMapper.mapToDTO(challenge);
     }
 
@@ -358,26 +369,20 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
      * -------------------------------------------------------- */
     @Override
     public DailyChallengeHierarchyDTO getChallengeHierarchy(Long challengeId) {
+        final String method = "getChallengeHierarchy";
         String traceId = TraceUtil.getTraceId();
-        log.info("[{}] Getting challenge hierarchy for id: {}", traceId, challengeId);
+        log.info("[{}] enter traceId={} id={}", method, traceId, challengeId);
 
         DailyChallenge challenge = dailyChallengeRepository.findByIdAndDeletedAtIsNull(challengeId)
                 .orElseThrow(() -> notFound(traceId, Const.CHALLENGE.NOT_FOUND, challengeId));
 
         appValidator.validateUserAccessToClass(challenge.getClassLesson().getClassChapter().getClazz().getId());
 
-        // Extract entities from hierarchy
-        ClassLesson classLesson = challenge.getClassLesson();
-        ClassChapter classChapter = classLesson.getClassChapter();
-        Clazz clazz = classChapter.getClazz();
-        Syllabus syllabus = clazz.getSyllabus();
-        Level level = syllabus != null ? syllabus.getLevel() : null;
-
-        // Build response DTO
+        log.info("[{}] exit traceId={} id={}", method, traceId, challengeId);
         return DailyChallengeHierarchyDTO.builder()
-                .level(buildLevelInfo(level))
-                .chapter(buildChapterInfo(classChapter))
-                .lesson(buildLessonInfo(classLesson))
+                .level(buildLevelInfo(challenge.getClassLesson().getClassChapter().getClazz().getSyllabus() == null ? null : challenge.getClassLesson().getClassChapter().getClazz().getSyllabus().getLevel()))
+                .chapter(buildChapterInfo(challenge.getClassLesson().getClassChapter()))
+                .lesson(buildLessonInfo(challenge.getClassLesson()))
                 .build();
     }
 
@@ -420,7 +425,7 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
      * VALIDATION HELPERS
      * -------------------------------------------------------- */
     private void validateUpdateDailyChallenge(UpdateDailyChallengeDTO challenge) {
-        if (challenge == null) throw badRequest("Challenge cannot be null");
+        if (challenge == null) throw badRequest(Const.CHALLENGE.CHALLENGE_REQUIRED);
         validateBasicFields(challenge);
 
         if (challenge.getChallengeMethod() == ChallengeMethod.TEST) {
@@ -441,9 +446,8 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
             throw badRequest(Const.CHALLENGE.INVALID_DATE_RANGE);
     }
 
-    // --- VALIDATE PUBLISH ---
     private void validatePublishable(DailyChallenge c) {
-        if (c == null) throw badRequest("Challenge cannot be null");
+        if (c == null) throw badRequest(Const.CHALLENGE.CHALLENGE_REQUIRED);
         if (isBlank(c.getChallengeName())) throw badRequest(Const.CHALLENGE.NAME_REQUIRED);
         if (c.getChallengeType() == null) throw badRequest(Const.CHALLENGE.TYPE_REQUIRED);
         if (c.getStartDate() == null || c.getEndDate() == null)
@@ -453,7 +457,6 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
         if (c.getSections() == null || c.getSections().isEmpty())
             throw badRequest(Const.CHALLENGE.NO_SECTIONS);
 
-        // Validate TEST method
         if (c.getChallengeMethod() == ChallengeMethod.TEST) {
             validateTestMethodCommon(
                     c.getHasAntiCheat(),
@@ -464,14 +467,13 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
         }
     }
 
-    // --- COMMON TEST VALIDATION ---
     private void validateTestMethodCommon(Boolean hasAntiCheat, Boolean translateOnScreen, Integer durationMinutes, String context) {
         if (Boolean.FALSE.equals(hasAntiCheat))
-            throw badRequest(context + " - Test method cannot disable anti-cheat");
+            throw badRequest(String.format(Const.CHALLENGE.TEST_CANNOT_DISABLE_ANTICHEAT, context));
         if (Boolean.TRUE.equals(translateOnScreen))
-            throw badRequest(context + " - Test method cannot enable translate on screen");
+            throw badRequest(String.format(Const.CHALLENGE.TEST_CANNOT_ENABLE_TRANSLATE, context));
         if (durationMinutes == null || durationMinutes <= 0)
-            throw badRequest(context + " - Test method - Duration minutes must be greater than 0");
+            throw badRequest(String.format(Const.CHALLENGE.TEST_DURATION_REQUIRED, context));
     }
 
 

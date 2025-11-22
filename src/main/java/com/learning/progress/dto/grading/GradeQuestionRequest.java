@@ -1,6 +1,7 @@
 package com.learning.progress.dto.grading;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.learning.progress.common.Const;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 import lombok.*;
@@ -14,8 +15,8 @@ import java.util.List;
 @Builder
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class GradeQuestionRequest {
-    @NotNull(message = "receivedWeight is required")
-    @Min(value = 0, message = "receivedWeight must be non-negative")
+    @NotNull(message = Const.GRADING.RECEIVED_WEIGHT_REQUIRED)
+    @Min(value = 0, message = Const.GRADING.RECEIVED_WEIGHT_NON_NEGATIVE)
     private Double receivedWeight;
 
     private FeedbackContent feedback;
@@ -23,5 +24,3 @@ public class GradeQuestionRequest {
     // Reuse HighlightComment structure from ManualGradingRequest
     private List<HighlightComment> highlightComments;
 }
-
-

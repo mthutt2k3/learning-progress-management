@@ -38,7 +38,6 @@ public class LevelController {
         );
     }
 
-
     @PreAuthorize("hasRole('MANAGER')")
     @GetMapping
     @Operation(summary = "View Level List", description = "Retrieve a list of all levels")
@@ -90,6 +89,4 @@ public class LevelController {
         levelService.draftAllLevels();
         return ResponseEntity.ok(DataResponse.success("All levels have been DRAFT", "All levels have been DRAFT"));
     }
-
-
 }

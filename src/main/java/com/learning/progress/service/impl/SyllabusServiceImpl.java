@@ -77,13 +77,22 @@ public class SyllabusServiceImpl implements SyllabusService {
     @Override
     @Transactional
     public SyllabusDTO createSyllabus(CreateSyllabusRequest request) {
+        final String method = "createSyllabus";
+        long startNs = System.nanoTime();
+        String traceId = TraceUtil.getTraceId();
+        log.info("[{}] enter traceId={} syllabusName={}", method, traceId, request.getSyllabusName());
+
         String syllabusNameNormalized = DataUtil.normalize(request.getSyllabusName());
         if (syllabusRepository.existsBySyllabusNameIgnoreCase(syllabusNameNormalized)) {
+            log.error("[{}] traceId={} duplicate syllabus name: {}", method, traceId, syllabusNameNormalized);
             throw new ApiException(Const.SYLLABUS.EXIST_NAME, HttpStatus.BAD_REQUEST.value());
         }
 
         Level level = levelRepository.findByIdAndDeletedAtIsNull(request.getLevelId())
-                .orElseThrow(() -> new ApiException(Const.SYLLABUS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> {
+                    log.error("[{}] traceId={} level not found id={}", method, traceId, request.getLevelId());
+                    return new ApiException(Const.SYLLABUS.NOT_FOUND, HttpStatus.NOT_FOUND.value());
+                });
 
         Syllabus syllabus = syllabusMapper.toSyllabus(request);
         syllabus.setSyllabusName(syllabusNameNormalized);
@@ -93,6 +102,7 @@ public class SyllabusServiceImpl implements SyllabusService {
         String syllabusCode = DataUtil.generateSyllabusCode(syllabus.getId());
         syllabus.setSyllabusCode(syllabusCode);
         syllabusRepository.saveAndFlush(syllabus);
+        log.info("[{}] traceId={} created syllabus id={} code={}", method, traceId, syllabus.getId(), syllabusCode);
 
         // notify actor
         try {
@@ -100,18 +110,27 @@ public class SyllabusServiceImpl implements SyllabusService {
             String title = "Tạo syllabus thành công";
             String message = "Bạn đã tạo syllabus \"" + syllabus.getSyllabusName() + "\".";
             notificationService.createNotification(actor, null, title, message, null, null);
+            log.debug("[{}] traceId={} notification sent for created syllabus id={}", method, traceId, syllabus.getId());
         } catch (Exception ex) {
-            log.debug("Failed to send createSyllabus notification: {}", ex.getMessage());
+            log.debug("[{}] traceId={} Failed to send createSyllabus notification: {}", method, traceId, ex.getMessage());
         }
 
+        long durationMs = (System.nanoTime() - startNs) / 1_000_000;
+        log.info("[{}] exit traceId={} createdSyllabusId={} durationMs={}", method, traceId, syllabus.getId(), durationMs);
         return syllabusMapper.toSyllabusDTO(syllabus);
     }
 
     @Override
     @Transactional
     public SyllabusDTO updateSyllabus(Long id, UpdateSyllabusRequest request) {
+        final String method = "updateSyllabus";
+        long startNs = System.nanoTime();
+        String traceId = TraceUtil.getTraceId();
+        log.info("[{}] enter traceId={} syllabusId={} syllabusName={}", method, traceId, id, request.getSyllabusName());
+
         String syllabusNameNormalized = DataUtil.normalize(request.getSyllabusName());
         if (syllabusRepository.existsBySyllabusNameIgnoreCaseAndIdNot(syllabusNameNormalized, id)) {
+            log.error("[{}] traceId={} duplicate syllabus name for update: {}", method, traceId, syllabusNameNormalized);
             throw new ApiException(Const.SYLLABUS.EXIST_NAME, HttpStatus.BAD_REQUEST.value());
         }
 
@@ -126,6 +145,7 @@ public class SyllabusServiceImpl implements SyllabusService {
         syllabus.setLevel(level);
         syllabus.setDescription(updatedSyllabus.getDescription());
         syllabusRepository.save(syllabus);
+        log.info("[{}] traceId={} updated syllabus id={}", method, traceId, id);
 
         // notify actor
         try {
@@ -133,29 +153,42 @@ public class SyllabusServiceImpl implements SyllabusService {
             String title = "Cập nhật syllabus thành công";
             String message = "Bạn đã cập nhật syllabus \"" + syllabus.getSyllabusName() + "\".";
             notificationService.createNotification(actor, null, title, message, null, null);
+            log.debug("[{}] traceId={} notification sent for updated syllabus id={}", method, traceId, id);
         } catch (Exception ex) {
-            log.debug("Failed to send updateSyllabus notification: {}", ex.getMessage());
+            log.debug("[{}] traceId={} Failed to send updateSyllabus notification: {}", method, traceId, ex.getMessage());
         }
 
+        long durationMs = (System.nanoTime() - startNs) / 1_000_000;
+        log.info("[{}] exit traceId={} updatedSyllabusId={} durationMs={}", method, traceId, id, durationMs);
         return syllabusMapper.toSyllabusDTO(syllabus);
     }
 
     @Override
     @Transactional
     public void deleteSyllabus(Long id) {
+        final String method = "deleteSyllabus";
+        long startNs = System.nanoTime();
+        String traceId = TraceUtil.getTraceId();
+        log.info("[{}] enter traceId={} syllabusId={}", method, traceId, id);
+
         Syllabus syllabus = syllabusRepository.findByIdAndDeletedAtIsNull(id)
-                .orElseThrow(() -> new ApiException(Const.SYLLABUS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> {
+                    log.error("[{}] traceId={} syllabus not found id={}", method, traceId, id);
+                    return new ApiException(Const.SYLLABUS.NOT_FOUND, HttpStatus.NOT_FOUND.value());
+                });
 
         boolean hasActiveClasses = classRepository.existsBySyllabusIdAndStatusNotAndDeletedAtIsNull(
                 id, ClassStatus.FINISHED);
 
         if (hasActiveClasses) {
+            log.error("[{}] traceId={} cannot delete syllabus in use id={}", method, traceId, id);
             throw new ApiException(Const.SYLLABUS.IN_USE_BY_ACTIVE_CLASS, HttpStatus.BAD_REQUEST.value());
         }
 
         syllabus.setDeletedBy(jwtUtil.extractUsernameFromCurrentRequest());
         syllabus.setDeletedAt(OffsetDateTime.now());
         syllabusRepository.save(syllabus);
+        log.info("[{}] traceId={} deleted syllabus id={}", method, traceId, id);
 
         // notify actor
         try {
@@ -163,13 +196,22 @@ public class SyllabusServiceImpl implements SyllabusService {
             String title = "Xóa syllabus";
             String message = "Bạn đã xóa syllabus \"" + syllabus.getSyllabusName() + "\".";
             notificationService.createNotification(actor, null, title, message, null, null);
+            log.debug("[{}] traceId={} notification sent for deleted syllabus id={}", method, traceId, id);
         } catch (Exception ex) {
-            log.debug("Failed to send deleteSyllabus notification: {}", ex.getMessage());
+            log.debug("[{}] traceId={} Failed to send deleteSyllabus notification: {}", method, traceId, ex.getMessage());
         }
+
+        long durationMs = (System.nanoTime() - startNs) / 1_000_000;
+        log.info("[{}] exit traceId={} deletedSyllabusId={} durationMs={}", method, traceId, id, durationMs);
     }
 
     @Override
     public SyllabusDetailDTO getSyllabusDetail(Long id, String include) {
+        final String method = "getSyllabusDetail";
+        long startNs = System.nanoTime();
+        String traceId = TraceUtil.getTraceId();
+        log.info("[{}] enter traceId={} syllabusId={} include={}", method, traceId, id, include);
+
         Syllabus syllabus = syllabusRepository.findByIdAndDeletedAtIsNull(id)
                 .orElseThrow(() -> new ApiException(Const.SYLLABUS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
@@ -233,23 +275,34 @@ public class SyllabusServiceImpl implements SyllabusService {
                                 .collect(Collectors.toList()));
                 break;
             default:
-                throw new ApiException("Invalid include parameter. Use CHAPTERS, LESSONS, or ALL", HttpStatus.BAD_REQUEST.value());
+                log.error("[{}] traceId={} invalid include param: {}", method, traceId, include);
+                throw new ApiException(Const.SYLLABUS.INVALID_INCLUDE_PARAM, HttpStatus.BAD_REQUEST.value());
         }
 
+        long durationMs = (System.nanoTime() - startNs) / 1_000_000;
+        log.info("[{}] exit traceId={} syllabusId={} durationMs={}", method, traceId, id, durationMs);
         return syllabusDetailDTO;
     }
 
     @Override
     public DataResponse<List<SyllabusDTO>> getSyllabusList(int page, int size, String searchText) {
+        final String method = "getSyllabusList";
+        long startNs = System.nanoTime();
+        String traceId = TraceUtil.getTraceId();
+        log.info("[{}] enter traceId={} page={} size={} searchText={}", method, traceId, page, size, searchText);
+
         Page<Syllabus> syllabusPage = syllabusRepository.findBySearchText(searchText, PageRequest.of(page, size, Sort.by("createdAt").descending()));
         List<SyllabusDTO> responses = syllabusPage.getContent().stream()
                 .map(syllabusMapper::toSyllabusDTO)
                 .collect(Collectors.toList());
 
+        long durationMs = (System.nanoTime() - startNs) / 1_000_000;
+        log.info("[{}] exit traceId={} page={} size={} durationMs={}", method, traceId, page, size, durationMs);
+
         return DataResponse.<List<SyllabusDTO>>builder()
                 .traceId(TraceUtil.getTraceId())
                 .success(true)
-                .message("Successful")
+                .message(Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL)
                 .data(responses)
                 .timestamp(java.time.LocalDateTime.now())
                 .page(page)
@@ -261,68 +314,89 @@ public class SyllabusServiceImpl implements SyllabusService {
 
     @Override
     public byte[] generateSyllabusImportTemplate() {
-        return fileService.generateSyllabusImportTemplate();
+        final String method = "generateSyllabusImportTemplate";
+        long startNs = System.nanoTime();
+        String traceId = TraceUtil.getTraceId();
+        log.info("[{}] enter traceId={}", method, traceId);
+
+        byte[] template = fileService.generateSyllabusImportTemplate();
+
+        long durationMs = (System.nanoTime() - startNs) / 1_000_000;
+        log.info("[{}] exit traceId={} templateSizeBytes={} durationMs={}", method, traceId, template != null ? template.length : 0, durationMs);
+        return template;
     }
 
     @Override
     public String getSyllabusTemplateSasUrl() {
-        return blobSasService.generateSasUrl(syllabusTemplate, Duration.ofMinutes(30));
+        final String method = "getSyllabusTemplateSasUrl";
+        long startNs = System.nanoTime();
+        String traceId = TraceUtil.getTraceId();
+        log.info("[{}] enter traceId={}", method, traceId);
+
+        String url = blobSasService.generateSasUrl(syllabusTemplate, Duration.ofMinutes(30));
+        log.debug("[{}] traceId={} generated sas url", method, traceId);
+
+        long durationMs = (System.nanoTime() - startNs) / 1_000_000;
+        log.info("[{}] exit traceId={} durationMs={}", method, traceId, durationMs);
+        return url;
     }
 
     @Override
     @Transactional
     public List<SyllabusDTO> importSyllabusFromExcel(MultipartFile file) {
-        // Đọc dữ liệu từ file Excel
+        final String method = "importSyllabusFromExcel";
+        long startNs = System.nanoTime();
+        String traceId = TraceUtil.getTraceId();
+        log.info("[{}] enter traceId={} filePresent={}", method, traceId, file != null && !file.isEmpty());
+
+        // Read input
         List<ImportSyllabusDTO> importList = fileService.readExcelData(file, "Import Data", ImportSyllabusDTO.class);
         List<SyllabusDTO> result = new ArrayList<>();
 
         for (ImportSyllabusDTO record : importList) {
-            // 1. Kiểm tra các trường bắt buộc
             String name = record.getSyllabusName();
 
             if (name == null) {
-                throw new ApiException("Syllabus name is required.", HttpStatus.BAD_REQUEST.value());
+                log.error("[{}] traceId={} import validation failed missing name", method, traceId);
+                throw new ApiException(Const.SYLLABUS.IMPORT_NAME_REQUIRED, HttpStatus.BAD_REQUEST.value());
             }
 
             if (name.isBlank()) {
-                throw new ApiException("Syllabus name must not be empty or blank.", HttpStatus.BAD_REQUEST.value());
+                log.error("[{}] traceId={} import validation failed blank name", method, traceId);
+                throw new ApiException(Const.SYLLABUS.IMPORT_NAME_EMPTY, HttpStatus.BAD_REQUEST.value());
             }
 
             if (name.length() > 100) {
-                throw new ApiException("Syllabus name must not exceed 100 characters.", HttpStatus.BAD_REQUEST.value());
+                log.error("[{}] traceId={} import validation failed name too long", method, traceId);
+                throw new ApiException(Const.SYLLABUS.IMPORT_NAME_TOO_LONG, HttpStatus.BAD_REQUEST.value());
             }
-
 
             if (StringUtils.isBlank(record.getLevelCode())) {
-                throw new ApiException("Level code is required", HttpStatus.BAD_REQUEST.value());
+                log.error("[{}] traceId={} import validation failed missing level code", method, traceId);
+                throw new ApiException(Const.SYLLABUS.IMPORT_LEVEL_CODE_REQUIRED, HttpStatus.BAD_REQUEST.value());
             }
 
-            // 2. Kiểm tra levelCode tồn tại
             Level level = levelRepository.findByLevelCodeIgnoreCase(record.getLevelCode())
-                    .orElseThrow(() -> new ApiException(
-                            "Level not found with code: " + record.getLevelCode(),
-                            HttpStatus.NOT_FOUND.value()
-                    ));
+                    .orElseThrow(() -> {
+                        log.error("[{}] traceId={} level not found code={}", method, traceId, record.getLevelCode());
+                        return new ApiException(String.format(Const.SYLLABUS.IMPORT_LEVEL_NOT_FOUND, record.getLevelCode()), HttpStatus.NOT_FOUND.value());
+                    });
 
-            // 4. Kiểm tra syllabusName không trùng
             if (syllabusRepository.existsBySyllabusName(record.getSyllabusName())) {
-                throw new ApiException("Syllabus name already exists: " + record.getSyllabusName(), HttpStatus.CONFLICT.value());
+                log.error("[{}] traceId={} syllabus name already exists name={}", method, traceId, record.getSyllabusName());
+                throw new ApiException(String.format(Const.SYLLABUS.IMPORT_SYLLABUS_ALREADY_EXISTS, record.getSyllabusName()), HttpStatus.CONFLICT.value());
             }
 
-            // 5. Tạo CreateSyllabusRequest
             CreateSyllabusRequest request = new CreateSyllabusRequest();
             request.setSyllabusName(record.getSyllabusName());
             request.setLevelId(level.getId());
             request.setDescription(record.getDescription());
 
-            // 6. Gọi createSyllabus
             SyllabusDTO syllabusDTO = createSyllabus(request);
-
-            // 8. Thêm vào kết quả
             result.add(syllabusDTO);
         }
 
-        log.info("Imported {} syllabuses successfully", result.size());
+        log.info("[{}] traceId={} importedCount={}", method, traceId, result.size());
 
         // notify actor
         try {
@@ -330,102 +404,84 @@ public class SyllabusServiceImpl implements SyllabusService {
             String title = "Import syllabus hoàn tất";
             String message = "Bạn đã import " + result.size() + " syllabus thành công.";
             notificationService.createNotification(actor, null, title, message, null, null);
+            log.debug("[{}] traceId={} import notification sent count={}", method, traceId, result.size());
         } catch (Exception ex) {
-            log.debug("Failed to send importSyllabus notification: {}", ex.getMessage());
+            log.debug("[{}] traceId={} Failed to send importSyllabus notification: {}", method, traceId, ex.getMessage());
         }
 
+        long durationMs = (System.nanoTime() - startNs) / 1_000_000;
+        log.info("[{}] exit traceId={} importedCount={} durationMs={}", method, traceId, result.size(), durationMs);
         return result;
     }
 
     @Override
     public byte[] exportSyllabuses(List<Long> ids) {
+        final String method = "exportSyllabuses";
+        long startNs = System.nanoTime();
+        String traceId = TraceUtil.getTraceId();
+        log.info("[{}] enter traceId={} idsPresent={}", method, traceId, ids != null && !ids.isEmpty());
+
         List<Syllabus> syllabuses;
 
-        // Case 1: ids = null hoặc không truyền → Export tất cả
         if (ids == null || ids.isEmpty()) {
             syllabuses = syllabusRepository.findAll().stream()
                     .filter(s -> s.getDeletedAt() == null)
                     .collect(Collectors.toList());
 
             if (syllabuses.isEmpty()) {
-                throw new ApiException(
-                        "No syllabuses found in the system",
-                        HttpStatus.NOT_FOUND.value()
-                );
+                log.error("[{}] traceId={} no syllabuses found for export", method, traceId);
+                throw new ApiException(Const.SYLLABUS.EXPORT_NO_SYLLABUSES_FOUND, HttpStatus.NOT_FOUND.value());
             }
-        }
-        // Case 2: ids có giá trị → Export theo IDs
-        else {
-            // Validation: Không cho chứa null values trong list
+        } else {
             if (ids.contains(null)) {
-                throw new ApiException(
-                        "IDs list cannot contain null values",
-                        HttpStatus.BAD_REQUEST.value()
-                );
+                log.error("[{}] traceId={} ids list contains null", method, traceId);
+                throw new ApiException(Const.SYLLABUS.EXPORT_IDS_CONTAIN_NULL, HttpStatus.BAD_REQUEST.value());
             }
 
-            // Validation: Không cho duplicate IDs
             Set<Long> uniqueIds = new HashSet<>(ids);
             if (uniqueIds.size() != ids.size()) {
                 List<Long> duplicates = ids.stream()
                         .filter(id -> Collections.frequency(ids, id) > 1)
                         .distinct()
                         .collect(Collectors.toList());
-                throw new ApiException(
-                        "Duplicate IDs found: " + duplicates,
-                        HttpStatus.BAD_REQUEST.value()
-                );
+                log.error("[{}] traceId={} duplicate ids in request: {}", method, traceId, duplicates);
+                throw new ApiException(String.format(Const.SYLLABUS.EXPORT_DUPLICATE_IDS, duplicates), HttpStatus.BAD_REQUEST.value());
             }
 
-            // Validation: Kiểm tra IDs phải là số dương
             List<Long> invalidIds = ids.stream()
                     .filter(id -> id <= 0)
                     .collect(Collectors.toList());
             if (!invalidIds.isEmpty()) {
-                throw new ApiException(
-                        "Invalid IDs (must be positive): " + invalidIds,
-                        HttpStatus.BAD_REQUEST.value()
-                );
+                log.error("[{}] traceId={} invalid ids: {}", method, traceId, invalidIds);
+                throw new ApiException(String.format(Const.SYLLABUS.EXPORT_INVALID_IDS, invalidIds), HttpStatus.BAD_REQUEST.value());
             }
 
-            // Lấy syllabuses từ DB
             syllabuses = syllabusRepository.findAllById(ids).stream()
                     .filter(s -> s.getDeletedAt() == null)
                     .collect(Collectors.toList());
 
-            // Validation: Check syllabuses không tồn tại hoặc đã bị xóa
             if (syllabuses.isEmpty()) {
-                throw new ApiException(
-                        "No syllabuses found with provided IDs or all are deleted",
-                        HttpStatus.NOT_FOUND.value()
-                );
+                log.error("[{}] traceId={} no syllabuses found with provided ids", method, traceId);
+                throw new ApiException(Const.SYLLABUS.EXPORT_NO_MATCHING_IDS, HttpStatus.NOT_FOUND.value());
             }
 
-            // Validation: Check có IDs nào không tồn tại
             if (syllabuses.size() != ids.size()) {
-                List<Long> foundIds = syllabuses.stream()
-                        .map(Syllabus::getId)
-                        .collect(Collectors.toList());
-                List<Long> missingIds = ids.stream()
-                        .filter(id -> !foundIds.contains(id))
-                        .collect(Collectors.toList());
-                throw new ApiException(
-                        "Syllabuses not found or deleted for IDs: " + missingIds,
-                        HttpStatus.NOT_FOUND.value()
-                );
+                List<Long> foundIds = syllabuses.stream().map(Syllabus::getId).collect(Collectors.toList());
+                List<Long> missingIds = ids.stream().filter(id -> !foundIds.contains(id)).collect(Collectors.toList());
+                log.error("[{}] traceId={} missing ids: {}", method, traceId, missingIds);
+                throw new ApiException(String.format(Const.SYLLABUS.EXPORT_NOT_FOUND_OR_DELETED_FOR_IDS, missingIds), HttpStatus.NOT_FOUND.value());
             }
         }
 
-        // Convert sang ExportSyllabusDTO
         List<ExportSyllabusDTO> exportData = syllabuses.stream()
                 .map(this::convertToExportSyllabusDTO)
                 .collect(Collectors.toList());
 
-        // Tạo summary info
         Map<String, String> summaryInfo = createSummaryInfo(exportData, ids);
 
-        // Export
-        return fileService.exportSyllabusesData(exportData, summaryInfo);
+        byte[] file = fileService.exportSyllabusesData(exportData, summaryInfo);
+        log.info("[{}] exit traceId={} exportFileSizeBytes={}", method, traceId, file != null ? file.length : 0);
+        return file;
     }
 
     private Map<String, String> createSummaryInfo(List<ExportSyllabusDTO> exportData, List<Long> ids) {
@@ -526,7 +582,12 @@ public class SyllabusServiceImpl implements SyllabusService {
     }
 
     @Override
-    public byte[] validateSyllabusImportFile(MultipartFile file) {
+    public byte[] downloadSyllabusValidationFile(MultipartFile file) {
+        final String method = "downloadSyllabusValidationFile";
+        long startNs = System.nanoTime();
+        String traceId = TraceUtil.getTraceId();
+        log.info("[{}] enter traceId={} filePresent={}", method, traceId, file != null && !file.isEmpty());
+
         ValidationResult<ImportSyllabusDTO> result = new ValidationResult<>();
         List<ImportSyllabusDTO> importList;
 
@@ -536,7 +597,8 @@ public class SyllabusServiceImpl implements SyllabusService {
             result.setTotalRows(importList.size());
 
             if (importList.isEmpty()) {
-                throw new ApiException("Import file is empty", HttpStatus.BAD_REQUEST.value());
+                log.error("[{}] traceId={} import file empty", method, traceId);
+                throw new ApiException(Const.SYLLABUS.IMPORT_FILE_EMPTY, HttpStatus.BAD_REQUEST.value());
             }
         } catch (ApiException e) {
             // Lỗi khi đọc file

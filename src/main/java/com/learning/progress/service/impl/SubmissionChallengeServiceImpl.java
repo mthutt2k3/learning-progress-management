@@ -19,6 +19,7 @@ import com.learning.progress.util.AppValidator;
 import com.learning.progress.util.JwtUtil;
 import com.learning.progress.util.JsonUtil;
 import com.learning.progress.dto.submission.AnswerContent;
+import com.learning.progress.util.TraceUtil;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import lombok.extern.slf4j.Slf4j;
@@ -111,11 +112,15 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
     @Async("taskExecutor")
     @Transactional
     public void createTemporarySubmissionsAsync(DailyChallenge challenge) {
+        final String method = "createTemporarySubmissionsAsync";
+        String traceId = TraceUtil.getTraceId();
+        log.info("[{}] enter {} challengeId={}", traceId, method, challenge != null ? challenge.getId() : null);
+
         Long classId = Optional.ofNullable(challenge)
                 .map(c -> c.getClassLesson().getClassChapter().getClazz().getId())
                 .orElse(null);
         if (classId == null) {
-            log.warn("createTemporarySubmissionsAsync aborted: missing classId on challenge");
+            log.warn("[{}] {} aborted: missing classId on challenge", traceId, method);
             return;
         }
 
@@ -140,22 +145,24 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
             if (!newSubs.isEmpty()) {
                 submissionDailyChallengeRepository.saveAll(newSubs);
                 cacheService.clearSubmissionsCacheForChallenge(challenge.getId());
-                log.info("createTemporarySubmissionsAsync: created {} temp submissions for challengeId={}", newSubs.size(), challenge.getId());
+                log.info("[{}] {} created {} temp submissions for challengeId={}", traceId, method, newSubs.size(), challenge.getId());
 
                 // notify users created
                 for (SubmissionDailyChallenge s : newSubs) {
                     try {
-                        String title = "Bạn có bài tập mới";
-                        String message = "Một bài tập mới đã được tạo: " + challenge.getChallengeName();
+                        String title = Const.NOTIFICATION.NEW_TEMP_SUBMISSION_TITLE;
+                        String message = String.format(Const.NOTIFICATION.NEW_TEMP_SUBMISSION_MESSAGE_TEMPLATE, challenge.getChallengeName());
                         notificationService.createNotification(s.getUser().getId(), null, title, message, null, null);
                     } catch (Exception ex) {
-                        log.debug("Failed to send temp submission notification userId={} error={}", s.getUser().getId(), ex.getMessage());
+                        log.debug("[{}] {} Failed to send temp submission notification userId={} error={}", traceId, method, s.getUser().getId(), ex.getMessage());
                     }
                 }
             }
 
             pageable = pageable.next();
         } while (page.hasNext());
+
+        log.info("[{}] exit {} challengeId={}", traceId, method, challenge.getId());
     }
 
     /**
@@ -165,8 +172,9 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
     @Transactional(readOnly = true)
     public DataResponse<List<StudentChallengeListDTO>> getAllChallengesForStudent(Long classId, int page, int size, String text) {
         final String action = "getAllChallengesForStudent";
+        String traceId = TraceUtil.getTraceId();
         Long studentId = jwtUtil.extractUserIdFromCurrentRequest();
-        log.info("[{}] enter classId={} studentId={} page={} size={} text={}", action, classId, studentId, page, size, text);
+        log.info("[{}] enter {} classId={} studentId={} page={} size={} text={}", traceId, action, classId, studentId, page, size, text);
 
         appValidator.validatePaginationParams(page, size);
         appValidator.validateUserAccessToClass(classId);
@@ -198,7 +206,7 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
                         submissionByChallengeId, gradingBySubmissionId, achievedByGradingId, maxWeightByChallengeId, now))
                 .collect(Collectors.toList());
 
-        log.info("[{}] exit classId={} lessonsReturned={} totalLessons={}", action, classId, result.size(), lessonPage.getTotalElements());
+        log.info("[{}] exit {} classId={} lessonsReturned={} totalLessons={}", traceId, action, classId, result.size(), lessonPage.getTotalElements());
         return DataResponse.success(result, Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL)
                 .page(page).size(size).totalElements(lessonPage.getTotalElements()).totalPages(lessonPage.getTotalPages());
     }
@@ -211,7 +219,8 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
     public DataResponse<List<StudentSubmissionDTO>> getSubmissionsByChallenge(Long challengeId, int page, int size,
                                                                               String text, String sortBy, String sortDir) {
         final String action = "getSubmissionsByChallenge";
-        log.info("[{}] enter challengeId={} page={} size={} sortBy={} sortDir={}", action, challengeId, page, size, sortBy, sortDir);
+        String traceId = TraceUtil.getTraceId();
+        log.info("[{}] enter {} challengeId={} page={} size={} sortBy={} sortDir={}", traceId, action, challengeId, page, size, sortBy, sortDir);
 
         String cacheKey = cacheService.buildSubmissionsByChallengeCacheKey(challengeId, page, size, text, sortBy, sortDir);
         List<StudentSubmissionDTO> cached = cacheService.getCachedObject(cacheKey, new TypeReference<>() {});
@@ -260,7 +269,7 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
                 .collect(Collectors.toList());
 
         cacheService.cacheObject(cacheKey, dtoList, 5);
-        log.info("[{}] exit challengeId={} returned={} totalElements={}", action, challengeId, dtoList.size(), submissionPage.getTotalElements());
+        log.info("[{}] exit {} challengeId={} returned={} totalElements={}", traceId, action, challengeId, dtoList.size(), submissionPage.getTotalElements());
         return DataResponse.success(dtoList, Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL)
                 .page(page).size(size).totalElements(submissionPage.getTotalElements()).totalPages(submissionPage.getTotalPages());
     }
@@ -272,8 +281,9 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
     @Transactional
     public void startSubmission(Long submissionId) {
         final String action = "startSubmission";
+        String traceId = TraceUtil.getTraceId();
         Long userId = jwtUtil.extractUserIdFromCurrentRequest();
-        log.info("[{}] enter submissionId={} userId={}", action, submissionId, userId);
+        log.info("[{}] enter {} submissionId={} userId={}", traceId, action, submissionId, userId);
 
         SubmissionDailyChallenge submission = submissionDailyChallengeRepository.findByIdAndDeletedAtIsNull(submissionId)
                 .orElseThrow(() -> {
@@ -297,7 +307,7 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
 
         cacheService.clearSubmissionCache(userId, submissionId);
         cacheService.clearSubmissionsCacheForChallenge(submission.getChallenge().getId());
-        log.info("[{}] exit started submissionId={} userId={}", action, submissionId, userId);
+        log.info("[{}] exit {} started submissionId={} userId={}", traceId, action, submissionId, userId);
 
         // === SAU KHI SAVE SUBMISSION + CLEAR CACHE ===
         Long challengeId = submission.getChallenge().getId();
@@ -318,8 +328,8 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
                     : "/teaching-assistant/daily-challenges/detail/";
             String teacherUrl = basePath + challengeId + "/submissions";
 
-            String title = "Cập nhật nộp bài";
-            String message = String.format("Submissions: %d/%d students", submittedCount, totalStudents);
+            String title = Const.NOTIFICATION.SUBMISSION_STATUS_UPDATE_TITLE;
+            String message = String.format(Const.NOTIFICATION.SUBMISSION_STATUS_UPDATE_MESSAGE_TEMPLATE, submittedCount, totalStudents);
 
             notificationService.createNotification(ct.getUser().getId(), challengeId, title, message, teacherUrl, null);
         }
@@ -566,22 +576,21 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
     @Transactional
     public String extendSubmissionDeadline(ExtendSubmissionDeadlineRequest request) {
         final String action = "extendSubmissionDeadline";
+        String traceId = TraceUtil.getTraceId();
         String teacherEmail = jwtUtil.extractEmailFromCurrentRequest();
+        log.info("[{}] enter {} teacher={} submissionsCount={} newExpiredAt={}", traceId, action, teacherEmail, request.getSubmissionIds() != null ? request.getSubmissionIds().size() : 0, request.getNewExpiredAt());
 
         List<Long> submissionIds = request.getSubmissionIds();
         OffsetDateTime newExpiredAt = request.getNewExpiredAt();
 
         if (submissionIds == null || submissionIds.isEmpty()) {
-            log.warn("[{}] empty submissionIds", action);
+            log.warn("[{}] {} empty submissionIds", traceId, action);
             throw new ApiException(Const.SUBMISSION.EMPTY_SUBMISSION_IDS, HttpStatus.BAD_REQUEST.value());
         }
         if (newExpiredAt == null || newExpiredAt.isBefore(OffsetDateTime.now())) {
-            log.warn("[{}] invalid newExpiredAt={}", action, newExpiredAt);
+            log.warn("[{}] {} invalid newExpiredAt={}", traceId, action, newExpiredAt);
             throw new ApiException(Const.SUBMISSION.INVALID_EXTEND_TIME, HttpStatus.BAD_REQUEST.value());
         }
-
-        log.info("[{}] start: teacher={} submissions={} newExpiredAt={}",
-                action, teacherEmail, submissionIds.size(), newExpiredAt);
 
         // Lấy submissions + validate quyền truy cập lớp
         List<SubmissionDailyChallenge> submissions = submissionDailyChallengeRepository
@@ -624,8 +633,8 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
             String ids = notEligible.stream()
                     .map(s -> s.getId().toString())
                     .collect(Collectors.joining(", "));
-            log.debug("[{}] submissions not eligible for extension: {}", action, ids);
-            throw new ApiException("Submissions with ids [" + ids + "] cannot be extended because they are already submitted/graded/missed",
+            log.debug("[{}] {} submissions not eligible for extension: {}", traceId, action, ids);
+            throw new ApiException(String.format(Const.SUBMISSION.CANNOT_EXTEND_ELIGIBLE, ids),
                     HttpStatus.BAD_REQUEST.value());
         }
         submissionDailyChallengeRepository.saveAll(toUpdate);
@@ -638,7 +647,7 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
         toUpdate.forEach(s -> cacheService.clearSubmissionCache(s.getUser().getId(), s.getId()));
         challengeIds.forEach(cacheService::clearSubmissionsCacheForChallenge);
 
-        log.info("[{}] completed: updated={} submissions", action, toUpdate.size());
+        log.info("[{}] completed: {} updated submissions", traceId, action, toUpdate.size());
 
         // notify affected students
         for (SubmissionDailyChallenge s : toUpdate) {
@@ -651,7 +660,7 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
             }
         }
 
-        return "Extended deadline for " + toUpdate.size() + " submissions.";
+        return String.format(Const.SUBMISSION.EXTEND_SUCCESS, toUpdate.size());
     }
 
     /**
@@ -662,6 +671,7 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
     @Transactional
     public String resetSubmissions(ResetSubmissionRequest request) {
         final String action = "resetSubmissions";
+        String traceId = TraceUtil.getTraceId();
         String teacherEmail = jwtUtil.extractEmailFromCurrentRequest();
         OffsetDateTime now = OffsetDateTime.now();
 
@@ -669,19 +679,18 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
         OffsetDateTime newStart = request.getNewStartDate();
         OffsetDateTime newEnd = request.getNewEndDate();
 
+        log.info("[{}] enter {} teacher={} submissionsCount={} newStart={} newEnd={}", traceId, action, teacherEmail, oldSubmissionIds != null ? oldSubmissionIds.size() : 0, newStart, newEnd);
+
         // Validate thời gian
         if (newStart == null || newEnd == null || newEnd.isBefore(newStart)) {
-            log.warn("[{}] invalid dates: start={} end={}", action, newStart, newEnd);
+            log.warn("[{}] {} invalid dates: start={} end={}", traceId, action, newStart, newEnd);
             throw new ApiException(Const.SUBMISSION.INVALID_RESET_DATES, HttpStatus.BAD_REQUEST.value());
         }
 
         if (oldSubmissionIds == null || oldSubmissionIds.isEmpty()) {
-            log.warn("[{}] empty submissionIds", action);
+            log.warn("[{}] {} empty submissionIds", traceId, action);
             throw new ApiException(Const.SUBMISSION.EMPTY_SUBMISSION_IDS, HttpStatus.BAD_REQUEST.value());
         }
-
-        log.info("[{}] start: teacher={} submissions={} newStart={} newEnd={}",
-                action, teacherEmail, oldSubmissionIds.size(), newStart, newEnd);
 
         // 1. Lấy submission cũ
         List<SubmissionDailyChallenge> oldSubmissions = submissionDailyChallengeRepository
@@ -705,8 +714,8 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
             String ids = notEligible.stream()
                     .map(s -> s.getId().toString())
                     .collect(Collectors.joining(", "));
-            log.debug("[{}] submissions not eligible for reset: {}", action, ids);
-            throw new ApiException("Submissions with ids [" + ids + "] cannot be reset because they are PENDING or DRAFT",
+            log.debug("[{}] {} submissions not eligible for reset: {}", traceId, action, ids);
+            throw new ApiException(String.format(Const.SUBMISSION.CANNOT_RESET_PENDING_DRAFT, ids),
                     HttpStatus.BAD_REQUEST.value());
         }
 
@@ -751,30 +760,30 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
         newSubmissions.forEach(s -> cacheService.clearSubmissionCache(s.getUser().getId(), s.getId()));
         challengeIds.forEach(cacheService::clearSubmissionsCacheForChallenge);
 
-        log.info("[{}] completed: reset {} submissions | new period: {} → {}",
-                action, newSubmissions.size(), newStart, newEnd);
+        log.info("[{}] completed: reset {} submissions | new period: {} → {}", traceId, action, newSubmissions.size(), newStart, newEnd);
 
         // notify affected students
         for (SubmissionDailyChallenge s : newSubmissions) {
             try {
-                String title = "Bài đã được reset";
-                String message = "Bài \"" + s.getChallenge().getChallengeName() + "\" đã được reset. Thời gian mới: " + newStart + " → " + newEnd;
+                String title = Const.NOTIFICATION.RESET_SUBMISSION_TITLE;
+                String message = String.format(Const.NOTIFICATION.RESET_SUBMISSION_MESSAGE_TEMPLATE, s.getChallenge().getChallengeName(), newStart, newEnd);
                 notificationService.createNotification(s.getUser().getId(), null, title, message, null, null);
             } catch (Exception ex) {
-                log.debug("Failed to send reset notification userId={} error={}", s.getUser().getId(), ex.getMessage());
+                log.debug("[{}] {} Failed to send reset notification userId={} error={}", traceId, action, s.getUser().getId(), ex.getMessage());
             }
         }
 
-        return "Reset " + newSubmissions.size() + " submissions.";
+        return String.format(Const.SUBMISSION.RESET_SUCCESS, newSubmissions.size());
     }
     @Override
     @Transactional
     public void autoUpdateSubmissionStatus() {
         final String method = "autoUpdateSubmissionStatus";
+        String traceId = TraceUtil.getTraceId();
         final int pageSize = 100;
         final OffsetDateTime now = OffsetDateTime.now();
 
-        log.info("[{}] Starting auto-update expired submissions (pageSize={})", method, pageSize);
+        log.info("[{}] {} Starting auto-update expired submissions (pageSize={})", traceId, method, pageSize);
 
         var stats = new ProcessingStats();
         Pageable pageable = PageRequest.of(0, pageSize);
@@ -799,8 +808,8 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
             pageable = pageable.next();
         }
 
-        log.info("[{}] Completed → processed={}, submitted={}, missed={}, markedLate={}, sqCreated={}",
-                method, stats.processed, stats.submitted, stats.missed, stats.markedLate, stats.sqCreated);
+        log.info("[{}] {} Completed → processed={}, submitted={}, missed={}, markedLate={}, sqCreated={}",
+                traceId, method, stats.processed, stats.submitted, stats.missed, stats.markedLate, stats.sqCreated);
     }
 
     private void processPage(List<SubmissionDailyChallenge> submissions,

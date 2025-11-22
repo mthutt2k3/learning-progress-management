@@ -1864,7 +1864,7 @@ public class OpenAiServiceImpl implements OpenAiService {
         prompt.append("      },\n");
         prompt.append("      \"questions\": [\n");
         prompt.append("        {\n");
-        prompt.append("          \"questionText\": \"string (required)\",\n");
+        prompt.append("          \"questionText\": \"string (required, ONLY question content, DO NOT include 'Question 1/2' or score))\",\n");
         prompt.append("          \"orderNumber\": 1,\n");
         prompt.append("          \"score\": 1.0,\n");
         prompt.append("          \"questionType\": \"QUESTION_TYPE\",\n");

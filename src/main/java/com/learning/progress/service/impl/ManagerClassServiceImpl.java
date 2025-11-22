@@ -70,6 +70,11 @@ public class ManagerClassServiceImpl implements ClassServiceStrategy {
     @Override
     @Transactional(readOnly = true)
     public ClassOverviewDTO getClassOverview(Long id) {
+        final String method = "getClassOverview";
+        long startNs = System.nanoTime();
+        String traceId = TraceUtil.getTraceId();
+        log.info("[{}] enter traceId={} classId={}", method, traceId, id);
+
         appValidator.validateUserAccessToClass(id);
         Clazz clazz = classRepository.findByIdAndDeletedAtIsNull(id)
                 .orElseThrow(() -> new ApiException(Const.CLASS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
@@ -129,7 +134,7 @@ public class ManagerClassServiceImpl implements ClassServiceStrategy {
         int numberOfStudents = classStudentRepository
                 .countByClazzIdAndDeletedAtIsNull(id);
 
-        return ClassOverviewDTO.builder()
+        ClassOverviewDTO result = ClassOverviewDTO.builder()
                 .id(clazz.getId())
                 .className(clazz.getClassName())
                 .classCode(clazz.getClassCode())
@@ -142,17 +147,37 @@ public class ManagerClassServiceImpl implements ClassServiceStrategy {
                 .level(levelInfo)
                 .syllabus(syllabusDTO)
                 .build();
+
+        long durationMs = (System.nanoTime() - startNs) / 1_000_000;
+        log.info("[{}] exit traceId={} classId={} durationMs={}", method, traceId, id, durationMs);
+        return result;
     }
 
     @Override
     public DataResponse<List<ClassHistoryDTO>> getClassHistory(Long classId, int page, int size, String sortBy, String sortDir, String startDate, String endDate, Long actionBy) {
-        return classHistoryService.getClassHistory(classId, page, size, sortBy, sortDir, startDate, endDate, actionBy);
+        final String method = "getClassHistory";
+        long startNs = System.nanoTime();
+        String traceId = TraceUtil.getTraceId();
+        log.info("[{}] enter traceId={} classId={} page={} size={} sortBy={} sortDir={} startDate={} endDate={} actionBy={}",
+                method, traceId, classId, page, size, sortBy, sortDir, startDate, endDate, actionBy);
+
+        DataResponse<List<ClassHistoryDTO>> response = classHistoryService.getClassHistory(classId, page, size, sortBy, sortDir, startDate, endDate, actionBy);
+
+        long durationMs = (System.nanoTime() - startNs) / 1_000_000;
+        log.info("[{}] exit traceId={} classId={} returnedCount={} durationMs={}", method, traceId, classId,
+                response != null && response.getData() != null ? response.getData().size() : 0, durationMs);
+        return response;
     }
 
 
     @Override
     @Transactional
     public ClassDTO createClass(CreateClassRequest request) {
+        final String method = "createClass";
+        long startNs = System.nanoTime();
+        String traceId = TraceUtil.getTraceId();
+        log.info("[{}] enter traceId={} syllabusId={} className={}", method, traceId, request.getSyllabusId(), request.getClassName());
+
         // Validate dates
         DataUtil.validateStartAndEndDate(request.getStartDate(), request.getEndDate());
 
@@ -163,6 +188,7 @@ public class ManagerClassServiceImpl implements ClassServiceStrategy {
 
         boolean exists = classRepository.existsByClassNameAndDeletedAtIsNull(request.getClassName());
         if (exists) {
+            log.error("[{}] traceId={} Class name already exists: {}", method, traceId, request.getClassName());
             throw new ApiException(Const.CLASS.EXIST_NAME, HttpStatus.BAD_REQUEST.value());
         }
 
@@ -183,10 +209,12 @@ public class ManagerClassServiceImpl implements ClassServiceStrategy {
         }
 
         Clazz savedClass = classRepository.saveAndFlush(clazz);
+        log.debug("[{}] traceId={} Saved initial class id={}", method, traceId, savedClass.getId());
 
         String classCode = DataUtil.generateClassCode(savedClass.getId());
         savedClass.setClassCode(classCode);
         savedClass = classRepository.saveAndFlush(savedClass);
+        log.info("[{}] traceId={} class created id={} code={}", method, traceId, savedClass.getId(), classCode);
 
         // Save history
         String actionDetails = String.format(
@@ -201,9 +229,11 @@ public class ManagerClassServiceImpl implements ClassServiceStrategy {
                 ActionType.CREATE_CLASS.name(),
                 RoleName.MANAGER.name()
         );
+        log.debug("[{}] traceId={} Saved class history for classId={}", method, traceId, savedClass.getId());
 
         // Copy chapters
         List<Chapter> chapters = chapterRepository.findBySyllabusIdAndDeletedAtIsNullOrderByOrderNumberAsc(syllabus.getId());
+        log.debug("[{}] traceId={} Found {} chapters to copy", method, traceId, chapters.size());
         List<ClassChapter> classChapters = new ArrayList<>();
         for (Chapter chapter : chapters) {
             ClassChapter classChapter = new ClassChapter();
@@ -217,9 +247,11 @@ public class ManagerClassServiceImpl implements ClassServiceStrategy {
             saved = classChapterRepository.save(saved);
 
             classChapters.add(saved);
+            log.debug("[{}] traceId={} Copied chapter id={} -> classChapterId={}", method, traceId, chapter.getId(), saved.getId());
 
             // Copy lessons
             List<Lesson> lessons = lessonRepository.findByChapterIdAndDeletedAtIsNullOrderByOrderNumberAsc(chapter.getId());
+            log.debug("[{}] traceId={} Found {} lessons for chapterId={}", method, traceId, lessons.size(), chapter.getId());
             for (Lesson lesson : lessons) {
                 ClassLesson classLesson = new ClassLesson();
                 classLesson.setClassChapter(classChapter);
@@ -230,21 +262,37 @@ public class ManagerClassServiceImpl implements ClassServiceStrategy {
             }
         }
 
+        long durationMs = (System.nanoTime() - startNs) / 1_000_000;
+        log.info("[{}] exit traceId={} createdClassId={} durationMs={}", method, traceId, savedClass.getId(), durationMs);
         return classMapper.toClassDTO(savedClass);
     }
 
     @Override
     @Transactional(readOnly = true)
     public ClassDTO getClass(Long id) {
+        final String method = "getClass";
+        long startNs = System.nanoTime();
+        String traceId = TraceUtil.getTraceId();
+        log.info("[{}] enter traceId={} classId={}", method, traceId, id);
+
         Clazz clazz = classRepository.findByIdAndDeletedAtIsNull(id)
                 .orElseThrow(() -> new ApiException(Const.CLASS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
-        return classMapper.toClassDTO(clazz);
+        ClassDTO result = classMapper.toClassDTO(clazz);
+
+        long durationMs = (System.nanoTime() - startNs) / 1_000_000;
+        log.info("[{}] exit traceId={} classId={} durationMs={}", method, traceId, id, durationMs);
+        return result;
     }
 
     @Override
     @Transactional(readOnly = true)
     public DataResponse<List<ClassDTO>> getClassList(int page, int size, String searchText, List<ClassStatus> status, Long syllabusId,
                                                      String sortBy, String sortDir) {
+        final String method = "getClassList";
+        long startNs = System.nanoTime();
+        String traceId = TraceUtil.getTraceId();
+        log.info("[{}] enter traceId={} page={} size={} searchText={} syllabusId={} status={}", method, traceId, page, size, searchText, syllabusId, status);
+
         appValidator.validatePaginationParams(page, size);
         appValidator.validateSortParams(
                 List.of("createdAt", "className", "classCode", "status", "startDate", "endDate"),
@@ -273,6 +321,9 @@ public class ManagerClassServiceImpl implements ClassServiceStrategy {
                 .map(classMapper::toClassDTO)
                 .toList();
 
+        long durationMs = (System.nanoTime() - startNs) / 1_000_000;
+        log.info("[{}] exit traceId={} page={} size={} returned={} durationMs={}", method, traceId, page, size, classDTOs.size(), durationMs);
+
         return DataResponse.<List<ClassDTO>>builder()
                 .success(true)
                 .message(Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL)
@@ -287,10 +338,16 @@ public class ManagerClassServiceImpl implements ClassServiceStrategy {
     @Override
     @Transactional
     public ClassDTO updateClass(Long id, UpdateClassRequest request) {
+        final String method = "updateClass";
+        long startNs = System.nanoTime();
+        String traceId = TraceUtil.getTraceId();
+        log.info("[{}] enter traceId={} classId={}", method, traceId, id);
+
         Clazz clazz = classRepository.findByIdAndDeletedAtIsNull(id)
                 .orElseThrow(() -> new ApiException(Const.CLASS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         if (clazz.getStatus() == ClassStatus.FINISHED) {
+            log.error("[{}] traceId={} Class is finished and cannot be updated classId={}", method, traceId, id);
             throw new ApiException(Const.CLASS.FINISHED_CLASS, HttpStatus.BAD_REQUEST.value());
         }
 
@@ -333,14 +390,24 @@ public class ManagerClassServiceImpl implements ClassServiceStrategy {
                     ActionType.UPDATE_CLASS.name(),
                     RoleName.MANAGER.name()
             );
+            log.debug("[{}] traceId={} Saved update history for classId={} details={}", method, traceId, id, changeDetails);
         }
 
-        return classMapper.toClassDTO(classRepository.save(clazz));
+        ClassDTO res = classMapper.toClassDTO(classRepository.save(clazz));
+
+        long durationMs = (System.nanoTime() - startNs) / 1_000_000;
+        log.info("[{}] exit traceId={} classId={} durationMs={}", method, traceId, id, durationMs);
+        return res;
     }
 
     @Override
     @Transactional
     public String changeClassStatusManually(Long id, String status) {
+        final String method = "changeClassStatusManually";
+        long startNs = System.nanoTime();
+        String traceId = TraceUtil.getTraceId();
+        log.info("[{}] enter traceId={} classId={} requestedStatus={}", method, traceId, id, status);
+
         Clazz clazz = classRepository.findByIdAndDeletedAtIsNull(id)
                 .orElseThrow(() -> new ApiException(Const.CLASS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
         Long actionByUserId = jwtUtil.extractUserIdFromCurrentRequest();
@@ -352,6 +419,7 @@ public class ManagerClassServiceImpl implements ClassServiceStrategy {
 
         clazz.setStatus(ClassStatus.valueOf(status));
         classRepository.save(clazz);
+        log.info("[{}] traceId={} Saved status change for classId={} newStatus={}", method, traceId, id, status);
 
         String actionDetails = String.format(
                 Const.CLASS_HISTORY.CHANGE_STATUS,
@@ -366,52 +434,61 @@ public class ManagerClassServiceImpl implements ClassServiceStrategy {
                 ActionType.TOGGLE_CLASS_ACTIVATION.name(),
                 RoleName.MANAGER.name()
         );
+        log.debug("[{}] traceId={} Saved change status history for classId={}", method, traceId, id);
 
-        // === SAU KHI SAVE CLASS + SAVE HISTORY ===
+        // === Notifications ===
         OffsetDateTime now = OffsetDateTime.now();
         String action = clazz.getStatus() == ClassStatus.ACTIVE ? "activated" : "deactivated";
-        String title = "Lớp học đã được " + (clazz.getStatus() == ClassStatus.ACTIVE ? "kích hoạt" : "tạm dừng");
-        String message = "Lớp " + clazz.getClassName() + " đã được " + action + " bởi quản lý.";
+        String title = clazz.getStatus() == ClassStatus.ACTIVE ? Const.CLASS.NOTIFY_CLASS_ACTIVATED_TITLE : Const.CLASS.NOTIFY_CLASS_DEACTIVATED_TITLE;
+        String message = String.format(Const.CLASS.NOTIFY_CLASS_STATUS_MESSAGE, clazz.getClassName(), action);
 
-// Lấy tất cả học sinh
+        // Lấy tất cả học sinh
         List<User> students = classStudentRepository
                 .findUsersByClazzIdAndStatus(clazz.getId(), ClassStudentStatus.ACTIVE);
 
-// Lấy tất cả giáo viên + trợ giảng
+        // Lấy tất cả giáo viên + trợ giảng
         List<ClassTeacher> teachers = classTeacherRepository
                 .findByClazzIdAndStatusIn(clazz.getId(), List.of(ClassTeacherStatus.ACTIVE));
 
-// Gửi cho học sinh
+        log.debug("[{}] traceId={} Notifying {} students and {} teachers about status change", method, traceId, students.size(), teachers.size());
+
+        // Gửi cho học sinh
         for (User student : students) {
             String basePath = RoleName.TEST_TAKER.equals(student.getRole().getName())
                     ? "/test-taker/classes/menu/"
                     : "/student/classes/menu/";
             String url = basePath + clazz.getId();
-
             notificationServiceImpl.createNotification(student.getId(), clazz.getId(), title, message, url, null);
         }
 
-// Gửi cho giáo viên + trợ giảng
+        // Gửi cho giáo viên + trợ giảng
         for (ClassTeacher ct : teachers) {
             String basePath = RoleInClass.TEACHER.equals(ct.getRoleInClass())
                     ? "/teacher/classes/menu/"
                     : "/teaching-assistant/classes/menu/";
             String url = basePath + clazz.getId();
-
             notificationServiceImpl.createNotification(ct.getUser().getId(), clazz.getId(), title, message, url, null);
         }
-// === KẾT THÚC ===
+        // === KẾT THÚC ===
 
+        long durationMs = (System.nanoTime() - startNs) / 1_000_000;
+        log.info("[{}] exit traceId={} classId={} durationMs={}", method, traceId, id, durationMs);
         return actionDetails;
     }
 
     @Override
     @Transactional
     public void deleteClass(Long id) {
+        final String method = "deleteClass";
+        long startNs = System.nanoTime();
+        String traceId = TraceUtil.getTraceId();
+        log.info("[{}] enter traceId={} classId={}", method, traceId, id);
+
         Clazz clazz = classRepository.findByIdAndDeletedAtIsNull(id)
                 .orElseThrow(() -> new ApiException(Const.CLASS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         if (clazz.getStatus() != ClassStatus.PENDING) {
+            log.error("[{}] traceId={} cannot delete non-pending class id={} status={}", method, traceId, id, clazz.getStatus());
             throw new ApiException(String.format(Const.CLASS.CANNOT_DELETE_ACTIVE_CLASS, clazz.getClassName(), clazz.getStatus()),
                     HttpStatus.BAD_REQUEST.value());
         }
@@ -428,11 +505,16 @@ public class ManagerClassServiceImpl implements ClassServiceStrategy {
                 ActionType.DELETE_CLASS.name(),
                 RoleName.MANAGER.name()
         );
+        log.debug("[{}] traceId={} Saved delete history for classId={}", method, traceId, id);
 
         OffsetDateTime now = OffsetDateTime.now();
         clazz.setDeletedBy(jwtUtil.extractEmailPrefixFromCurrentRequest());
         clazz.setDeletedAt(now);
         classRepository.save(clazz);
+        log.info("[{}] traceId={} Deleted class id={}", method, traceId, id);
+
+        long durationMs = (System.nanoTime() - startNs) / 1_000_000;
+        log.info("[{}] exit traceId={} classId={} durationMs={}", method, traceId, id, durationMs);
     }
 
 }

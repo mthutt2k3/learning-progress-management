@@ -50,6 +50,7 @@ public class ChallengeSectionController {
                 HttpStatus.CREATED
         );
     }
+
     @PostMapping("/bulk/{challengeId}")
     @PreAuthorize("hasRole('TEACHER')")
     @Operation(summary = "Delete or order sections",

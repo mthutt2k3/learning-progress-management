@@ -107,7 +107,7 @@ public class ChapterController {
             @Parameter(description = "Excel file to validate")
             @RequestParam("file") MultipartFile file) {
 
-        byte[] validationFile = chapterService.validateChapterImportFile(syllabusId, file);
+        byte[] validationFile = chapterService.downloadChapterValidationFile(syllabusId, file);
         ByteArrayResource resource = new ByteArrayResource(validationFile);
 
         String filename = "Chapter_Validation_" +

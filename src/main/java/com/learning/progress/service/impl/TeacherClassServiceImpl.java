@@ -15,6 +15,7 @@ import com.learning.progress.repository.*;
 import com.learning.progress.service.ClassHistoryService;
 import com.learning.progress.service.strategy.ClassServiceStrategy;
 import com.learning.progress.util.*;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -29,6 +30,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 @Service
+@Slf4j
 public class TeacherClassServiceImpl implements ClassServiceStrategy {
 
     @Autowired
@@ -54,6 +56,11 @@ public class TeacherClassServiceImpl implements ClassServiceStrategy {
     @Override
     @Transactional(readOnly = true)
     public ClassOverviewDTO getClassOverview(Long id) {
+        final String method = "getClassOverview";
+        long startNs = System.nanoTime();
+        String traceId = TraceUtil.getTraceId();
+        log.info("[{}] enter traceId={} classId={}", method, traceId, id);
+
         appValidator.validateUserAccessToClass(id);
         Clazz clazz = classRepository.findByIdAndDeletedAtIsNull(id)
                 .orElseThrow(() -> new ApiException(Const.CLASS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
@@ -113,7 +120,7 @@ public class TeacherClassServiceImpl implements ClassServiceStrategy {
         int numberOfStudents = classStudentRepository
                 .countByClazzIdAndDeletedAtIsNull(id);
 
-        return ClassOverviewDTO.builder()
+        ClassOverviewDTO result = ClassOverviewDTO.builder()
                 .id(clazz.getId())
                 .className(clazz.getClassName())
                 .classCode(clazz.getClassCode())
@@ -126,45 +133,79 @@ public class TeacherClassServiceImpl implements ClassServiceStrategy {
                 .level(levelInfo)
                 .syllabus(syllabusDTO)
                 .build();
+
+        long durationMs = (System.nanoTime() - startNs) / 1_000_000;
+        log.info("[{}] exit traceId={} classId={} durationMs={}", method, traceId, id, durationMs);
+        return result;
     }
 
     @Override
     public DataResponse<List<ClassHistoryDTO>> getClassHistory(Long classId, int page, int size, String sortBy, String sortDir, String startDate, String endDate, Long actionBy) {
-        return classHistoryService.getClassHistory(classId, page, size, sortBy, sortDir, startDate, endDate, actionBy);
+        final String method = "getClassHistory";
+        long startNs = System.nanoTime();
+        String traceId = TraceUtil.getTraceId();
+        log.info("[{}] enter traceId={} classId={} page={} size={} sortBy={} sortDir={} startDate={} endDate={} actionBy={}",
+                method, traceId, classId, page, size, sortBy, sortDir, startDate, endDate, actionBy);
+
+        DataResponse<List<ClassHistoryDTO>> response = classHistoryService.getClassHistory(classId, page, size, sortBy, sortDir, startDate, endDate, actionBy);
+
+        long durationMs = (System.nanoTime() - startNs) / 1_000_000;
+        log.info("[{}] exit traceId={} classId={} returnedCount={} durationMs={}", method, traceId, classId,
+                response != null && response.getData() != null ? response.getData().size() : 0, durationMs);
+        return response;
     }
 
 
     @Override
     @Transactional(readOnly = true)
     public ClassDTO getClass(Long id) {
+        final String method = "getClass";
+        long startNs = System.nanoTime();
+        String traceId = TraceUtil.getTraceId();
+        log.info("[{}] enter traceId={} classId={}", method, traceId, id);
+
         // Validate role
         String username = SecurityContextHolder.getContext().getAuthentication().getName();
         User currentUser = userRepository.findByUserNameAndDeletedAtIsNull(username)
                 .orElseThrow(() -> new ApiException(Const.USER.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
         if (!currentUser.getRole().getName().equals(RoleName.TEACHER) &&
                 !currentUser.getRole().getName().equals(RoleName.TEACHING_ASSISTANT)) {
+            log.error("[{}] traceId={} Forbidden role for getClass: {}", method, traceId, currentUser.getRole());
             throw new ApiException(Const.SECURITY.FORBIDDEN_ROLE, HttpStatus.FORBIDDEN.value());
         }
 
         // Check if teacher is in class
         classTeacherRepository.findByUserIdAndClazzIdAndStatus(currentUser.getId(), id, ClassTeacherStatus.ACTIVE)
-                .orElseThrow(() -> new ApiException(Const.SECURITY.FORBIDDEN_ROLE, HttpStatus.FORBIDDEN.value()));
+                .orElseThrow(() -> {
+                    log.error("[{}] traceId={} Teacher not active in class userId={} classId={}", method, traceId, currentUser.getId(), id);
+                    return new ApiException(Const.SECURITY.FORBIDDEN_ROLE, HttpStatus.FORBIDDEN.value());
+                });
 
         Clazz clazz = classRepository.findByIdAndDeletedAtIsNull(id)
                 .orElseThrow(() -> new ApiException(Const.CLASS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
-        return classMapper.toClassDTO(clazz);
+        ClassDTO res = classMapper.toClassDTO(clazz);
+
+        long durationMs = (System.nanoTime() - startNs) / 1_000_000;
+        log.info("[{}] exit traceId={} classId={} durationMs={}", method, traceId, id, durationMs);
+        return res;
     }
 
     @Override
     @Transactional(readOnly = true)
     public DataResponse<List<ClassDTO>> getClassList(int page, int size, String searchText, List<ClassStatus> status, Long syllabusId,
                                                      String sortBy, String sortDir) {
+        final String method = "getClassList";
+        long startNs = System.nanoTime();
+        String traceId = TraceUtil.getTraceId();
+        log.info("[{}] enter traceId={} page={} size={} searchText={} syllabusId={} status={}", method, traceId, page, size, searchText, syllabusId, status);
+
         // Validate role
         String username = SecurityContextHolder.getContext().getAuthentication().getName();
         User currentUser = userRepository.findByUserNameAndDeletedAtIsNull(username)
                 .orElseThrow(() -> new ApiException(Const.USER.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
         if (!currentUser.getRole().getName().equals(RoleName.TEACHER) &&
                 !currentUser.getRole().getName().equals(RoleName.TEACHING_ASSISTANT)) {
+            log.error("[{}] traceId={} Forbidden role for getClassList: {}", method, traceId, currentUser.getRole());
             throw new ApiException(Const.SECURITY.FORBIDDEN_ROLE, HttpStatus.FORBIDDEN.value());
         }
 
@@ -194,6 +235,9 @@ public class TeacherClassServiceImpl implements ClassServiceStrategy {
                 .map(classMapper::toClassDTO)
                 .toList();
 
+        long durationMs = (System.nanoTime() - startNs) / 1_000_000;
+        log.info("[{}] exit traceId={} page={} size={} returned={} durationMs={}", method, traceId, page, size, classDTOs.size(), durationMs);
+
         return DataResponse.<List<ClassDTO>>builder()
                 .success(true)
                 .message(Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL)
@@ -207,21 +251,26 @@ public class TeacherClassServiceImpl implements ClassServiceStrategy {
 
     @Override
     public ClassDTO createClass(CreateClassRequest request) {
+        log.error("[createClass] Teacher role not allowed to create class");
         throw new ApiException(Const.SECURITY.FORBIDDEN_ROLE, HttpStatus.FORBIDDEN.value());
     }
 
     @Override
     public ClassDTO updateClass(Long id, UpdateClassRequest request) {
+        log.error("[updateClass] Teacher role not allowed to update class");
         throw new ApiException(Const.SECURITY.FORBIDDEN_ROLE, HttpStatus.FORBIDDEN.value());
     }
 
     @Override
     public String changeClassStatusManually(Long id, String status) {
+        log.error("[changeClassStatusManually] Teacher role not allowed to change class status");
         throw new ApiException(Const.SECURITY.FORBIDDEN_ROLE, HttpStatus.FORBIDDEN.value());
     }
 
     @Override
     public void deleteClass(Long id) {
+        log.error("[deleteClass] Teacher role not allowed to delete class");
         throw new ApiException(Const.SECURITY.FORBIDDEN_ROLE, HttpStatus.FORBIDDEN.value());
     }
 }
+

@@ -71,6 +71,11 @@ public class ClassChapterServiceImpl implements ClassChapterService {
     @Transactional
     @Override
     public List<ClassChapterDTO> syncClassChapters(Long classId, List<SyncClassChapterRequest> request) {
+        final String method = "syncClassChapters";
+        long startNs = System.nanoTime();
+        String traceId = com.learning.progress.util.TraceUtil.getTraceId();
+        log.info("[{}] enter traceId={} classId={} requestSize={}", method, traceId, classId, request != null ? request.size() : 0);
+
         // Validate class
         Clazz classEntity = classRepository.findById(classId)
                 .filter(c -> c.getDeletedAt() == null)
@@ -82,6 +87,7 @@ public class ClassChapterServiceImpl implements ClassChapterService {
         if (classEntity.getStatus() == ClassStatus.FINISHED) {
             throw new ApiException(Const.CLASS.FINISHED_CLASS, HttpStatus.BAD_REQUEST.value());
         }
+
         // Load existing active class chapters
         List<ClassChapter> existingActiveChapters = classChapterRepository
                 .findByClassIdAndDeletedAtIsNullOrderByOrderNumberAsc(classId);
@@ -101,13 +107,17 @@ public class ClassChapterServiceImpl implements ClassChapterService {
         for (SyncClassChapterRequest deleteReq : deleteRequests) {
             Set<ConstraintViolation<SyncClassChapterRequest>> violations = validator.validate(deleteReq, SyncClassChapterRequest.Deleted.class);
             if (!violations.isEmpty()) {
-                throw new ApiException(violations.stream().map(ConstraintViolation::getMessage).collect(Collectors.joining(", ")), HttpStatus.BAD_REQUEST.value());
+                String msg = violations.stream().map(ConstraintViolation::getMessage).collect(Collectors.joining(", "));
+                log.warn("[{}] traceId={} delete validation failed: {}", method, traceId, msg);
+                throw new ApiException(msg, HttpStatus.BAD_REQUEST.value());
             }
             Long deleteId = deleteReq.getId();
             if (deleteId == null || !existingActiveIds.contains(deleteId)) {
-                throw new ApiException(String.format(Const.CLASS_CHAPTER.ID_NOT_FOUND,deleteId), HttpStatus.BAD_REQUEST.value());
+                log.error("[{}] traceId={} delete id invalid: {}", method, traceId, deleteId);
+                throw new ApiException(String.format(Const.CLASS_CHAPTER.ID_NOT_FOUND, deleteId), HttpStatus.BAD_REQUEST.value());
             }
         }
+
         // 3. Validate EXISTING IDs trong non-deleted requests
         Set<Long> existingUpdateIds = nonDeletedRequests.stream()
                 .filter(req -> req.getId() != null) // Existing chapters
@@ -119,38 +129,35 @@ public class ClassChapterServiceImpl implements ClassChapterService {
                 .collect(Collectors.toSet());
 
         if (!invalidExistingIds.isEmpty()) {
-            throw new ApiException(
-                    Const.CLASS_CHAPTER.INVALID_EXISTING_CHAPTER_IDS + invalidExistingIds,
-                    HttpStatus.BAD_REQUEST.value()
-            );
+            log.error("[{}] traceId={} invalidExistingIds={}", method, traceId, invalidExistingIds);
+            throw new ApiException(String.format(Const.CLASS_CHAPTER.INVALID_EXISTING_CHAPTER_IDS_FMT, invalidExistingIds), HttpStatus.BAD_REQUEST.value());
         }
+
         // Validate non-deleted
         for (SyncClassChapterRequest req : nonDeletedRequests) {
             Set<ConstraintViolation<SyncClassChapterRequest>> violations = validator.validate(req, SyncClassChapterRequest.NotDeleted.class);
             if (!violations.isEmpty()) {
-                throw new ApiException(violations.stream().map(ConstraintViolation::getMessage).collect(Collectors.joining(", ")), HttpStatus.BAD_REQUEST.value());
+                String msg = violations.stream().map(ConstraintViolation::getMessage).collect(Collectors.joining(", "));
+                log.warn("[{}] traceId={} non-deleted validation failed: {}", method, traceId, msg);
+                throw new ApiException(msg, HttpStatus.BAD_REQUEST.value());
             }
         }
 
         // ========== THÊM VALIDATION MỚI ==========
-
-// 1. CHECK TRÙNG classChapterName trong REQUEST
+        // 1. CHECK TRÙNG classChapterName trong REQUEST
         Set<String> usedNames = new HashSet<>();
         for (SyncClassChapterRequest req : nonDeletedRequests) {
             if (req.getClassChapterName() != null) {
                 String normalizedName = req.getClassChapterName().trim().toLowerCase();
 
                 if (usedNames.contains(normalizedName)) {
-                    throw new ApiException(
-                            String.format(Const.CLASS_CHAPTER.DUPLICATE_NAME_CHAPTER, req.getClassChapterName()),
-                            HttpStatus.BAD_REQUEST.value()
-                    );
+                    log.error("[{}] traceId={} duplicate name in request: {}", method, traceId, req.getClassChapterName());
+                    throw new ApiException(String.format(Const.CLASS_CHAPTER.DUPLICATE_NAME_CHAPTER_FMT, req.getClassChapterName()), HttpStatus.BAD_REQUEST.value());
                 }
                 usedNames.add(normalizedName);
             }
         }
-
-// ========== KẾT THÚC VALIDATION MỚI ==========
+        // ========== KẾT THÚC VALIDATION MỚI ==========
 
         // 5. Validate EXISTING IDs - Strict Matching
         Set<Long> requestExistingIds = nonDeletedRequests.stream()
@@ -173,10 +180,8 @@ public class ClassChapterServiceImpl implements ClassChapterService {
                 .collect(Collectors.toSet()));
 
         if (!invalidRequestIds.isEmpty()) {
-            throw new ApiException(
-                    Const.CHAPTER.IDS_NOT_FOUND + invalidRequestIds,
-                    HttpStatus.BAD_REQUEST.value()
-            );
+            log.error("[{}] traceId={} invalidRequestIds={}", method, traceId, invalidRequestIds);
+            throw new ApiException(String.format(Const.CHAPTER.REQUEST_IDS_NOT_EXIST_OR_DELETED, invalidRequestIds), HttpStatus.BAD_REQUEST.value());
         }
 
         // Check 2: Tất cả DB active chapters phải được handle (update HOẶC delete)
@@ -189,10 +194,8 @@ public class ClassChapterServiceImpl implements ClassChapterService {
                 .collect(Collectors.toSet());
 
         if (!unhandledDbIds.isEmpty()) {
-            throw new ApiException(
-                    String.format(Const.CHAPTER.UNHANDLED_CHAPTER, unhandledDbIds),
-                    HttpStatus.BAD_REQUEST.value()
-            );
+            log.error("[{}] traceId={} unhandledDbIds={}", method, traceId, unhandledDbIds);
+            throw new ApiException(String.format(Const.CHAPTER.UNHANDLED_CHAPTER, unhandledDbIds), HttpStatus.BAD_REQUEST.value());
         }
 
         // Check 3: Verify exact matching logic
@@ -200,16 +203,15 @@ public class ClassChapterServiceImpl implements ClassChapterService {
         int actualNonDeletedCount = requestExistingIds.size();
 
         if (actualNonDeletedCount != expectedNonDeletedCount) {
-            throw new ApiException(
-                    String.format(Const.CHAPTER.CHAPTER_COUNT_MISMATCH,
-                            expectedNonDeletedCount, actualNonDeletedCount),
+            log.error("[{}] traceId={} count mismatch expected={} actual={}", method, traceId, expectedNonDeletedCount, actualNonDeletedCount);
+            throw new ApiException(String.format(Const.CHAPTER.CHAPTER_COUNT_MISMATCH,
+                    expectedNonDeletedCount, actualNonDeletedCount),
                     HttpStatus.BAD_REQUEST.value()
             );
         }
 
-        log.info("Strict ID validation passed: DB active={}, handled={}, existing={}, delete={}",
-                existingActiveIds.size(), handledIds.size(), requestExistingIds.size(), requestDeleteIds.size());
-
+        log.info("[{}] traceId={} Strict ID validation passed: DB active={}, handled={}, existing={}, delete={}",
+                method, traceId, existingActiveIds.size(), handledIds.size(), requestExistingIds.size(), requestDeleteIds.size());
 
         // Validate order numbers
         Set<Integer> orderNumbers = nonDeletedRequests.stream()
@@ -219,6 +221,7 @@ public class ClassChapterServiceImpl implements ClassChapterService {
         int nonDeletedSize = nonDeletedRequests.size();
         Set<Integer> expectedOrders = IntStream.rangeClosed(1, nonDeletedSize).boxed().collect(Collectors.toSet());
         if (orderNumbers.size() != nonDeletedSize || !orderNumbers.equals(expectedOrders)) {
+            log.error("[{}] traceId={} invalid order numbers: {}", method, traceId, orderNumbers);
             throw new ApiException(String.format(Const.CHAPTER.ORDER_NUMBER_SEQUENCE_INVALID,
                     nonDeletedSize), HttpStatus.BAD_REQUEST.value());
         }
@@ -250,7 +253,7 @@ public class ClassChapterServiceImpl implements ClassChapterService {
                     ActionType.DELETE_CHAPTER.name(),
                     visibleToRoles
             );
-
+            log.debug("[{}] traceId={} deleted classChapterId={} name={}", method, traceId, classChapter.getId(), classChapter.getClassChapterName());
         }
 
         // Process UPDATE
@@ -279,6 +282,7 @@ public class ClassChapterServiceImpl implements ClassChapterService {
                     ActionType.UPDATE_CHAPTER.name(),
                     visibleToRoles
             );
+            log.debug("[{}] traceId={} updated classChapterId={} name={}", method, traceId, req.getId(), req.getClassChapterName());
         }
 
         // Process CREATE
@@ -290,7 +294,6 @@ public class ClassChapterServiceImpl implements ClassChapterService {
             newChapter.setClazz(classEntity);
             newChapter.setClassChapterName(req.getClassChapterName());
             newChapter.setOrderNumber(req.getOrderNumber());
-//            result.add(classChapterMapper.toClassChapterDTO(classChapterRepository.save(newChapter)));
 
             ClassChapter saved = classChapterRepository.saveAndFlush(newChapter);
             String chapterCode = DataUtil.generateClassChapterCode(saved.getId(), saved.getClazz().getId());
@@ -312,20 +315,37 @@ public class ClassChapterServiceImpl implements ClassChapterService {
                     ActionType.CREATE_CHAPTER.name(),
                     visibleToRoles
             );
+            log.debug("[{}] traceId={} created classChapterId={} name={}", method, traceId, saved.getId(), saved.getClassChapterName());
         }
 
+        long durationMs = (System.nanoTime() - startNs) / 1_000_000;
+        log.info("[{}] exit traceId={} classId={} processed={} durationMs={}", method, traceId, classId, result.size(), durationMs);
         return result;
     }
 
     public ClassChapterDTO getClassChapter(Long id) {
+        final String method = "getClassChapter";
+        long startNs = System.nanoTime();
+        String traceId = com.learning.progress.util.TraceUtil.getTraceId();
+        log.info("[{}] enter traceId={} id={}", method, traceId, id);
+
         ClassChapter classChapter = classChapterRepository.findById(id)
                 .filter(c -> c.getDeletedAt() == null)
                 .orElseThrow(() -> new ApiException(Const.CLASS_CHAPTER.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
         appValidator.validateUserAccessToClass(classChapter.getClazz().getId());
-        return classChapterMapper.toClassChapterDTO(classChapter);
+        ClassChapterDTO dto = classChapterMapper.toClassChapterDTO(classChapter);
+
+        long durationMs = (System.nanoTime() - startNs) / 1_000_000;
+        log.info("[{}] exit traceId={} id={} durationMs={}", method, traceId, id, durationMs);
+        return dto;
     }
 
     public DataResponse<List<ClassChapterDTO>> getClassChapterList(Long classId, int page, int size, String searchText) {
+        final String method = "getClassChapterList";
+        long startNs = System.nanoTime();
+        String traceId = com.learning.progress.util.TraceUtil.getTraceId();
+        log.info("[{}] enter traceId={} classId={} page={} size={} searchText={}", method, traceId, classId, page, size, searchText);
+
         Clazz clazz = classRepository.findById(classId)
                 .filter(c -> c.getDeletedAt() == null)
                 .orElseThrow(() -> new ApiException(Const.CLASS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
@@ -342,6 +362,9 @@ public class ClassChapterServiceImpl implements ClassChapterService {
                 .map(classChapterMapper::toClassChapterDTO)
                 .collect(Collectors.toList());
 
+        long durationMs = (System.nanoTime() - startNs) / 1_000_000;
+        log.info("[{}] exit traceId={} classId={} returned={} durationMs={}", method, traceId, classId, responses.size(), durationMs);
+
         return DataResponse.<List<ClassChapterDTO>>builder()
                 .success(true)
                 .message(Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL)
@@ -355,17 +378,40 @@ public class ClassChapterServiceImpl implements ClassChapterService {
 
     @Override
     public byte[] generateClassChaptersImportTemplate() {
-        return fileService.generateChapterInClassImportTemplate();
+        final String method = "generateClassChaptersImportTemplate";
+        long startNs = System.nanoTime();
+        String traceId = com.learning.progress.util.TraceUtil.getTraceId();
+        log.info("[{}] enter traceId={}", method, traceId);
+
+        byte[] res = fileService.generateChapterInClassImportTemplate();
+
+        long durationMs = (System.nanoTime() - startNs) / 1_000_000;
+        log.info("[{}] exit traceId={} templateSizeBytes={} durationMs={}", method, traceId, res != null ? res.length : 0, durationMs);
+        return res;
     }
 
     @Override
     public String getClassChaptersTemplateSasUrl() {
-        return blobSasService.generateSasUrl(chapterInClassTemplate, Duration.ofMinutes(30));
+        final String method = "getClassChaptersTemplateSasUrl";
+        long startNs = System.nanoTime();
+        String traceId = com.learning.progress.util.TraceUtil.getTraceId();
+        log.info("[{}] enter traceId={}", method, traceId);
+
+        String url = blobSasService.generateSasUrl(chapterInClassTemplate, Duration.ofMinutes(30));
+
+        long durationMs = (System.nanoTime() - startNs) / 1_000_000;
+        log.info("[{}] exit traceId={} durationMs={}", method, traceId, durationMs);
+        return url;
     }
 
     @Override
     @Transactional
     public List<ClassChapterDTO> importClassChaptersFromExcel(Long classId, MultipartFile file) {
+        final String method = "importClassChaptersFromExcel";
+        long startNs = System.nanoTime();
+        String traceId = com.learning.progress.util.TraceUtil.getTraceId();
+        log.info("[{}] enter traceId={} classId={} filePresent={}", method, traceId, classId, file != null && !file.isEmpty());
+
         // Validate class
         Clazz classEntity = classRepository.findById(classId)
                 .filter(c -> c.getDeletedAt() == null)
@@ -376,6 +422,7 @@ public class ClassChapterServiceImpl implements ClassChapterService {
         // Validate teacher assignment
         Long currentUserId = jwtUtil.extractUserIdFromCurrentRequest();
         if (!classTeacherRepository.existsByClazz_IdAndUser_IdAndStatus(classId, currentUserId, ClassTeacherStatus.ACTIVE)) {
+            log.error("[{}] traceId={} teacher not assigned userId={} classId={}", method, traceId, currentUserId, classId);
             throw new ApiException(Const.CLASS.TEACHER_NOT_ASSIGNED, HttpStatus.FORBIDDEN.value());
         }
 
@@ -384,6 +431,7 @@ public class ClassChapterServiceImpl implements ClassChapterService {
                 file, "Import Data", ImportChapterInClassDTO.class);
 
         if (importList.isEmpty()) {
+            log.error("[{}] traceId={} import file empty", method, traceId);
             throw new ApiException(Const.FILE.EMPTY, HttpStatus.BAD_REQUEST.value());
         }
 
@@ -404,6 +452,13 @@ public class ClassChapterServiceImpl implements ClassChapterService {
                         .max(Integer::compare)
                         .orElse(0) + 1;
 
+        int totalChaptersAfterImport = existingChapters.size() + importList.size();
+        int maxAllowed = 100; // kept default; consider externalizing later
+        if (totalChaptersAfterImport > maxAllowed) {
+            log.error("[{}] traceId={} total after import {} exceeds max {}", method, traceId, totalChaptersAfterImport, maxAllowed);
+            throw new ApiException(String.format(Const.CLASS_CHAPTER.IMPORT_TOTAL_EXCEEDS_LIMIT, maxAllowed, existingChapters.size(), importList.size()), HttpStatus.BAD_REQUEST.value());
+        }
+
         // Validate chapters
         Set<String> usedChapterNames = new HashSet<>();
         int rowIndex = 2; // Bắt đầu từ dòng 2 (sau header)
@@ -414,25 +469,20 @@ public class ClassChapterServiceImpl implements ClassChapterService {
 
             // Validate Chapter Name
             if (req.getChapterName() == null || req.getChapterName().trim().isEmpty()) {
-                throw new ApiException(
-                        String.format("Dòng %d, Cột 'Chapter Name': Không được để trống", rowNumber),
-                        HttpStatus.BAD_REQUEST.value());
+                log.error("[{}] traceId={} row {} missing chapter name", method, traceId, rowNumber);
+                throw new ApiException(String.format(Const.CLASS_CHAPTER.IMPORT_ROW_CHAPTER_NAME_REQUIRED, rowNumber), HttpStatus.BAD_REQUEST.value());
             }
 
             String trimmedName = req.getChapterName().trim();
             if (trimmedName.length() > 255) {
-                throw new ApiException(
-                        String.format("Dòng %d, Cột 'Chapter Name': Vượt quá 255 ký tự (hiện tại: %d ký tự)",
-                                rowNumber, trimmedName.length()),
-                        HttpStatus.BAD_REQUEST.value());
+                log.error("[{}] traceId={} row {} chapter name too long", method, traceId, rowNumber);
+                throw new ApiException(String.format(Const.CLASS_CHAPTER.IMPORT_ROW_CHAPTER_NAME_TOO_LONG, rowNumber, trimmedName.length()), HttpStatus.BAD_REQUEST.value());
             }
 
             // Kiểm tra trùng tên trong cùng batch
             if (usedChapterNames.contains(trimmedName.toLowerCase())) {
-                throw new ApiException(
-                        String.format("Dòng %d, Cột 'Chapter Name': Tên '%s' bị trùng lặp trong file",
-                                rowNumber, trimmedName),
-                        HttpStatus.BAD_REQUEST.value());
+                log.error("[{}] traceId={} duplicate name in import file row {} name={}", method, traceId, rowNumber, trimmedName);
+                throw new ApiException(String.format(Const.CLASS_CHAPTER.IMPORT_DUPLICATE_NAME_IN_FILE_ROW, rowNumber, trimmedName), HttpStatus.BAD_REQUEST.value());
             }
             usedChapterNames.add(trimmedName.toLowerCase());
 
@@ -440,10 +490,8 @@ public class ClassChapterServiceImpl implements ClassChapterService {
             boolean exists = classChapterRepository.existsByClazzAndClassChapterNameIgnoreCaseAndDeletedAtIsNull(
                     classEntity, trimmedName);
             if (exists) {
-                throw new ApiException(
-                        String.format("Dòng %d, Cột 'Chapter Name': Tên '%s' đã tồn tại trong lớp này",
-                                rowNumber, trimmedName),
-                        HttpStatus.BAD_REQUEST.value());
+                log.error("[{}] traceId={} row {} chapter already exists in class name={}", method, traceId, rowNumber, trimmedName);
+                throw new ApiException(String.format(Const.CLASS_CHAPTER.IMPORT_ALREADY_EXISTS_IN_CLASS_ROW, rowNumber, trimmedName, classId), HttpStatus.BAD_REQUEST.value());
             }
         }
 
@@ -479,13 +527,21 @@ public class ClassChapterServiceImpl implements ClassChapterService {
                     ActionType.CREATE_CHAPTER.name(),
                     visibleToRoles
             );
+            log.debug("[{}] traceId={} created chapter code={} name={}", method, traceId, saved.getClassChapterCode(), saved.getClassChapterName());
         }
 
+        long durationMs = (System.nanoTime() - startNs) / 1_000_000;
+        log.info("[{}] exit traceId={} classId={} importedCount={} durationMs={}", method, traceId, classId, result.size(), durationMs);
         return result;
     }
 
     @Override
-    public byte[] validateClassChapterImportFile(Long classId, MultipartFile file) {
+    public byte[] downloadClassChapterValidationImportFile(Long classId, MultipartFile file) {
+        final String method = "downloadClassChapterValidationImportFile";
+        long startNs = System.nanoTime();
+        String traceId = com.learning.progress.util.TraceUtil.getTraceId();
+        log.info("[{}] enter traceId={} classId={} filePresent={}", method, traceId, classId, file != null && !file.isEmpty());
+
         ValidationResult<ImportChapterInClassDTO> result = new ValidationResult<>();
 
         // Bước 1: Validate class exists
@@ -493,7 +549,7 @@ public class ClassChapterServiceImpl implements ClassChapterService {
         try {
             classEntity = classRepository.findById(classId)
                     .filter(c -> c.getDeletedAt() == null)
-                    .orElseThrow(() -> new ApiException("Class không tồn tại", HttpStatus.NOT_FOUND.value()));
+                    .orElseThrow(() -> new ApiException(Const.CLASS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
             appValidator.validateClassIsActive(classId);
             appValidator.validateUserAccessToClass(classId);
         } catch (ApiException e) {
@@ -506,7 +562,7 @@ public class ClassChapterServiceImpl implements ClassChapterService {
             errorRow.setData(new ImportChapterInClassDTO());
             errorRow.setRowNumber(0);
             errorRow.setValid(false);
-            errorRow.setErrorMessage("❌ LỖI:\n" + e.getMessage());
+            errorRow.setErrorMessage(String.format("%s%s", Const.CLASS_CHAPTER.VALIDATION_FILE_ERROR_PREFIX, e.getMessage()));
             result.addRow(errorRow);
 
             return fileService.generateValidationResultFile(
@@ -527,7 +583,7 @@ public class ClassChapterServiceImpl implements ClassChapterService {
             errorRow.setData(new ImportChapterInClassDTO());
             errorRow.setRowNumber(0);
             errorRow.setValid(false);
-            errorRow.setErrorMessage("❌ LỖI:\nGiáo viên không được phân công cho lớp này");
+            errorRow.setErrorMessage(String.format("%s%s", Const.CLASS_CHAPTER.VALIDATION_FILE_ERROR_PREFIX, Const.CLASS.TEACHER_NOT_ASSIGNED));
             result.addRow(errorRow);
 
             return fileService.generateValidationResultFile(
@@ -554,7 +610,7 @@ public class ClassChapterServiceImpl implements ClassChapterService {
             errorRow.setData(new ImportChapterInClassDTO());
             errorRow.setRowNumber(0);
             errorRow.setValid(false);
-            errorRow.setErrorMessage("❌ LỖI ĐỌC FILE:\n" + e.getMessage());
+            errorRow.setErrorMessage(String.format("%s%s", Const.CLASS_CHAPTER.VALIDATION_FILE_READ_ERROR_PREFIX, e.getMessage()));
             result.addRow(errorRow);
 
             return fileService.generateValidationResultFile(
@@ -580,19 +636,17 @@ public class ClassChapterServiceImpl implements ClassChapterService {
             try {
                 // Validate Chapter Name
                 if (dto.getChapterName() == null || dto.getChapterName().trim().isEmpty()) {
-                    errors.append("• Chapter Name không được để trống\n");
+                    errors.append(Const.CLASS_CHAPTER.VALIDATION_CHAPTER_NAME_REQUIRED).append("\n");
                 } else {
                     String trimmedName = dto.getChapterName().trim();
 
                     if (trimmedName.length() > 255) {
-                        errors.append("• Chapter Name vượt quá 255 ký tự (hiện tại: ")
-                                .append(trimmedName.length()).append(" ký tự)\n");
+                        errors.append(String.format(Const.CLASS_CHAPTER.VALIDATION_CHAPTER_NAME_TOO_LONG, trimmedName.length())).append("\n");
                     }
 
                     // Check duplicate trong file
                     if (usedChapterNames.contains(trimmedName.toLowerCase())) {
-                        errors.append("• Chapter Name bị trùng lặp trong file: ")
-                                .append(trimmedName).append("\n");
+                        errors.append(String.format(Const.CLASS_CHAPTER.VALIDATION_DUPLICATE_IN_FILE, trimmedName)).append("\n");
                     } else {
                         usedChapterNames.add(trimmedName.toLowerCase());
                     }
@@ -603,8 +657,7 @@ public class ClassChapterServiceImpl implements ClassChapterService {
                                     classEntity, trimmedName
                             );
                     if (exists) {
-                        errors.append("• Chapter Name đã tồn tại trong lớp này: ")
-                                .append(trimmedName).append("\n");
+                        errors.append(String.format(Const.CLASS_CHAPTER.VALIDATION_ALREADY_EXISTS_IN_CLASS, trimmedName)).append("\n");
                     }
                 }
 
@@ -614,13 +667,13 @@ public class ClassChapterServiceImpl implements ClassChapterService {
                     invalidCount++;
                 } else {
                     validatedRow.setValid(true);
-                    validatedRow.setErrorMessage("✓ Hợp lệ");
+                    validatedRow.setErrorMessage(Const.CLASS_CHAPTER.VALIDATION_OK);
                     validCount++;
                 }
 
             } catch (Exception e) {
                 validatedRow.setValid(false);
-                validatedRow.setErrorMessage("⚠️ Lỗi xử lý dòng: " + e.getMessage());
+                validatedRow.setErrorMessage(Const.CLASS_CHAPTER.VALIDATION_ROW_PROCESSING_ERROR + e.getMessage());
                 invalidCount++;
             }
 
@@ -631,8 +684,12 @@ public class ClassChapterServiceImpl implements ClassChapterService {
         result.setValidRows(validCount);
         result.setInvalidRows(invalidCount);
 
+        long durationMs = (System.nanoTime() - startNs) / 1_000_000;
+        log.info("[{}] exit traceId={} classId={} totalRows={} valid={} invalid={} durationMs={}", method, traceId, classId, result.getTotalRows(), validCount, invalidCount, durationMs);
+
         return fileService.generateValidationResultFile(
                 file, "Import Data", result, ImportChapterInClassDTO.class
         );
     }
 }
+

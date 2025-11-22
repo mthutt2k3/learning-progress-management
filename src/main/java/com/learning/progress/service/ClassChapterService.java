@@ -19,7 +19,7 @@ public interface ClassChapterService {
 
     String getClassChaptersTemplateSasUrl();
 
-    byte[] validateClassChapterImportFile(Long classId, MultipartFile file);
+    byte[] downloadClassChapterValidationImportFile(Long classId, MultipartFile file);
 
     List<ClassChapterDTO> importClassChaptersFromExcel(Long classId, MultipartFile file);
 }

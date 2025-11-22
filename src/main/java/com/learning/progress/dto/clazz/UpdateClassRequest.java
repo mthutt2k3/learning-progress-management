@@ -19,8 +19,8 @@ import java.time.OffsetDateTime;
 @AllArgsConstructor
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class UpdateClassRequest {
-    @NotBlank(message = "Tên lớp không được để trống")
-    @Size(max = 50, message = "Tên lớp không được vượt quá 50 ký tự")
+    @NotBlank(message = Const.CLASS.CLASS_NAME_REQUIRED)
+    @Size(max = Const.CLASS.CLASS_NAME_MAX_LENGTH_VALUE, message = Const.CLASS.CLASS_NAME_MAX_LENGTH)
     private String className;
 
     private String avatarUrl;
