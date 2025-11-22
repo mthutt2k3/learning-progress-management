@@ -8,7 +8,6 @@ import com.learning.progress.dto.clazz.CreateClassRequest;
 import com.learning.progress.dto.clazz.UpdateClassRequest;
 import com.learning.progress.dto.DataResponse;
 import com.learning.progress.dto.clazz.history.ClassHistoryDTO;
-import com.learning.progress.service.ClassHistoryService;
 import com.learning.progress.service.ClassService;
 import com.learning.progress.service.strategy.ClassServiceStrategyFactory;
 import io.swagger.v3.oas.annotations.Operation;

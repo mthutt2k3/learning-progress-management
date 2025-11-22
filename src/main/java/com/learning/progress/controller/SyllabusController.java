@@ -150,7 +150,7 @@ public class SyllabusController {
             @Parameter(description = "Excel file to validate")
             @RequestParam("file") MultipartFile file) {
 
-        byte[] validationFile = syllabusService.validateSyllabusImportFile(file);
+        byte[] validationFile = syllabusService.downloadSyllabusValidationFile(file);
         ByteArrayResource resource = new ByteArrayResource(validationFile);
 
         String filename = "Syllabus_Validation_" +

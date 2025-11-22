@@ -76,38 +76,40 @@ public class AuthServiceImpl implements AuthService {
      */
     @Override
     public LoginResponse login(LoginRequest loginRequest) {
+        final String method = "login";
+        long startNs = System.nanoTime();
         String traceId = TraceUtil.getTraceId();
-        log.info("[{}] Login attempt for username: {}, role: {}", traceId, loginRequest.getUsername(), loginRequest.getLoginRole());
+        log.info("[{}] enter traceId={} username={} loginRole={}", method, traceId, loginRequest.getUsername(), loginRequest.getLoginRole());
 
         // Fetch user by username
         User user = userRepository.findByUserNameAndDeletedAtIsNull(loginRequest.getUsername())
                 .orElseThrow(() -> {
-                    log.error("[{}] User not found: {}", traceId, loginRequest.getUsername());
+                    log.error("[{}] traceId={} User not found: {}", method, traceId, loginRequest.getUsername());
                     return new ApiException(Const.USER.NOT_FOUND, HttpStatus.UNAUTHORIZED.value());
                 });
 
         // Validate password
         if (!passwordEncoder.matches(loginRequest.getPassword(), user.getPassword())) {
-            log.error("[{}] Invalid credentials for username: {}", traceId, loginRequest.getUsername());
+            log.error("[{}] traceId={} Invalid credentials for username: {}", method, traceId, loginRequest.getUsername());
             throw new ApiException(Const.AUTH.INVALID_CREDENTIALS, HttpStatus.UNAUTHORIZED.value());
         }
 
         // Check user status
         if (user.getStatus() == UserStatus.INACTIVE) {
-            log.error("[{}] User inactive: {}", traceId, loginRequest.getUsername());
+            log.error("[{}] traceId={} User inactive: {}", method, traceId, loginRequest.getUsername());
             throw new ApiException(Const.USER.USER_INACTIVE, HttpStatus.FORBIDDEN.value());
         }
 
         // Validate login role
         String roleInput = loginRequest.getLoginRole();
         String roleUpper = roleInput.trim().toUpperCase();
-        log.debug("[{}] Validating role: {}", traceId, roleUpper);
+        log.debug("[{}] traceId={} Validating role: {}", method, traceId, roleUpper);
 
         RoleName loginRole;
         try {
             loginRole = RoleName.valueOf(roleUpper);
         } catch (IllegalArgumentException e) {
-            log.error("[{}] Invalid login role: {}", traceId, roleUpper);
+            log.error("[{}] traceId={} Invalid login role: {}", method, traceId, roleUpper);
             throw new ApiException(Const.ROLE.INVALID_LOGIN_ROLE, HttpStatus.BAD_REQUEST.value());
         }
 
@@ -118,18 +120,18 @@ public class AuthServiceImpl implements AuthService {
             case TEACHER -> {
                 if (!(userRole == RoleName.ADMIN || userRole == RoleName.MANAGER
                         || userRole == RoleName.TEACHER || userRole == RoleName.TEACHING_ASSISTANT)) {
-                    log.error("[{}] Forbidden role for teacher login: {}", traceId, userRole);
+                    log.error("[{}] traceId={} Forbidden role for teacher login: {}", method, traceId, userRole);
                     throw new ApiException(Const.SECURITY.FORBIDDEN_ROLE, HttpStatus.FORBIDDEN.value());
                 }
             }
             case STUDENT -> {
                 if (!(userRole == RoleName.STUDENT || userRole == RoleName.TEST_TAKER)) {
-                    log.error("[{}] Forbidden role for student login: {}", traceId, userRole);
+                    log.error("[{}] traceId={} Forbidden role for student login: {}", method, traceId, userRole);
                     throw new ApiException(Const.SECURITY.FORBIDDEN_ROLE, HttpStatus.FORBIDDEN.value());
                 }
             }
             default -> {
-                log.error("[{}] Invalid login role: {}", traceId, loginRole);
+                log.error("[{}] traceId={} Invalid login role: {}", method, traceId, loginRole);
                 throw new ApiException(Const.ROLE.INVALID_LOGIN_ROLE, HttpStatus.BAD_REQUEST.value());
             }
         }
@@ -146,16 +148,25 @@ public class AuthServiceImpl implements AuthService {
             user.setRequestResetPasswordByTeacher(false);
         }
         userRepository.save(user);
-        log.info("[{}] Login successful for username: {}", traceId, loginRequest.getUsername());
-        return authMapper.toLoginResponse(user, refreshToken, accessToken, mustChangePassword);
+        log.info("[{}] Login successful for username: {}", method, loginRequest.getUsername());
+
+        LoginResponse response = authMapper.toLoginResponse(user, refreshToken, accessToken, mustChangePassword);
+        long durationMs = (System.nanoTime() - startNs) / 1_000_000;
+        log.info("[{}] exit traceId={} username={} durationMs={}", method, traceId, loginRequest.getUsername(), durationMs);
+        return response;
     }
 
     @Override
     public String requestTeacherResetPassword(RequestTeacherResetPassword request) {
+        final String method = "requestTeacherResetPassword";
+        long startNs = System.nanoTime();
         String traceId = TraceUtil.getTraceId();
+        log.info("[{}] enter traceId={} username={}", method, traceId, request.getUserName());
+
         // Fetch user by username
         User user = userRepository.findByUserNameAndDeletedAtIsNull(request.getUserName())
                 .orElseThrow(() -> {
+                    log.error("[{}] traceId={} User not found: {}", method, traceId, request.getUserName());
                     return new ApiException(Const.USER.NOT_FOUND, HttpStatus.NOT_FOUND.value());
                 });
 
@@ -202,7 +213,7 @@ public class AuthServiceImpl implements AuthService {
                         teacherUrl,
                         avatarUrl
                 );
-                log.info("[{}] Sent password reset notification to {} teachers", traceId, teacherIds.size());
+                log.info("[{}] traceId={} Sent password reset notification to {} teachers", method, traceId, teacherIds.size());
             }
 
             // 5. Send to managers with manager URL
@@ -216,13 +227,16 @@ public class AuthServiceImpl implements AuthService {
                         managerUrl,
                         avatarUrl
                 );
-                log.info("[{}] Sent password reset notification to {} managers", traceId, managerIds.size());
+                log.info("[{}] traceId={} Sent password reset notification to {} managers", method, traceId, managerIds.size());
             }
 
         } catch (Exception e) {
-            log.error("[{}] Failed to send password reset notifications: {}", traceId, e.getMessage(), e);
+            log.error("[{}] traceId={} Failed to send password reset notifications: {}", method, traceId, e.getMessage(), e);
             // Don't throw - notification failure shouldn't break the password reset request
         }
+
+        long durationMs = (System.nanoTime() - startNs) / 1_000_000;
+        log.info("[{}] exit traceId={} username={} durationMs={}", method, traceId, request.getUserName(), durationMs);
         return Const.RESULT_MESSAGE_CODE.PASSWORD_RESET_TEACHER_SENT;
     }
 
@@ -234,25 +248,27 @@ public class AuthServiceImpl implements AuthService {
      */
     @Override
     public ResetPasswordByTeacherResponse resetPasswordByTeacher(String username) {
+        final String method = "resetPasswordByTeacher";
+        long startNs = System.nanoTime();
         String traceId = TraceUtil.getTraceId();
-        log.info("[{}] Teacher password reset requested for username: {}", traceId, username);
+        log.info("[{}] enter traceId={} username={}", method, traceId, username);
 
         // Validate username
         if (username == null || username.trim().isEmpty()) {
-            log.error("[{}] Username is required", traceId);
+            log.error("[{}] traceId={} Username is required", method, traceId);
             throw new ApiException(Const.USERNAME.REQUIRED, HttpStatus.BAD_REQUEST.value());
         }
 
         // Fetch user
         User user = userRepository.findByUserNameAndDeletedAtIsNull(username)
                 .orElseThrow(() -> {
-                    log.error("[{}] User not found: {}", traceId, username);
+                    log.error("[{}] traceId={} User not found: {}", method, traceId, username);
                     return new ApiException(Const.USER.NOT_FOUND, HttpStatus.NOT_FOUND.value());
                 });
 
         // Check user status
         if (user.getStatus() != UserStatus.ACTIVE) {
-            log.error("[{}] User inactive: {}", traceId, username);
+            log.error("[{}] traceId={} User inactive: {}", method, traceId, username);
             throw new ApiException(Const.USER.USER_INACTIVE, HttpStatus.FORBIDDEN.value());
         }
         if(!user.isRequestResetPasswordByTeacher()){
@@ -262,7 +278,7 @@ public class AuthServiceImpl implements AuthService {
         // Validate role
         RoleName userRole = RoleName.valueOf(user.getRole().getName().toString().toUpperCase());
         if (!(userRole == RoleName.STUDENT || userRole == RoleName.TEST_TAKER)) {
-            log.error("[{}] Forbidden role for reset: {}", traceId, userRole);
+            log.error("[{}] traceId={} Forbidden role for reset: {}", method, traceId, userRole);
             throw new ApiException(Const.SECURITY.FORBIDDEN_ROLE_STUDENT_ONLY, HttpStatus.FORBIDDEN.value());
         }
 
@@ -271,9 +287,12 @@ public class AuthServiceImpl implements AuthService {
         user.setPassword(passwordEncoder.encode(newPassword));
         user.setMustChangePassword(true);
         userRepository.save(user);
-        log.info("[{}] Password reset by teacher for username: {}", traceId, username);
+        log.info("[{}] traceId={} Password reset by teacher for username: {}", method, traceId, username);
 
-        return authMapper.toResetPasswordByTeacherResponse(user, newPassword);
+        ResetPasswordByTeacherResponse response = authMapper.toResetPasswordByTeacherResponse(user, newPassword);
+        long durationMs = (System.nanoTime() - startNs) / 1_000_000;
+        log.info("[{}] exit traceId={} username={} durationMs={}", method, traceId, username, durationMs);
+        return response;
     }
 
     /**
@@ -284,36 +303,41 @@ public class AuthServiceImpl implements AuthService {
      */
     @Override
     public String requestResetPasswordByEmail(RequestResetPasswordByEmail request) {
+        final String method = "requestResetPasswordByEmail";
+        long startNs = System.nanoTime();
         String traceId = TraceUtil.getTraceId();
-        log.info("[{}] Password reset requested for username: {}", traceId, request.getUserName());
+        log.info("[{}] enter traceId={} username={}", method, traceId, request.getUserName());
 
         // Fetch user by username
         User user = userRepository.findByUserNameAndDeletedAtIsNull(request.getUserName())
                 .orElseThrow(() -> {
-                    log.error("[{}] User not found: {}", traceId, request.getUserName());
+                    log.error("[{}] traceId={} User not found: {}", method, traceId, request.getUserName());
                     return new ApiException(Const.USER.NOT_FOUND, HttpStatus.NOT_FOUND.value());
                 });
 
         // Check user status
         if (user.getStatus() != UserStatus.ACTIVE) {
-            log.error("[{}] User inactive: {}", traceId, request.getUserName());
+            log.error("[{}] traceId={} User inactive: {}", method, traceId, request.getUserName());
             throw new ApiException(Const.USER.USER_INACTIVE, HttpStatus.FORBIDDEN.value());
         }
 
         // Generate and save reset token
         String resetPasswordToken = jwtUtil.generateResetPasswordToken(user.getUserName(), user.getRole().getName().toString(), user.getId());
-        log.debug("[{}] Reset token generated for user is {}", traceId, resetPasswordToken);
+        log.debug("[{}] traceId={} Reset token generated for user", method, traceId);
 
         // Send reset email
         try {
             emailService.sendForgotPasswordEmail(user, request, resetPasswordToken);
-            log.info("[{}] Password reset email sent to: {}", traceId, user.getEmail());
+            log.info("[{}] traceId={} Password reset email sent to: {}", method, traceId, user.getEmail());
             user.setResetPasswordTokenUsed(false);
             userRepository.save(user);
-            return DataUtil.maskEmail(user.getEmail());
+
+            String result = DataUtil.maskEmail(user.getEmail());
+            long durationMs = (System.nanoTime() - startNs) / 1_000_000;
+            log.info("[{}] exit traceId={} username={} durationMs={}", method, traceId, request.getUserName(), durationMs);
+            return result;
         } catch (Exception e) {
-            log.error("[{}] Failed to send reset email for username: {}, error: {}",
-                    traceId, request.getUserName(), e.getMessage());
+            log.error("[{}] traceId={} Failed to send reset email for username: {}, error: {}", method, traceId, request.getUserName(), e.getMessage());
             throw new ApiException(Const.AUTH.EMAIL_SEND_FAILED, HttpStatus.INTERNAL_SERVER_ERROR.value());
         }
     }
@@ -326,8 +350,10 @@ public class AuthServiceImpl implements AuthService {
      */
     @Override
     public String resetPasswordByToken(ResetPasswordByTokenRequest request) {
+        final String method = "resetPasswordByToken";
+        long startNs = System.nanoTime();
         String traceId = TraceUtil.getTraceId();
-        log.info("[{}] Confirming password reset with token: {}", traceId, request.getToken());
+        log.info("[{}] enter traceId={} token={}", method, traceId, request.getToken());
 
         // ✅ Validate token + user
         Long userId = jwtUtil.validateAndGetUserIdFromResetPasswordToken(request.getToken());
@@ -335,18 +361,18 @@ public class AuthServiceImpl implements AuthService {
         // Fetch user by reset token
         User user = userRepository.findByIdAndDeletedAtIsNull(userId)
                 .orElseThrow(() -> {
-                    log.error("[{}] Invalid reset token: {}", traceId, request.getToken());
+                    log.error("[{}] traceId={} Invalid reset token: {}", method, traceId, request.getToken());
                     return new ApiException(Const.USER.NOT_FOUND, HttpStatus.BAD_REQUEST.value());
                 });
         if (user.getStatus() == UserStatus.INACTIVE) {
-            log.error("[{}] User inactive: {}", traceId, user.getUserName());
+            log.error("[{}] traceId={} User inactive: {}", method, traceId, user.getUserName());
             throw new ApiException(Const.USER.USER_INACTIVE, HttpStatus.FORBIDDEN.value());
         }
         if (user.getStatus() == UserStatus.PENDING) {
             user.setStatus(UserStatus.ACTIVE);
         }
         if (user.isResetPasswordTokenUsed()) {
-            log.error("[{}] Have changed password: {}", traceId, user.getUserName());
+            log.error("[{}] traceId={} Have changed password: {}", method, traceId, user.getUserName());
             throw new ApiException(Const.AUTH.HAVE_CHANGED_PASSWORD, HttpStatus.FORBIDDEN.value());
         }
 
@@ -355,9 +381,12 @@ public class AuthServiceImpl implements AuthService {
         user.setMustChangePassword(false);
         user.setResetPasswordTokenUsed(true);
         userRepository.save(user);
-        log.info("[{}] Password reset successful for user: {}", traceId, user.getUserName());
+        log.info("[{}] traceId={} Password reset successful for user: {}", method, traceId, user.getUserName());
 
-        return DataUtil.maskEmail(user.getEmail());
+        String result = DataUtil.maskEmail(user.getEmail());
+        long durationMs = (System.nanoTime() - startNs) / 1_000_000;
+        log.info("[{}] exit traceId={} user={} durationMs={}", method, traceId, user.getUserName(), durationMs);
+        return result;
     }
 
     /**
@@ -368,36 +397,38 @@ public class AuthServiceImpl implements AuthService {
      */
     @Override
     public LoginResponse changePassword(ChangePasswordRequest request) {
+        final String method = "changePassword";
+        long startNs = System.nanoTime();
         String traceId = TraceUtil.getTraceId();
         String username = jwtUtil.extractUsernameFromCurrentRequest();
-        log.info("[{}] Password change requested for username: {}", traceId, username);
+        log.info("[{}] enter traceId={} username={}", method, traceId, username);
 
         // Validate password match
         if (!request.getNewPassword().equals(request.getConfirmPassword())) {
-            log.error("[{}] New password and confirm password do not match for username: {}", traceId, username);
+            log.error("[{}] traceId={} New password and confirm password do not match for username: {}", method, traceId, username);
             throw new ApiException(Const.AUTH.PASSWORDS_DO_NOT_MATCH, HttpStatus.BAD_REQUEST.value());
         }
 
         // Fetch user
         User user = userRepository.findByUserNameAndDeletedAtIsNull(username)
                 .orElseThrow(() -> {
-                    log.error("[{}] User not found: {}", traceId, username);
+                    log.error("[{}] traceId={} User not found: {}", method, traceId, username);
                     return new ApiException(Const.USER.NOT_FOUND, HttpStatus.NOT_FOUND.value());
                 });
         // Check user status
         if (user.getStatus() != UserStatus.ACTIVE) {
-            log.error("[{}] User inactive: {}", traceId, username);
+            log.error("[{}] traceId={} User inactive: {}", method, traceId, username);
             throw new ApiException(Const.USER.USER_INACTIVE, HttpStatus.FORBIDDEN.value());
         }
         // Validate old password
         if (!passwordEncoder.matches(request.getOldPassword(), user.getPassword())) {
-            log.error("[{}] Invalid old password for username: {}", traceId, username);
+            log.error("[{}] traceId={} Invalid old password for username: {}", method, traceId, username);
             throw new ApiException(Const.AUTH.INVALID_OLD_PASSWORD, HttpStatus.BAD_REQUEST.value());
         }
 
         // Check if new password is same as old
         if (passwordEncoder.matches(request.getNewPassword(), user.getPassword())) {
-            log.error("[{}] New password same as old for username: {}", traceId, username);
+            log.error("[{}] traceId={} New password same as old for username: {}", method, traceId, username);
             throw new ApiException(Const.AUTH.NEW_PASSWORD_SAME_AS_OLD, HttpStatus.BAD_REQUEST.value());
         }
 
@@ -405,18 +436,21 @@ public class AuthServiceImpl implements AuthService {
         user.setPassword(passwordEncoder.encode(request.getNewPassword()));
         user.setMustChangePassword(false);
         userRepository.save(user);
-        log.debug("[{}] Password updated for username: {}", traceId, username);
+        log.debug("[{}] traceId={} Password updated for username: {}", method, traceId, username);
 
         logout(request.getRefreshToken());
-        log.debug("[{}] User logged out after password change: {}", traceId, username);
+        log.debug("[{}] traceId={} User logged out after password change: {}", method, traceId, username);
 
         // Generate new tokens
         String accessToken = jwtUtil.generateAuthToken(user.getUserName(), user.getRole().getName().toString(), user.getId(), user.getEmail());
         RefreshToken refreshToken = tokenService.createRefreshToken(user);
         boolean mustChangePassword = user.isMustChangePassword();
 
-        log.info("[{}] Password change successful for username: {}", traceId, username);
-        return authMapper.toLoginResponse(user, refreshToken, accessToken, mustChangePassword);
+        LoginResponse response = authMapper.toLoginResponse(user, refreshToken, accessToken, mustChangePassword);
+        log.info("[{}] Password change successful for username: {}", method, username);
+        long durationMs = (System.nanoTime() - startNs) / 1_000_000;
+        log.info("[{}] exit traceId={} username={} durationMs={}", method, traceId, username, durationMs);
+        return response;
     }
 
     /**
@@ -427,37 +461,38 @@ public class AuthServiceImpl implements AuthService {
      */
     @Override
     public Map<String, String> refreshAccessToken(String refreshToken) {
+        final String method = "refreshAccessToken";
+        long startNs = System.nanoTime();
         String traceId = TraceUtil.getTraceId();
-        log.info("[{}] Refresh token request", traceId);
+        log.info("[{}] enter traceId={}", method, traceId);
 
-        // Validate refresh token
         if (refreshToken == null || refreshToken.trim().isEmpty()) {
-            log.error("[{}] Refresh token required", traceId);
+            log.error("[{}] traceId={} Refresh token required", method, traceId);
             throw new ApiException(Const.VALIDATION.REFRESH_TOKEN_REQUIRED, HttpStatus.BAD_REQUEST.value());
         }
 
-        // Fetch refresh token
         RefreshToken token = refreshTokenRepository.findByTokenAndRevokedFalse(refreshToken)
                 .orElseThrow(() -> {
-                    log.error("[{}] Invalid refresh token: {}", traceId, refreshToken);
+                    log.error("[{}] traceId={} Invalid refresh token: {}", method, traceId, refreshToken);
                     return new ApiException(Const.AUTH.INVALID_REFRESH_TOKEN, HttpStatus.UNAUTHORIZED.value());
                 });
 
-        // Check token expiration
         if (token.getExpiresAt().isBefore(Instant.now())) {
-            log.error("[{}] Refresh token expired", traceId);
+            log.error("[{}] traceId={} Refresh token expired", method, traceId);
             throw new ApiException(Const.RESULT_MESSAGE_CODE.REFRESH_TOKEN_EXPIRED, HttpStatus.UNAUTHORIZED.value());
         }
 
-        // Generate new access token
         User user = token.getUser();
         String newAccessToken = jwtUtil.generateAuthToken(user.getUserName(), user.getRole().getName().toString(), user.getId(), user.getEmail());
-        log.info("[{}] Access token refreshed for username: {}", traceId, user.getUserName());
+        log.info("[{}] traceId={} Access token refreshed for username: {}", method, traceId, user.getUserName());
 
-        return Map.of(
+        Map<String, String> result = Map.of(
                 "accessToken", newAccessToken,
                 "refreshToken", refreshToken
         );
+        long durationMs = (System.nanoTime() - startNs) / 1_000_000;
+        log.info("[{}] exit traceId={} username={} durationMs={}", method, traceId, user.getUserName(), durationMs);
+        return result;
     }
 
 
@@ -468,55 +503,50 @@ public class AuthServiceImpl implements AuthService {
      */
     @Override
     public void logout(String refreshTokenParam) {
+        final String method = "logout";
+        long startNs = System.nanoTime();
         String traceId = TraceUtil.getTraceId();
-        log.info("[{}] Logout request", traceId);
+        log.info("[{}] enter traceId={}", method, traceId);
 
-        // Validate refresh token
         if (refreshTokenParam == null || refreshTokenParam.trim().isEmpty()) {
-            log.error("[{}] Refresh token required for logout", traceId);
+            log.error("[{}] traceId={} Refresh token required for logout", method, traceId);
             throw new ApiException(Const.TOKEN.REFRESH_TOKEN_REQUIRED, HttpStatus.BAD_REQUEST.value());
         }
 
-        // Get request attributes
         ServletRequestAttributes attributes = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
-        if (attributes == null) {
-            log.error("[{}] Request attributes not found", traceId);
-            throw new ApiException(Const.SECURITY.OPERATION_FAILED, HttpStatus.INTERNAL_SERVER_ERROR.value());
-        }
-
-        // Extract access token
         HttpServletRequest request = attributes.getRequest();
         String authHeader = request.getHeader("Authorization");
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-            log.error("[{}] Bearer token required", traceId);
+            log.error("[{}] traceId={} Bearer token required", method, traceId);
             throw new ApiException(Const.SECURITY.AUTH_BEARER_REQUIRED, HttpStatus.UNAUTHORIZED.value());
         }
 
         String accessToken = authHeader.substring(7);
-        if (accessToken == null || accessToken.trim().isEmpty()) {
-            log.error("[{}] Access token required", traceId);
+        if (accessToken.trim().isEmpty()) {
+            log.error("[{}] traceId={} Access token required", method, traceId);
             throw new ApiException(Const.SECURITY.ACCESS_TOKEN_REQUIRED, HttpStatus.UNAUTHORIZED.value());
         }
 
-        // Check if access token is blacklisted
         if (tokenService.isAccessTokenBlacklisted(accessToken)) {
-            log.error("[{}] Access token blacklisted: {}", traceId, accessToken);
+            log.error("[{}] traceId={} Access token blacklisted: {}", method, traceId, accessToken);
             throw new ApiException(Const.AUTH.ACCESS_TOKEN_BLACKLISTED, HttpStatus.UNAUTHORIZED.value());
         }
 
-        // Blacklist access token
         Instant expiry = jwtUtil.getExpirationDate(accessToken, JwtTokenType.AUTH).toInstant();
         tokenService.blacklistAccessToken(accessToken, expiry);
-        log.debug("[{}] Access token blacklisted: {}", traceId, accessToken);
+        log.debug("[{}] traceId={} Access token blacklisted", method, traceId);
 
-        // Revoke refresh token
         RefreshToken refreshToken = refreshTokenRepository.findByTokenAndRevokedFalse(refreshTokenParam)
                 .orElseThrow(() -> {
-                    log.error("[{}] Invalid refresh token: {}", traceId, refreshTokenParam);
+                    log.error("[{}] traceId={} Invalid refresh token: {}", method, traceId, refreshTokenParam);
                     return new ApiException(Const.AUTH.INVALID_REFRESH_TOKEN, HttpStatus.UNAUTHORIZED.value());
                 });
         refreshToken.setRevoked(true);
         refreshTokenRepository.save(refreshToken);
-        log.info("[{}] Logout successful, refresh token revoked", traceId);
+        log.info("[{}] traceId={} Logout successful, refresh token revoked", method, traceId);
+
+        long durationMs = (System.nanoTime() - startNs) / 1_000_000;
+        log.info("[{}] exit traceId={} durationMs={}", method, traceId, durationMs);
     }
 }
+

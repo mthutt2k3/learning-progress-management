@@ -99,12 +99,12 @@ public class ClassChapterController {
             summary = "Validate Class Chapter Import File",
             description = "Validate Excel file without importing. Returns validation result file."
     )
-    public ResponseEntity<ByteArrayResource> validateClassChapterImport(
+    public ResponseEntity<ByteArrayResource> downloadClassChapterValidationImportFile(
             @Parameter(description = "Excel file to validate")
             @RequestParam("file") MultipartFile file,
             @RequestParam Long classId) {
 
-        byte[] validationFile = classChapterService.validateClassChapterImportFile(classId, file);
+        byte[] validationFile = classChapterService.downloadClassChapterValidationImportFile(classId, file);
         ByteArrayResource resource = new ByteArrayResource(validationFile);
 
         String filename = "ClassChapter_Validation_" +

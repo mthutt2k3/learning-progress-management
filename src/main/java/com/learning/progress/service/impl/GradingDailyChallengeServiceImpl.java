@@ -61,28 +61,29 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
     public GradingChallengeDetailResponse getChallengeGradingDetail(Long submissionId) {
         final String method = "getChallengeGradingDetail";
         long startNs = System.nanoTime();
-        log.info("[{}] enter submissionId={}", method, submissionId);
+        String traceId = TraceUtil.getTraceId();
+        log.info("[{}] [{}] enter submissionId={}", traceId, method, submissionId);
 
         SubmissionDailyChallenge submission = appValidator.validateUserAccessToSubmissionResult(submissionId);
-        log.debug("[{}] loaded submission id={} userId={} challengeId={}", method,
+        log.debug("[{}] [{}] loaded submission id={} userId={} challengeId={}", traceId, method,
                 submission.getId(),
                 submission.getUser() != null ? submission.getUser().getId() : null,
                 submission.getChallenge() != null ? submission.getChallenge().getId() : null);
 
         GradingDailyChallenge grading = Optional.ofNullable(submission.getGradingDailyChallenge())
                 .orElseThrow(() -> {
-                    log.warn("[{}] grading not found for submissionId={}", method, submissionId);
-                    return new ApiException("Grading not found", HttpStatus.NOT_FOUND.value());
+                    log.warn("[{}] [{}] grading not found for submissionId={}", traceId, method, submissionId);
+                    return new ApiException(Const.GRADING.GRADING_NOT_FOUND, HttpStatus.NOT_FOUND.value());
                 });
 
-        log.debug("[{}] gradingId={} graderId={} finalized={}", method,
+        log.debug("[{}] [{}] gradingId={} graderId={} finalized={}", traceId, method,
                 grading.getId(),
                 grading.getGrader() != null ? grading.getGrader().getId() : null,
                 grading.getIsFinalized());
 
         List<GradingQuestion> gradingQuestions = gradingQuestionRepo
                 .findByGradingDailyIdAndDeletedAtIsNull(grading.getId());
-        log.debug("[{}] gradingQuestionsCount={}", method, gradingQuestions.size());
+        log.debug("[{}] [{}] gradingQuestionsCount={}", traceId, method, gradingQuestions.size());
 
         GradingStats stats = computeGradingStats(gradingQuestions);
         String teacherFeedback = grading.getOverallFeedback();
@@ -103,7 +104,7 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
                 .build();
 
         long durationMs = (System.nanoTime() - startNs) / 1_000_000;
-        log.info("[{}] exit submissionId={} gradingId={} durationMs={}", method, submissionId, grading.getId(), durationMs);
+        log.info("[{}] [{}] exit submissionId={} gradingId={} durationMs={}", traceId, method, submissionId, grading.getId(), durationMs);
         return response;
     }
 
@@ -160,70 +161,73 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
     public void autoGradeSubmission(Long submissionId, boolean force) {
         final String method = "autoGradeSubmission";
         long startNs = System.nanoTime();
-        log.info("[{}] enter submissionId={} force={}", method, submissionId, force);
+        String traceId = TraceUtil.getTraceId();
+        log.info("[{}] [{}] enter submissionId={} force={}", traceId, method, submissionId, force);
 
         SubmissionDailyChallenge submission = loadSubmissionOrThrow(submissionId);
-        log.debug("[{}] loaded submission id={} userId={} status={}", method,
+        log.debug("[{}] [{}] loaded submission id={} userId={} status={}", traceId, method,
                 submission.getId(),
                 submission.getUser() != null ? submission.getUser().getId() : null,
                 submission.getSubmissionStatus());
 
         DailyChallenge challenge = Optional.ofNullable(submission.getChallenge())
                 .orElseThrow(() -> {
-                    log.error("[{}] missing challenge for submissionId={}", method, submissionId);
-                    return new ApiException("Challenge missing", HttpStatus.INTERNAL_SERVER_ERROR.value());
+                    log.error("[{}] [{}] missing challenge for submissionId={}", traceId, method, submissionId);
+                    return new ApiException(Const.GRADING.CHALLENGE_MISSING, HttpStatus.INTERNAL_SERVER_ERROR.value());
                 });
 
-        log.debug("[{}] challengeId={} type={}", method, challenge.getId(), challenge.getChallengeType());
+        log.debug("[{}] [{}] challengeId={} type={}", traceId, method, challenge.getId(), challenge.getChallengeType());
 
         if (!AUTO_GRADABLE_TYPES.contains(challenge.getChallengeType())) {
-            log.info("[{}] challengeType {} not auto-gradable, skip", method, challenge.getChallengeType());
+            log.info("[{}] [{}] challengeType {} not auto-gradable, skip", traceId, method, challenge.getChallengeType());
             return;
         }
 
         if (!force && isAlreadyFinalized(submission) && submission.getSubmissionStatus() == SubmissionStatus.GRADED) {
-            log.info("[{}] grading already finalized and force=false, skip", method);
+            log.info("[{}] [{}] grading already finalized and force=false, skip", traceId, method);
             return;
         }
 
         AutoGradingData autoData;
         try {
             long computeStart = System.nanoTime();
-            log.debug("[{}] computing auto grading details", method);
+            log.debug("[{}] [{}] computing auto grading details for submissionId={}", traceId, method, submissionId);
             autoData = computeAutoGrading(submission, challenge);
             long computeMs = (System.nanoTime() - computeStart) / 1_000_000;
-            log.debug("[{}] computeAutoGrading finished durationMs={}", method, computeMs);
+            log.debug("[{}] [{}] computeAutoGrading finished durationMs={}", traceId, method, computeMs);
         } catch (Exception ex) {
-            log.error("[{}] computeAutoGrading failed submissionId={} error={}", method, submissionId, ex.getMessage(), ex);
+            log.error("[{}] [{}] computeAutoGrading failed submissionId={} error={}", traceId, method, submissionId, ex.getMessage(), ex);
             throw ex;
         }
 
         try {
             long persistStart = System.nanoTime();
-            log.debug("[{}] persisting grading (questions count={})", method, autoData.gradingQuestions().size());
+            log.debug("[{}] [{}] persisting grading (questions count={})", traceId, method, autoData.gradingQuestions().size());
             persistGrading(submission, autoData);
             long persistMs = (System.nanoTime() - persistStart) / 1_000_000;
-            log.debug("[{}] persistGrading completed durationMs={}", method, persistMs);
+            log.debug("[{}] [{}] persistGrading completed durationMs={}", traceId, method, persistMs);
         } catch (Exception ex) {
-            log.error("[{}] persistGrading failed submissionId={} error={}", method, submissionId, ex.getMessage(), ex);
+            log.error("[{}] [{}] persistGrading failed submissionId={} error={}", traceId, method, submissionId, ex.getMessage(), ex);
             throw ex;
         }
 
         cacheService.clearSubmissionsCacheForChallenge(challenge.getId());
 
         long totalMs = (System.nanoTime() - startNs) / 1_000_000;
-        log.info("[{}] exit submissionId={} totalMs={} achieved={} maxPossible={} rawScore={}",
-                method, submissionId, totalMs, autoData.totalAchieved(), autoData.maxPossible(), autoData.rawScore());
+        log.info("[{}] [{}] exit submissionId={} totalMs={} achieved={} maxPossible={} rawScore={}",
+                traceId, method, submissionId, totalMs, autoData.totalAchieved(), autoData.maxPossible(), autoData.rawScore());
 
         // notify student about auto grading
         try {
             if (submission.getUser() != null && submission.getUser().getId() != null) {
-                String title = "Bài làm vừa được chấm tự động";
-                String message = "Bài làm của bạn cho bài \"" + (challenge != null ? challenge.getChallengeName() : "") + "\" đã được chấm tự động. Điểm: " + autoData.rawScore();
+                String title = Const.GRADING.AUTO_GRADE_NOTIFICATION_TITLE;
+                String message = String.format(Const.GRADING.AUTO_GRADE_NOTIFICATION_TEMPLATE,
+                        challenge != null ? challenge.getChallengeName() : "", autoData.rawScore());
                 notificationService.createNotification(submission.getUser().getId(), null, title, message, null, null);
+                log.debug("[{}] [{}] sent auto-grade notification userId={} submissionId={}", traceId, method, submission.getUser().getId(), submissionId);
             }
         } catch (Exception ex) {
-            log.debug("Failed to send autoGrade notification for submissionId={} error={}", submissionId, ex.getMessage());
+            log.debug("[{}] [{}] Failed to send autoGrade notification for submissionId={} error={}", traceId, method, submissionId, ex.getMessage());
         }
     }
 
@@ -235,10 +239,11 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
 
     private SubmissionDailyChallenge loadSubmissionOrThrow(Long submissionId) {
         final String method = "loadSubmissionOrThrow";
-        log.debug("[{}] loading submissionId={}", method, submissionId);
+        String traceId = TraceUtil.getTraceId();
+        log.debug("[{}] [{}] loading submissionId={}", traceId, method, submissionId);
         return submissionRepo.findByIdAndDeletedAtIsNull(submissionId)
                 .orElseThrow(() -> {
-                    log.warn("[{}] submission not found id={}", method, submissionId);
+                    log.warn("[{}] [{}] submission not found id={}", traceId, method, submissionId);
                     return new ApiException(Const.SUBMISSION.NOT_FOUND, HttpStatus.NOT_FOUND.value());
                 });
     }
@@ -246,16 +251,17 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
     private AutoGradingData computeAutoGrading(SubmissionDailyChallenge submission, DailyChallenge challenge) {
         final String method = "computeAutoGrading";
         long startNs = System.nanoTime();
-        log.info("[{}] start submissionId={} challengeId={}", method, submission.getId(), challenge.getId());
+        String traceId = TraceUtil.getTraceId();
+        log.info("[{}] [{}] start submissionId={} challengeId={}", traceId, method, submission.getId(), challenge.getId());
 
         List<ChallengeSection> sections = sectionRepo.findByChallengeIdWithQuestions(challenge.getId());
-        log.debug("[{}] loaded sectionsCount={}", method, sections == null ? 0 : sections.size());
+        log.debug("[{}] [{}] loaded sectionsCount={}", traceId, method, sections == null ? 0 : sections.size());
 
         Map<Long, SubmissionQuestion> submissionQuestionMap = loadSubmissionQuestionsWithQuestion(submission.getId());
-        log.debug("[{}] submissionQuestionsLoaded={}", method, submissionQuestionMap.size());
+        log.debug("[{}] [{}] submissionQuestionsLoaded={}", traceId, method, submissionQuestionMap.size());
 
         Map<Long, Question> questionMap = extractQuestionMap(sections);
-        log.debug("[{}] questionDefsCount={}", method, questionMap.size());
+        log.debug("[{}] [{}] questionDefsCount={}", traceId, method, questionMap.size());
 
         // Danh sách để lưu các SubmissionQuestion cần tạo mới
         List<SubmissionQuestion> toCreate = new ArrayList<>();
@@ -275,14 +281,14 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
         }
 
         if (!toCreate.isEmpty()) {
-            log.debug("[{}] creating {} missing submissionQuestion placeholders", method, toCreate.size());
+            log.debug("[{}] [{}] creating {} missing submissionQuestion placeholders", traceId, method, toCreate.size());
             submissionQuestionRepo.saveAll(toCreate);
 
             // Reload lại map để đảm bảo submissionQuestionMap chứa đầy đủ (cả cũ + mới)
             submissionQuestionMap = loadSubmissionQuestionsWithQuestion(submission.getId());
-            log.debug("[{}] reloaded submissionQuestionsLoaded={}", method, submissionQuestionMap.size());
+            log.debug("[{}] [{}] reloaded submissionQuestionsLoaded={}", traceId, method, submissionQuestionMap.size());
         } else {
-            log.debug("[{}] all questions already have submissionQuestion, nothing to create", method);
+            log.debug("[{}] [{}] all questions already have submissionQuestion, nothing to create", traceId, method);
         }
 
         double totalAchieved = 0.0;
@@ -339,20 +345,19 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
 
         double rawScore = DataUtil.getRawScore(totalAchieved, maxPossible);
         long durationMs = (System.nanoTime() - startNs) / 1_000_000;
-        log.info("[{}] computed summary durationMs={} totalAchieved={} maxPossible={} rawScore={}",
-                method, durationMs, totalAchieved, maxPossible, rawScore);
+        log.info("[{}] [{}] computed summary durationMs={} ", traceId, method, durationMs);
 
         return new AutoGradingData(totalAchieved, maxPossible, rawScore, gradingQuestions);
     }
 
     private Map<Long, SubmissionQuestion> loadSubmissionQuestionsWithQuestion(Long submissionId) {
         final String method = "loadSubmissionQuestionsWithQuestion";
-        log.debug("[{}] loading submission questions for submissionId={}", method, submissionId);
+        log.debug("[{}] [{}] loading submission questions for submissionId={}", method, submissionId);
         List<SubmissionQuestion> list = submissionQuestionRepo.findBySubmissionDailyIdAndDeletedAtIsNull(submissionId);
         Map<Long, SubmissionQuestion> map = list.stream()
                 .filter(sq -> sq.getQuestion() != null)
                 .collect(Collectors.toMap(sq -> sq.getQuestion().getId(), Function.identity(), (a, b) -> a));
-        log.debug("[{}] found {} submissionQuestions", method, map.size());
+        log.debug("[{}] [{}] found {} submissionQuestions", method, submissionId, map.size());
         return map;
     }
 
@@ -414,38 +419,39 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
     private void persistGrading(SubmissionDailyChallenge submission, AutoGradingData data) {
         final String method = "persistGrading";
         long startNs = System.nanoTime();
-        log.info("[{}] enter submissionId={} gradingQuestionsCount={}", method, submission.getId(), data.gradingQuestions().size());
+        String traceId = TraceUtil.getTraceId();
+        log.info("[{}] [{}] enter submissionId={} gradingQuestionsCount={}", traceId, method, submission.getId(), data.gradingQuestions().size());
 
         GradingDailyChallenge grading = gradingRepo
                 .findBySubmissionDailyIdAndDeletedAtIsNull(submission.getId())
                 .orElse(new GradingDailyChallenge());
 
         boolean creatingHeader = grading.getId() == null;
-        log.debug("[{}] creatingHeader={}", method, creatingHeader);
+        log.debug("[{}] [{}] creatingHeader={}", traceId, method, creatingHeader);
 
         grading.setSubmissionDaily(submission);
         grading.setIsFinalized(true);
         grading.setRawScore(data.rawScore());
         gradingRepo.save(grading);
-        log.debug("[{}] saved grading header id={}", method, grading.getId());
+        log.debug("[{}] [{}] saved grading header id={}", traceId, method, grading.getId());
 
         data.gradingQuestions().forEach(gq -> {
             gq.setGradingDaily(grading);
             if (gq.getSubmissionQuestion() != null) {
-                log.trace("[{}] associating gradingQuestion to submissionQuestionId={}", method, gq.getSubmissionQuestion().getId());
+                log.trace("[{}] [{}] associating gradingQuestion to submissionQuestionId={}", traceId, method, gq.getSubmissionQuestion().getId());
             }
         });
 
         gradingQuestionRepo.saveAll(data.gradingQuestions());
-        log.debug("[{}] saved {} gradingQuestions", method, data.gradingQuestions().size());
+        log.debug("[{}] [{}] saved {} gradingQuestions", traceId, method, data.gradingQuestions().size());
 
         submission.setSubmissionStatus(SubmissionStatus.GRADED);
         submission.setGradingDailyChallenge(grading);
         submissionRepo.save(submission);
-        log.debug("[{}] updated submission id={} status=GRADED", method, submission.getId());
+        log.debug("[{}] [{}] updated submission id={} status=GRADED", traceId, method, submission.getId());
 
         long durationMs = (System.nanoTime() - startNs) / 1_000_000;
-        log.info("[{}] exit submissionId={} durationMs={} createdHeader={}", method, submission.getId(), durationMs, creatingHeader);
+        log.info("[{}] [{}] exit submissionId={} durationMs={} createdHeader={}", traceId, method, submission.getId(), durationMs, creatingHeader);
     }
 
     private double roundToTwoDecimals(double value) {
@@ -460,22 +466,23 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
     public void gradeSubmissionChallenge(Long submissionId, GradeSummaryRequest request) {
         final String method = "gradeSubmissionChallenge";
         long startNs = System.nanoTime();
-        log.info("[{}] enter submissionId={} rawScore={} penalty={}", method, submissionId, request.getRawScore(), request.getPenaltyApplied());
+        String traceId = TraceUtil.getTraceId();
+        log.info("[{}] [{}] enter submissionId={} rawScore={} penalty={}", traceId, method, submissionId, request.getRawScore(), request.getPenaltyApplied());
 
         SubmissionDailyChallenge submission = loadSubmissionOrThrow(submissionId);
         DailyChallenge challenge = submission.getChallenge();
-        log.debug("[{}] validate access classId={}", method, getClassId(challenge));
+        log.debug("[{}] [{}] validate access classId={}", traceId, method, getClassId(challenge));
         appValidator.validateUserAccessToClass(getClassId(challenge));
 
         User grader = loadCurrentUser();
-        log.debug("[{}] graderId={}", method, grader.getId());
+        log.debug("[{}] [{}] graderId={}", traceId, method, grader.getId());
 
         GradingDailyChallenge grading = gradingRepo
                 .findBySubmissionDailyIdAndDeletedAtIsNull(submissionId)
                 .orElseGet(() -> {
                     GradingDailyChallenge g = new GradingDailyChallenge();
                     g.setSubmissionDaily(submission);
-                    log.trace("[{}] creating new grading header", method);
+                    log.trace("[{}] [{}] creating new grading header", traceId, method);
                     return g;
                 });
 
@@ -485,27 +492,29 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
         grading.setOverallFeedback(request.getOverallFeedback());
         grading.setIsFinalized(true);
         gradingRepo.save(grading);
-        log.debug("[{}] saved grading header id={}", method, grading.getId());
+        log.debug("[{}] [{}] saved grading header id={}", traceId, method, grading.getId());
 
         submission.setSubmissionStatus(SubmissionStatus.GRADED);
         submission.setSubmittedAt(OffsetDateTime.now());
         submissionRepo.save(submission);
-        log.debug("[{}] updated submission id={} status=GRADED", method, submissionId);
+        log.debug("[{}] [{}] updated submission id={} status=GRADED", traceId, method, submissionId);
 
         clearCaches(submission, challenge);
 
         long durationMs = (System.nanoTime() - startNs) / 1_000_000;
-        log.info("[{}] exit submissionId={} durationMs={}", method, submissionId, durationMs);
+        log.info("[{}] [{}] exit submissionId={} durationMs={}", traceId, method, submissionId, durationMs);
 
         // notify student
         try {
             if (submission.getUser() != null && submission.getUser().getId() != null) {
-                String title = "Bài làm đã được chấm";
-                String message = "Bài làm của bạn cho bài \"" + (challenge != null ? challenge.getChallengeName() : "") + "\" đã được chấm. Điểm: " + request.getRawScore();
+                String title = Const.GRADING.MANUAL_GRADE_NOTIFICATION_TITLE;
+                String message = String.format(Const.GRADING.MANUAL_GRADE_NOTIFICATION_TEMPLATE,
+                        challenge != null ? challenge.getChallengeName() : "", request.getRawScore());
                 notificationService.createNotification(submission.getUser().getId(), null, title, message, null, null);
+                log.debug("[{}] [{}] sent manual-grade notification userId={} submissionId={}", traceId, method, submission.getUser().getId(), submissionId);
             }
         } catch (Exception ex) {
-            log.debug("Failed to send manual grade notification for submissionId={} error={}", submissionId, ex.getMessage());
+            log.debug("[{}] [{}] Failed to send manual grade notification for submissionId={} error={}", traceId, method, submissionId, ex.getMessage());
         }
     }
 
@@ -517,21 +526,22 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
     public void gradeSubmissionQuestion(Long submissionQuestionId, GradeQuestionRequest request) {
         final String method = "gradeSubmissionQuestion";
         long startNs = System.nanoTime();
-        log.info("[{}] enter submissionQuestionId={} receivedWeight={}", method, submissionQuestionId, request.getReceivedWeight());
+        String traceId = TraceUtil.getTraceId();
+        log.info("[{}] [{}] enter submissionQuestionId={} receivedWeight={}", traceId, method, submissionQuestionId, request.getReceivedWeight());
 
         SubmissionQuestion submissionQuestion = submissionQuestionRepo.findByIdAndDeletedAtIsNull(submissionQuestionId)
                 .orElseThrow(() -> {
-                    log.warn("[{}] submissionQuestion not found id={}", method, submissionQuestionId);
-                    return new ApiException("Submission question not found", HttpStatus.NOT_FOUND.value());
+                    log.warn("[{}] [{}] submissionQuestion not found id={}", traceId, method, submissionQuestionId);
+                    return new ApiException(Const.GRADING.SUBMISSION_QUESTION_NOT_FOUND, HttpStatus.NOT_FOUND.value());
                 });
 
         SubmissionDailyChallenge submission = submissionQuestion.getSubmissionDaily();
         DailyChallenge challenge = submission.getChallenge();
-        log.debug("[{}] submissionId={} challengeId={}", method, submission.getId(), challenge != null ? challenge.getId() : null);
+        log.debug("[{}] [{}] submissionId={} challengeId={}", traceId, method, submission.getId(), challenge != null ? challenge.getId() : null);
 
         if (!Set.of(ChallengeType.WR, ChallengeType.SP).contains(challenge.getChallengeType())) {
-            log.warn("[{}] invalid challenge type {} for manual grading", method, challenge.getChallengeType());
-            throw new ApiException("Manual grading only allowed for WR, SP", HttpStatus.BAD_REQUEST.value());
+            log.warn("[{}] [{}] invalid challenge type {} for manual grading", traceId, method, challenge.getChallengeType());
+            throw new ApiException(Const.GRADING.MANUAL_GRADING_ONLY_WR_SP, HttpStatus.BAD_REQUEST.value());
         }
 
         Double questionMax = Optional.ofNullable(submissionQuestion.getQuestion())
@@ -540,20 +550,20 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
                 .orElse(0.0);
 
         if (request.getReceivedWeight() != null && request.getReceivedWeight() > questionMax) {
-            log.warn("[{}] receivedWeight exceeds max submissionQuestionId={} received={} max={}", method, submissionQuestionId, request.getReceivedWeight(), questionMax);
-            throw new ApiException("Received weight exceeds max", HttpStatus.BAD_REQUEST.value());
+            log.warn("[{}] [{}] receivedWeight exceeds max submissionQuestionId={} received={} max={}", traceId, method, submissionQuestionId, request.getReceivedWeight(), questionMax);
+            throw new ApiException(Const.GRADING.RECEIVED_WEIGHT_EXCEEDS_MAX, HttpStatus.BAD_REQUEST.value());
         }
 
-        log.debug("[{}] validating user access to class", method);
+        log.debug("[{}] [{}] validating user access to class", traceId, method);
         appValidator.validateUserAccessToClass(getClassId(challenge));
 
         User grader = loadCurrentUser();
-        log.debug("[{}] graderId={}", method, grader.getId());
+        log.debug("[{}] [{}] graderId={}", traceId, method, grader.getId());
 
         GradingDailyChallenge grading = ensureGradingHeader(submission);
         grading.setGrader(grader);
         gradingRepo.save(grading);
-        log.debug("[{}] ensured grading header id={}", method, grading.getId());
+        log.debug("[{}] [{}] ensured grading header id={}", traceId, method, grading.getId());
 
         GradingQuestion gradingQuestion = gradingQuestionRepo
                 .findBySubmissionQuestionIdAndDeletedAtIsNull(submissionQuestionId)
@@ -566,28 +576,29 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
 
         if (request.getFeedback() != null) {
             gradingQuestion.setFeedback(JsonUtil.objectToJson(request.getFeedback()));
-            log.trace("[{}] saved feedback JSON for sqId={}", method, submissionQuestionId);
+            log.trace("[{}] [{}] saved feedback JSON for sqId={}", traceId, method, submissionQuestionId);
         }
         if (request.getHighlightComments() != null) {
             gradingQuestion.setHighlightCommentsJson(JsonUtil.objectToJson(request.getHighlightComments()));
-            log.trace("[{}] saved highlight comments for sqId={}", method, submissionQuestionId);
+            log.trace("[{}] [{}] saved highlight comments for sqId={}", traceId, method, submissionQuestionId);
         }
 
         gradingQuestionRepo.save(gradingQuestion);
         cacheService.clearSubmissionCache(submission.getUser().getId(), submission.getId());
 
         long durationMs = (System.nanoTime() - startNs) / 1_000_000;
-        log.info("[{}] exit submissionQuestionId={} durationMs={} gradingQuestionId={}", method, submissionQuestionId, durationMs, gradingQuestion.getId());
+        log.info("[{}] [{}] exit submissionQuestionId={} durationMs={} gradingQuestionId={}", traceId, method, submissionQuestionId, durationMs, gradingQuestion.getId());
 
         // notify student about per-question grading
         try {
             if (submission.getUser() != null && submission.getUser().getId() != null) {
-                String title = "Cập nhật điểm câu hỏi";
-                String message = "Một câu hỏi trong bài làm của bạn đã được chấm. SubmissionId=" + submission.getId();
+                String title = Const.GRADING.PER_QUESTION_GRADE_NOTIFICATION_TITLE;
+                String message = String.format(Const.GRADING.PER_QUESTION_GRADE_NOTIFICATION_TEMPLATE, submission.getId());
                 notificationService.createNotification(submission.getUser().getId(), null, title, message, null, null);
+                log.debug("[{}] [{}] sent per-question notification userId={} submissionId={} sqId={}", traceId, method, submission.getUser().getId(), submission.getId(), submissionQuestionId);
             }
         } catch (Exception ex) {
-            log.debug("Failed to send per-question grade notification for sqId={} error={}", submissionQuestionId, ex.getMessage());
+            log.debug("[{}] [{}] Failed to send per-question grade notification for sqId={} error={}", traceId, method, submissionQuestionId, ex.getMessage());
         }
     }
 
@@ -599,16 +610,17 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
     public GradingQuestionDetailResponse getQuestionGradingDetail(Long submissionQuestionId) {
         final String method = "getQuestionGradingDetail";
         long startNs = System.nanoTime();
-        log.info("[{}] enter submissionQuestionId={}", method, submissionQuestionId);
+        String traceId = TraceUtil.getTraceId();
+        log.info("[{}] [{}] enter submissionQuestionId={}", traceId, method, submissionQuestionId);
 
         GradingQuestion gradingQuestion = gradingQuestionRepo
                 .findBySubmissionQuestionIdAndDeletedAtIsNull(submissionQuestionId)
                 .orElseThrow(() -> {
-                    log.warn("[{}] gradingQuestion not found for submissionQuestionId={}", method, submissionQuestionId);
-                    return new ApiException("Grading not found", HttpStatus.NOT_FOUND.value());
+                    log.warn("[{}] [{}] gradingQuestion not found for submissionQuestionId={}", traceId, method, submissionQuestionId);
+                    return new ApiException(Const.GRADING.GRADING_NOT_FOUND, HttpStatus.NOT_FOUND.value());
                 });
 
-        log.debug("[{}] gradingQuestionId={} gradingId={}", method, gradingQuestion.getId(),
+        log.debug("[{}] [{}] gradingQuestionId={} gradingId={}", traceId, method, gradingQuestion.getId(),
                 gradingQuestion.getGradingDaily() != null ? gradingQuestion.getGradingDaily().getId() : null);
 
         appValidator.validateUserAccessToSubmissionResult(gradingQuestion.getGradingDaily().getSubmissionDaily().getId());
@@ -634,7 +646,7 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
                 .build();
 
         long durationMs = (System.nanoTime() - startNs) / 1_000_000;
-        log.info("[{}] exit submissionQuestionId={} durationMs={}", method, submissionQuestionId, durationMs);
+        log.info("[{}] [{}] exit submissionQuestionId={} durationMs={}", traceId, method, submissionQuestionId, durationMs);
         return response;
     }
 

@@ -11,7 +11,6 @@ public interface QuestionService {
     List<QuestionDto> bulkQuestion(List<QuestionDto> dtos, Long sectionId);
     void deleteQuestions(List<Long> ids);
 
-    void updateScoreQuestion(Long questionId, double score);
     Map<Long, List<QuestionDto>> bulkInsertQuestionsForSections(Map<Long, List<QuestionDto>> sectionQuestionsMap);
 
     /**

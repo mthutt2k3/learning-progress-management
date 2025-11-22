@@ -1,6 +1,7 @@
 package com.learning.progress.dto.ai;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.learning.progress.common.Const;
 import com.learning.progress.common.DifficultyLevel;
 import com.learning.progress.common.LessonFocus;
 import com.learning.progress.dto.challenge.section.SectionDto;
@@ -14,36 +15,36 @@ import java.util.List;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class GenerateContentBasedQuestionsRequest {
 
-    @NotNull(message = "Challenge ID is required")
+    @NotNull(message = Const.AI.CHALLENGE_ID_REQUIRED)
     private Long challengeId;
 
-    @NotNull(message = "Sections are required")
-    @NotEmpty(message = "At least one section is required")
+    @NotNull(message = Const.AI.SECTIONS_REQUIRED)
+    @NotEmpty(message = Const.AI.AT_LEAST_ONE_SECTION_REQUIRED)
     private List<SectionWithConfig> sections;
 
     private String description; // Optional additional context for AI
 
-    @NotBlank(message = "Level is required")
+    @NotBlank(message = Const.AI.LEVEL_REQUIRED)
     private String level;
 
     @Data
     public static class SectionWithConfig {
-        @NotNull(message = "Section is required")
+        @NotNull(message = Const.AI.SECTION_REQUIRED)
         @Valid
         private SectionDto section; // Must contain sectionTitle, sectionsContent, resourceType
 
-        @NotNull(message = "Question type configs are required")
-        @NotEmpty(message = "At least one question type config is required")
+        @NotNull(message = Const.AI.QUESTION_TYPE_CONFIGS_REQUIRED)
+        @NotEmpty(message = Const.AI.AT_LEAST_ONE_QUESTION_TYPE_CONFIG_REQUIRED)
         private List<QuestionTypeConfig> questionTypeConfigs;
     }
 
     @Data
     public static class QuestionTypeConfig {
-        @NotNull(message = "Question type is required")
+        @NotNull(message = Const.AI.QUESTION_TYPE_REQUIRED)
         private String questionType; // e.g. "MULTIPLE_CHOICE", "FILL_IN_THE_BLANK"
 
-        @NotNull(message = "Number of questions is required")
-        @Min(value = 1, message = "Number of questions must be at least 1")
+        @NotNull(message = Const.AI.NUMBER_OF_QUESTIONS_REQUIRED)
+        @Min(value = 1, message = Const.AI.NUMBER_OF_QUESTIONS_MIN)
         private Integer numberOfQuestions; // How many questions of this type
     }
 }

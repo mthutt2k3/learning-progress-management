@@ -3,7 +3,6 @@ package com.learning.progress.service.impl;
 import com.learning.progress.common.*;
 import com.learning.progress.dto.clazz.teacher.AddTeacherToClassRequest;
 import com.learning.progress.dto.clazz.teacher.ClassTeacherResponse;
-import com.learning.progress.dto.clazz.teacher.TeacherPerformanceReport;
 import com.learning.progress.dto.DataResponse;
 import com.learning.progress.dto.clazz.teacher.TeacherWithRole;
 import com.learning.progress.entity.ClassTeacher;
@@ -19,6 +18,7 @@ import com.learning.progress.service.ClassTeacherService;
 import com.learning.progress.util.AppValidator;
 import com.learning.progress.util.JwtUtil;
 import com.learning.progress.util.TraceUtil;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
@@ -34,6 +34,7 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
+@Slf4j
 public class ClassTeacherServiceImpl implements ClassTeacherService {
 
     @Autowired
@@ -69,6 +70,11 @@ public class ClassTeacherServiceImpl implements ClassTeacherService {
 
     @Override
     public DataResponse<List<ClassTeacherResponse>> getTeachersInClass(Long classId, int page, int size, String text, List<ClassTeacherStatus> status, String sortBy, String sortDir) {
+        final String method = "getTeachersInClass";
+        long startNs = System.nanoTime();
+        String traceId = TraceUtil.getTraceId();
+        log.info("[{}] enter traceId={} classId={} page={} size={} text={} status={}", method, traceId, classId, page, size, text, status);
+
         // Validate pagination and sort parameters
         appValidator.validatePaginationParams(page, size);
         appValidator.validateSortParams(List.of("id", "userName", "fullName", "email", "joinedAt", "status"), sortBy, sortDir);
@@ -77,7 +83,7 @@ public class ClassTeacherServiceImpl implements ClassTeacherService {
         Sort sort = Sort.by(sortDir.equalsIgnoreCase("asc") ? Sort.Direction.ASC : Sort.Direction.DESC, sortBy);
         Pageable pageable = PageRequest.of(page, size, sort);
 
-        Clazz clazz = classRepository.findById(classId)
+        classRepository.findById(classId)
                 .orElseThrow(() -> new ApiException(Const.CLASS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         // Nếu không truyền status thì lấy tất cả
@@ -99,6 +105,9 @@ public class ClassTeacherServiceImpl implements ClassTeacherService {
                 .map(classTeacherMapper::toClassTeacherResponse)
                 .collect(Collectors.toList());
 
+        long durationMs = (System.nanoTime() - startNs) / 1_000_000;
+        log.info("[{}] exit traceId={} classId={} returned={} durationMs={}", method, traceId, classId, teachers.size(), durationMs);
+
         return DataResponse.<List<ClassTeacherResponse>>builder()
                 .traceId(TraceUtil.getTraceId())
                 .success(true)
@@ -115,6 +124,11 @@ public class ClassTeacherServiceImpl implements ClassTeacherService {
     @Override
     @Transactional
     public void addTeacherToClass(Long classId, AddTeacherToClassRequest request) {
+        final String method = "addTeacherToClass";
+        long startNs = System.nanoTime();
+        String traceId = TraceUtil.getTraceId();
+        log.info("[{}] enter traceId={} classId={} requestSize={}", method, traceId, classId, request != null ? request.getTeachers().size() : 0);
+
         // 1️⃣ Validate class
         Clazz clazz = classRepository.findById(classId)
                 .orElseThrow(() -> new ApiException(Const.CLASS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
@@ -161,7 +175,7 @@ public class ClassTeacherServiceImpl implements ClassTeacherService {
                     .filter(id -> !foundIds.contains(id))
                     .collect(Collectors.toList());
             throw new ApiException(
-                    Const.USER.NOT_FOUND,
+                    String.format(Const.CLASS_TEACHER.USER_IDS_NOT_FOUND, notFoundIds),
                     HttpStatus.NOT_FOUND.value()
             );
         }
@@ -170,28 +184,26 @@ public class ClassTeacherServiceImpl implements ClassTeacherService {
         Map<Long, User> userMap = users.stream()
                 .collect(Collectors.toMap(User::getId, u -> u));
 
-        // 5️⃣ Validate all users
+        // 5️⃣ Validate all users (use const templates)
         List<String> validationErrors = new ArrayList<>();
         for (User user : users) {
             if (!UserStatus.ACTIVE.equals(user.getStatus())) {
-                validationErrors.add(String.format("User ID %d (%s) is not active",
-                        user.getId(), user.getUserName()));
+                validationErrors.add(String.format(Const.CLASS_TEACHER.VALIDATION_USER_NOT_ACTIVE, user.getId(), user.getUserName()));
             }
 
             if (user.getRole() == null || (!RoleName.TEACHER.equals(user.getRole().getName()) && !RoleName.TEACHING_ASSISTANT.equals(user.getRole().getName()))) {
-                validationErrors.add(String.format("User ID %d (%s) is not a teacher or a teaching assistant",
-                        user.getId(), user.getUserName()));
+                validationErrors.add(String.format(Const.CLASS_TEACHER.VALIDATION_USER_NOT_TEACHER, user.getId(), user.getUserName()));
             }
 
             if (user.getDeletedAt() != null) {
-                validationErrors.add(String.format("User ID %d (%s) has been deleted",
-                        user.getId(), user.getUserName()));
+                validationErrors.add(String.format(Const.CLASS_TEACHER.VALIDATION_USER_DELETED, user.getId(), user.getUserName()));
             }
         }
 
         if (!validationErrors.isEmpty()) {
+            log.error("[{}] traceId={} validationErrors={}", method, traceId, validationErrors);
             throw new ApiException(
-                    "Validation errors: " + String.join("; ", validationErrors),
+                    String.format(Const.CLASS_TEACHER.VALIDATION_ERRORS, String.join("; ", validationErrors)),
                     HttpStatus.BAD_REQUEST.value()
             );
         }
@@ -306,7 +318,7 @@ public class ClassTeacherServiceImpl implements ClassTeacherService {
         // 10️⃣ Save all class-teacher relationships
         classTeacherRepository.saveAll(classTeachersToSave);
 
-        // 1️⃣1️⃣ Save history
+        // 1️⃣1️⃣ Save history & notify
         Long actionByUserId = jwtUtil.extractUserIdFromCurrentRequest();
         String visibleToRoles = String.format("%s,%s,%s",
                 RoleName.MANAGER.name(),
@@ -336,11 +348,14 @@ public class ClassTeacherServiceImpl implements ClassTeacherService {
 
             // notify newly added teachers
             for (User u : newTeachers) {
-                String title = "Bạn đã được thêm làm giáo viên lớp " + clazz.getClassName();
-                String message = "Bạn vừa được gán vai trò trong lớp " + clazz.getClassName() + " bởi " + jwtUtil.extractUsernameFromCurrentRequest();
+                String title = String.format(Const.CLASS_TEACHER.NOTIFY_ADDED_AS_TEACHER_TITLE, clazz.getClassName());
+                String message = String.format(Const.CLASS_TEACHER.NOTIFY_ADDED_AS_TEACHER_MESSAGE, jwtUtil.extractUsernameFromCurrentRequest(), clazz.getClassName());
                 String url = "/teacher/classes/menu/" + clazz.getId();
-
-                notificationService.createNotification(u.getId(), clazz.getId(), title, message, url, null);
+                try {
+                    notificationService.createNotification(u.getId(), clazz.getId(), title, message, url, null);
+                } catch (Exception ex) {
+                    log.debug("[{}] traceId={} Failed to notify new teacher userId={} error={}", method, traceId, u.getId(), ex.getMessage());
+                }
             }
         }
 
@@ -366,11 +381,14 @@ public class ClassTeacherServiceImpl implements ClassTeacherService {
             );
 
             for (User u : newTAs) {
-                String title = "Bạn đã được thêm làm trợ giảng lớp " + clazz.getClassName();
-                String message = "Bạn vừa được gán vai trò trợ giảng trong lớp " + clazz.getClassName() + " bởi " + jwtUtil.extractUsernameFromCurrentRequest();
+                String title = String.format(Const.CLASS_TEACHER.NOTIFY_ADDED_AS_TA_TITLE, clazz.getClassName());
+                String message = String.format(Const.CLASS_TEACHER.NOTIFY_ADDED_AS_TA_MESSAGE, jwtUtil.extractUsernameFromCurrentRequest(), clazz.getClassName());
                 String url = "/teaching-assistant/classes/menu/" + clazz.getId();
-
-                notificationService.createNotification(u.getId(), clazz.getId(), title, message, url, null);
+                try {
+                    notificationService.createNotification(u.getId(), clazz.getId(), title, message, url, null);
+                } catch (Exception ex) {
+                    log.debug("[{}] traceId={} Failed to notify new TA userId={} error={}", method, traceId, u.getId(), ex.getMessage());
+                }
             }
         }
 
@@ -395,12 +413,15 @@ public class ClassTeacherServiceImpl implements ClassTeacherService {
                     visibleToRoles
             );
 
-            for (User u : newTeachers) {
-                String title = "Bạn đã được thêm làm giáo viên lớp " + clazz.getClassName();
-                String message = "Bạn vừa được gán vai trò trong lớp " + clazz.getClassName() + " bởi " + jwtUtil.extractUsernameFromCurrentRequest();
+            for (User u : reactivatedTeachers) {
+                String title = String.format(Const.CLASS_TEACHER.NOTIFY_REACTIVATED_TITLE, clazz.getClassName());
+                String message = String.format(Const.CLASS_TEACHER.NOTIFY_REACTIVATED_MESSAGE, jwtUtil.extractUsernameFromCurrentRequest(), clazz.getClassName());
                 String url = "/teacher/classes/menu/" + clazz.getId();
-
-                notificationService.createNotification(u.getId(), clazz.getId(), title, message, url, null);
+                try {
+                    notificationService.createNotification(u.getId(), clazz.getId(), title, message, url, null);
+                } catch (Exception ex) {
+                    log.debug("[{}] traceId={} Failed to notify reactivated teacher userId={} error={}", method, traceId, u.getId(), ex.getMessage());
+                }
             }
         }
 
@@ -425,19 +446,31 @@ public class ClassTeacherServiceImpl implements ClassTeacherService {
                     visibleToRoles
             );
 
-            for (User u : newTAs) {
-                String title = "Bạn đã được thêm làm trợ giảng lớp " + clazz.getClassName();
-                String message = "Bạn vừa được gán vai trò trợ giảng trong lớp " + clazz.getClassName() + " bởi " + jwtUtil.extractUsernameFromCurrentRequest();
+            for (User u : reactivatedTAs) {
+                String title = String.format(Const.CLASS_TEACHER.NOTIFY_REACTIVATED_TITLE, clazz.getClassName());
+                String message = String.format(Const.CLASS_TEACHER.NOTIFY_REACTIVATED_MESSAGE, jwtUtil.extractUsernameFromCurrentRequest(), clazz.getClassName());
                 String url = "/teaching-assistant/classes/menu/" + clazz.getId();
-
-                notificationService.createNotification(u.getId(), clazz.getId(), title, message, url, null);
+                try {
+                    notificationService.createNotification(u.getId(), clazz.getId(), title, message, url, null);
+                } catch (Exception ex) {
+                    log.debug("[{}] traceId={} Failed to notify reactivated TA userId={} error={}", method, traceId, u.getId(), ex.getMessage());
+                }
             }
         }
+
+        long durationMs = (System.nanoTime() - startNs) / 1_000_000;
+        log.info("[{}] exit traceId={} classId={} addedTeachers={} addedTAs={} reactivatedTeachers={} reactivatedTAs={} durationMs={}",
+                method, traceId, classId, newTeachers.size(), newTAs.size(), reactivatedTeachers.size(), reactivatedTAs.size(), durationMs);
     }
 
     @Override
     @Transactional
     public void removeTeacherFromClass(Long classId, Long userId) {
+        final String method = "removeTeacherFromClass";
+        long startNs = System.nanoTime();
+        String traceId = TraceUtil.getTraceId();
+        log.info("[{}] enter traceId={} classId={} userId={}", method, traceId, classId, userId);
+
         Clazz clazz = classRepository.findById(classId)
                 .orElseThrow(() -> new ApiException(Const.CLASS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
@@ -481,7 +514,9 @@ public class ClassTeacherServiceImpl implements ClassTeacherService {
                 RoleName.TEACHER.name(),
                 RoleName.TEACHING_ASSISTANT.name());
 
-        String roleType = RoleInClass.TEACHER.equals(classTeacher.getRoleInClass()) ? "teacher" : "teaching assistant";
+        String roleType = RoleInClass.TEACHER.equals(classTeacher.getRoleInClass())
+                ? Const.CLASS_TEACHER.ROLE_TYPE_TEACHER
+                : Const.CLASS_TEACHER.ROLE_TYPE_TEACHING_ASSISTANT;
         String actionDetails = String.format(
                 Const.CLASS_TEACHER.REMOVE_TEACHER_SUCCESSFULLY,
                 roleType,
@@ -503,8 +538,8 @@ public class ClassTeacherServiceImpl implements ClassTeacherService {
 
         // notify removed teacher/TA
         try {
-            String title = "Bạn đã bị gỡ khỏi lớp " + clazz.getClassName();
-            String message = "Vai trò của bạn trong lớp " + clazz.getClassName() + " đã bị gỡ bởi " + jwtUtil.extractUsernameFromCurrentRequest();
+            String title = String.format(Const.CLASS_TEACHER.NOTIFY_REMOVED_TITLE, clazz.getClassName());
+            String message = String.format(Const.CLASS_TEACHER.NOTIFY_REMOVED_MESSAGE, jwtUtil.extractUsernameFromCurrentRequest(), clazz.getClassName());
 
             String url = RoleInClass.TEACHER.equals(classTeacher.getRoleInClass())
                     ? "/teacher/classes/menu/" + clazz.getId()
@@ -512,9 +547,11 @@ public class ClassTeacherServiceImpl implements ClassTeacherService {
 
             notificationService.createNotification(user.getId(), null, title, message, url, null);
         } catch (Exception ex) {
-//            log.warn("Failed to send notification to removed teacher userId={} error={}", userId, ex.getMessage());
+            log.debug("[{}] traceId={} Failed to notify removed userId={} error={}", method, traceId, userId, ex.getMessage());
         }
+
+        long durationMs = (System.nanoTime() - startNs) / 1_000_000;
+        log.info("[{}] exit traceId={} classId={} userId={} durationMs={}", method, traceId, classId, userId, durationMs);
     }
 
 }
-
