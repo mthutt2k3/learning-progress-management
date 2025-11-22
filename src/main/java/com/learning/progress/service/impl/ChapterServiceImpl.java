@@ -71,27 +71,49 @@ public class ChapterServiceImpl implements ChapterService {
 
     @Override
     public ChapterDTO getChapter(Long id) {
+        final String method = "getChapter";
+        long startNs = System.nanoTime();
+        String traceId = TraceUtil.getTraceId();
+        log.info("[{}] enter traceId={} id={}", method, traceId, id);
+
         Chapter chapter = chapterRepository.findById(id)
                 .filter(c -> c.getDeletedAt() == null)
-                .orElseThrow(() -> new ApiException("Chapter không tìm thấy hoặc đã bị xóa", HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> {
+                    log.error("[{}] traceId={} chapter not found id={}", method, traceId, id);
+                    return new ApiException(Const.CHAPTER.NOT_FOUND, HttpStatus.NOT_FOUND.value());
+                });
+
+        long durationMs = (System.nanoTime() - startNs) / 1_000_000;
+        log.info("[{}] exit traceId={} id={} durationMs={}", method, traceId, id, durationMs);
         return chapterMapper.toChapterDTO(chapter);
     }
 
     @Override
     public DataResponse<List<ChapterDTO>> getChapterList(Long syllabusId, int page, int size, String searchText) {
+        final String method = "getChapterList";
+        long startNs = System.nanoTime();
+        String traceId = TraceUtil.getTraceId();
+        log.info("[{}] enter traceId={} syllabusId={} page={} size={} searchText={}", method, traceId, syllabusId, page, size, searchText);
+
         syllabusRepository.findById(syllabusId)
                 .filter(s -> s.getDeletedAt() == null)
-                .orElseThrow(() -> new ApiException("Syllabus không tìm thấy hoặc đã bị xóa", HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> {
+                    log.error("[{}] traceId={} syllabus not found id={}", method, traceId, syllabusId);
+                    return new ApiException(Const.SYLLABUS.NOT_FOUND, HttpStatus.NOT_FOUND.value());
+                });
 
         Page<Chapter> chapterPage = chapterRepository.findBySyllabusIdAndSearchText(syllabusId, searchText, PageRequest.of(page, size, Sort.by("orderNumber").ascending()));
         List<ChapterDTO> responses = chapterPage.getContent().stream()
                 .map(chapterMapper::toChapterDTO)
                 .collect(Collectors.toList());
 
+        long durationMs = (System.nanoTime() - startNs) / 1_000_000;
+        log.info("[{}] exit traceId={} syllabusId={} returned={} durationMs={}", method, traceId, syllabusId, responses.size(), durationMs);
+
         return DataResponse.<List<ChapterDTO>>builder()
                 .traceId(TraceUtil.getTraceId())
                 .success(true)
-                .message("Thành công")
+                .message(Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL)
                 .data(responses)
                 .timestamp(java.time.LocalDateTime.now())
                 .page(page)
@@ -104,9 +126,17 @@ public class ChapterServiceImpl implements ChapterService {
     @Override
     @Transactional
     public List<ChapterDTO> syncChapters(Long syllabusId, List<SyncChapterRequest> request) {
+        final String method = "syncChapters";
+        long startNs = System.nanoTime();
+        String traceId = TraceUtil.getTraceId();
+        log.info("[{}] enter traceId={} syllabusId={} requestSize={}", method, traceId, syllabusId, request != null ? request.size() : 0);
+
         Syllabus syllabus = syllabusRepository.findById(syllabusId)
                 .filter(s -> s.getDeletedAt() == null)
-                .orElseThrow(() -> new ApiException("Syllabus không tìm thấy", HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> {
+                    log.error("[{}] traceId={} syllabus not found id={}", method, traceId, syllabusId);
+                    return new ApiException(Const.SYLLABUS.NOT_FOUND, HttpStatus.NOT_FOUND.value());
+                });
 
         // Lấy tất cả active chapters hiện tại
         List<Chapter> existingActiveChapters = chapterRepository
@@ -130,18 +160,15 @@ public class ChapterServiceImpl implements ChapterService {
             // Validate ID required cho delete
             Set<ConstraintViolation<SyncChapterRequest>> violations = validator.validate(deleteReq, SyncChapterRequest.Deleted.class);
             if (!violations.isEmpty()) {
-                String errorMsg = violations.stream()
-                        .map(ConstraintViolation::getMessage)
-                        .collect(Collectors.joining(", "));
+                String errorMsg = violations.stream().map(ConstraintViolation::getMessage).collect(Collectors.joining(", "));
+                log.error("[{}] traceId={} validation error for delete: {}", method, traceId, errorMsg);
                 throw new ApiException(errorMsg, HttpStatus.BAD_REQUEST.value());
             }
 
             Long deleteId = deleteReq.getId();
             if (deleteId == null || !existingActiveIds.contains(deleteId)) {
-                throw new ApiException(
-                        "Chapter ID để xóa không tồn tại hoặc đã bị xóa: " + deleteId,
-                        HttpStatus.BAD_REQUEST.value()
-                );
+                log.error("[{}] traceId={} delete id invalid: {}", method, traceId, deleteId);
+                throw new ApiException(String.format("%s%s", Const.CHAPTER.IDS_NOT_FOUND, deleteId), HttpStatus.BAD_REQUEST.value());
             }
         }
 
@@ -157,7 +184,7 @@ public class ChapterServiceImpl implements ChapterService {
 
         if (!invalidExistingIds.isEmpty()) {
             throw new ApiException(
-                    "Các existing chapter ID không tồn tại: " + invalidExistingIds,
+                    String.format(Const.CHAPTER.EXISTING_IDS_NOT_FOUND, invalidExistingIds),
                     HttpStatus.BAD_REQUEST.value()
             );
         }
@@ -181,7 +208,7 @@ public class ChapterServiceImpl implements ChapterService {
 
                 if (usedNames.contains(normalizedName)) {
                     throw new ApiException(
-                            "Chapter name bị trùng lặp trong request: " + req.getChapterName(),
+                            String.format(Const.CHAPTER.DUPLICATE_NAME_IN_REQUEST, req.getChapterName()),
                             HttpStatus.BAD_REQUEST.value()
                     );
                 }
@@ -206,12 +233,12 @@ public class ChapterServiceImpl implements ChapterService {
             String name = req.getChapterName().trim().toLowerCase();
             if (!chapterNamesLower.add(name)) {
                 throw new ApiException(
-                        String.format("Tên chapter bị trùng (không phân biệt hoa thường): %s", req.getChapterName()),
+                        String.format(Const.CHAPTER.DUPLICATE_NAME_CASE_INSENSITIVE, req.getChapterName()),
                         HttpStatus.BAD_REQUEST.value()
                 );
             }
         }
-        
+
         // Check 1: Tất cả request IDs phải tồn tại trong DB active chapters
         Set<Long> invalidRequestIds = new HashSet<>();
         invalidRequestIds.addAll(requestExistingIds.stream()
@@ -223,7 +250,7 @@ public class ChapterServiceImpl implements ChapterService {
 
         if (!invalidRequestIds.isEmpty()) {
             throw new ApiException(
-                    "Các chapter ID không tồn tại hoặc đã bị xóa: " + invalidRequestIds,
+                    String.format(Const.CHAPTER.REQUEST_IDS_NOT_EXIST_OR_DELETED, invalidRequestIds),
                     HttpStatus.BAD_REQUEST.value()
             );
         }
@@ -239,7 +266,7 @@ public class ChapterServiceImpl implements ChapterService {
 
         if (!unhandledDbIds.isEmpty()) {
             throw new ApiException(
-                    String.format("Các chapter sau không được handle trong sync request: %s. FE phải bao gồm tất cả active chapters!", unhandledDbIds),
+                    String.format(Const.CHAPTER.UNHANDLED_IN_SYNC_REQUEST, unhandledDbIds),
                     HttpStatus.BAD_REQUEST.value()
             );
         }
@@ -250,8 +277,7 @@ public class ChapterServiceImpl implements ChapterService {
 
         if (actualNonDeletedCount != expectedNonDeletedCount) {
             throw new ApiException(
-                    String.format("Số lượng non-deleted chapters không khớp! Expected: %d, Actual: %d",
-                            expectedNonDeletedCount, actualNonDeletedCount),
+                    String.format(Const.CHAPTER.NON_DELETED_COUNT_MISMATCH, expectedNonDeletedCount, actualNonDeletedCount),
                     HttpStatus.BAD_REQUEST.value()
             );
         }
@@ -270,8 +296,7 @@ public class ChapterServiceImpl implements ChapterService {
 
         if (orderNumbers.size() != nonDeletedSize || !orderNumbers.equals(expectedOrders)) {
             throw new ApiException(
-                    String.format("Order numbers phải tuần tự từ 1 đến %d không trùng lặp và không có gap. Current: %s",
-                            nonDeletedSize, orderNumbers),
+                    String.format(Const.CHAPTER.ORDER_NUMBER_SEQUENCE_INVALID, nonDeletedSize, orderNumbers),
                     HttpStatus.BAD_REQUEST.value()
             );
         }
@@ -292,32 +317,38 @@ public class ChapterServiceImpl implements ChapterService {
         // New: check final count will not exceed configured maximum BEFORE any DB changes
         int finalCount = existingActiveChapters.size() - requestDeleteIds.size() + newRequests.size();
         if (finalCount > maxChaptersPerSyllabus) {
-            throw new ApiException(
-                    String.format("Số lượng chapter sau khi sync (%d) vượt quá giới hạn cho phép (%d).", finalCount, maxChaptersPerSyllabus),
-                    HttpStatus.BAD_REQUEST.value()
-            );
+            log.error("[{}] traceId={} final chapter count {} exceeds max {}", method, traceId, finalCount, maxChaptersPerSyllabus);
+            throw new ApiException(String.format(Const.CHAPTER.CHAPTER_COUNT_MISMATCH, finalCount, maxChaptersPerSyllabus), HttpStatus.BAD_REQUEST.value());
         }
 
         // 7. Process DELETE (chỉ cần ID)
         for (SyncChapterRequest deleteReq : deleteRequests) {
             Chapter chapter = chapterRepository.findById(deleteReq.getId())
                     .filter(c -> c.getDeletedAt() == null)
-                    .orElseThrow(() -> new ApiException("Chapter không tìm thấy để xóa", HttpStatus.NOT_FOUND.value()));
+                    .orElseThrow(() -> {
+                        log.error("[{}] traceId={} chapter not found for delete id={}", method, traceId, deleteReq.getId());
+                        return new ApiException(Const.CHAPTER.NOT_FOUND, HttpStatus.NOT_FOUND.value());
+                    });
             chapter.setDeletedBy(jwtUtil.extractEmailPrefixFromCurrentRequest());
             chapter.setDeletedAt(now);
             chapterRepository.save(chapter);
+            log.debug("[{}] traceId={} deleted chapter id={}", method, traceId, deleteReq.getId());
         }
 
         // 8. Process UPDATE existing
         for (SyncChapterRequest req : updateRequests) {
             Chapter chapter = chapterRepository.findById(req.getId())
                     .filter(c -> c.getDeletedAt() == null)
-                    .orElseThrow(() -> new ApiException("Chapter không tìm thấy: " + req.getId(), HttpStatus.NOT_FOUND.value()));
+                    .orElseThrow(() -> {
+                        log.error("[{}] traceId={} chapter not found for update id={}", method, traceId, req.getId());
+                        return new ApiException(Const.CHAPTER.NOT_FOUND, HttpStatus.NOT_FOUND.value());
+                    });
 
             chapter.setChapterName(req.getChapterName());
             chapter.setOrderNumber(req.getOrderNumber());
             Chapter saved = chapterRepository.save(chapter);
             result.add(chapterMapper.toChapterDTO(saved));
+            log.debug("[{}] traceId={} updated chapter id={}", method, traceId, saved.getId());
         }
 
         // 9. Process CREATE new (id = null)
@@ -330,27 +361,53 @@ public class ChapterServiceImpl implements ChapterService {
             Chapter saved = chapterRepository.saveAndFlush(newChapter);
             String chapterCode = DataUtil.generateChapterCode(saved.getId());
             saved.setChapterCode(chapterCode);
-
             saved = chapterRepository.save(saved);
             result.add(chapterMapper.toChapterDTO(saved));
+            log.debug("[{}] traceId={} created chapter id={} code={}", method, traceId, saved.getId(), chapterCode);
         }
 
+        long durationMs = (System.nanoTime() - startNs) / 1_000_000;
+        log.info("[{}] exit traceId={} syllabusId={} processed={} durationMs={}", method, traceId, syllabusId, result.size(), durationMs);
         return result;
     }
 
     @Override
     public byte[] generateChapterImportTemplate() {
-        return fileService.generateChapterImportTemplate();
+        final String method = "generateChapterImportTemplate";
+        long startNs = System.nanoTime();
+        String traceId = TraceUtil.getTraceId();
+        log.info("[{}] enter traceId={}", method, traceId);
+
+        byte[] template = fileService.generateChapterImportTemplate();
+
+        long durationMs = (System.nanoTime() - startNs) / 1_000_000;
+        log.info("[{}] exit traceId={} templateSizeBytes={} durationMs={}", method, traceId, template != null ? template.length : 0, durationMs);
+        return template;
     }
 
     @Override
     public String getChapterTemplateSasUrl() {
-        return blobSasService.generateSasUrl(chapterTemplate, Duration.ofMinutes(30));
+        final String method = "getChapterTemplateSasUrl";
+        long startNs = System.nanoTime();
+        String traceId = TraceUtil.getTraceId();
+        log.info("[{}] enter traceId={}", method, traceId);
+
+        String url = blobSasService.generateSasUrl(chapterTemplate, Duration.ofMinutes(30));
+        log.debug("[{}] traceId={} generated sas url", method, traceId);
+
+        long durationMs = (System.nanoTime() - startNs) / 1_000_000;
+        log.info("[{}] exit traceId={} durationMs={}", method, traceId, durationMs);
+        return url;
     }
 
     @Override
     @Transactional
     public List<ChapterDTO> importChaptersFromExcel(Long syllabusId, MultipartFile file) {
+        final String method = "importChaptersFromExcel";
+        long startNs = System.nanoTime();
+        String traceId = TraceUtil.getTraceId();
+        log.info("[{}] enter traceId={} syllabusId={} filePresent={}", method, traceId, syllabusId, file != null && !file.isEmpty());
+
         // Validate file
         validateExcelFile(file);
 
@@ -359,79 +416,62 @@ public class ChapterServiceImpl implements ChapterService {
         );
 
         if (importList.isEmpty()) {
-            throw new ApiException("File không có dữ liệu để import", HttpStatus.BAD_REQUEST.value());
+            log.error("[{}] traceId={} import file empty", method, traceId);
+            throw new ApiException(Const.CHAPTER.IMPORT_FILE_EMPTY, HttpStatus.BAD_REQUEST.value());
         }
 
-        // 1️⃣ Kiểm tra syllabus tồn tại & active
         Syllabus syllabus = syllabusRepository.findByIdAndDeletedAtIsNull(syllabusId)
                 .filter(s -> s.getDeletedAt() == null)
-                .orElseThrow(() -> new ApiException(
-                        String.format("Syllabus ID %d không tồn tại hoặc đã bị xóa", syllabusId),
-                        HttpStatus.BAD_REQUEST.value()
-                ));
+                .orElseThrow(() -> {
+                    log.error("[{}] traceId={} syllabus not found id={}", method, traceId, syllabusId);
+                    return new ApiException(String.format(Const.SYLLABUS.NOT_FOUND_WITH_ID, syllabusId), HttpStatus.BAD_REQUEST.value());
+                });
 
-        // 2️⃣ Lấy chapters hiện có
         List<Chapter> existingChapters = chapterRepository.findBySyllabusAndDeletedAtIsNullOrderByOrderNumberAsc(syllabus);
-        int lastOrderNumber = existingChapters.isEmpty() ? 0 :
-                existingChapters.get(existingChapters.size() - 1).getOrderNumber();
+        int lastOrderNumber = existingChapters.isEmpty() ? 0 : existingChapters.get(existingChapters.size() - 1).getOrderNumber();
 
         int totalChaptersAfterImport = existingChapters.size() + importList.size();
-        if (totalChaptersAfterImport > 100) {
-            throw new ApiException(
-                    String.format("Tổng số chapters cho syllabus ID %d sẽ vượt quá giới hạn 100 (hiện tại: %d, file import: %d)",
-                            syllabusId, existingChapters.size(), importList.size()),
-                    HttpStatus.BAD_REQUEST.value()
-            );
+        if (totalChaptersAfterImport > maxChaptersPerSyllabus) {
+            log.error("[{}] traceId={} total after import {} exceeds max {}", method, traceId, totalChaptersAfterImport, maxChaptersPerSyllabus);
+            throw new ApiException(String.format(Const.CHAPTER.IMPORT_TOTAL_EXCEEDS_LIMIT, syllabusId, existingChapters.size(), importList.size(), maxChaptersPerSyllabus), HttpStatus.BAD_REQUEST.value());
         }
 
-        // 3️⃣ Validate dữ liệu trong file
+        // Validate file rows
         Set<String> usedNames = new HashSet<>();
-        int rowIndex = 2; // dòng bắt đầu sau header
+        int rowIndex = 2; // header + 1
 
         for (ImportChapterDTO dto : importList) {
             String chapterName = dto.getChapterName();
 
             if (chapterName == null || chapterName.trim().isEmpty()) {
-                throw new ApiException(
-                        String.format("Dòng %d, Cột 'Chapter Name': Không được để trống", rowIndex),
-                        HttpStatus.BAD_REQUEST.value()
-                );
+                log.error("[{}] traceId={} row {} missing chapter name", method, traceId, rowIndex);
+                throw new ApiException(String.format(Const.CHAPTER.IMPORT_NAME_REQUIRED_ROW, rowIndex), HttpStatus.BAD_REQUEST.value());
             }
 
             String trimmedName = chapterName.trim();
 
             if (trimmedName.length() > 255) {
-                throw new ApiException(
-                        String.format("Dòng %d, 'Chapter Name' vượt quá 255 ký tự (hiện tại: %d)", rowIndex, trimmedName.length()),
-                        HttpStatus.BAD_REQUEST.value()
-                );
+                log.error("[{}] traceId={} row {} chapter name too long", method, traceId, rowIndex);
+                throw new ApiException(String.format(Const.CHAPTER.IMPORT_NAME_TOO_LONG_ROW, rowIndex, trimmedName.length()), HttpStatus.BAD_REQUEST.value());
             }
 
-            // Trùng trong file
             if (!usedNames.add(trimmedName.toLowerCase())) {
-                throw new ApiException(
-                        String.format("Dòng %d: Chapter Name '%s' bị trùng lặp trong file", rowIndex, trimmedName),
-                        HttpStatus.BAD_REQUEST.value()
-                );
+                log.error("[{}] traceId={} duplicate name in file row {} name={}", method, traceId, rowIndex, trimmedName);
+                throw new ApiException(String.format(Const.CHAPTER.IMPORT_DUPLICATE_NAME_IN_FILE, rowIndex, trimmedName), HttpStatus.BAD_REQUEST.value());
             }
 
-            // Trùng trong DB
             boolean exists = chapterRepository.existsBySyllabusAndChapterNameAndDeletedAtIsNull(syllabus, trimmedName);
             if (exists) {
-                throw new ApiException(
-                        String.format("Dòng %d: Chapter '%s' đã tồn tại trong hệ thống cho syllabus ID %d",
-                                rowIndex, trimmedName, syllabusId),
-                        HttpStatus.BAD_REQUEST.value()
-                );
+                log.error("[{}] traceId={} row {} chapter already exists in DB name={}", method, traceId, rowIndex, trimmedName);
+                throw new ApiException(String.format(Const.CHAPTER.IMPORT_ALREADY_EXISTS, rowIndex, trimmedName, syllabusId), HttpStatus.BAD_REQUEST.value());
             }
 
             rowIndex++;
         }
 
-        // 4️⃣ Import chapters nối tiếp thứ tự hiện có
+        // Import rows
         List<ChapterDTO> result = new ArrayList<>();
         int nextOrder = lastOrderNumber;
-
         for (ImportChapterDTO dto : importList) {
             Chapter newChapter = new Chapter();
             newChapter.setSyllabus(syllabus);
@@ -443,38 +483,45 @@ public class ChapterServiceImpl implements ChapterService {
             chapterRepository.save(saved);
 
             result.add(chapterMapper.toChapterDTO(saved));
+            log.debug("[{}] traceId={} imported chapter id={} name={}", method, traceId, saved.getId(), saved.getChapterName());
         }
 
+        long durationMs = (System.nanoTime() - startNs) / 1_000_000;
+        log.info("[{}] exit traceId={} syllabusId={} imported={} durationMs={}", method, traceId, syllabusId, result.size(), durationMs);
         return result;
     }
 
     // Validate Excel File
     private void validateExcelFile(MultipartFile file) {
+        final String method = "validateExcelFile";
+        String traceId = TraceUtil.getTraceId();
+        log.debug("[{}] enter traceId={} filePresent={}", method, traceId, file != null && !file.isEmpty());
+
         if (file == null || file.isEmpty()) {
-            throw new ApiException("File không được để trống", HttpStatus.BAD_REQUEST.value());
+            log.error("[{}] traceId={} file empty", method, traceId);
+            throw new ApiException(Const.FILE.EMPTY, HttpStatus.BAD_REQUEST.value());
         }
 
         String filename = file.getOriginalFilename();
-        if (filename == null ||
-                (!filename.endsWith(".xlsx") && !filename.endsWith(".xls"))) {
-            throw new ApiException(
-                    "File phải có định dạng Excel (.xlsx hoặc .xls)",
-                    HttpStatus.BAD_REQUEST.value()
-            );
+        if (filename == null || (!filename.endsWith(".xlsx") && !filename.endsWith(".xls"))) {
+            log.error("[{}] traceId={} invalid file extension: {}", method, traceId, filename);
+            throw new ApiException(Const.CHAPTER.FILE_INVALID_FORMAT, HttpStatus.BAD_REQUEST.value());
         }
 
-        // Validate file size (max 10MB)
         long maxSize = 10 * 1024 * 1024; // 10MB
         if (file.getSize() > maxSize) {
-            throw new ApiException(
-                    String.format("File vượt quá kích thước cho phép (Max: %dMB)", maxSize / (1024 * 1024)),
-                    HttpStatus.BAD_REQUEST.value()
-            );
+            log.error("[{}] traceId={} file too large: {} bytes", method, traceId, file.getSize());
+            throw new ApiException(String.format(Const.CHAPTER.FILE_TOO_LARGE, maxSize / (1024 * 1024)), HttpStatus.BAD_REQUEST.value());
         }
     }
 
     @Override
-    public byte[] validateChapterImportFile(Long syllabusId, MultipartFile file) {
+    public byte[] downloadChapterValidationFile(Long syllabusId, MultipartFile file) {
+        final String method = "validateChapterImportFile";
+        long startNs = System.nanoTime();
+        String traceId = TraceUtil.getTraceId();
+        log.info("[{}] enter traceId={} syllabusId={} filePresent={}", method, traceId, syllabusId, file != null && !file.isEmpty());
+
         ValidationResult<ImportChapterDTO> result = new ValidationResult<>();
         List<ImportChapterDTO> importList;
 
@@ -486,7 +533,8 @@ public class ChapterServiceImpl implements ChapterService {
             result.setTotalRows(importList.size());
 
             if (importList.isEmpty()) {
-                throw new ApiException("File không có dữ liệu để import", HttpStatus.BAD_REQUEST.value());
+                log.error("[{}] traceId={} import file empty", method, traceId);
+                throw new ApiException(Const.CHAPTER.IMPORT_FILE_EMPTY, HttpStatus.BAD_REQUEST.value());
             }
         } catch (ApiException e) {
             result.setTotalRows(0);
@@ -507,7 +555,7 @@ public class ChapterServiceImpl implements ChapterService {
         Syllabus syllabus = syllabusRepository.findByIdAndDeletedAtIsNull(syllabusId)
                 .filter(s -> s.getDeletedAt() == null)
                 .orElseThrow(() -> new ApiException(
-                        String.format("Syllabus ID %d không tồn tại hoặc đã bị xóa", syllabusId),
+                        String.format(Const.SYLLABUS.NOT_FOUND_WITH_ID, syllabusId),
                         HttpStatus.BAD_REQUEST.value()
                 ));
 

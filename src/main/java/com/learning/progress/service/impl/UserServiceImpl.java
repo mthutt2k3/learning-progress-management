@@ -93,6 +93,11 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public StudentProfileDTO createStudent(CreateStudentRequest request) {
+        final String method = "createStudent";
+        long startNs = System.nanoTime();
+        String traceId = TraceUtil.getTraceId();
+        log.info("[{}] enter traceId={} requestRole={} email={}", method, traceId, request.getRoleName(), request.getEmail());
+
         appValidator.validateEnumValue(Gender.class, request.getGender());
         DataUtil.validateDateOfBirth(request.getDateOfBirth());
         appValidator.validateAllowedEnumValue(
@@ -124,12 +129,18 @@ public class UserServiceImpl implements UserService {
         String password = DataUtil.generateRandomPassword(8);
         accountService.createAccountForExistUser(user, username, password);
 
+        long durationMs = (System.nanoTime() - startNs) / 1_000_000;
+        log.info("[{}] exit traceId={} createdUserId={} durationMs={}", method, traceId, user.getId(), durationMs);
         return mapToStudentProfileDTO(user);
     }
 
     @Override
     @Transactional
     public StudentProfileDTO updateStudent(Long userId, UpdateStudentRequest request) {
+        final String method = "updateStudent";
+        long startNs = System.nanoTime();
+        String traceId = TraceUtil.getTraceId();
+        log.info("[{}] enter traceId={} userId={}", method, traceId, userId);
 
         appValidator.validateEnumValue(Gender.class, request.getGender());
 
@@ -180,12 +191,19 @@ public class UserServiceImpl implements UserService {
 
         userRepository.save(user);
 
+        long durationMs = (System.nanoTime() - startNs) / 1_000_000;
+        log.info("[{}] exit traceId={} userId={} durationMs={}", method, traceId, userId, durationMs);
         return mapToStudentProfileDTO(user);
     }
 
     @Override
     @Transactional
     public StudentProfileDTO updateStudentStatus(Long userId, UserStatus newStatus) {
+        final String method = "updateStudentStatus";
+        long startNs = System.nanoTime();
+        String traceId = TraceUtil.getTraceId();
+        log.info("[{}] enter traceId={} userId={} newStatus={}", method, traceId, userId, newStatus);
+
         User user = userRepository.findByIdAndDeletedAtIsNull(userId)
                 .orElseThrow(() -> new ApiException(Const.USER.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
@@ -195,7 +213,7 @@ public class UserServiceImpl implements UserService {
                 Set.of(RoleName.STUDENT, RoleName.TEST_TAKER)
         );
         UserStatus oldStatus = user.getStatus();
-        // Quy tắc trạng thái
+
         if (UserStatus.PENDING.equals(oldStatus)) {
             throw new ApiException(Const.ACCOUNT.CANNOT_CHANGE_STATUS_TO_ACTIVE_MANUALLY, HttpStatus.FORBIDDEN.value());
         }
@@ -205,12 +223,18 @@ public class UserServiceImpl implements UserService {
         user.setStatus(newStatus);
         userRepository.save(user);
 
+        long durationMs = (System.nanoTime() - startNs) / 1_000_000;
+        log.info("[{}] exit traceId={} userId={} durationMs={}", method, traceId, userId, durationMs);
         return mapToStudentProfileDTO(user);
     }
 
     @Override
     public DataResponse<List<StudentProfileDTO>> getStudentList(int page, int size, String searchText, List<String> status, List<String> roleName, String sortBy, String sortDir) {
-        // Validate pagination and sort parameters
+        final String method = "getStudentList";
+        long startNs = System.nanoTime();
+        String traceId = TraceUtil.getTraceId();
+        log.info("[{}] enter traceId={} page={} size={} searchText={}", method, traceId, page, size, searchText);
+
         appValidator.validatePaginationParams(page, size);
         appValidator.validateSortParams(List.of("createdAt", "userName", "email", "fullName", "status"), sortBy, sortDir);
 
@@ -240,6 +264,8 @@ public class UserServiceImpl implements UserService {
                 .map(this::mapToStudentProfileDTO)
                 .collect(Collectors.toList());
 
+        long durationMs = (System.nanoTime() - startNs) / 1_000_000;
+        log.info("[{}] exit traceId={} page={} size={} durationMs={}", method, traceId, page, size, durationMs);
         return DataResponse.<List<StudentProfileDTO>>builder()
                 .traceId(TraceUtil.getTraceId())
                 .success(true)
@@ -505,6 +531,11 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional
     public void requestChangeEmail(Long userId, ChangeEmailRequest request) {
+        final String method = "requestChangeEmail";
+        long startNs = System.nanoTime();
+        String traceId = TraceUtil.getTraceId();
+        log.info("[{}] enter traceId={} userId={} newEmail={}", method, traceId, userId, request.getNewEmail());
+
         String username = jwtUtil.extractUsernameFromCurrentRequest();
         if (username == null || username.trim().isEmpty()) {
             throw new ApiException(Const.AUTH.INVALID_TOKEN_USERNAME, HttpStatus.UNAUTHORIZED.value());
@@ -513,7 +544,6 @@ public class UserServiceImpl implements UserService {
         User currentUser = userRepository.findByUserNameAndDeletedAtIsNull(username)
                 .orElseThrow(() -> new ApiException(Const.USER.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
-        // Lấy user mục tiêu dựa trên userId được truyền vào
         User targetUser = userRepository.findByIdAndDeletedAtIsNull(userId)
                 .orElseThrow(() -> new ApiException(Const.USER.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
@@ -521,39 +551,24 @@ public class UserServiceImpl implements UserService {
         RoleName currentRole = currentUser.getRole().getName();
         RoleName targetRole = targetUser.getRole().getName();
 
-        // --- Validate quyền đổi email ---
         if (!isSelf) {
-            // Chỉ một số role nhất định được đổi email người khác
             if (!List.of(RoleName.TEACHER, RoleName.TEACHING_ASSISTANT, RoleName.MANAGER).contains(currentRole)) {
                 throw new ApiException(Const.SECURITY.FORBIDDEN_ROLE, HttpStatus.FORBIDDEN.value());
             }
 
-            // Chỉ được đổi cho các role này
             if (!List.of(RoleName.STUDENT, RoleName.TEST_TAKER, RoleName.TEACHER, RoleName.TEACHING_ASSISTANT).contains(targetRole)) {
                 throw new ApiException(Const.SECURITY.FORBIDDEN_ROLE, HttpStatus.FORBIDDEN.value());
             }
 
-            // 🎯 Validate riêng theo role của người thực hiện
             if (currentRole == RoleName.MANAGER) {
-                // Manager chỉ được đổi email cho TEACHER/ASSISTANT ở trạng thái PENDING
                 if (List.of(RoleName.TEACHER, RoleName.TEACHING_ASSISTANT).contains(targetRole) && (targetUser.getStatus() != UserStatus.PENDING)) {
-                        throw new ApiException(
-                                "Manager chỉ được đổi email cho TEACHER/TEACHING_ASSISTANT ở trạng thái PENDING",
-                                HttpStatus.FORBIDDEN.value()
-                        );
-
+                    throw new ApiException(Const.EMAIL_CHANGE.MANAGER_ONLY_PENDING_TEACHERS, HttpStatus.FORBIDDEN.value());
                 }
-                // Manager có thể đổi email cho STUDENT/TEST_TAKER bất kỳ trạng thái nào
-            } else if (currentRole == RoleName.TEACHER || currentRole == RoleName.TEACHING_ASSISTANT && (!List.of(RoleName.STUDENT, RoleName.TEST_TAKER).contains(targetRole))) {
-                    throw new ApiException(
-                            "TEACHER/TEACHING_ASSISTANT chỉ được đổi email cho STUDENT/TEST_TAKER",
-                            HttpStatus.FORBIDDEN.value()
-                    );
-
+            } else if ((currentRole == RoleName.TEACHER || currentRole == RoleName.TEACHING_ASSISTANT) && (!List.of(RoleName.STUDENT, RoleName.TEST_TAKER).contains(targetRole))) {
+                throw new ApiException(Const.EMAIL_CHANGE.TEACHER_ONLY_STUDENTS, HttpStatus.FORBIDDEN.value());
             }
         }
 
-        // Validate trạng thái user trước khi xử lý
         if (targetUser.getStatus() == UserStatus.INACTIVE) {
             throw new ApiException(Const.USER.USER_INACTIVE, HttpStatus.BAD_REQUEST.value());
         }
@@ -561,7 +576,7 @@ public class UserServiceImpl implements UserService {
         String newEmail = request.getNewEmail();
 
         if (targetUser.getStatus() == UserStatus.ACTIVE && newEmail.equalsIgnoreCase(targetUser.getEmail())) {
-            throw new ApiException("Email mới không được trùng với email hiện tại khi user đang ACTIVE", HttpStatus.BAD_REQUEST.value());
+            throw new ApiException(Const.EMAIL_CHANGE.NEW_EMAIL_SAME_AS_CURRENT_WHEN_ACTIVE, HttpStatus.BAD_REQUEST.value());
         }
 
         targetUser.setChangeEmailTokenUsed(false);
@@ -583,12 +598,19 @@ public class UserServiceImpl implements UserService {
             default:
                 throw new ApiException(Const.USER.USER_INACTIVE, HttpStatus.BAD_REQUEST.value());
         }
-    }
 
+        long durationMs = (System.nanoTime() - startNs) / 1_000_000;
+        log.info("[{}] exit traceId={} userId={} durationMs={}", method, traceId, userId, durationMs);
+    }
 
     @Override
     @Transactional
     public UserProfileDTO confirmChangeEmail(String token) {
+        final String method = "confirmChangeEmail";
+        long startNs = System.nanoTime();
+        String traceId = TraceUtil.getTraceId();
+        log.info("[{}] enter traceId={} tokenPresent={}", method, traceId, token != null && !token.isBlank());
+
         EmailChangeTokenClaims claims = jwtUtil.validateEmailChangeToken(token);
         Long userId = claims.getUserId();
         String newEmail = claims.getNewEmail();
@@ -597,11 +619,14 @@ public class UserServiceImpl implements UserService {
                 .orElseThrow(() -> new ApiException(Const.USER.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         if(user.isChangeEmailTokenUsed()){
-            throw new ApiException("The link change email has already been used.", HttpStatus.BAD_REQUEST.value());
+            throw new ApiException(Const.EMAIL_CHANGE.CHANGE_LINK_ALREADY_USED, HttpStatus.BAD_REQUEST.value());
         }
         user.setChangeEmailTokenUsed(true);
         user.setEmail(newEmail);
         userRepository.save(user);
+
+        long durationMs = (System.nanoTime() - startNs) / 1_000_000;
+        log.info("[{}] exit traceId={} userId={} durationMs={}", method, traceId, userId, durationMs);
 
         RoleName roleName = user.getRole().getName();
         if (List.of(RoleName.STUDENT, RoleName.TEST_TAKER).contains(roleName)) {
@@ -617,6 +642,11 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional
     public void importStudentsFromExcel(MultipartFile file) {
+        final String method = "importStudentsFromExcel";
+        long startNs = System.nanoTime();
+        String traceId = TraceUtil.getTraceId();
+        log.info("[{}] enter traceId={} filePresent={}", method, traceId, file != null && !file.isEmpty());
+
         List<ImportStudentDTO> importList = fileService.readExcelData(file, "Import Data", ImportStudentDTO.class);
 
         String firstError = null;
@@ -628,45 +658,45 @@ public class UserServiceImpl implements UserService {
 
             // Email
             if (record.getEmail() == null || record.getEmail().isBlank()) {
-                firstError = "Row " + row + ": Email is required.";
+                firstError = String.format(Const.IMPORT_STUDENT.ROW_EMAIL_REQUIRED, row);
                 break;
             }
             if (!Pattern.matches(Const.VALIDATE_INPUT.regexEmail, record.getEmail())) {
-                firstError = "Row " + row + ": Invalid email format: " + record.getEmail();
+                firstError = String.format(Const.IMPORT_STUDENT.ROW_INVALID_EMAIL, row, record.getEmail());
                 break;
             }
 
             // Full name
             if (record.getFullName() == null || record.getFullName().trim().isEmpty()) {
-                firstError = "Row " + row + ": Full name is required.";
+                firstError = String.format(Const.IMPORT_STUDENT.ROW_FULL_NAME_REQUIRED, row);
                 break;
             }
 
             // Role
             if (!EnumUtil.isAllowedEnumValue(RoleName.class, record.getRoleName(),
                     Set.of(RoleName.STUDENT, RoleName.TEST_TAKER))) {
-                firstError = "Row " + row + ": Invalid role name: " + record.getRoleName();
+                firstError = String.format(Const.IMPORT_STUDENT.ROW_INVALID_ROLE, row, record.getRoleName());
                 break;
             }
 
             // Phone (optional)
             if (record.getPhoneNumber() != null &&
                     !DataUtil.isValidPhoneNumber(record.getPhoneNumber())) {
-                firstError = "Row " + row + ": Invalid phone number: " + record.getPhoneNumber();
+                firstError = String.format(Const.IMPORT_STUDENT.ROW_INVALID_PHONE, row, record.getPhoneNumber());
                 break;
             }
 
             // Gender (optional)
             if (record.getGender() != null &&
                     !EnumUtil.isValidEnum(Gender.class, record.getGender())) {
-                firstError = "Row " + row + ": Invalid gender: " + record.getGender();
+                firstError = String.format(Const.IMPORT_STUDENT.ROW_INVALID_GENDER, row, record.getGender());
                 break;
             }
 
             // Parent email (optional)
             if (record.getParentEmail() != null && !record.getParentEmail().isEmpty() &&
                     !Pattern.matches(Const.VALIDATE_INPUT.regexEmail, record.getParentEmail())) {
-                firstError = "Row " + row + ": Invalid parent email: " + record.getParentEmail();
+                firstError = String.format(Const.IMPORT_STUDENT.ROW_INVALID_PARENT_EMAIL, row, record.getParentEmail());
                 break;
             }
 
@@ -674,7 +704,7 @@ public class UserServiceImpl implements UserService {
             if (record.getLevelCode() != null && !record.getLevelCode().isBlank()) {
                 boolean levelExists = levelRepository.findByLevelCodeIgnoreCase(record.getLevelCode()).isPresent();
                 if (!levelExists) {
-                    firstError = "Row " + row + ": Level not found with code: " + record.getLevelCode();
+                    firstError = String.format(Const.IMPORT_STUDENT.ROW_LEVEL_NOT_FOUND, row, record.getLevelCode());
                     break;
                 }
             }
@@ -682,6 +712,7 @@ public class UserServiceImpl implements UserService {
 
         // Nếu có lỗi → dừng import
         if (firstError != null) {
+            log.error("[{}] traceId={} import validation failed: {}", method, traceId, firstError);
             throw new ApiException(firstError, HttpStatus.BAD_REQUEST.value());
         }
 
@@ -715,12 +746,20 @@ public class UserServiceImpl implements UserService {
 
             createStudent(request);
         }
+
+        long durationMs = (System.nanoTime() - startNs) / 1_000_000;
+        log.info("[{}] exit traceId={} importedRows={} durationMs={}", method, traceId, importList.size(), durationMs);
     }
 
 
     @Override
     @Transactional
     public void importTeachersFromExcel(MultipartFile file) {
+        final String method = "importTeachersFromExcel";
+        long startNs = System.nanoTime();
+        String traceId = TraceUtil.getTraceId();
+        log.info("[{}] enter traceId={} filePresent={}", method, traceId, file != null && !file.isEmpty());
+
         List<ImportTeacherDTO> importList =
                 fileService.readExcelData(file, "Import Data", ImportTeacherDTO.class);
 
@@ -733,29 +772,29 @@ public class UserServiceImpl implements UserService {
 
             // Email
             if (record.getEmail() == null || record.getEmail().trim().isEmpty()) {
-                firstError = "Row " + row + ": Email cannot be empty";
+                firstError = String.format(Const.IMPORT_TEACHER.ROW_EMAIL_REQUIRED, row);
                 break;
             }
             if (!Pattern.matches(Const.VALIDATE_INPUT.regexEmail, record.getEmail())) {
-                firstError = "Row " + row + ": Invalid email format: " + record.getEmail();
+                firstError = String.format(Const.IMPORT_TEACHER.ROW_INVALID_EMAIL, row, record.getEmail());
                 break;
             }
 
             // Full Name
             if (record.getFullName() == null || record.getFullName().trim().isEmpty()) {
-                firstError = "Row " + row + ": Full name cannot be empty";
+                firstError = String.format(Const.IMPORT_TEACHER.ROW_FULL_NAME_REQUIRED, row);
                 break;
             }
 
             // Role Name
             if (record.getRoleName() == null || record.getRoleName().trim().isEmpty()) {
-                firstError = "Row " + row + ": Role name cannot be empty";
+                firstError = String.format(Const.IMPORT_TEACHER.ROW_ROLE_NAME_REQUIRED, row);
                 break;
             }
 
             if (!EnumUtil.isAllowedEnumValue(RoleName.class, record.getRoleName(),
                     Set.of(RoleName.TEACHER, RoleName.TEACHING_ASSISTANT))) {
-                firstError = "Row " + row + ": Invalid role name: " + record.getRoleName();
+                firstError = String.format(Const.IMPORT_TEACHER.ROW_INVALID_ROLE, row, record.getRoleName());
                 break;
             }
 
@@ -764,7 +803,7 @@ public class UserServiceImpl implements UserService {
                     !record.getPhoneNumber().trim().isEmpty() &&
                     !DataUtil.isValidPhoneNumber(record.getPhoneNumber())) {
 
-                firstError = "Row " + row + ": Invalid phone number: " + record.getPhoneNumber();
+                firstError = String.format(Const.IMPORT_TEACHER.ROW_INVALID_PHONE, row, record.getPhoneNumber());
                 break;
             }
 
@@ -773,13 +812,14 @@ public class UserServiceImpl implements UserService {
                     !record.getGender().trim().isEmpty() &&
                     !EnumUtil.isValidEnum(Gender.class, record.getGender())) {
 
-                firstError = "Row " + row + ": Invalid gender: " + record.getGender();
+                firstError = String.format(Const.IMPORT_TEACHER.ROW_INVALID_GENDER, row, record.getGender());
                 break;
             }
         }
 
         // If any error exists → stop import
         if (firstError != null) {
+            log.error("[{}] traceId={} import validation failed: {}", method, traceId, firstError);
             throw new ApiException(firstError, HttpStatus.BAD_REQUEST.value());
         }
 
@@ -799,32 +839,11 @@ public class UserServiceImpl implements UserService {
 
             createTeacher(request);
         }
+
+        long durationMs = (System.nanoTime() - startNs) / 1_000_000;
+        log.info("[{}] exit traceId={} importedRows={} durationMs={}", method, traceId, importList.size(), durationMs);
     }
 
-
-
-    /**
-     * Xây dựng thông báo lỗi chi tiết cho toàn bộ file
-     */
-    private String buildDetailedErrorMessage(Map<Integer, List<String>> errorsByRow, int totalRows) {
-        StringBuilder message = new StringBuilder();
-        message.append("❌ Import thất bại! Phát hiện ").append(errorsByRow.size())
-                .append(" dòng lỗi trong tổng số ").append(totalRows).append(" dòng dữ liệu:\n\n");
-
-        for (Map.Entry<Integer, List<String>> entry : errorsByRow.entrySet()) {
-            int rowNumber = entry.getKey();
-            List<String> errors = entry.getValue();
-
-            message.append("📍 Dòng ").append(rowNumber).append(":\n");
-            for (String error : errors) {
-                message.append("   • ").append(error).append("\n");
-            }
-            message.append("\n");
-        }
-
-        message.append("⚠️ Vui lòng sửa các lỗi trên và thử lại!");
-        return message.toString();
-    }
 
     @Override
     public byte[] generateStudentImportTemplate() {
@@ -1335,7 +1354,7 @@ public class UserServiceImpl implements UserService {
         // Validate tất cả phải là ACTIVE hoặc INACTIVE
         List<User> pendingUsers = users.stream()
                 .filter(u -> u.getStatus() == UserStatus.PENDING)
-                .collect(Collectors.toList());
+                .toList();
 
         if (!pendingUsers.isEmpty()) {
             String pendingIds = pendingUsers.stream()
@@ -1368,7 +1387,7 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
-    public byte[] validateStudentImportFile(MultipartFile file) {
+    public byte[] downloadStudentValidationFile(MultipartFile file) {
         // Đọc và validate file
         List<ImportStudentDTO> importList = fileService.readExcelData(
                 file, "Import Data", ImportStudentDTO.class
@@ -1407,7 +1426,7 @@ public class UserServiceImpl implements UserService {
                 if (record.getGender() != null && !EnumUtil.isValidEnum(Gender.class, record.getGender())) {
                     errors.append("• Gender không hợp lệ\n");
                 }
-                if (record.getParentEmail() != null && !record.getParentEmail().isEmpty() &&
+                if (record.getParentEmail() != null && record.getParentEmail().isEmpty() &&
                         !Pattern.matches(Const.VALIDATE_INPUT.regexEmail, record.getParentEmail())) {
                     errors.append("• Parent Email không hợp lệ\n");
                 }
@@ -1446,7 +1465,7 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
-    public byte[] validateTeacherImportFile(MultipartFile file) {
+    public byte[] downloadTeacherValidationFile(MultipartFile file) {
         // Tương tự như student, nhưng dùng ImportTeacherDTO
         List<ImportTeacherDTO> importList = fileService.readExcelData(
                 file, "Import Data", ImportTeacherDTO.class
@@ -1524,3 +1543,4 @@ public class UserServiceImpl implements UserService {
         );
     }
 }
+

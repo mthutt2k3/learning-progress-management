@@ -12,11 +12,6 @@ import java.util.List;
 
 public interface ClassStudentService {
     DataResponse<List<ClassStudentResponse>> getStudentsInClass(Long classId, int page, int size, String text, List<ClassStudentStatus> status, String sortBy, String sortDir);
-    ClassStudentResponse getStudentProfile(Long classId, Long userId);
     void addStudentToClass(Long classId, AddStudentToClassRequest request);
     void removeStudentFromClass(Long classId, Long userId);
-    byte[] generateStudentImportTemplate();
-    String getStudentTemplateSasUrl();
-    void importStudentsFromExcel(MultipartFile file);
-    byte[] validateStudentToClassImportFile(MultipartFile file);
 }

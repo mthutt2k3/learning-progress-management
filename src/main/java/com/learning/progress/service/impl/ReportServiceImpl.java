@@ -43,10 +43,6 @@ public class ReportServiceImpl implements ReportService {
     private final AppValidator appValidator;
     private final JwtUtil jwtUtil;
 
-    private static final List<String> SKILL_TYPES = Arrays.asList(
-            "VOCABULARY", "READING", "LISTENING", "WRITING", "SPEAKING"
-    );
-
     /* --------------------------------------------------------
      * CLASS REPORT APIs
      * -------------------------------------------------------- */
@@ -54,30 +50,41 @@ public class ReportServiceImpl implements ReportService {
     @Override
     @Transactional(readOnly = true)
     public ClassReportDTO.ClassOverview getClassOverview(Long classId) {
+        final String method = "getClassOverview";
+        long startNs = System.nanoTime();
         String traceId = TraceUtil.getTraceId();
-        log.info("[{}] Getting class overview for classId: {}", traceId, classId);
+        log.info("[{}] {} enter classId={}", traceId, method, classId);
 
         validateClassAccess(classId);
+        log.debug("[{}] {} access validated for classId={}", traceId, method, classId);
 
         // Get average score
         BigDecimal averageScore = reportRepository.getAverageScoreByClass(classId);
         if (averageScore == null) averageScore = BigDecimal.ZERO;
+        log.debug("[{}] {} averageScore={}", traceId, method, averageScore);
 
         // Get completion rate
         BigDecimal completionRate = reportRepository.getCompletionRateByClass(classId);
         if (completionRate == null) completionRate = BigDecimal.ZERO;
+        log.debug("[{}] {} completionRate={}", traceId, method, completionRate);
 
         // Get lesson stats
         Map<String, Object> lessonStats = reportRepository.getLessonStatsByClass(classId);
         Integer totalLessons = getIntValue(lessonStats, "total_lessons");
         Integer completedLessons = getIntValue(lessonStats, "completed_lessons");
+        log.debug("[{}] {} lessonStats total={} completed={}", traceId, method, totalLessons, completedLessons);
 
         // Get member count by role
         List<Map<String, Object>> memberCounts = reportRepository.getMemberCountByRole(classId);
         ClassReportDTO.MemberCount memberCount = buildMemberCount(memberCounts);
+        log.debug("[{}] {} memberCount={}", traceId, method, memberCount);
 
         // Get total challenges
         Long totalChallenges = reportRepository.countChallengesByClass(classId);
+        log.debug("[{}] {} totalChallenges={}", traceId, method, totalChallenges);
+
+        long durationMs = (System.nanoTime() - startNs) / 1_000_000;
+        log.info("[{}] {} exit classId={} durationMs={}", traceId, method, classId, durationMs);
 
         return ClassReportDTO.ClassOverview.builder()
                 .averageScore(averageScore.setScale(2, RoundingMode.HALF_UP))
@@ -92,26 +99,35 @@ public class ReportServiceImpl implements ReportService {
     @Override
     @Transactional(readOnly = true)
     public ClassReportDTO.MembersDetail getMembersDetail(Long classId) {
+        final String method = "getMembersDetail";
+        long startNs = System.nanoTime();
         String traceId = TraceUtil.getTraceId();
-        log.info("[{}] Getting members detail for classId: {}", traceId, classId);
+        log.info("[{}] {} enter classId={}", traceId, method, classId);
 
         validateClassAccess(classId);
+        log.debug("[{}] {} access validated for classId={}", traceId, method, classId);
 
         // Role distribution
         List<Map<String, Object>> memberCounts = reportRepository.getMemberCountByRole(classId);
         List<ClassReportDTO.RoleDistribution> roleDistribution = buildRoleDistribution(memberCounts);
+        log.debug("[{}] {} roleDistributionSize={}", traceId, method, roleDistribution.size());
 
         // Teacher activities
         List<Map<String, Object>> teacherActivitiesData = reportRepository.getTeacherActivities(classId);
         List<ClassReportDTO.TeacherActivity> teacherActivities = teacherActivitiesData.stream()
                 .map(this::buildTeacherActivity)
                 .collect(Collectors.toList());
+        log.debug("[{}] {} teacherActivitiesSize={}", traceId, method, teacherActivities.size());
 
         // Student rankings
         List<Map<String, Object>> studentRankingsData = reportRepository.getStudentRankings(classId);
         List<ClassReportDTO.StudentRanking> studentRankings = studentRankingsData.stream()
                 .map(this::buildStudentRanking)
                 .collect(Collectors.toList());
+        log.debug("[{}] {} studentRankingsSize={}", traceId, method, studentRankings.size());
+
+        long durationMs = (System.nanoTime() - startNs) / 1_000_000;
+        log.info("[{}] {} exit classId={} durationMs={}", traceId, method, classId, durationMs);
 
         return ClassReportDTO.MembersDetail.builder()
                 .roleDistribution(roleDistribution)
@@ -123,16 +139,20 @@ public class ReportServiceImpl implements ReportService {
     @Override
     @Transactional(readOnly = true)
     public ClassReportDTO.ChallengeStatsBySkill getChallengeStatsBySkill(Long classId, ChallengeType skill) {
+        final String method = "getChallengeStatsBySkill";
         String traceId = TraceUtil.getTraceId();
-        log.info("[{}] Getting challenge stats by skill for classId: {}, skill: {}", traceId, classId, skill);
+        log.info("[{}] {} enter classId={} skill={}", traceId, method, classId, skill);
 
         validateClassAccess(classId);
+        log.debug("[{}] {} access validated for classId={}", traceId, method, classId);
 
         List<Map<String, Object>> challengeData = reportRepository.getChallengeStatsBySkill(classId, skill.toString());
         List<ClassReportDTO.ChallengeData> challenges = challengeData.stream()
                 .map(this::buildChallengeData)
                 .collect(Collectors.toList());
+        log.debug("[{}] {} challengesCount={}", traceId, method, challenges.size());
 
+        log.info("[{}] {} exit classId={}", traceId, method, classId);
         return ClassReportDTO.ChallengeStatsBySkill.builder()
                 .skill(skill.toString())
                 .challenges(challenges)
@@ -142,14 +162,14 @@ public class ReportServiceImpl implements ReportService {
     @Override
     @Transactional(readOnly = true)
     public ClassReportDTO.ChallengeProgressBySkill getChallengeProgressBySkill(Long classId) {
+        final String method = "getChallengeProgressBySkill";
         String traceId = TraceUtil.getTraceId();
-        log.info("[{}] Getting challenge progress by skill for classId: {}", traceId, classId);
+        log.info("[{}] {} enter classId={}", traceId, method, classId);
 
         validateClassAccess(classId);
+        log.debug("[{}] {} access validated for classId={}", traceId, method, classId);
 
         List<Map<String, Object>> progressData = reportRepository.getChallengeProgressBySkill(classId);
-
-        // Group by skill
         Map<String, List<Map<String, Object>>> groupedBySkill = progressData.stream()
                 .collect(Collectors.groupingBy(m -> (String) m.get("skill")));
 
@@ -160,7 +180,8 @@ public class ReportServiceImpl implements ReportService {
                 ))
                 .collect(Collectors.toList());
 
-
+        log.debug("[{}] {} skillCount={}", traceId, method, skills.size());
+        log.info("[{}] {} exit classId={}", traceId, method, classId);
         return ClassReportDTO.ChallengeProgressBySkill.builder()
                 .skills(skills)
                 .build();
@@ -173,12 +194,16 @@ public class ReportServiceImpl implements ReportService {
     @Override
     @Transactional(readOnly = true)
     public ChallengeReportDTO.ChallengeOverview getChallengeOverview(Long challengeId) {
+        final String method = "getChallengeOverview";
+        long startNs = System.nanoTime();
         String traceId = TraceUtil.getTraceId();
-        log.info("[{}] Getting challenge overview for challengeId: {}", traceId, challengeId);
+        log.info("[{}] {} enter challengeId={}", traceId, method, challengeId);
 
         DailyChallenge challenge = validateChallengeAccess(challengeId);
+        log.debug("[{}] {} loaded challenge id={} name={}", traceId, method, challenge.getId(), challenge.getChallengeName());
 
         Map<String, Object> stats = reportRepository.getChallengeOverviewStats(challengeId);
+        log.debug("[{}] {} rawStats={}", traceId, method, stats);
 
         BigDecimal averageScore = getBigDecimalValue(stats, "average_score");
         BigDecimal highestScore = getBigDecimalValue(stats, "highest_score");
@@ -191,6 +216,7 @@ public class ReportServiceImpl implements ReportService {
         Long totalStudents = classRepository.countActiveStudentsByClassId(
                 challenge.getClassLesson().getClassChapter().getClazz().getId()
         );
+        log.debug("[{}] {} totalStudents={}", traceId, method, totalStudents);
 
         ChallengeReportDTO.SubmissionStats submissionStats = ChallengeReportDTO.SubmissionStats.builder()
                 .completedCount(completedCount)
@@ -198,6 +224,9 @@ public class ReportServiceImpl implements ReportService {
                 .notStartedCount(notStartedCount)
                 .totalStudents(totalStudents)
                 .build();
+
+        long durationMs = (System.nanoTime() - startNs) / 1_000_000;
+        log.info("[{}] {} exit challengeId={} durationMs={}", traceId, method, challengeId, durationMs);
 
         return ChallengeReportDTO.ChallengeOverview.builder()
                 .challengeId(challenge.getId())
@@ -213,16 +242,20 @@ public class ReportServiceImpl implements ReportService {
     @Override
     @Transactional(readOnly = true)
     public ChallengeReportDTO.StudentPerformanceList getStudentPerformanceList(Long challengeId) {
+        final String method = "getStudentPerformanceList";
         String traceId = TraceUtil.getTraceId();
-        log.info("[{}] Getting student performance list for challengeId: {}", traceId, challengeId);
+        log.info("[{}] {} enter challengeId={}", traceId, method, challengeId);
 
         validateChallengeAccess(challengeId);
+        log.debug("[{}] {} challenge validated challengeId={}", traceId, method, challengeId);
 
         List<Map<String, Object>> performanceData = reportRepository.getStudentPerformanceByChallenge(challengeId);
         List<ChallengeReportDTO.StudentPerformance> students = performanceData.stream()
                 .map(this::buildStudentPerformance)
                 .collect(Collectors.toList());
+        log.debug("[{}] {} studentsSize={}", traceId, method, students.size());
 
+        log.info("[{}] {} exit challengeId={}", traceId, method, challengeId);
         return ChallengeReportDTO.StudentPerformanceList.builder()
                 .students(students)
                 .build();
@@ -231,16 +264,20 @@ public class ReportServiceImpl implements ReportService {
     @Override
     @Transactional(readOnly = true)
     public ChallengeReportDTO.ChallengeChartData getChallengeChartData(Long challengeId) {
+        final String method = "getChallengeChartData";
         String traceId = TraceUtil.getTraceId();
-        log.info("[{}] Getting challenge chart data for challengeId: {}", traceId, challengeId);
+        log.info("[{}] {} enter challengeId={}", traceId, method, challengeId);
 
         validateChallengeAccess(challengeId);
+        log.debug("[{}] {} challenge validated challengeId={}", traceId, method, challengeId);
 
         List<Map<String, Object>> performanceData = reportRepository.getStudentPerformanceByChallenge(challengeId);
         List<ChallengeReportDTO.StudentChartPoint> dataPoints = performanceData.stream()
                 .map(this::buildStudentChartPoint)
                 .collect(Collectors.toList());
+        log.debug("[{}] {} dataPointsSize={}", traceId, method, dataPoints.size());
 
+        log.info("[{}] {} exit challengeId={}", traceId, method, challengeId);
         return ChallengeReportDTO.ChallengeChartData.builder()
                 .dataPoints(dataPoints)
                 .build();
@@ -253,6 +290,8 @@ public class ReportServiceImpl implements ReportService {
     @Override
     @Transactional(readOnly = true)
     public StudentPerformanceDTO.StudentOverview getStudentOverview(Long userId) {
+        final String method = "getStudentOverview";
+        long startNs = System.nanoTime();
         String traceId = TraceUtil.getTraceId();
         String currentUserRole = jwtUtil.extractRoleFromCurrentRequest();
 
@@ -261,25 +300,28 @@ public class ReportServiceImpl implements ReportService {
             targetUserId = jwtUtil.extractUserIdFromCurrentRequest();
         } else {
             if (userId == null) {
-                throw badRequest("userId is required for teachers");
+                log.warn("[{}] {} missing userId for teacher call", traceId, method);
+                throw badRequest(Const.REPORT.USER_ID_REQUIRED_FOR_TEACHERS);
             }
             targetUserId = userId;
         }
 
-        log.info("[{}] Getting student overview for userId: {}", traceId, targetUserId);
+        log.info("[{}] {} enter targetUserId={}", traceId, method, targetUserId);
 
         // Get first class joined date
         Instant instant = reportRepository.getFirstClassJoinedDate(targetUserId);
         OffsetDateTime firstJoinedAt = instant != null
                 ? instant.atOffset(ZoneOffset.UTC)
                 : null;
-
+        log.debug("[{}] {} firstJoinedAt={}", traceId, method, firstJoinedAt);
 
         // Get current class info
         Map<String, Object> currentClassData = reportRepository.getCurrentClassInfo(targetUserId);
         if (currentClassData == null || currentClassData.isEmpty()) {
+            log.warn("[{}] {} no current class info for userId={}", traceId, method, targetUserId);
             return null;
         }
+        log.debug("[{}] {} currentClassData={}", traceId, method, currentClassData);
 
         Long classId = getLongValue(currentClassData, "class_id");
 
@@ -302,6 +344,10 @@ public class ReportServiceImpl implements ReportService {
         // Get challenge progress
         Map<String, Object> progressData = reportRepository.getStudentChallengeProgress(targetUserId, classId);
         StudentPerformanceDTO.ChallengeProgress challengeProgress = buildChallengeProgress(progressData);
+        log.debug("[{}] {} challengeProgress={}", traceId, method, challengeProgress);
+
+        long durationMs = (System.nanoTime() - startNs) / 1_000_000;
+        log.info("[{}] {} exit targetUserId={} durationMs={}", traceId, method, targetUserId, durationMs);
 
         return StudentPerformanceDTO.StudentOverview.builder()
                 .firstClassJoinedAt(firstJoinedAt)
@@ -314,6 +360,7 @@ public class ReportServiceImpl implements ReportService {
     @Override
     @Transactional(readOnly = true)
     public StudentPerformanceDTO.LevelHistory getStudentLevelHistory(Long userId) {
+        final String method = "getStudentLevelHistory";
         String traceId = TraceUtil.getTraceId();
         String currentUserRole = jwtUtil.extractRoleFromCurrentRequest();
 
@@ -322,14 +369,15 @@ public class ReportServiceImpl implements ReportService {
             targetUserId = jwtUtil.extractUserIdFromCurrentRequest();
         } else {
             if (userId == null) {
-                throw badRequest("userId is required for teachers");
+                log.warn("[{}] {} missing userId for teacher call", traceId, method);
+                throw badRequest(Const.REPORT.USER_ID_REQUIRED_FOR_TEACHERS);
             }
             targetUserId = userId;
         }
 
-        log.info("[{}] Getting student level history for userId: {}", traceId, targetUserId);
-
+        log.info("[{}] {} enter targetUserId={}", traceId, method, targetUserId);
         List<Map<String, Object>> historyData = reportRepository.getStudentLevelHistory(targetUserId);
+        log.debug("[{}] {} historyRows={}", traceId, method, historyData.size());
 
         // Group by level and then by class
         Map<Long, List<Map<String, Object>>> groupedByLevel = historyData.stream()
@@ -344,6 +392,7 @@ public class ReportServiceImpl implements ReportService {
                         Comparator.reverseOrder()))
                 .collect(Collectors.toList());
 
+        log.info("[{}] {} exit targetUserId={} levelsReturned={}", traceId, method, targetUserId, levels.size());
         return StudentPerformanceDTO.LevelHistory.builder()
                 .levels(levels)
                 .build();
@@ -440,63 +489,10 @@ public class ReportServiceImpl implements ReportService {
                 .build();
     }
 
-    private StudentPerformanceDTO.ClassDetail mapToClassDetail(Map<String, Object> data) {
-        Integer totalChallenges = getIntValue(data, "total_challenges");
-        Integer completedChallenges = getIntValue(data, "completed_challenges");
-        Integer lateChallenges = getIntValue(data, "late_challenges");
-        Integer notStartedChallenges = getIntValue(data, "not_started_challenges");
-
-        // Calculate rates
-        BigDecimal completionRate = calculateRate(completedChallenges, totalChallenges);
-        BigDecimal lateSubmissionRate = calculateRate(lateChallenges, totalChallenges);
-        BigDecimal notStartedRate = calculateRate(notStartedChallenges, totalChallenges);
-
-        return StudentPerformanceDTO.ClassDetail.builder()
-                .classId(getLongValue(data, "class_id"))
-                .className(getStringValue(data, "class_name"))
-                .classCode(getStringValue(data, "class_code"))
-                .startDate(getLocalDateValue(data, "start_date"))
-                .endDate(getLocalDateValue(data, "end_date"))
-                .joinedAt(getOffsetDateTimeValue(data, "joined_at"))
-                .leftAt(getOffsetDateTimeValue(data, "left_at"))
-
-                // Performance metrics
-                .ranking(getIntValue(data, "ranking"))
-                .studentAverageScore(getBigDecimalValue(data, "student_avg_score"))
-                .classAverageScore(getBigDecimalValue(data, "class_avg_score"))
-
-                // Completion stats
-                .completionRate(completionRate)
-                .lateSubmissionRate(lateSubmissionRate)
-                .notStartedRate(notStartedRate)
-                .totalChallenges(totalChallenges)
-                .completedChallenges(completedChallenges)
-                .lateChallenges(lateChallenges)
-                .notStartedChallenges(notStartedChallenges)
-
-                // Score by type
-                .scoreByType(StudentPerformanceDTO.ScoreByType.builder()
-                        .vocabularyAvg(getBigDecimalValue(data, "vocabulary_avg"))
-                        .readingAvg(getBigDecimalValue(data, "reading_avg"))
-                        .listeningAvg(getBigDecimalValue(data, "listening_avg"))
-                        .writingAvg(getBigDecimalValue(data, "writing_avg"))
-                        .speakingAvg(getBigDecimalValue(data, "speaking_avg"))
-                        .build())
-                .build();
-    }
-
     // Thêm helper method này nếu chưa có
     private String getStringValue(Map<String, Object> map, String key) {
         Object value = map.get(key);
         return value != null ? value.toString() : null;
-    }
-
-    private OffsetDateTime getOffsetDateTimeValue(Map<String, Object> map, String key) {
-        Object value = map.get(key);
-        if (value == null) return null;
-        if (value instanceof OffsetDateTime) return (OffsetDateTime) value;
-        if (value instanceof Instant) return ((Instant) value).atOffset(ZoneOffset.UTC);
-        return null;
     }
 
     private BigDecimal calculateRate(Integer count, Integer total) {
@@ -508,38 +504,35 @@ public class ReportServiceImpl implements ReportService {
                 .divide(BigDecimal.valueOf(total), 2, RoundingMode.HALF_UP);
     }
 
-    // Helper methods (nếu chưa có)
-    private LocalDate getLocalDateValue(Map<String, Object> map, String key) {
-        Object value = map.get(key);
-        if (value == null) return null;
-        if (value instanceof LocalDate) return (LocalDate) value;
-        if (value instanceof java.sql.Date) return ((java.sql.Date) value).toLocalDate();
-        return null;
-    }
-
     @Override
     @Transactional(readOnly = true)
     public StudentPerformanceDTO.ClassChallengeDetail getStudentClassChallengeDetail(Long classId, Long userId) {
+        final String method = "getStudentClassChallengeDetail";
+        long startNs = System.nanoTime();
         String traceId = TraceUtil.getTraceId();
-        String currentUserRole = jwtUtil.extractRoleFromCurrentRequest();
+        log.info("[{}] {} enter classId={} userId={}", traceId, method, classId, userId);
 
+        String currentUserRole = jwtUtil.extractRoleFromCurrentRequest();
         Long targetUserId;
         if ("STUDENT".equals(currentUserRole) || "TEST_TAKER".equals(currentUserRole)) {
             targetUserId = jwtUtil.extractUserIdFromCurrentRequest();
         } else {
             if (userId == null) {
-                throw badRequest("userId is required for teachers");
+                log.warn("[{}] {} missing userId for teacher call", traceId, method);
+                throw badRequest(Const.REPORT.USER_ID_REQUIRED_FOR_TEACHERS);
             }
             targetUserId = userId;
         }
-        log.info("[{}] Getting student class challenge detail for userId: {}, classId: {}", traceId, targetUserId, classId);
+        log.debug("[{}] {} targetUserId={}", traceId, method, targetUserId);
 
         // Validate student is/was in this class
         validateStudentClassAccess(targetUserId, classId);
+        log.debug("[{}] {} validated student-class relation targetUserId={} classId={}", traceId, method, targetUserId, classId);
 
         // Get class and level info
         Map<String, Object> classData = classRepository.getClassWithLevelInfo(classId);
         if (classData == null) {
+            log.warn("[{}] {} class not found classId={}", traceId, method, classId);
             return null;
         }
 
@@ -576,6 +569,9 @@ public class ReportServiceImpl implements ReportService {
                         .multiply(BigDecimal.valueOf(100))
                         .setScale(2, RoundingMode.HALF_UP);
 
+        long durationMs = (System.nanoTime() - startNs) / 1_000_000;
+        log.info("[{}] {} exit classId={} userId={} durationMs={}", traceId, method, classId, userId, durationMs);
+
         return StudentPerformanceDTO.ClassChallengeDetail.builder()
                 .classId(classId)
                 .className((String) classData.get("class_name"))
@@ -591,27 +587,33 @@ public class ReportServiceImpl implements ReportService {
      * -------------------------------------------------------- */
 
     private void validateClassAccess(Long classId) {
+        String traceId = TraceUtil.getTraceId();
+        log.debug("[{}] validateClassAccess classId={}", traceId, classId);
         classRepository.findById(classId)
                 .filter(c -> c.getDeletedAt() == null)
-                .orElseThrow(() -> notFound("Class not found"));
+                .orElseThrow(() -> notFound(Const.CLASS.NOT_FOUND));
         appValidator.validateUserAccessToClass(classId);
+        log.debug("[{}] validateClassAccess success classId={}", traceId, classId);
     }
 
     private DailyChallenge validateChallengeAccess(Long challengeId) {
+        String traceId = TraceUtil.getTraceId();
+        log.debug("[{}] validateChallengeAccess challengeId={}", traceId, challengeId);
         DailyChallenge challenge = dailyChallengeRepository.findByIdAndDeletedAtIsNull(challengeId)
                 .orElseThrow(() -> notFound(Const.CHALLENGE.NOT_FOUND));
         appValidator.validateUserAccessToClass(
                 challenge.getClassLesson().getClassChapter().getClazz().getId()
         );
+        log.debug("[{}] validateChallengeAccess success challengeId={}", traceId, challengeId);
         return challenge;
     }
 
     private void validateStudentClassAccess(Long userId, Long classId) {
-        // This should check if student is/was ever in this class
-        // For now, just validate class exists
+        String traceId = TraceUtil.getTraceId();
+        log.debug("[{}] validateStudentClassAccess userId={} classId={}", traceId, userId, classId);
         classRepository.findById(classId)
                 .filter(c -> c.getDeletedAt() == null)
-                .orElseThrow(() -> notFound("Class not found"));
+                .orElseThrow(() -> notFound(Const.CLASS.NOT_FOUND));
     }
 
     /* --------------------------------------------------------
@@ -1170,26 +1172,6 @@ public class ReportServiceImpl implements ReportService {
         int copyPasteAttempts;  // ĐỔI: Gộp copy + paste
     }
 
-    private CheatStats analyzeCheatBehavior(List<String> logsJsonList) {
-        int totalTabSwitches = 0;
-        int totalCopyPasteAttempts = 0;
-
-        for (String logsJson : logsJsonList) {
-            if (logsJson == null || logsJson.isEmpty()) continue;
-
-            try {
-                totalTabSwitches += countEventType(logsJson, "TAB_SWITCH");
-                // ĐỔI: Đếm cả COPY và PASTE
-                totalCopyPasteAttempts += countEventType(logsJson, "COPY_ATTEMPT");
-                totalCopyPasteAttempts += countEventType(logsJson, "PASTE_ATTEMPT");
-            } catch (Exception e) {
-                log.warn("Failed to parse submission logs: {}", e.getMessage());
-            }
-        }
-
-        return new CheatStats(totalTabSwitches, totalCopyPasteAttempts);
-    }
-
     private int countEventType(String logsJson, String eventType) {
         String pattern = "\"event\": \"" + eventType + "\"";
         int count = 0;
@@ -1199,43 +1181,6 @@ public class ReportServiceImpl implements ReportService {
             index += pattern.length();
         }
         return count;
-    }
-
-    private Map<String, List<BigDecimal>> groupScoresBySkill(List<Map<String, Object>> skillScores) {
-        Map<String, List<BigDecimal>> grouped = new HashMap<>();
-
-        for (Map<String, Object> row : skillScores) {
-            String skillType = (String) row.get("challenge_type");
-            BigDecimal score = getBigDecimalValue(row, "final_score");
-
-            grouped.computeIfAbsent(skillType, k -> new ArrayList<>()).add(score);
-        }
-
-        return grouped;
-    }
-
-    private boolean isDecliningSkill(List<BigDecimal> scores) {
-        if (scores.size() < 3) return false;
-
-        // Check 1: 3 bài liền giảm dần
-        boolean consecutive = true;
-        for (int i = 0; i < Math.min(3, scores.size() - 1); i++) {
-            if (scores.get(i).compareTo(scores.get(i + 1)) <= 0) {
-                consecutive = false;
-                break;
-            }
-        }
-        if (consecutive) return true;
-
-        // Check 2: Bài mới nhất giảm > 2 điểm so với bài thứ 3
-        if (scores.size() >= 3) {
-            BigDecimal latest = scores.get(0);
-            BigDecimal third = scores.get(2);
-            BigDecimal drop = third.subtract(latest);
-            if (drop.compareTo(BigDecimal.valueOf(SKILL_DROP_THRESHOLD)) > 0) return true;
-        }
-
-        return false;
     }
 
     private RiskType mapSkillToRiskType(String skillType) {
@@ -1259,15 +1204,6 @@ public class ReportServiceImpl implements ReportService {
                 .divide(BigDecimal.valueOf(total), 4, RoundingMode.HALF_UP)
                 .multiply(BigDecimal.valueOf(100))
                 .setScale(2, RoundingMode.HALF_UP);
-    }
-
-    private BigDecimal calculateAverage(List<BigDecimal> values) {
-        if (values == null || values.isEmpty()) return BigDecimal.ZERO;
-
-        BigDecimal sum = values.stream()
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-        return sum.divide(BigDecimal.valueOf(values.size()), 2, RoundingMode.HALF_UP);
     }
 
     private Long getLongValue(Map<String, Object> map, String key) {
@@ -1317,3 +1253,4 @@ public class ReportServiceImpl implements ReportService {
         return new ApiException(msg, HttpStatus.NOT_FOUND.value());
     }
 }
+

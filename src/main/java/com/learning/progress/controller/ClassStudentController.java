@@ -48,13 +48,6 @@ public class ClassStudentController {
         );
     }
 
-    @PreAuthorize("hasAnyRole('MANAGER', 'TEACHER', 'TEACHING_ASSISTANT')")
-    @GetMapping("/{classId}/student/{userId}/profile")
-    @Operation(summary = "View Student Profile", description = "Retrieve detailed profile of a student in a class")
-    public ResponseEntity<?> viewStudentProfile(@PathVariable Long classId, @PathVariable Long userId) {
-        ClassStudentResponse response = classStudentService.getStudentProfile(classId, userId);
-        return ResponseEntity.ok(DataResponse.success(response, Const.CLASS_STUDENT.PROFILE_RETRIEVED));
-    }
     @PreAuthorize("hasRole('MANAGER')")
     @PostMapping("/{classId}/add-student")
     @Operation(summary = "Add Student to Class", description = "Add a student to a specific class")
@@ -71,60 +64,4 @@ public class ClassStudentController {
         return ResponseEntity.ok(DataResponse.success(Const.CLASS_STUDENT.STUDENT_REMOVED, Const.CLASS_STUDENT.STUDENT_REMOVED));
     }
 
-    @PreAuthorize("hasRole('MANAGER')")
-    @GetMapping("/upload-template")
-    @Operation(summary = "Upload Student Import Template", description = "Download Excel template for importing students")
-    public ResponseEntity<ByteArrayResource> uploadImportTemplate() {
-        byte[] template = classStudentService.generateStudentImportTemplate();
-        ByteArrayResource resource = new ByteArrayResource(template);
-        return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=student_import_template.xlsx")
-                .contentType(MediaType.APPLICATION_OCTET_STREAM)
-                .contentLength(template.length)
-                .body(resource);
-    }
-
-    @PreAuthorize("hasRole('MANAGER')")
-    @GetMapping("/download-template")
-    @Operation(summary = "Download Student Import Template", description = "Get SAS URL for downloading student import template")
-    public ResponseEntity<String> downloadImportTemplate() {
-        try {
-            String sasUrl = classStudentService.getStudentTemplateSasUrl();
-            return ResponseEntity.ok(sasUrl);
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body("Error generating SAS URL: " + e.getMessage());
-        }
-    }
-
-    @PreAuthorize("hasRole('MANAGER')")
-    @PostMapping("/import-students")
-    @Operation(summary = "Import Students from Excel", description = "Import multiple students to a class from an Excel file")
-    public ResponseEntity<?> importStudentsFromExcel(@RequestParam("file") MultipartFile file) {
-        classStudentService.importStudentsFromExcel(file);
-        return ResponseEntity.ok(DataResponse.success(Const.CLASS_STUDENT.STUDENTS_IMPORTED, Const.CLASS_STUDENT.STUDENTS_IMPORTED));
-    }
-
-    @PreAuthorize("hasRole('MANAGER')")
-    @PostMapping("/validate-import")
-    @Operation(
-            summary = "Validate Student to Class Import File",
-            description = "Validate Excel file without importing. Returns validation result file."
-    )
-    public ResponseEntity<ByteArrayResource> validateStudentToClassImport(
-            @RequestParam("file") MultipartFile file) {
-
-        byte[] validationFile = classStudentService.validateStudentToClassImportFile(file);
-        ByteArrayResource resource = new ByteArrayResource(validationFile);
-
-        String filename = "StudentToClass_Validation_" +
-                new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date()) +
-                ".xlsx";
-
-        return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=" + filename)
-                .contentType(MediaType.APPLICATION_OCTET_STREAM)
-                .contentLength(validationFile.length)
-                .body(resource);
-    }
 }

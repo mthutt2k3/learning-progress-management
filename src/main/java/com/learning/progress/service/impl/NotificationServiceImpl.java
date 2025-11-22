@@ -299,6 +299,5 @@ public class NotificationServiceImpl implements NotificationService {
                 log.error("[{}] Redis publish failed for receiverId {} notificationId {}: {}", traceId, persisted.getReceiver().getId(), persisted.getId(), e.getMessage(), e);
             }
         }
-
     }
 }

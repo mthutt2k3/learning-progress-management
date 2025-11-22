@@ -118,7 +118,7 @@ public class LessonController {
             @Parameter(description = "Excel file to validate")
             @RequestParam("file") MultipartFile file) {
 
-        byte[] validationFile = lessonService.validateLessonImportFile(file);
+        byte[] validationFile = lessonService.downloadLessonValidationFile(file);
         ByteArrayResource resource = new ByteArrayResource(validationFile);
 
         String filename = "Lesson_Validation_" +

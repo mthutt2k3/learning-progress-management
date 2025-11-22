@@ -17,6 +17,7 @@ import com.learning.progress.service.GradingDailyChallengeService;
 import com.learning.progress.service.QuestionService;
 import com.learning.progress.util.AppValidator;
 import com.learning.progress.util.JwtUtil;
+import com.learning.progress.util.TraceUtil;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validator;
 import lombok.extern.slf4j.Slf4j;
@@ -45,14 +46,9 @@ public class ChallengeSectionServiceImpl implements ChallengeSectionService {
     @Autowired private AppValidator appValidator;
     @Autowired private JwtUtil jwtUtil;
     @Autowired private Validator validator;
-    @Autowired private QuestionRepository questionRepository;
     @Autowired private CacheService cacheService;
     @Autowired
-    private SubmissionDailyChallengeRepository submissionDailyChallengeRepository;
-    @Autowired
     private DailyChallengeRepository dailyChallengeRepository;
-    @Autowired
-    private GradingDailyChallengeService gradingDailyChallengeService;
     @Autowired
     private GradingDailyChallengeRepository gradingDailyChallengeRepository;
 
@@ -63,8 +59,10 @@ public class ChallengeSectionServiceImpl implements ChallengeSectionService {
     @Override
     @Transactional
     public SectionWithQuestionsDto saveSection(Long challengeId, SectionWithQuestionsDto dto) {
+        final String method = "saveSection";
+        String traceId = TraceUtil.getTraceId();
         long tStart = System.currentTimeMillis();
-        log.info("Saving section for challengeId: {}", challengeId);
+        log.info("[{}] enter traceId={} Saving section for challengeId: {}", method, traceId, challengeId);
 
         long tValidateStart = System.currentTimeMillis();
         validateSectionDto(dto);
@@ -76,9 +74,9 @@ public class ChallengeSectionServiceImpl implements ChallengeSectionService {
 
         // Check if the challenge is already published or higher
         if (challenge.getChallengeStatus().isPublishedOrHigher()) {
-            log.info("Challenge is in PUBLISHED or higher status. Only updates are allowed.");
+            log.info("[{}] traceId={} Challenge is in PUBLISHED or higher status. Only updates are allowed.", method, traceId);
             if (dto.getSection().getId() == null) {
-                throw new ApiException("Cannot create a new section for a published challenge.", HttpStatus.BAD_REQUEST.value());
+                throw new ApiException(Const.SECTION.CANNOT_CREATE_FOR_PUBLISHED, HttpStatus.BAD_REQUEST.value());
             }
         }
 
@@ -101,26 +99,26 @@ public class ChallengeSectionServiceImpl implements ChallengeSectionService {
         long tCacheClear = System.currentTimeMillis() - tCacheClearStart;
 
         if (challenge.getChallengeStatus().isPublishedOrHigher()) {
-            log.info("Checking if questions were updated to trigger auto-grading.");
+            log.info("[{}] traceId={} Checking if questions were updated to trigger auto-grading.", method, traceId);
             boolean hasUpdates = questionService.hasUpdates(dto.getQuestions(), section.getId());
 
             if (hasUpdates) {
-                log.info("Questions updated for published challenge ID {}. Reopening all finalized gradings.", challenge.getId());
+                log.info("[{}] traceId={} Questions updated for published challenge ID {}. Reopening all finalized gradings.", method, traceId, challenge.getId());
 
                 int reopenedCount = gradingDailyChallengeRepository.reopenGradingForChallenge(challenge.getId());
 
-                log.info("Reopened {} finalized gradings for regrading due to question updates.", reopenedCount);
+                log.info("[{}] traceId={} Reopened {} finalized gradings for regrading due to question updates.", method, traceId, reopenedCount);
 
             } else {
-                log.debug("No question updates detected for challenge ID {}.", challenge.getId());
+                log.debug("[{}] traceId={} No question updates detected for challenge ID {}.", method, traceId, challenge.getId());
             }
         }
 
         long total = System.currentTimeMillis() - tStart;
-        log.info("saveSection durations(ms) validate={}, loadChallenge={}, accessChecks={}, saveSection={}, saveQuestions={}, cacheClear={}, total={}",
-                tValidate, tLoadChallenge, tAccess, tSaveSection, tSaveQuestions, tCacheClear, total);
+        log.info("[{}] traceId={} saveSection durations(ms) validate={}, loadChallenge={}, accessChecks={}, saveSection={}, saveQuestions={}, cacheClear={}, total={}",
+                method, traceId, tValidate, tLoadChallenge, tAccess, tSaveSection, tSaveQuestions, tCacheClear, total);
 
-        log.info("Successfully saved section with ID: {} for challengeId: {}", section.getId(), challengeId);
+        log.info("[{}] traceId={} Successfully saved section with ID: {} for challengeId: {}", method, traceId, section.getId(), challengeId);
         return challengeSectionMapper.toSectionWithQuestionsDto(section, questions);
     }
 
@@ -286,25 +284,27 @@ public class ChallengeSectionServiceImpl implements ChallengeSectionService {
     @Override
     @Transactional
     public void bulkOrderSection(Long challengeId, List<QuickBulkSectionRequest> dtos) {
+        final String method = "bulkOrderSection";
+        String traceId = TraceUtil.getTraceId();
         long tTotalStart = System.currentTimeMillis();
-        log.info("Processing bulk order for {} sections in challengeId: {}", dtos.size(), challengeId);
+        log.info("[{}] enter traceId={} Processing bulk order for {} sections in challengeId: {}", method, traceId, dtos.size(), challengeId);
 
         long tStepStart;
         long tStepElapsed;
         DailyChallenge challenge = dailyChallengeRepository.findByIdAndDeletedAtIsNull(challengeId)
                 .orElseThrow(() -> {
-                    log.error("Challenge not found for challengeId: {}", challengeId);
+                    log.error("[{}] traceId={} Challenge not found for challengeId: {}", method, traceId, challengeId);
                     return new ApiException(Const.CHALLENGE.NOT_FOUND, HttpStatus.NOT_FOUND.value());
                 });
         // 1. loadExistingSections
         tStepStart = System.currentTimeMillis();
         List<ChallengeSection> existingSections = loadExistingSections(challengeId);
         tStepElapsed = System.currentTimeMillis() - tStepStart;
-        log.debug("bulkOrderSection - loadExistingSections: {} ms", tStepElapsed);
+        log.debug("[{}] traceId={} bulkOrderSection - loadExistingSections: {} ms", method, traceId, tStepElapsed);
 
         if (existingSections.isEmpty()) {
-            log.warn("No sections to process for challengeId: {}", challengeId);
-            log.info("bulkOrderSection total: {} ms", System.currentTimeMillis() - tTotalStart);
+            log.warn("[{}] traceId={} No sections to process for challengeId: {}", method, traceId, challengeId);
+            log.info("[{}] traceId={} bulkOrderSection total: {} ms", method, traceId, System.currentTimeMillis() - tTotalStart);
             return;
         }
 
@@ -313,48 +313,48 @@ public class ChallengeSectionServiceImpl implements ChallengeSectionService {
         appValidator.validateClassIsActive(challenge.getClassLesson().getClassChapter().getClazz().getId());
         validateUserAccessToClass(challenge.getClassLesson().getClassChapter().getClazz().getId());
         tStepElapsed = System.currentTimeMillis() - tStepStart;
-        log.debug("bulkOrderSection - validateUserAccessToClass: {} ms", tStepElapsed);
+        log.debug("[{}] traceId={} bulkOrderSection - validateUserAccessToClass: {} ms", method, traceId, tStepElapsed);
 
         // 3. filter requests
         tStepStart = System.currentTimeMillis();
         List<QuickBulkSectionRequest> deleteRequests = filterDeleteRequests(dtos);
         List<QuickBulkSectionRequest> nonDeletedRequests = filterNonDeletedRequests(dtos);
         tStepElapsed = System.currentTimeMillis() - tStepStart;
-        log.debug("bulkOrderSection - filterDelete/NonDeletedRequests: {} ms (delete={}, nonDeleted={})",
-                tStepElapsed, deleteRequests.size(), nonDeletedRequests.size());
+        log.debug("[{}] traceId={} bulkOrderSection - filterDelete/NonDeletedRequests: {} ms (delete={}, nonDeleted={})",
+                method, traceId, tStepElapsed, deleteRequests.size(), nonDeletedRequests.size());
 
         if(challenge.getChallengeStatus().isPublishedOrHigher() && !deleteRequests.isEmpty()) {
-            log.error("Cannot delete sections for a published or higher challenge: {}", challengeId);
-            throw new ApiException("Cannot delete sections for a published or higher challenge.", HttpStatus.BAD_REQUEST.value());
+            log.error("[{}] traceId={} Cannot delete sections for a published or higher challenge: {}", method, traceId, challengeId);
+            throw new ApiException(Const.SECTION.CANNOT_DELETE_FOR_PUBLISHED, HttpStatus.BAD_REQUEST.value());
         }
 
         // 4. validateBulkRequests
         tStepStart = System.currentTimeMillis();
         validateBulkRequests(existingSections, deleteRequests, nonDeletedRequests);
         tStepElapsed = System.currentTimeMillis() - tStepStart;
-        log.debug("bulkOrderSection - validateBulkRequests: {} ms", tStepElapsed);
+        log.debug("[{}] traceId={} bulkOrderSection - validateBulkRequests: {} ms", method, traceId, tStepElapsed);
 
         // 5. loadSectionMap
         tStepStart = System.currentTimeMillis();
         Map<Long, ChallengeSection> sectionMap = loadSectionMap(deleteRequests, nonDeletedRequests);
         tStepElapsed = System.currentTimeMillis() - tStepStart;
-        log.debug("bulkOrderSection - loadSectionMap: {} ms (mapSize={})", tStepElapsed, sectionMap.size());
+        log.debug("[{}] traceId={} bulkOrderSection - loadSectionMap: {} ms (mapSize={})", method, traceId, tStepElapsed, sectionMap.size());
 
         // 6. processSections (delete + update)
         tStepStart = System.currentTimeMillis();
         processSections(deleteRequests, nonDeletedRequests, sectionMap);
         tStepElapsed = System.currentTimeMillis() - tStepStart;
-        log.debug("bulkOrderSection - processSections: {} ms", tStepElapsed);
+        log.debug("[{}] traceId={} bulkOrderSection - processSections: {} ms", method, traceId, tStepElapsed);
 
         // 7. clear cache per section & challenge
         tStepStart = System.currentTimeMillis();
         cacheService.clearCacheForChallenge(challengeId);
         tStepElapsed = System.currentTimeMillis() - tStepStart;
-        log.debug("bulkOrderSection - cacheClear: {} ms", tStepElapsed);
+        log.debug("[{}] traceId={} bulkOrderSection - cacheClear: {} ms", method, traceId, tStepElapsed);
 
         long tTotalElapsed = System.currentTimeMillis() - tTotalStart;
-        log.info("Successfully processed bulk order: {} deleted, {} reordered for challengeId: {} (total {} ms)",
-                deleteRequests.size(), nonDeletedRequests.size(), challengeId, tTotalElapsed);
+        log.info("[{}] traceId={} Successfully processed bulk order: {} deleted, {} reordered for challengeId: {} (total {} ms)",
+                method, traceId, deleteRequests.size(), nonDeletedRequests.size(), challengeId, tTotalElapsed);
     }
 
     // ===================================================================
@@ -461,7 +461,7 @@ public class ChallengeSectionServiceImpl implements ChallengeSectionService {
             validateBean(dto, QuickBulkSectionRequest.Deleted.class);
             if (!existingIds.contains(dto.getId())) {
                 log.error("Invalid section ID for deletion: {}", dto.getId());
-                throw new ApiException("Section ID to delete does not exist: " + dto.getId(), HttpStatus.BAD_REQUEST.value());
+                throw new ApiException(String.format(Const.SECTION.DELETE_ID_NOT_FOUND, dto.getId()), HttpStatus.BAD_REQUEST.value());
             }
         }
     }
@@ -479,7 +479,7 @@ public class ChallengeSectionServiceImpl implements ChallengeSectionService {
 
         if (!invalid.isEmpty()) {
             log.error("Invalid section IDs: {}", invalid);
-            throw new ApiException("Invalid section IDs: " + invalid, HttpStatus.BAD_REQUEST.value());
+            throw new ApiException(String.format(Const.SECTION.INVALID_SECTION_IDS, invalid), HttpStatus.BAD_REQUEST.value());
         }
 
         Set<Long> handled = new HashSet<>(reqExisting);
@@ -488,14 +488,13 @@ public class ChallengeSectionServiceImpl implements ChallengeSectionService {
 
         if (!unhandled.isEmpty()) {
             log.error("Sections not handled: {}", unhandled);
-            throw new ApiException("Sections not handled: " + unhandled, HttpStatus.BAD_REQUEST.value());
+            throw new ApiException(String.format(Const.SECTION.SECTIONS_NOT_HANDLED, unhandled), HttpStatus.BAD_REQUEST.value());
         }
 
         int expected = existing.size() - deleteReqs.size();
         if (nonDeleteReqs.size() != expected) {
             log.error("Non-deleted count mismatch! Expected: {}, Actual: {}", expected, nonDeleteReqs.size());
-            throw new ApiException(
-                    String.format("Non-deleted sections count mismatch! Expected: %d, Actual: %d", expected, nonDeleteReqs.size()),
+            throw new ApiException(String.format(Const.SECTION.NON_DELETED_SECTIONS_COUNT_MISMATCH, expected, nonDeleteReqs.size()),
                     HttpStatus.BAD_REQUEST.value());
         }
     }
@@ -528,7 +527,7 @@ public class ChallengeSectionServiceImpl implements ChallengeSectionService {
             Set<Long> missing = new HashSet<>(ids);
             missing.removeAll(map.keySet());
             log.error("Sections not found: {}", missing);
-            throw new ApiException("Sections not found: " + missing, HttpStatus.NOT_FOUND.value());
+            throw new ApiException(String.format(Const.SECTION.SECTIONS_NOT_FOUND, missing), HttpStatus.NOT_FOUND.value());
         }
         return map;
     }

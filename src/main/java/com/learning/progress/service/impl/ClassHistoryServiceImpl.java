@@ -14,6 +14,7 @@ import com.learning.progress.repository.ClassRepository;
 import com.learning.progress.repository.UserRepository;
 import com.learning.progress.service.ClassHistoryService;
 import com.learning.progress.util.*;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -31,6 +32,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 @Service
+@Slf4j
 public class ClassHistoryServiceImpl implements ClassHistoryService {
 
     @Autowired
@@ -55,23 +57,39 @@ public class ClassHistoryServiceImpl implements ClassHistoryService {
     @Async("taskExecutor")
     @Transactional
     public void saveClassHistory(Long classId, String actionDetails, Long actionByUserId, String actionType, String visibleToRoles) {
+        final String method = "saveClassHistory";
+        long startNs = System.nanoTime();
+        String traceId = TraceUtil.getTraceId();
+        log.info("[{}] {} enter classId={} actionByUserId={} actionType={} visibleToRoles={}", traceId, method, classId, actionByUserId, actionType, visibleToRoles);
+
         Clazz clazz = clazzRepository.findById(classId)
-                .orElseThrow(() -> new ApiException(Const.CLASS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> {
+                    log.warn("[{}] {} class not found id={}", traceId, method, classId);
+                    return new ApiException(Const.CLASS.NOT_FOUND, HttpStatus.NOT_FOUND.value());
+                });
 
         User actionBy = userRepository.findById(actionByUserId)
-                .orElse(null); // Nếu không tìm thấy user, để trống (hoặc có thể xử lý khác tùy yêu cầu)
+                .orElse(null); // optional - log if missing
+        if (actionBy == null) {
+            log.debug("[{}] {} actionBy user not found id={}", traceId, method, actionByUserId);
+        } else {
+            log.debug("[{}] {} actionBy loaded id={} username={}", traceId, method, actionBy.getId(), actionBy.getUserName());
+        }
 
+        // Validate actionType
         if (!EnumUtil.isValidEnum(com.learning.progress.common.ActionType.class, actionType)) {
-            throw new ApiException("Invalid action type: " + actionType, HttpStatus.BAD_REQUEST.value());
+            log.warn("[{}] {} invalid actionType={}", traceId, method, actionType);
+            throw new ApiException(String.format(Const.CLASS_HISTORY.INVALID_ACTION_TYPE, actionType), HttpStatus.BAD_REQUEST.value());
         }
 
         // Validate visibleToRoles
         if (visibleToRoles != null && !visibleToRoles.isEmpty()) {
-            List<String> validRoles = Arrays.asList("MANAGER", "TEACHER", "TEACHING_ASSISTANT", "STUDENT", "TEST_TAKER");
+            List<String> validRoles = Arrays.asList(Const.CLASS_HISTORY.VISIBLE_TO_ROLES_ALLOWED.split(","));
             List<String> roles = Arrays.asList(visibleToRoles.split(","));
             for (String role : roles) {
                 if (!validRoles.contains(role.trim())) {
-                    throw new ApiException("Invalid role in visible_to_roles: " + role, HttpStatus.BAD_REQUEST.value());
+                    log.warn("[{}] {} invalid visible role={} allowed={}", traceId, method, role, Const.CLASS_HISTORY.VISIBLE_TO_ROLES_ALLOWED);
+                    throw new ApiException(String.format(Const.CLASS_HISTORY.INVALID_ROLE_IN_VISIBLE_TO_ROLES, role), HttpStatus.BAD_REQUEST.value());
                 }
             }
         }
@@ -86,53 +104,78 @@ public class ClassHistoryServiceImpl implements ClassHistoryService {
                 .build();
 
         classHistoryRepository.save(history);
+        log.info("[{}] {} {}", traceId, method, String.format(Const.CLASS_HISTORY.SAVE_HISTORY_SUCCESS,
+                history.getId(), classId, actionType, actionBy != null ? actionBy.getUserName() : "null"));
+
+        long durationMs = (System.nanoTime() - startNs) / 1_000_000;
+        log.info("[{}] {} exit classId={} durationMs={}", traceId, method, classId, durationMs);
     }
 
     @Override
     @Transactional(readOnly = true)
     public DataResponse<List<ClassHistoryDTO>> getClassHistory(Long classId, int page, int size, String sortBy, String sortDir, String startDate, String endDate, Long actionBy) {
+        final String method = "getClassHistory";
+        long startNs = System.nanoTime();
+        String traceId = TraceUtil.getTraceId();
+        log.info("[{}] {} enter classId={} page={} size={} sortBy={} sortDir={} startDate={} endDate={} actionBy={}",
+                traceId, method, classId, page, size, sortBy, sortDir, startDate, endDate, actionBy);
+
         appValidator.validatePaginationParams(page, size);
         appValidator.validateSortParams(List.of("actionAt", "actionType"), sortBy, sortDir);
         appValidator.validateUserAccessToClass(classId);
-        String username = jwtUtil.extractUsernameFromCurrentRequest();
+        log.debug("[{}] {} pagination and access validated for classId={}", traceId, method, classId);
 
+        String username = jwtUtil.extractUsernameFromCurrentRequest();
         User user = userRepository.findByUserNameAndDeletedAtIsNull(username)
-                .orElseThrow(() -> new ApiException(Const.USER.NOT_FOUND, HttpStatus.UNAUTHORIZED.value()));
+                .orElseThrow(() -> {
+                    log.warn("[{}] {} current user not found username={}", traceId, method, username);
+                    return new ApiException(Const.USER.NOT_FOUND, HttpStatus.UNAUTHORIZED.value());
+                });
+        log.debug("[{}] {} current user loaded id={} role={}", traceId, method, user.getId(), user.getRole() != null ? user.getRole().getName() : null);
 
         // Validate actionBy
         if (actionBy != null) {
             userRepository.findByIdAndDeletedAtIsNull(actionBy)
-                    .orElseThrow(() -> new ApiException(Const.USER.NOT_FOUND, HttpStatus.BAD_REQUEST.value()));
+                    .orElseThrow(() -> {
+                        log.warn("[{}] {} actionBy not found id={}", traceId, method, actionBy);
+                        return new ApiException(Const.USER.NOT_FOUND, HttpStatus.BAD_REQUEST.value());
+                    });
+            log.debug("[{}] {} actionBy validated id={}", traceId, method, actionBy);
         }
 
-        // Xử lý startDate và endDate
+        // Parse dates
         OffsetDateTime start = DataUtil.parseAndValidateOffsetDateTime(startDate, "yyyy-MM-dd", "startDate");
         OffsetDateTime end = DataUtil.parseAndValidateOffsetDateTime(endDate, "yyyy-MM-dd", "endDate");
-
-        // Mặc định lấy 30 ngày gần nhất nếu không có startDate và endDate
         if (start == null && end == null) {
             end = OffsetDateTime.now();
             start = end.minusDays(30);
+            log.debug("[{}] {} default date range applied start={} end={}", traceId, method, start, end);
         } else if (start == null) {
-            start = end.minusDays(30); // Nếu chỉ có endDate, lấy startDate là 30 ngày trước
+            start = end.minusDays(30);
+            log.debug("[{}] {} default start from end start={} end={}", traceId, method, start, end);
         } else if (end == null) {
-            end = start.plusDays(30); // Nếu chỉ có startDate, lấy endDate là 30 ngày sau
+            end = start.plusDays(30);
+            log.debug("[{}] {} default end from start start={} end={}", traceId, method, start, end);
         }
-
-        // Validate startDate <= endDate
         DataUtil.validateStartAndEndDate(start, end);
+        log.debug("[{}] {} validated date range start={} end={}", traceId, method, start, end);
 
         Sort sort = Sort.by(Sort.Direction.fromString(sortDir), sortBy);
         Pageable pageable = PageRequest.of(page, size, sort);
         Page<ClassHistory> historyPage = classHistoryRepository.findByFilters(classId, start, end, actionBy, pageable);
+        log.debug("[{}] {} fetched historyPage size={} totalElements={}", traceId, method, historyPage.getNumberOfElements(), historyPage.getTotalElements());
 
-        // Lọc bản ghi dựa trên visible_to_roles
         List<ClassHistory> histories = historyPage.getContent().stream()
                 .filter(history -> isVisibleToUser(history, user.getRole().getName()))
                 .collect(Collectors.toList());
+        log.debug("[{}] {} filtered visible histories count={}", traceId, method, histories.size());
+
         List<ClassHistoryDTO> historiesDTO = histories.stream()
                 .map(classHistoryMapper::toClassHistoryDTO)
                 .collect(Collectors.toList());
+
+        long durationMs = (System.nanoTime() - startNs) / 1_000_000;
+        log.info("[{}] {} exit classId={} returned={} totalElements={} durationMs={}", traceId, method, classId, historiesDTO.size(), historyPage.getTotalElements(), durationMs);
 
         return DataResponse.<List<ClassHistoryDTO>>builder()
                 .traceId(TraceUtil.getTraceId())
@@ -151,10 +194,11 @@ public class ClassHistoryServiceImpl implements ClassHistoryService {
 
     private boolean isVisibleToUser(ClassHistory history, RoleName userRole) {
         if (history.getVisibleToRoles() == null || history.getVisibleToRoles().isEmpty()) {
-            return true; // Nếu không có visible_to_roles, mặc định cho phép tất cả
+            return true; // default allow
         }
         String[] allowedRoles = history.getVisibleToRoles().split(",");
         return Arrays.stream(allowedRoles)
                 .anyMatch(role -> role.trim().equals(userRole.name()));
     }
 }
+

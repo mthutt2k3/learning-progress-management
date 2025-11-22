@@ -78,14 +78,16 @@ public class AccountServiceImpl implements AccountService {
      */
     @Override
     public DataResponse<List<AccountDTO>> listAccounts(int page, int size, String text, List<String> statusStr, List<String> roleNameStr, String sortBy, String sortDir) {
+        final String method = "listAccounts";
+        long startNs = System.nanoTime();
         String traceId = TraceUtil.getTraceId();
-        log.info("[{}] Listing accounts with page: {}, size: {}, text: {}, statuses: {}, roles: {}, sortBy: {}, sortDir: {}",
-                traceId, page, size, text, statusStr, roleNameStr, sortBy, sortDir);
+        log.info("[{}] enter traceId={} page={} size={} text={} statuses={} roles={} sortBy={} sortDir={}",
+                method, traceId, page, size, text, statusStr, roleNameStr, sortBy, sortDir);
 
         // Validate pagination and sort parameters
         appValidator.validatePaginationParams(page, size);
-        appValidator.validateSortParams(List.of("createdAt", "userName", "email", "fullName", "status"), sortBy, sortDir);
-        log.debug("[{}] Pagination and sort parameters validated", traceId);
+        appValidator.validateSortParams(List.of("userName", "email"), sortBy, sortDir);
+        log.debug("[{}] traceId={} pagination and sort params validated", method, traceId);
 
         // Convert status and role strings to enums
         List<UserStatus> statuses = appValidator.validateAndConvertEnums(statusStr, UserStatus.class);
@@ -99,12 +101,12 @@ public class AccountServiceImpl implements AccountService {
         // Fetch users based on filters
         Page<User> userPage;
         if (text != null && !text.isBlank()) {
-            if (statuses != null && !statuses.isEmpty() && roleNames != null && !roleNames.isEmpty()) {
-                userPage = userRepository.findByTextAndStatusInAndRoleNameIn(text, statuses, roleNames, pageable);
-            } else if (statuses != null && !statuses.isEmpty()) {
-                userPage = userRepository.findByTextAndStatusIn(text, statuses, pageable);
-            } else if (roleNames != null && !roleNames.isEmpty()) {
-                userPage = userRepository.findByTextAndRoleNameIn(text, roleNames, pageable);
+            if (statusStr != null && !statusStr.isEmpty() && roleNameStr != null && !roleNameStr.isEmpty()) {
+                userPage = userRepository.findByTextAndStatusInAndRoleNameIn(text, appValidator.validateAndConvertEnums(statusStr, UserStatus.class), appValidator.validateAndConvertEnums(roleNameStr, RoleName.class), pageable);
+            } else if (statusStr != null && !statusStr.isEmpty()) {
+                userPage = userRepository.findByTextAndStatusIn(text, appValidator.validateAndConvertEnums(statusStr, UserStatus.class), pageable);
+            } else if (roleNameStr != null && !roleNameStr.isEmpty()) {
+                userPage = userRepository.findByTextAndRoleNameIn(text, appValidator.validateAndConvertEnums(roleNameStr, RoleName.class), pageable);
             } else {
                 userPage = userRepository.findByText(text, pageable);
             }
@@ -119,14 +121,16 @@ public class AccountServiceImpl implements AccountService {
                 userPage = userRepository.findAllByDeletedAtIsNull(pageable);
             }
         }
-        log.debug("[{}] Retrieved {} users for page {}", traceId, userPage.getTotalElements(), page);
+        log.debug("[{}] traceId={} retrieved {} users for page {}", method, traceId, userPage.getTotalElements(), page);
 
         // Map users to DTOs
         List<AccountDTO> accounts = userPage.getContent().stream()
                 .map(userMapper::toAccountDTO)
                 .collect(Collectors.toList());
 
-        log.info("[{}] Successfully retrieved account list with {} accounts", traceId, accounts.size());
+        long durationMs = (System.nanoTime() - startNs) / 1_000_000;
+        log.info("[{}] exit traceId={} accountsCount={} durationMs={}", method, traceId, accounts.size(), durationMs);
+
         return DataResponse.<List<AccountDTO>>builder()
                 .traceId(traceId)
                 .success(true)
@@ -148,17 +152,20 @@ public class AccountServiceImpl implements AccountService {
      */
     @Override
     public AccountDTO getAccountByUserId(Long userId) {
+        final String method = "getAccountByUserId";
+        long startNs = System.nanoTime();
         String traceId = TraceUtil.getTraceId();
-        log.info("[{}] Retrieving account for userId: {}", traceId, userId);
+        log.info("[{}] enter traceId={} userId={}", method, traceId, userId);
 
         // Fetch user by ID
         User user = userRepository.findByIdAndDeletedAtIsNull(userId)
                 .orElseThrow(() -> {
-                    log.error("[{}] Account not found for userId: {}", traceId, userId);
+                    log.error("[{}] traceId={} account not found userId={}", method, traceId, userId);
                     return new ApiException(Const.ACCOUNT.ACCOUNT_NOT_FOUND, HttpStatus.BAD_REQUEST.value());
                 });
 
-        log.info("[{}] Successfully retrieved account for userId: {}", traceId, userId);
+        long durationMs = (System.nanoTime() - startNs) / 1_000_000;
+        log.info("[{}] exit traceId={} userId={} durationMs={}", method, traceId, userId, durationMs);
         return userMapper.toAccountDTO(user);
     }
 
@@ -171,13 +178,15 @@ public class AccountServiceImpl implements AccountService {
     @Override
     @Transactional
     public AccountDTO createNewAccount(CreateNewAccountRequest request) {
+        final String method = "createNewAccount";
+        long startNs = System.nanoTime();
         String traceId = TraceUtil.getTraceId();
-        log.info("[{}] Creating new account with role: {}", traceId, request.getRoleName());
+        log.info("[{}] enter traceId={} role={}", method, traceId, request.getRoleName());
 
         // Fetch role
         Role role = roleRepository.findByName(RoleName.valueOf(request.getRoleName().toUpperCase()))
                 .orElseThrow(() -> {
-                    log.error("[{}] Role not found: {}", traceId, request.getRoleName());
+                    log.error("[{}] traceId={} role not found: {}", method, traceId, request.getRoleName());
                     return new ApiException(Const.ROLE.NOT_FOUND, HttpStatus.BAD_REQUEST.value());
                 });
 
@@ -191,18 +200,19 @@ public class AccountServiceImpl implements AccountService {
         userRepository.saveAndFlush(newUser);
         entityManager.clear();
         userRepository.save(newUser);
-        log.debug("[{}] User saved with ID: {}", traceId, newUser.getId());
+        log.debug("[{}] traceId={} user saved id={}", method, traceId, newUser.getId());
 
         // Generate username and password
         String username = DataUtil.generateUsername(request.getRoleName().toString(), newUser.getId());
         String password = DataUtil.generateRandomPassword(8);
         this.createAccountForExistUser(newUser, username, password);
-        log.debug("[{}] Generated username: {}, password for userId: {}", traceId, username, newUser.getId());
+        log.debug("[{}] traceId={} generated username={} for userId={}", method, traceId, username, newUser.getId());
         // Map to DTO
         AccountDTO accountDTO = userMapper.toAccountDTO(newUser);
         accountDTO.setUserName(newUser.getUserName());
 
-        log.info("[{}] Successfully created account for userId: {}", traceId, newUser.getId());
+        long durationMs = (System.nanoTime() - startNs) / 1_000_000;
+        log.info("[{}] exit traceId={} createdUserId={} durationMs={}", method, traceId, newUser.getId(), durationMs);
         return accountDTO;
     }
 
@@ -217,12 +227,14 @@ public class AccountServiceImpl implements AccountService {
     @Override
     @Transactional
     public User createAccountForExistUser(User user, String username, String password) {
+        final String method = "createAccountForExistUser";
+        long startNs = System.nanoTime();
         String traceId = TraceUtil.getTraceId();
-        log.info("[{}] Creating account for existing user with username: {}", traceId, username);
+        log.info("[{}] enter traceId={} username={}", method, traceId, username);
 
         // Check for username uniqueness
         if (userRepository.existsByUserName(username)) {
-            log.error("[{}] Username already exists: {}", traceId, username);
+            log.error("[{}] traceId={} username exists: {}", method, traceId, username);
             throw new ApiException(Const.USER.USERNAME_EXISTS, HttpStatus.BAD_REQUEST.value());
         }
 
@@ -233,10 +245,12 @@ public class AccountServiceImpl implements AccountService {
         user.setMustChangePassword(true);
 
         userRepository.save(user);
-        log.info("[{}] Account created for existing user with username: {}", traceId, username);
+        log.info("[{}] traceId={} account created username={}", method, traceId, username);
 
         emailService.sendNewAccountEmail(user, username, password);
 
+        long durationMs = (System.nanoTime() - startNs) / 1_000_000;
+        log.debug("[{}] exit traceId={} username={} durationMs={}", method, traceId, username, durationMs);
         return user;
     }
 
@@ -244,67 +258,75 @@ public class AccountServiceImpl implements AccountService {
     @Override
     @Transactional
     public AccountDTO updateAccount(Long id, @Valid String email) {
+        final String method = "updateAccount";
+        long startNs = System.nanoTime();
         String traceId = TraceUtil.getTraceId();
+        log.info("[{}] enter traceId={} userId={} email={}", method, traceId, id, email);
 
-        if(!DataUtil.isValidEmail(email)){
+        if (!DataUtil.isValidEmail(email)) {
+            log.error("[{}] traceId={} invalid email: {}", method, traceId, email);
             throw new ApiException(Const.EMAIL.INVALID, HttpStatus.BAD_REQUEST.value());
         }
 
         // Fetch user by ID
         User user = userRepository.findByIdAndDeletedAtIsNull(id)
                 .orElseThrow(() -> {
-                    log.error("[{}] User not found for userId: {}", traceId, id);
+                    log.error("[{}] traceId={} user not found id={}", method, traceId, id);
                     return new ApiException(Const.USER.NOT_FOUND, HttpStatus.NOT_FOUND.value());
                 });
         if (!UserStatus.PENDING.equals(user.getStatus())) {
+            log.error("[{}] traceId={} forbidden email change for active user id={}", method, traceId, id);
             throw new ApiException(Const.ACCOUNT.FORBIDDEN_EMAIL_CHANGE_ACTIVE_USER, HttpStatus.FORBIDDEN.value());
         }
 
         String password = DataUtil.generateRandomPassword(8);
-
         // Update user fields
         user.setEmail(email);
         user.setPassword(passwordEncoder.encode(password));
         // Save updates
         userRepository.save(user);
-        log.info("[{}] Successfully updated account for userId: {}", traceId, id);
+        log.info("[{}] traceId={} updated account id={}", method, traceId, id);
 
         emailService.sendNewAccountEmail(user, user.getUserName(), password);
 
+        long durationMs = (System.nanoTime() - startNs) / 1_000_000;
+        log.debug("[{}] exit traceId={} userId={} durationMs={}", method, traceId, id, durationMs);
         return userMapper.toAccountDTO(user);
     }
 
     @Override
     @Transactional
     public AccountDTO updateStatusAccount(Long id, UserStatus newStatus) {
+        final String method = "updateStatusAccount";
+        long startNs = System.nanoTime();
         String traceId = TraceUtil.getTraceId();
-        log.info("[{}] Updating status for userId: {} to {}", traceId, id, newStatus);
+        log.info("[{}] enter traceId={} userId={} newStatus={}", method, traceId, id, newStatus);
 
         User targetUser = userRepository.findByIdAndDeletedAtIsNull(id)
                 .orElseThrow(() -> {
-                    log.error("[{}] User not found for userId: {}", traceId, id);
+                    log.error("[{}] traceId={} user not found id={}", method, traceId, id);
                     return new ApiException(Const.USER.NOT_FOUND, HttpStatus.BAD_REQUEST.value());
                 });
 
         Long userIdFromCurrentRequest = jwtUtil.extractUserIdFromCurrentRequest();
 
-        // Lấy thông tin admin đang thao tác
         User currentUser = userRepository.findByIdAndDeletedAtIsNull(userIdFromCurrentRequest)
                 .orElseThrow(() -> new ApiException("Current user not found", HttpStatus.UNAUTHORIZED.value()));
 
         UserStatus oldStatus = targetUser.getStatus();
 
-        // Quy tắc trạng thái
         if (UserStatus.PENDING.equals(oldStatus)) {
+            log.error("[{}] traceId={} cannot change status from PENDING userId={}", method, traceId, id);
             throw new ApiException(Const.ACCOUNT.CANNOT_CHANGE_STATUS_TO_ACTIVE_MANUALLY, HttpStatus.FORBIDDEN.value());
         }
         if (UserStatus.PENDING.equals(newStatus)) {
+            log.error("[{}] traceId={} cannot change status to PENDING userId={}", method, traceId, id);
             throw new ApiException(Const.ACCOUNT.CANNOT_CHANGE_STATUS_TO_PENDING, HttpStatus.FORBIDDEN.value());
         }
 
-        // Quy tắc Admin
         if (RoleName.ADMIN.equals(targetUser.getRole().getName())) {
             if (RoleName.ADMIN.equals(currentUser.getRole().getName())) {
+                log.error("[{}] traceId={} admin cannot change admin status userId={}", method, traceId, id);
                 throw new ApiException(Const.USER.ADMIN_CANNOT_CHANGE_STATUS, HttpStatus.FORBIDDEN.value());
             }
         }
@@ -312,38 +334,53 @@ public class AccountServiceImpl implements AccountService {
         // Update status
         targetUser.setStatus(newStatus);
         userRepository.save(targetUser);
-        log.info("[{}] Successfully updated status for userId: {} to {}", traceId, id, newStatus);
+        log.info("[{}] traceId={} updated status for userId={} to {}", method, traceId, id, newStatus);
 
+        long durationMs = (System.nanoTime() - startNs) / 1_000_000;
+        log.debug("[{}] exit traceId={} userId={} durationMs={}", method, traceId, id, durationMs);
         return userMapper.toAccountDTO(targetUser);
     }
 
     @Override
     public void deleteAccount(Long id) {
+        final String method = "deleteAccount";
+        long startNs = System.nanoTime();
+        String traceId = TraceUtil.getTraceId();
+        log.info("[{}] enter traceId={} userId={}", method, traceId, id);
+
         User targetUser = userRepository.findByIdAndDeletedAtIsNull(id)
                 .filter(user -> user.getDeletedAt() == null)
-                .orElseThrow(() -> new ApiException(Const.USER.NOT_FOUND, HttpStatus.BAD_REQUEST.value()));
+                .orElseThrow(() -> {
+                    log.error("[{}] traceId={} user not found id={}", method, traceId, id);
+                    return new ApiException(Const.USER.NOT_FOUND, HttpStatus.BAD_REQUEST.value());
+                });
 
-        if(!targetUser.getStatus().equals(UserStatus.PENDING)) {
+        if (!targetUser.getStatus().equals(UserStatus.PENDING)) {
+            log.error("[{}] traceId={} cannot delete non-pending user id={}", method, traceId, id);
             throw new ApiException(Const.USER.PENDING_STATUS, HttpStatus.BAD_REQUEST.value());
         }
 
         Long userIdFromCurrentRequest = jwtUtil.extractUserIdFromCurrentRequest();
 
-        // Lấy thông tin admin đang thao tác
         User currentUser = userRepository.findByIdAndDeletedAtIsNull(userIdFromCurrentRequest)
                 .orElseThrow(() -> new ApiException(Const.USER.NOT_FOUND, HttpStatus.UNAUTHORIZED.value()));
 
-        // Quy tắc Admin
         if (RoleName.ADMIN.equals(targetUser.getRole().getName()) && (RoleName.ADMIN.equals(currentUser.getRole().getName()))) {
-                throw new ApiException(Const.USER.ADMIN_CANNOT_CHANGE_STATUS, HttpStatus.FORBIDDEN.value());
+            log.error("[{}] traceId={} admin cannot delete admin userId={}", method, traceId, id);
+            throw new ApiException(Const.USER.ADMIN_CANNOT_CHANGE_STATUS, HttpStatus.FORBIDDEN.value());
         }
-        // Quy tắc Manager
         if (RoleName.MANAGER.equals(targetUser.getRole().getName()) && (RoleName.MANAGER.equals(currentUser.getRole().getName()))) {
+            log.error("[{}] traceId={} manager cannot delete manager userId={}", method, traceId, id);
             throw new ApiException(Const.USER.MANAGER_CANNOT_CHANGE_STATUS, HttpStatus.FORBIDDEN.value());
         }
 
         targetUser.setDeletedBy(jwtUtil.extractEmailPrefixFromCurrentRequest());
         targetUser.setDeletedAt(OffsetDateTime.now());
         userRepository.save(targetUser);
+
+        long durationMs = (System.nanoTime() - startNs) / 1_000_000;
+        log.info("[{}] exit traceId={} deleted userId={} durationMs={}", method, traceId, id, durationMs);
     }
+
+    // ...existing private helpers and other methods...
 }

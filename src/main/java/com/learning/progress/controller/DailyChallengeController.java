@@ -109,7 +109,7 @@ public class DailyChallengeController {
         } catch (ApiException e) {
             throw e;
         } catch (Exception e) {
-            throw new ApiException("Failed to export worksheet: " + e.getMessage(),
+            throw new ApiException(String.format(Const.CHALLENGE.EXPORT_WORKSHEET_FAILED, e.getMessage()),
                     HttpStatus.INTERNAL_SERVER_ERROR.value());
         }
     }

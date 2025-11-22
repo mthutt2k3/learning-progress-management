@@ -19,6 +19,7 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/v1/submission")
 @Tag(name = "Submission Question Management", description = "APIs for managing submissions of daily challenges")
 public class SubmissionQuestionController {
+
     @Autowired
     private SubmissionQuestionService submissionQuestionService;
 

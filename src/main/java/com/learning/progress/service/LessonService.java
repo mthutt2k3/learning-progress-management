@@ -16,5 +16,5 @@ public interface LessonService {
     List<LessonDTO> importLessonsFromExcel(MultipartFile file);
     byte[] generateLessonImportTemplate();
     String getLessonTemplateSasUrl();
-    byte[] validateLessonImportFile(MultipartFile file);
+    byte[] downloadLessonValidationFile(MultipartFile file);
 }

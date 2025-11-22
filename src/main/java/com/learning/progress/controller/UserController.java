@@ -339,7 +339,7 @@ public class UserController {
             @Parameter(description = "Excel file to validate")
             @RequestParam("file") MultipartFile file) {
 
-        byte[] validationFile = userService.validateStudentImportFile(file);
+        byte[] validationFile = userService.downloadStudentValidationFile(file);
         ByteArrayResource resource = new ByteArrayResource(validationFile);
 
         String filename = "Student_Validation_" +
@@ -363,7 +363,7 @@ public class UserController {
             @Parameter(description = "Excel file to validate")
             @RequestParam("file") MultipartFile file) {
 
-        byte[] validationFile = userService.validateTeacherImportFile(file);
+        byte[] validationFile = userService.downloadTeacherValidationFile(file);
         ByteArrayResource resource = new ByteArrayResource(validationFile);
 
         String filename = "Teacher_Validation_" +
