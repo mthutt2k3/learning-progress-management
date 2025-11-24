@@ -114,11 +114,12 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
 
         appValidator.validatePaginationParams(page, size);
         appValidator.validateSortParams(List.of("createdAt", "challengeName", "classLessonId"), sortBy, sortDir);
-        appValidator.validateUserAccessToClass(classId);
 
         classRepository.findById(classId)
                 .filter(c -> c.getDeletedAt() == null)
                 .orElseThrow(() -> new ApiException(Const.CLASS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+
+        appValidator.validateUserAccessToClass(classId);
 
         Pageable pageable = PageRequest.of(page, size);
 
@@ -188,6 +189,10 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
         final String method = "updateChallenge";
         String traceId = TraceUtil.getTraceId();
         log.info("[{}] enter traceId={} id={}", method, traceId, id);
+
+        if (dto.getDurationMinutes() != null && dto.getDurationMinutes() <= 0) {
+            throw badRequest(Const.CHALLENGE.DURATION_NULL_OR_POSITIVE);
+        }
 
         DailyChallenge challenge = dailyChallengeRepository.findByIdAndDeletedAtIsNull(id)
                 .orElseThrow(() -> notFound(traceId, Const.CHALLENGE.NOT_FOUND, id));
