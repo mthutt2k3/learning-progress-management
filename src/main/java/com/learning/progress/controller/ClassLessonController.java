@@ -102,12 +102,12 @@ public class ClassLessonController {
             summary = "Validate Class Lesson Import File",
             description = "Validate Excel file without importing. Returns validation result file."
     )
-    public ResponseEntity<ByteArrayResource> validateClassLessonImport(
+    public ResponseEntity<ByteArrayResource> downloadClassLessonValidationFile(
             @Parameter(description = "Excel file to validate")
             @RequestParam("file") MultipartFile file,
             @RequestParam Long classId) {
 
-        byte[] validationFile = classLessonService.validateClassLessonImportFile(classId, file);
+        byte[] validationFile = classLessonService.downloadClassLessonValidationFile(classId, file);
         ByteArrayResource resource = new ByteArrayResource(validationFile);
 
         String filename = "ClassLesson_Validation_" +

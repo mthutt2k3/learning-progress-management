@@ -10,6 +10,6 @@ public class TeacherWithRole {
     @NotNull(message = Const.ID.USER_ID_REQUIRED)
     private Long userId;
 
-    @NotNull(message = "Role in class is required")
+    @NotNull(message = Const.CLASS_TEACHER.VALIDATION_ROLE_IN_CLASS)
     private RoleInClass roleInClass;
 }

@@ -30,8 +30,8 @@ public class SyncLevelRequest {
     @Size(max = Const.LEVEL.LEARNING_OBJECTIVES_MAX_LENGTH_VALUE, message = Const.LEVEL.LEARNING_OBJECTIVES_MAX_LENGTH)
     private String learningObjectives;
 
-    @NotNull(message = "Order number is required", groups = NotDeleted.class)
-    @Min(value = 1, message = "Order number must be 1 or greater", groups = NotDeleted.class)
+    @NotNull(message = Const.ORDER_NUMBER.ORDER_NUMBER_REQUIRED, groups = NotDeleted.class)
+    @Min(value = 1, message = Const.ORDER_NUMBER.ORDER_NUMBER_MIN, groups = NotDeleted.class)
     private Integer orderNumber;
 
     private boolean toBeDeleted;

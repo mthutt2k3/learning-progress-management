@@ -1,12 +1,17 @@
 package com.learning.progress.entity;
 
 import jakarta.persistence.*;
-import lombok.Data;
+import lombok.*;
+import lombok.experimental.SuperBuilder;
 
 import java.time.Instant;
 
+@SuperBuilder
+@NoArgsConstructor
+@AllArgsConstructor
+@Getter
+@Setter
 @Entity
-@Data
 @Table(name = "refresh_tokens")
 public class RefreshToken {
 

@@ -19,7 +19,7 @@ public interface ClassLessonService {
 
     String getLessonInClassTemplateSasUrl();
 
-    byte[] validateClassLessonImportFile(Long classId, MultipartFile file);
+    byte[] downloadClassLessonValidationFile(Long classId, MultipartFile file);
 
     byte[] generateLessonInClassImportTemplate();
 }

@@ -41,75 +41,109 @@ public class SubmissionLogServiceImpl implements SubmissionLogService {
     private static final Snowflake SNOWFLAKE = new Snowflake();
     private final RedisPublisher redisPublisher;
 
-    // NEW: inject SseService + NotificationServiceImpl to push notifications to teachers and SSE to student
-    private final SseService sseService;
     private final NotificationServiceImpl notificationService; // using impl directly to call bulk create
 
     @Override
     @Transactional
     public void appendLogs(Long submissionId, @Valid AppendSubmissionLogRequest logs) {
-        Long userId = jwtUtil.extractUserIdFromCurrentRequest();
+        final String action = "appendLogs";
+        String traceId = TraceUtil.getTraceId();
+        log.info("[{}] {} enter submissionId={} callerId={}", traceId, action, submissionId,
+                jwtUtil != null ? jwtUtil.extractUserIdFromCurrentRequest() : null);
 
         // 1. Validate đồng bộ (chỉ đọc)
-        validateAppendLogs(submissionId, userId, logs);
+        try {
+            validateAppendLogs(submissionId, jwtUtil.extractUserIdFromCurrentRequest(), logs);
+        } catch (ApiException ae) {
+            log.warn("[{}] {} validation failed: {}", traceId, action, ae.getMessage());
+            throw ae;
+        } catch (Exception ex) {
+            log.error("[{}] {} unexpected validation error: {}", traceId, action, ex.getMessage(), ex);
+            throw ex;
+        }
 
         // 2. Gọi async để ghi log (ngoài transaction hiện tại)
-        appendLogsAsync(submissionId, userId, logs);
+        appendLogsAsync(submissionId, jwtUtil.extractUserIdFromCurrentRequest(), logs);
+        log.info("[{}] {} scheduled async append for submissionId={}", traceId, action, submissionId);
     }
 
-    /**
-     * Validate: chỉ đọc, không ghi
-     */
-    @Transactional(readOnly = true)
     protected void validateAppendLogs(Long submissionId, Long userId, @Valid AppendSubmissionLogRequest logRequest) {
+        final String action = "validateAppendLogs";
+        String traceId = TraceUtil.getTraceId();
+        log.debug("[{}] {} enter submissionId={} userId={} logsSize={}", traceId, action, submissionId, userId,
+                logRequest != null && logRequest.getLogs() != null ? logRequest.getLogs().size() : 0);
+
         if (submissionId == null || userId == null || logRequest == null) {
-            throw new ApiException("Invalid request parameters", HttpStatus.BAD_REQUEST.value());
+            log.error("[{}] {} invalid params", traceId, action);
+            throw new ApiException(Const.SUBMISSION_LOG.INVALID_REQUEST_PARAMS, HttpStatus.BAD_REQUEST.value());
         }
         List<AppendSubmissionLogRequest.SubmissionLogEvent> newLogs = logRequest.getLogs();
 
         if (newLogs == null || newLogs.isEmpty()) {
+            log.debug("[{}] {} no logs to validate", traceId, action);
             return; // nothing to validate
         }
 
         // Centralized validation: will throw if not allowed and also returns the submission
         SubmissionDailyChallenge submission = appValidator.validateUserAccessToSubmission(submissionId);
+        log.trace("[{}] {} loaded submission id={} challengeId={}", traceId, action,
+                submission.getId(), submission.getChallenge() != null ? submission.getChallenge().getId() : null);
 
         // Validate anti-cheat enabled (behavior kept)
         if (!Boolean.TRUE.equals(submission.getChallenge().getHasAntiCheat())) {
-            log.debug("Anti-cheat disabled for challenge {}, ignoring logs", submission.getChallenge().getId());
+            log.info("[{}] {} {}", traceId, action,
+                    String.format(Const.SUBMISSION_LOG.ANTI_CHEAT_DISABLED, submission.getChallenge().getId()));
             // still allow call to proceed (async will return quickly)
         }
 
         // Validate format of logs
-        for (AppendSubmissionLogRequest.SubmissionLogEvent log : newLogs) {
-            if (log.getEvent() == null || log.getEvent().isBlank()) {
-                throw new ApiException("Log event type is required", HttpStatus.BAD_REQUEST.value());
+        for (AppendSubmissionLogRequest.SubmissionLogEvent activity : newLogs) {
+            if (activity.getEvent() == null || activity.getEvent().isBlank()) {
+                log.error("[{}] {} missing event type in one of the logs", traceId, action);
+                throw new ApiException(Const.SUBMISSION_LOG.LOG_EVENT_REQUIRED, HttpStatus.BAD_REQUEST.value());
             }
-            if (log.getTimestamp() == null) {
-                throw new ApiException("Log timestamp is required", HttpStatus.BAD_REQUEST.value());
+            if (activity.getTimestamp() == null) {
+                log.error("[{}] {} missing timestamp in one of the logs", traceId, action);
+                throw new ApiException(Const.SUBMISSION_LOG.LOG_TIMESTAMP_REQUIRED, HttpStatus.BAD_REQUEST.value());
             }
         }
+
+        log.debug("[{}] {} validation passed for submissionId={}", traceId, action, submissionId);
     }
 
     @Async("taskExecutor")
     @Transactional
     public void appendLogsAsync(Long submissionId, Long userId, @Valid AppendSubmissionLogRequest logRequest) {
+        final String action = "appendLogsAsync";
+        String traceId = TraceUtil.getTraceId();
+        log.info("[{}] {} enter submissionId={} userId={} logsSize={}", traceId, action, submissionId, userId,
+                logRequest != null && logRequest.getLogs() != null ? logRequest.getLogs().size() : 0);
+
         List<AppendSubmissionLogRequest.SubmissionLogEvent> newLogs = logRequest.getLogs();
-        if (newLogs.isEmpty()) return;
+        if (newLogs == null || newLogs.isEmpty()) {
+            log.debug("[{}] {} nothing to append", traceId, action);
+            return;
+        }
 
         try {
             SubmissionDailyChallenge submission = submissionDailyChallengeRepository
                     .findByIdAndDeletedAtIsNull(submissionId)
-                    .orElseThrow(() -> new ApiException("Submission not found", HttpStatus.NOT_FOUND.value()));
+                    .orElseThrow(() -> {
+                        log.warn("[{}] {} submission not found id={}", traceId, action, submissionId);
+                        return new ApiException(Const.SUBMISSION.NOT_FOUND, HttpStatus.NOT_FOUND.value());
+                    });
 
-            if (!submission.getUser().getId().equals(userId)) {
-                log.warn("Unauthorized log append by user {}", userId);
+            if (!Objects.equals(submission.getUser().getId(), userId)) {
+                log.warn("[{}] {} {}", traceId, action, String.format(Const.SUBMISSION_LOG.UNAUTHORIZED_LOG_APPEND, userId, submissionId));
                 return;
             }
 
             if (!Boolean.TRUE.equals(submission.getChallenge().getHasAntiCheat())) {
+                log.debug("[{}] {} anti-cheat disabled for submissionId={}", traceId, action, submissionId);
                 return;
             }
+
+            log.trace("[{}] {} processing {} new logs", traceId, action, newLogs.size());
 
             // PHÁT HIỆN 2 MÁY
             List<AppendSubmissionLogRequest.SubmissionLogEvent> startSessionEvents = newLogs.stream()
@@ -121,18 +155,26 @@ public class SubmissionLogServiceImpl implements SubmissionLogService {
                     userId);
 
             if (!deviceMismatchEvents.isEmpty()) {
-                log.info("Detected {} device mismatch events in submission {} by user {}", deviceMismatchEvents.size(), submissionId, userId);
+                log.info("[{}] {} Detected {} device mismatch events in submission {} by user {}", traceId, action, deviceMismatchEvents.size(), submissionId, userId);
                 newLogs.addAll(deviceMismatchEvents);
+            } else {
+                log.debug("[{}] {} no device mismatch events generated", traceId, action);
             }
+
             // GHI LOG
             assignEventIds(newLogs);
             mergeAndSaveLogs(submission, newLogs);
 
             cacheService.clearSubmissionCache(userId, submissionId);
-            log.debug("Appended {} logs for submission {}", newLogs.size(), submissionId);
+            log.info("[{}] {} {}", traceId, action, String.format(Const.SUBMISSION_LOG.APPEND_SUCCESS, newLogs.size(), submissionId));
 
+        } catch (ApiException ae) {
+            log.warn("[{}] {} api error submissionId={} message={}", traceId, action, submissionId, ae.getMessage());
+            throw ae;
         } catch (Exception e) {
-            log.error("Failed to append logs for submission {}", submissionId, e);
+            log.error("[{}] {} {}", traceId, action, String.format(Const.SUBMISSION_LOG.FAILED_APPEND, submissionId), e);
+        } finally {
+            log.debug("[{}] {} exit submissionId={}", traceId, action, submissionId);
         }
     }
 
@@ -145,6 +187,11 @@ public class SubmissionLogServiceImpl implements SubmissionLogService {
             List<AppendSubmissionLogRequest.SubmissionLogEvent> newStartEvents,
             Long userId) {
 
+        final String action = "checkDuplicateDevice";
+        String traceId = TraceUtil.getTraceId();
+        log.debug("[{}] {} enter submissionId={} newStartCount={}", traceId, action, submission != null ? submission.getId() : null,
+                newStartEvents != null ? newStartEvents.size() : 0);
+
         List<AppendSubmissionLogRequest.SubmissionLogEvent> deviceMismatchEvents = new ArrayList<>();
         List<AppendSubmissionLogRequest.SubmissionLogEvent> existing = getExistingLogs(submission);
 
@@ -153,7 +200,10 @@ public class SubmissionLogServiceImpl implements SubmissionLogService {
                 .findFirst()
                 .orElse(null);
 
-        if (newStart == null) return deviceMismatchEvents;
+        if (newStart == null) {
+            log.trace("[{}] {} no new session-start event found", traceId, action);
+            return deviceMismatchEvents;
+        }
 
         AppendSubmissionLogRequest.SubmissionLogEvent lastStart = existing.stream()
                 .filter(e -> Const.SUBMISSION_EVENT.SESSION_START.equals(e.getEvent()))
@@ -163,11 +213,12 @@ public class SubmissionLogServiceImpl implements SubmissionLogService {
         if (lastStart != null && !isSameDevice(lastStart, newStart)) {
             int warningCount = countDeviceMismatches(existing) + 1;
 
-            log.info("Device mismatch #{} detected: submission={}, user={}", warningCount, submission.getId(), userId);
+            log.info("[{}] {} Device mismatch #{} detected: submission={}, user={}", traceId, action, warningCount, submission.getId(), userId);
 
             // 1. GHI LOG MISMATCH
             AppendSubmissionLogRequest.SubmissionLogEvent mismatch = createMismatchEvent(newStart, lastStart, warningCount);
             deviceMismatchEvents.add(mismatch);
+            log.debug("[{}] {} created mismatch event id={} warningCount={}", traceId, action, mismatch.getEventId(), warningCount);
 
             // 2. GỬI QUA cảnh báo cho học sinh
             DeviceMismatchNotification noti = new DeviceMismatchNotification();
@@ -178,12 +229,15 @@ public class SubmissionLogServiceImpl implements SubmissionLogService {
                     lastStart.getDeviceFingerprint(),
                     lastStart.getIpAddress()
             ));
-            noti.setMessage("Cảnh báo: Chỉ được dùng 1 thiết bị!");
+            noti.setMessage(Const.NOTIFICATION.DEVICE_MISMATCH_USER_MESSAGE);
 
             redisPublisher.publishWarningDeviceMismatchToUser(submission.getId(), noti);
+            log.debug("[{}] {} published device mismatch warning to userId={} submissionId={}", traceId, action, userId, submission.getId());
 
             // 3. THÔNG BÁO GIÁO VIÊN (dùng Redis hoặc DB)
             notifyTeachersAboutMismatch(submission, userId, warningCount);
+        } else {
+            log.trace("[{}] {} no device mismatch (same device or no prior start)", traceId, action);
         }
 
         return deviceMismatchEvents;
@@ -211,7 +265,12 @@ public class SubmissionLogServiceImpl implements SubmissionLogService {
         ev.setIpAddress(newStart.getIpAddress());
         return ev;
     }
+
     private void notifyTeachersAboutMismatch(SubmissionDailyChallenge submission, Long studentId, int warningCount) {
+        final String action = "notifyTeachersAboutMismatch";
+        String traceId = TraceUtil.getTraceId();
+        log.debug("[{}] {} enter submissionId={} studentId={} warningCount={}", traceId, action, submission != null ? submission.getId() : null, studentId, warningCount);
+
         try {
             List<Long> teacherIds = Optional.ofNullable(submission.getChallenge())
                     .map(ch -> ch.getClassLesson())
@@ -228,28 +287,37 @@ public class SubmissionLogServiceImpl implements SubmissionLogService {
                     .collect(Collectors.toList());
 
             if (!teacherIds.isEmpty()) {
-                String title = "Phát hiện gian lận: 2 thiết bị";
-                String message = "Học sinh <b>" + submission.getUser().getFullName() + "</b> " +
-                        "đang dùng <b>2 thiết bị</b> cho bài <b>" + submission.getChallenge().getChallengeName() + "</b>";
+                String title = Const.NOTIFICATION.DEVICE_MISMATCH_TEACHER_TITLE;
+                String message = String.format(Const.NOTIFICATION.DEVICE_MISMATCH_TEACHER_MESSAGE_TEMPLATE,
+                        submission.getUser().getFullName(), submission.getChallenge().getChallengeName());
                 String targetUrl = "/app/submissions/" + submission.getId();
 
                 notificationService.createNotification(teacherIds, null, title, message, targetUrl, null);
-                log.info("Notified {} teachers about device mismatch", teacherIds.size());
+                log.info("[{}] {} Notified {} teachers about device mismatch for submission {}", traceId, action, teacherIds.size(), submission.getId());
+            } else {
+                log.debug("[{}] {} no active teachers to notify for submission {}", traceId, action, submission.getId());
             }
         } catch (Exception e) {
-            log.error("Failed to notify teachers for submission {}", submission.getId(), e);
+            log.error("[{}] {} Failed to notify teachers for submission {} error={}", traceId, action, submission != null ? submission.getId() : null, e.getMessage(), e);
         }
     }
 
     private void assignEventIds(List<AppendSubmissionLogRequest.SubmissionLogEvent> logs) {
+        String traceId = TraceUtil.getTraceId();
+        log.trace("[{}] assignEventIds enter count={}", traceId, logs != null ? logs.size() : 0);
         logs.forEach(ev -> {
             if (ev.getEventId() == null) {
                 ev.setEventId(Long.parseLong(SNOWFLAKE.nextId()));
+                log.trace("[{}] assignEventIds assigned id={} for event={}", traceId, ev.getEventId(), ev.getEvent());
             }
         });
+        log.trace("[{}] assignEventIds exit", traceId);
     }
 
     private void mergeAndSaveLogs(SubmissionDailyChallenge submission, List<AppendSubmissionLogRequest.SubmissionLogEvent> newLogs) {
+        String traceId = TraceUtil.getTraceId();
+        log.debug("[{}] mergeAndSaveLogs enter submissionId={} newLogsCount={}", traceId, submission != null ? submission.getId() : null, newLogs != null ? newLogs.size() : 0);
+
         AppendSubmissionLogRequest existing = submission.getSubmissionLogsJson() == null
                 ? new AppendSubmissionLogRequest()
                 : JsonUtil.jsonToObject(submission.getSubmissionLogsJson(), AppendSubmissionLogRequest.class);
@@ -259,28 +327,44 @@ public class SubmissionLogServiceImpl implements SubmissionLogService {
 
         if (all.size() > 1000) {
             all = all.subList(all.size() - 1000, all.size());
+            log.debug("[{}] mergeAndSaveLogs trimmed logs to last 1000 entries", traceId);
         }
 
         existing.setLogs(all);
         submission.setSubmissionLogsJson(JsonUtil.objectToJson(existing));
         submissionDailyChallengeRepository.save(submission);
+        log.info("[{}] mergeAndSaveLogs saved submissionId={} totalLogs={}", traceId, submission.getId(), all.size());
     }
 
     private List<AppendSubmissionLogRequest.SubmissionLogEvent> getExistingLogs(SubmissionDailyChallenge submission) {
-        if (submission.getSubmissionLogsJson() == null) return new ArrayList<>();
+        String traceId = TraceUtil.getTraceId();
+        if (submission.getSubmissionLogsJson() == null) {
+            log.trace("[{}] getExistingLogs none", traceId);
+            return new ArrayList<>();
+        }
         AppendSubmissionLogRequest req = JsonUtil.jsonToObject(submission.getSubmissionLogsJson(), AppendSubmissionLogRequest.class);
-        return req.getLogs() != null ? req.getLogs() : new ArrayList<>();
+        List<AppendSubmissionLogRequest.SubmissionLogEvent> existing = req.getLogs() != null ? req.getLogs() : new ArrayList<>();
+        log.trace("[{}] getExistingLogs found {} events", traceId, existing.size());
+        return existing;
     }
 
     @Override
     @Transactional(readOnly = true)
     public SubmissionLogsResponse getLogs(Long submissionId) {
+        final String action = "getLogs";
+        String traceId = TraceUtil.getTraceId();
+        log.info("[{}] {} enter submissionId={}", traceId, action, submissionId);
+
         if (submissionId == null) {
-            throw new ApiException("Invalid submissionId", HttpStatus.BAD_REQUEST.value());
+            log.warn("[{}] {} invalid submissionId", traceId, action);
+            throw new ApiException(Const.SUBMISSION_LOG.INVALID_REQUEST_PARAMS, HttpStatus.BAD_REQUEST.value());
         }
         SubmissionDailyChallenge submission = submissionDailyChallengeRepository
                 .findByIdAndDeletedAtIsNull(submissionId)
-                .orElseThrow(() -> new ApiException("Submission not found", HttpStatus.NOT_FOUND.value()));
+                .orElseThrow(() -> {
+                    log.warn("[{}] {} submission not found id={}", traceId, action, submissionId);
+                    return new ApiException(Const.SUBMISSION.NOT_FOUND, HttpStatus.NOT_FOUND.value());
+                });
         try {
             AppendSubmissionLogRequest appendSubmissionLog = JsonUtil.jsonToObject(submission.getSubmissionLogsJson(), AppendSubmissionLogRequest.class);
             List<AppendSubmissionLogRequest.SubmissionLogEvent> logs = ((appendSubmissionLog != null) && (appendSubmissionLog.getLogs() != null))
@@ -294,12 +378,13 @@ public class SubmissionLogServiceImpl implements SubmissionLogService {
                 counts.put(key, counts.getOrDefault(key, 0L) + 1L);
             }
 
+            log.info("[{}] {} exit submissionId={} logsReturned={}", traceId, action, submissionId, logs.size());
             return SubmissionLogsResponse.builder()
                     .logs(logs)
                     .eventCounts(counts)
                     .build();
         } catch (Exception e) {
-            log.warn("Failed to parse submission logs for submission {}, returning empty list and counts", submissionId, e);
+            log.warn("[{}] {} Failed to parse submission logs for submission {}, returning empty result. error={}", traceId, action, submissionId, e.getMessage());
             return SubmissionLogsResponse.builder()
                     .logs(new ArrayList<>())
                     .eventCounts(new HashMap<>())

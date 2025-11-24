@@ -50,6 +50,7 @@ public class ChallengeSectionController {
                 HttpStatus.CREATED
         );
     }
+
     @PostMapping("/bulk/{challengeId}")
     @PreAuthorize("hasRole('TEACHER')")
     @Operation(summary = "Delete or order sections",
@@ -82,7 +83,7 @@ public class ChallengeSectionController {
         return new ResponseEntity<>(response, HttpStatus.OK);
     }
     @GetMapping("/challenge/{challengeId}/public")
-    @PreAuthorize("hasAnyRole('TEACHER', 'TEACHING_ASSISTANT', 'STUDENT', 'TEST_TAKER')")
+    @PreAuthorize("hasAnyRole('TEACHER', 'TEACHING_ASSISTANT', 'STUDENT', 'TEST_TAKER', 'MANAGER')")
     @Operation(summary = "List sections for students/test takers",
             description = "Retrieve a list of sections for a specific challenge (questions only, without answers)")
     public ResponseEntity<DataResponse<List<StudentSectionWithQuestionsDto>>> listSectionsWithoutAnswers(

@@ -6,13 +6,11 @@ import com.learning.progress.dto.challenge.StudentChallengeListDTO;
 import com.learning.progress.dto.submission.*;
 import com.learning.progress.service.SubmissionChallengeService;
 import com.learning.progress.service.SubmissionLogService;
-import com.learning.progress.util.JwtUtil;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -42,7 +40,7 @@ public class SubmissionChallengeController {
     }
 
     @GetMapping("/challenge/{challengeId}/submissions")
-    @PreAuthorize("hasAnyRole('TEACHER', 'TEACHING_ASSISTANT')")
+    @PreAuthorize("hasAnyRole('TEACHER', 'TEACHING_ASSISTANT', 'MANAGER')")
     @Operation(summary = "List student submissions for a challenge",
             description = "Retrieve a paginated list of student submissions for a specific challenge with optional filtering and sorting")
     public ResponseEntity<DataResponse<List<StudentSubmissionDTO>>> getSubmissionsByChallenge(
@@ -77,7 +75,7 @@ public class SubmissionChallengeController {
     }
 
     @GetMapping("/{submissionChallengeId}/logs")
-    @PreAuthorize("hasAnyRole('STUDENT', 'TEST_TAKER', 'TEACHER', 'TEACHING_ASSISTANT')")
+    @PreAuthorize("hasAnyRole('STUDENT', 'TEST_TAKER', 'TEACHER', 'TEACHING_ASSISTANT', 'MANAGER')")
     @Operation(summary = "Get submission event logs", description = "Retrieve anti-cheat / interaction logs for a submission")
     public ResponseEntity<DataResponse<SubmissionLogsResponse>> getLogs(
             @PathVariable Long submissionChallengeId) {
@@ -87,7 +85,7 @@ public class SubmissionChallengeController {
     }
 
     @GetMapping("/{submissionChallengeId}/info")
-    @PreAuthorize("hasAnyRole('STUDENT', 'TEST_TAKER', 'TEACHER', 'TEACHING_ASSISTANT')")
+    @PreAuthorize("hasAnyRole('STUDENT', 'TEST_TAKER', 'TEACHER', 'TEACHING_ASSISTANT', 'MANAGER')")
     @Operation(summary = "Get submission info with both challenge-level and submission-level deadlines",
             description = "Returns submission times, challenge deadlines, grading totals (if graded) and related timing fields")
     public ResponseEntity<DataResponse<StudentSubmissionDTO>> getSubmissionInfo(

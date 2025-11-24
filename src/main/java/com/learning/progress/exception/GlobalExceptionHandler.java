@@ -1,12 +1,15 @@
 package com.learning.progress.exception;
 
+import com.fasterxml.jackson.core.JsonParseException;
 import com.learning.progress.common.RoleName;
 import com.learning.progress.dto.DataResponse;
 import com.learning.progress.util.TraceUtil;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.validation.FieldError;
@@ -18,7 +21,9 @@ import io.swagger.v3.oas.annotations.Hidden;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.Arrays;
+import java.util.stream.Collectors;
 
 @Hidden
 @ControllerAdvice
@@ -116,4 +121,54 @@ public class GlobalExceptionHandler {
                 .build();
         return new ResponseEntity<>(response, HttpStatus.FORBIDDEN);
     }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<DataResponse<Object>> handleJsonParseError(
+            HttpMessageNotReadableException ex, HttpServletRequest request) {
+
+        String message = "Invalid JSON format";
+        Throwable cause = ex.getCause();
+
+        // Lỗi JSON syntax cơ bản
+        if (cause instanceof JsonParseException jsonParseEx) {
+            String originalMsg = jsonParseEx.getOriginalMessage();
+
+            if (originalMsg.contains("Unexpected character")
+                    || originalMsg.contains("was expecting double-quote")) {
+                message = "JSON syntax error: Object keys must be enclosed in double quotes";
+            } else if (originalMsg.contains("Unexpected end-of-input")) {
+                message = "JSON is incomplete or malformed";
+            } else {
+                message = "Invalid JSON: " + originalMsg;
+            }
+        }
+
+        // 🔥 Lỗi Enum không hợp lệ
+        else if (cause instanceof com.fasterxml.jackson.databind.exc.InvalidFormatException invalidEx) {
+            Class<?> targetType = invalidEx.getTargetType();
+
+            // Nếu target type là Enum
+            if (targetType.isEnum()) {
+                Object[] allowed = targetType.getEnumConstants();
+                String allowedValues = Arrays.stream(allowed)
+                        .map(Object::toString)
+                        .collect(Collectors.joining(", "));
+
+                message = "Invalid value for " + targetType.getSimpleName()
+                        + ". Allowed values are: " + allowedValues;
+            }
+        }
+
+        DataResponse<Object> response = DataResponse.builder()
+                .traceId(TraceUtil.getTraceId())
+                .success(false)
+                .error(message)
+                .status(HttpStatus.BAD_REQUEST.value())
+                .timestamp(LocalDateTime.now())
+                .path(request.getRequestURI())
+                .build();
+
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+    }
+
 }

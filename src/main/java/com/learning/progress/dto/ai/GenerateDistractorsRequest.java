@@ -1,6 +1,7 @@
 package com.learning.progress.dto.ai;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.learning.progress.common.Const;
 import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 
@@ -10,10 +11,10 @@ import java.util.List;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class GenerateDistractorsRequest {
 
-    @NotBlank(message = "Question text is required")
+    @NotBlank(message = Const.AI.QUESTION_TEXT_REQUIRED)
     private String questionText;
 
-    @NotBlank(message = "Correct answer is required")
+    @NotBlank(message = Const.AI.CORRECT_ANSWER_REQUIRED)
     private String correctAnswer;
 
     private List<String> existingDistractors;

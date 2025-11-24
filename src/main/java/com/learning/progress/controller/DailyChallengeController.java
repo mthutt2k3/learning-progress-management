@@ -34,7 +34,7 @@ public class DailyChallengeController {
     }
 
     @GetMapping("/class/{classId}")
-    @PreAuthorize("hasAnyRole('TEACHER', 'TEACHING_ASSISTANT')")
+    @PreAuthorize("hasAnyRole('TEACHER', 'TEACHING_ASSISTANT', 'MANAGER')")
     @Operation(summary = "List all daily challenges", description = "Retrieve a paginated list of daily challenges with optional filtering and sorting")
     public ResponseEntity<DataResponse<List<DailyChallengeListDTO>>> getAllChallenges(
             @PathVariable Long classId,
@@ -48,7 +48,7 @@ public class DailyChallengeController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('TEACHER', 'TEACHING_ASSISTANT', 'STUDENT', 'TEST_TAKER')")
+    @PreAuthorize("hasAnyRole('TEACHER', 'TEACHING_ASSISTANT', 'STUDENT', 'TEST_TAKER', 'MANAGER')")
     @Operation(summary = "Get daily challenge by ID", description = "Retrieve details of a specific daily challenge")
     public ResponseEntity<DataResponse<DailyChallengeResponse>> getChallengeById(@PathVariable Long id) {
         DailyChallengeResponse response = dailyChallengeService.getChallengeById(id);
@@ -81,7 +81,7 @@ public class DailyChallengeController {
     }
 
     @GetMapping("/{dailyChallengeId}/hierarchy")
-    @PreAuthorize("hasAnyRole('TEACHER', 'TEACHING_ASSISTANT')")
+    @PreAuthorize("hasAnyRole('TEACHER', 'TEACHING_ASSISTANT', 'MANAGER')")
     @Operation(summary = "Get challenge hierarchy information",
             description = "Get level, class, syllabus, chapter, lesson information for a daily challenge")
     public ResponseEntity<DataResponse<DailyChallengeHierarchyDTO>> getChallengeHierarchy(@PathVariable Long dailyChallengeId) {
@@ -109,7 +109,7 @@ public class DailyChallengeController {
         } catch (ApiException e) {
             throw e;
         } catch (Exception e) {
-            throw new ApiException("Failed to export worksheet: " + e.getMessage(),
+            throw new ApiException(String.format(Const.CHALLENGE.EXPORT_WORKSHEET_FAILED, e.getMessage()),
                     HttpStatus.INTERNAL_SERVER_ERROR.value());
         }
     }

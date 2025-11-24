@@ -1,11 +1,11 @@
 package com.learning.progress.dto.challenge;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.learning.progress.common.Const;
 import com.learning.progress.common.ChallengeMethod;
-import com.learning.progress.common.ChallengeType;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -16,12 +16,14 @@ import java.time.OffsetDateTime;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class UpdateDailyChallengeDTO {
 
-    @NotBlank(message = "Challenge name is required")
+    @NotBlank(message = Const.CHALLENGE.NAME_REQUIRED)
+    @Size(max = Const.CHALLENGE.MAX_LENGTH_VALUE, message = Const.CHALLENGE.LENGTH_INVALID)
     private String challengeName;
 
+    @Size(max = Const.CHALLENGE.MAX_DESCRIPTION_LENGTH_VALUE, message = Const.CHALLENGE.DESCRIPTION_LENGTH_INVALID)
     private String description;
 
-    @NotNull(message = "Challenge method is required")
+    @NotNull(message = Const.CHALLENGE.METHOD_REQUIRED)
     private ChallengeMethod challengeMethod;
 
     private Integer durationMinutes = null;
@@ -32,10 +34,10 @@ public class UpdateDailyChallengeDTO {
 
     private Boolean translateOnScreen = false;
 
-    @NotNull(message = "Start date cannot be empty")
+    @NotNull(message = Const.CHALLENGE.START_DATE_REQUIRED)
     private OffsetDateTime startDate;
 
-    @NotNull(message = "End date cannot be empty")
+    @NotNull(message = Const.CHALLENGE.END_DATE_REQUIRED)
     private OffsetDateTime endDate;
 
 }

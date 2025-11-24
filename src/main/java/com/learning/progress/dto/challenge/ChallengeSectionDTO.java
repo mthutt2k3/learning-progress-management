@@ -1,6 +1,6 @@
 package com.learning.progress.dto.challenge;
 
-import com.learning.progress.common.ResourceType;
+import com.learning.progress.common.Const;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PositiveOrZero;
 import lombok.Getter;
@@ -13,21 +13,15 @@ import java.time.OffsetDateTime;
 public class ChallengeSectionDTO {
     private Long id;
 
-    @NotNull(message = "Challenge ID is required")
-    private Long challengeId;
-
+    @NotNull(message = Const.SECTION.SECTION_TITLE_REQUIRED)
     private String sectionTitle;
 
-    @NotNull(message = "SectionDto type is required")
-    private ResourceType sectionsType;
-
+    @NotNull(message = Const.SECTION.SECTION_TYPE_REQUIRED)
     private String sectionsUrl;
 
     private String sectionsContent;
 
-    @PositiveOrZero(message = "Order number must be non-negative")
-    private Integer orderNumber;
-
+    @PositiveOrZero(message = Const.SECTION.ORDER_NUMBER_NON_NEGATIVE)
     private String createdBy;
 
     private OffsetDateTime createdAt;

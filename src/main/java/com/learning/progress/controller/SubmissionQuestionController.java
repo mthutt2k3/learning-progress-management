@@ -19,6 +19,7 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/v1/submission")
 @Tag(name = "Submission Question Management", description = "APIs for managing submissions of daily challenges")
 public class SubmissionQuestionController {
+
     @Autowired
     private SubmissionQuestionService submissionQuestionService;
 
@@ -33,7 +34,7 @@ public class SubmissionQuestionController {
     }
 
     @GetMapping("{submissionChallengeId}/result")
-    @PreAuthorize("hasAnyRole('TEACHER', 'TEACHING_ASSISTANT', 'STUDENT', 'TEST_TAKER')")
+    @PreAuthorize("hasAnyRole('TEACHER', 'TEACHING_ASSISTANT', 'STUDENT', 'TEST_TAKER', 'MANAGER')")
     @Operation(summary = "Get submission result", description = "Retrieve the submission result including question content and submitted answers")
     public ResponseEntity<DataResponse<SubmissionResultResponse>> getSubmissionResult(
             @PathVariable Long submissionChallengeId) {
@@ -52,7 +53,7 @@ public class SubmissionQuestionController {
     }
 
     @GetMapping("question/{submissionQuestionId}")
-    @PreAuthorize("hasAnyRole('STUDENT', 'TEST_TAKER', 'TEACHER', 'TEACHING_ASSISTANT')")
+    @PreAuthorize("hasAnyRole('STUDENT', 'TEST_TAKER', 'TEACHER', 'TEACHING_ASSISTANT', 'MANAGER')")
     @Operation(summary = "Get a single submission question detail",
             description = "Retrieve question content and submitted answer for a specific submissionQuestionId")
     public ResponseEntity<DataResponse<SubmissionResultResponse.QuestionResult>> getSubmissionQuestionDetail(
