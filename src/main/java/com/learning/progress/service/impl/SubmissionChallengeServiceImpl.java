@@ -241,11 +241,6 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
 
         Long classId = challenge.getClassLesson().getClassChapter().getClazz().getId();
         appValidator.validateUserAccessToClass(classId);
-        String role = jwtUtil.extractRoleFromCurrentRequest();
-        if (!RoleName.TEACHER.name().equals(role) && !RoleName.TEACHING_ASSISTANT.name().equals(role)) {
-            log.warn("[{}] unauthorized role={} for challengeId={}", action, role, challengeId);
-            throw new ApiException(Const.SUBMISSION.UNAUTHORIZED_VIEW_SUBMISSIONS, HttpStatus.FORBIDDEN.value());
-        }
 
         Sort sort = Sort.by(sortDir.equalsIgnoreCase("asc") ? Sort.Direction.ASC : Sort.Direction.DESC, sortBy);
         Pageable pageable = PageRequest.of(page, size, sort);
