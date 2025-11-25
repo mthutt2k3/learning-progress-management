@@ -11,7 +11,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentMatchers;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -192,8 +191,8 @@ class AuthControllerTest {
         when(authService.login(any())).thenThrow(new ApiException(Const.USER.NOT_FOUND, HttpStatus.UNAUTHORIZED.value()));
 
         mockMvc.perform(post("/api/v1/auth/login")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(req)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.error").value(Const.USER.NOT_FOUND));
 
@@ -212,8 +211,8 @@ class AuthControllerTest {
         when(authService.login(any())).thenThrow(new ApiException(Const.AUTH.INVALID_CREDENTIALS, HttpStatus.UNAUTHORIZED.value()));
 
         mockMvc.perform(post("/api/v1/auth/login")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(req)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.error").value(Const.AUTH.INVALID_CREDENTIALS));
 
@@ -232,8 +231,8 @@ class AuthControllerTest {
         when(authService.login(any())).thenThrow(new ApiException(Const.USER.USER_INACTIVE, HttpStatus.FORBIDDEN.value()));
 
         mockMvc.perform(post("/api/v1/auth/login")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(req)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.error").value(Const.USER.USER_INACTIVE));
 
@@ -252,8 +251,8 @@ class AuthControllerTest {
         when(authService.login(any())).thenThrow(new ApiException(Const.SECURITY.FORBIDDEN_ROLE, HttpStatus.FORBIDDEN.value()));
 
         mockMvc.perform(post("/api/v1/auth/login")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(req)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.error").value(Const.SECURITY.FORBIDDEN_ROLE));
 
@@ -272,8 +271,8 @@ class AuthControllerTest {
         when(authService.login(any())).thenThrow(new ApiException(Const.SECURITY.FORBIDDEN_ROLE, HttpStatus.FORBIDDEN.value()));
 
         mockMvc.perform(post("/api/v1/auth/login")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(req)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.error").value(Const.SECURITY.FORBIDDEN_ROLE));
 
@@ -283,7 +282,6 @@ class AuthControllerTest {
     @Test
     @DisplayName("14. Invalid login role (case-sensitive check bypassed) → 400")
     void invalid_login_role_case_insensitive() throws Exception {
-        // "Admin" → không hợp lệ dù viết hoa
         LoginRequest req = LoginRequest.builder()
                 .username("validuser")
                 .password("ValidPass1")
@@ -293,8 +291,8 @@ class AuthControllerTest {
         when(authService.login(any())).thenThrow(new ApiException(Const.ROLE.INVALID_LOGIN_ROLE, HttpStatus.BAD_REQUEST.value()));
 
         mockMvc.perform(post("/api/v1/auth/login")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(req)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error").value(Const.ROLE.INVALID_LOGIN_ROLE));
 
@@ -309,7 +307,7 @@ class AuthControllerTest {
         LoginRequest req = LoginRequest.builder()
                 .username("testuser")
                 .password("ValidPass1")
-                .loginRole("STUDENT")  // lowercase → vẫn hợp lệ
+                .loginRole("STUDENT")
                 .build();
 
         LoginResponse resp = LoginResponse.builder()
@@ -323,8 +321,8 @@ class AuthControllerTest {
         when(authService.login(any())).thenReturn(resp);
 
         mockMvc.perform(post("/api/v1/auth/login")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(req)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.message").value(Const.RESULT_MESSAGE_CODE.LOGIN_SUCCESS))
@@ -353,8 +351,8 @@ class AuthControllerTest {
         when(authService.login(any())).thenReturn(resp);
 
         mockMvc.perform(post("/api/v1/auth/login")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(req)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.role").value("TEACHER"));
@@ -389,6 +387,164 @@ class AuthControllerTest {
                         .content(json))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.accessToken").value("atoken"));
+
+        verify(authService, times(1)).login(any());
+    }
+
+    // ====================== ADDITIONAL SERVICE TESTS (MOCK SERVICE BEHAVIOR) ======================
+
+    @Test
+    @DisplayName("18. Login Success (STUDENT) - Full flow")
+    void login_success_student_full_flow() throws Exception {
+        LoginRequest req = LoginRequest.builder()
+                .username("student01")
+                .password("ValidPass123")
+                .loginRole("STUDENT")
+                .build();
+
+        LoginResponse resp = LoginResponse.builder()
+                .username("student01")
+                .accessToken("access-token-xyz")
+                .refreshToken("refresh-token-123")
+                .role("STUDENT")
+                .mustChangePassword(false)
+                .build();
+
+        when(authService.login(any())).thenReturn(resp);
+
+        mockMvc.perform(post("/api/v1/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.accessToken").value("access-token-xyz"));
+
+        verify(authService, times(1)).login(any());
+    }
+
+    @Test
+    @DisplayName("19. User not found - Service Level → 401")
+    void login_userNotFound_401_service() throws Exception {
+        LoginRequest req = LoginRequest.builder()
+                .username("unknown")
+                .password("password")
+                .loginRole("STUDENT")
+                .build();
+
+        when(authService.login(any())).thenThrow(new ApiException(Const.USER.NOT_FOUND, HttpStatus.UNAUTHORIZED.value()));
+
+        mockMvc.perform(post("/api/v1/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.error").value(Const.USER.NOT_FOUND));
+
+        verify(authService, times(1)).login(any());
+    }
+
+    @Test
+    @DisplayName("20. Invalid password - Service Level → 401")
+    void login_invalidPassword_401_service() throws Exception {
+        LoginRequest req = LoginRequest.builder()
+                .username("student01")
+                .password("wrongPass")
+                .loginRole("STUDENT")
+                .build();
+
+        when(authService.login(any())).thenThrow(new ApiException(Const.AUTH.INVALID_CREDENTIALS, HttpStatus.UNAUTHORIZED.value()));
+
+        mockMvc.perform(post("/api/v1/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.error").value(Const.AUTH.INVALID_CREDENTIALS));
+
+        verify(authService, times(1)).login(any());
+    }
+
+    @Test
+    @DisplayName("21. User inactive - Service Level → 403")
+    void login_userInactive_403_service() throws Exception {
+        LoginRequest req = LoginRequest.builder()
+                .username("student01")
+                .password("ValidPass123")
+                .loginRole("STUDENT")
+                .build();
+
+        when(authService.login(any())).thenThrow(new ApiException(Const.USER.USER_INACTIVE, HttpStatus.FORBIDDEN.value()));
+
+        mockMvc.perform(post("/api/v1/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.error").value(Const.USER.USER_INACTIVE));
+
+        verify(authService, times(1)).login(any());
+    }
+
+    @Test
+    @DisplayName("22. TEACHER login as STUDENT - Service Level → 403")
+    void login_forbiddenRole_teacherTryStudent_403_service() throws Exception {
+        LoginRequest req = LoginRequest.builder()
+                .username("teacher01")
+                .password("ValidPass123")
+                .loginRole("STUDENT")
+                .build();
+
+        when(authService.login(any())).thenThrow(new ApiException(Const.SECURITY.FORBIDDEN_ROLE, HttpStatus.FORBIDDEN.value()));
+
+        mockMvc.perform(post("/api/v1/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.error").value(Const.SECURITY.FORBIDDEN_ROLE));
+
+        verify(authService, times(1)).login(any());
+    }
+
+    @Test
+    @DisplayName("23. STUDENT login as TEACHER - Service Level → 403")
+    void login_forbiddenRole_studentTryTeacher_403_service() throws Exception {
+        LoginRequest req = LoginRequest.builder()
+                .username("student01")
+                .password("ValidPass123")
+                .loginRole("TEACHER")
+                .build();
+
+        when(authService.login(any())).thenThrow(new ApiException(Const.SECURITY.FORBIDDEN_ROLE, HttpStatus.FORBIDDEN.value()));
+
+        mockMvc.perform(post("/api/v1/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.error").value(Const.SECURITY.FORBIDDEN_ROLE));
+
+        verify(authService, times(1)).login(any());
+    }
+
+    @Test
+    @DisplayName("24. Must change password - Service Level → returns reset token")
+    void login_mustChangePassword_generateResetToken_service() throws Exception {
+        LoginRequest req = LoginRequest.builder()
+                .username("student01")
+                .password("ValidPass123")
+                .loginRole("STUDENT")
+                .build();
+
+        LoginResponse resp = LoginResponse.builder()
+                .username("student01")
+                .refreshToken("reset-token-123")
+                .role("STUDENT")
+                .mustChangePassword(true)
+                .build();
+
+        when(authService.login(any())).thenReturn(resp);
+
+        mockMvc.perform(post("/api/v1/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.mustChangePassword").value(true))
+                .andExpect(jsonPath("$.data.refreshToken").value("reset-token-123"));
 
         verify(authService, times(1)).login(any());
     }

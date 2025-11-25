@@ -86,7 +86,7 @@ public class AccountServiceImpl implements AccountService {
 
         // Validate pagination and sort parameters
         appValidator.validatePaginationParams(page, size);
-        appValidator.validateSortParams(List.of("userName", "email"), sortBy, sortDir);
+        appValidator.validateSortParams(List.of("userName", "email", "createdAt"), sortBy, sortDir);
         log.debug("[{}] traceId={} pagination and sort params validated", method, traceId);
 
         // Convert status and role strings to enums

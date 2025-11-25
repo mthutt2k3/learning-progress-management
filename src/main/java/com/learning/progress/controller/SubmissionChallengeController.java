@@ -40,7 +40,7 @@ public class SubmissionChallengeController {
     }
 
     @GetMapping("/challenge/{challengeId}/submissions")
-    @PreAuthorize("hasAnyRole('TEACHER', 'TEACHING_ASSISTANT')")
+    @PreAuthorize("hasAnyRole('TEACHER', 'TEACHING_ASSISTANT', 'MANAGER')")
     @Operation(summary = "List student submissions for a challenge",
             description = "Retrieve a paginated list of student submissions for a specific challenge with optional filtering and sorting")
     public ResponseEntity<DataResponse<List<StudentSubmissionDTO>>> getSubmissionsByChallenge(
@@ -75,7 +75,7 @@ public class SubmissionChallengeController {
     }
 
     @GetMapping("/{submissionChallengeId}/logs")
-    @PreAuthorize("hasAnyRole('STUDENT', 'TEST_TAKER', 'TEACHER', 'TEACHING_ASSISTANT')")
+    @PreAuthorize("hasAnyRole('STUDENT', 'TEST_TAKER', 'TEACHER', 'TEACHING_ASSISTANT', 'MANAGER')")
     @Operation(summary = "Get submission event logs", description = "Retrieve anti-cheat / interaction logs for a submission")
     public ResponseEntity<DataResponse<SubmissionLogsResponse>> getLogs(
             @PathVariable Long submissionChallengeId) {
@@ -85,7 +85,7 @@ public class SubmissionChallengeController {
     }
 
     @GetMapping("/{submissionChallengeId}/info")
-    @PreAuthorize("hasAnyRole('STUDENT', 'TEST_TAKER', 'TEACHER', 'TEACHING_ASSISTANT')")
+    @PreAuthorize("hasAnyRole('STUDENT', 'TEST_TAKER', 'TEACHER', 'TEACHING_ASSISTANT', 'MANAGER')")
     @Operation(summary = "Get submission info with both challenge-level and submission-level deadlines",
             description = "Returns submission times, challenge deadlines, grading totals (if graded) and related timing fields")
     public ResponseEntity<DataResponse<StudentSubmissionDTO>> getSubmissionInfo(

@@ -196,6 +196,11 @@ public class Const {
     }
     public static class CHALLENGE {
         // validation / not found
+        public static final String LENGTH_INVALID = "Challenge name must be less than 200 characters.";
+        public static final int MAX_LENGTH_VALUE = 200;
+        public static final String DESCRIPTION_LENGTH_INVALID = "Description must be less than 1000 characters.";
+        public static final int MAX_DESCRIPTION_LENGTH_VALUE = 1000;
+        public static final String DURATION_NULL_OR_POSITIVE = "Duration must be null or greater than 0";
         public static final String NAME_REQUIRED = "Challenge name is required";
         public static final String CLASS_LESSON_REQUIRED = "Class lesson is required";
         public static final String NOT_FOUND = "Challenge not found or has been deleted";
@@ -837,6 +842,7 @@ public class Const {
         public static final String RECEIVED_WEIGHT_REQUIRED = "receivedWeight is required";
         public static final String RECEIVED_WEIGHT_NON_NEGATIVE = "receivedWeight must be non-negative";
 
+        public static final String RAW_SCORE_REQUIRED = "Raw score is required";
         public static final String RAW_SCORE_RANGE = "Raw score must be 0-10";
         public static final String PENALTY_RANGE = "Penalty must be 0.0-1.0";
 

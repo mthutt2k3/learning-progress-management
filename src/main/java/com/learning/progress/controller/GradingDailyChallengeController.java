@@ -24,7 +24,7 @@ public class GradingDailyChallengeController {
     private GradingDailyChallengeService gradingDailyChallengeService;
 
     @GetMapping("/submission-challenges/{submissionChallengeId}")
-    @PreAuthorize("hasAnyRole('STUDENT', 'TEST_TAKER', 'TEACHER', 'TEACHING_ASSISTANT')")
+    @PreAuthorize("hasAnyRole('STUDENT', 'TEST_TAKER', 'TEACHER', 'TEACHING_ASSISTANT', 'MANAGER')")
     @Operation(summary = "Get grading summary for a submission",
             description = "Return overall grading summary (total score, max possible, percentage, question stats and teacher feedback) for a submission")
     public ResponseEntity<DataResponse<GradingChallengeDetailResponse>> getChallengeGradingDetail(
@@ -34,7 +34,7 @@ public class GradingDailyChallengeController {
     }
 
     @GetMapping("/submission-questions/{submissionQuestionId}")
-    @PreAuthorize("hasAnyRole('TEACHER', 'TEACHING_ASSISTANT', 'STUDENT', 'TEST_TAKER')")
+    @PreAuthorize("hasAnyRole('TEACHER', 'TEACHING_ASSISTANT', 'STUDENT', 'TEST_TAKER', 'MANAGER')")
     @Operation(summary = "Get grading detail for a submission question",
             description = "Return teacher's highlights and feedback for a specific submission question")
     public ResponseEntity<DataResponse<GradingQuestionDetailResponse>> getQuestionGradingDetail(
