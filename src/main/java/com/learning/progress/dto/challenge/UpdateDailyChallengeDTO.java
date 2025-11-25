@@ -5,6 +5,7 @@ import com.learning.progress.common.Const;
 import com.learning.progress.common.ChallengeMethod;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -16,8 +17,10 @@ import java.time.OffsetDateTime;
 public class UpdateDailyChallengeDTO {
 
     @NotBlank(message = Const.CHALLENGE.NAME_REQUIRED)
+    @Size(max = Const.CHALLENGE.MAX_LENGTH_VALUE, message = Const.CHALLENGE.LENGTH_INVALID)
     private String challengeName;
 
+    @Size(max = Const.CHALLENGE.MAX_DESCRIPTION_LENGTH_VALUE, message = Const.CHALLENGE.DESCRIPTION_LENGTH_INVALID)
     private String description;
 
     @NotNull(message = Const.CHALLENGE.METHOD_REQUIRED)
