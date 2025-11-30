@@ -10,11 +10,6 @@ import com.learning.progress.dto.report.performance.ClassChallengeDetail;
 import com.learning.progress.dto.report.performance.LevelHistory;
 import com.learning.progress.dto.report.performance.StudentOverview;
 
-import com.learning.progress.dto.report.ChallengeReportDTO;
-import com.learning.progress.dto.report.ClassReportDTO;
-import com.learning.progress.dto.report.StudentOverview;
-import com.learning.progress.dto.report.StudentPerformanceDTO;
-
 public interface ReportService {
 
     /* --------------------------------------------------------
