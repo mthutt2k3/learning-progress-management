@@ -1,6 +1,5 @@
 package com.learning.progress.controller;
 
-import com.learning.progress.common.ChallengeStatus;
 import com.learning.progress.common.Const;
 import com.learning.progress.dto.challenge.*;
 import com.learning.progress.dto.DataResponse;

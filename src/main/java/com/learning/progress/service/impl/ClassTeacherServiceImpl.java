@@ -1,6 +1,5 @@
 package com.learning.progress.service.impl;
 
-import com.learning.progress.common.CommonStatus;
 import com.learning.progress.common.*;
 import com.learning.progress.dto.clazz.teacher.AddTeacherToClassRequest;
 import com.learning.progress.dto.clazz.teacher.ClassTeacherResponse;

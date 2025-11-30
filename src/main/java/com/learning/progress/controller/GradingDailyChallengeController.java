@@ -2,7 +2,6 @@ package com.learning.progress.controller;
 
 import com.learning.progress.dto.DataResponse;
 import com.learning.progress.dto.grading.*;
-import com.learning.progress.dto.grading.GradeQuestionRequest;
 import com.learning.progress.service.GradingDailyChallengeService;
 import com.learning.progress.common.Const;
 import io.swagger.v3.oas.annotations.Operation;

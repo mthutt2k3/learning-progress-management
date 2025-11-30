@@ -5,6 +5,7 @@ import com.learning.progress.common.Const;
 import com.learning.progress.common.RiskType;
 import com.learning.progress.dto.report.ChallengeReportDTO;
 import com.learning.progress.dto.report.ClassReportDTO;
+import com.learning.progress.dto.report.StudentOverview;
 import com.learning.progress.dto.report.StudentPerformanceDTO;
 import com.learning.progress.entity.DailyChallenge;
 import com.learning.progress.exception.ApiException;
@@ -289,7 +290,7 @@ public class ReportServiceImpl implements ReportService {
 
     @Override
     @Transactional(readOnly = true)
-    public StudentPerformanceDTO.StudentOverview getStudentOverview(Long userId) {
+    public StudentOverview getStudentOverview(Long userId) {
         final String method = "getStudentOverview";
         long startNs = System.nanoTime();
         String traceId = TraceUtil.getTraceId();
@@ -349,7 +350,7 @@ public class ReportServiceImpl implements ReportService {
         long durationMs = (System.nanoTime() - startNs) / 1_000_000;
         log.info("[{}] {} exit targetUserId={} durationMs={}", traceId, method, targetUserId, durationMs);
 
-        return StudentPerformanceDTO.StudentOverview.builder()
+        return StudentOverview.builder()
                 .firstClassJoinedAt(firstJoinedAt)
                 .currentLevel(levelInfo)
                 .currentClass(classInfo)

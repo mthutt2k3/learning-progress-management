@@ -1,14 +1,8 @@
 package com.learning.progress.dto.challenge;
 
-import com.learning.progress.common.ChallengeStatus;
-import com.learning.progress.common.ChallengeType;
-import com.learning.progress.common.SubmissionStatus;
-import com.learning.progress.dto.grading.GradingChallengeDetailResponse;
 import com.learning.progress.dto.submission.StudentSubmissionDTO;
 import lombok.*;
 
-import java.time.Duration;
-import java.time.OffsetDateTime;
 import java.util.List;
 
 @Getter
