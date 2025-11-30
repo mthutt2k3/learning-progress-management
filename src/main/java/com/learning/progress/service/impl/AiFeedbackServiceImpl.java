@@ -1,9 +1,8 @@
 package com.learning.progress.service.impl;
 
+import com.learning.progress.dto.ai.ContentAssessmentResult;
 import com.learning.progress.exception.ApiException;
 import com.learning.progress.service.AiFeedbackService;
-import lombok.Builder;
-import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -1317,17 +1316,6 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
         return merged.toString();
     }
 
-    // ✅ NEW: Supporting class for content assessment
-    @Data
-    @Builder
-    private static class ContentAssessmentResult {
-        private double taskAchievementScore;
-        private double contentQualityScore;
-        private double relevanceScore;
-        private double coherenceScore;
-        private String contentFeedback;
-    }
-
     /**
      * Correct grammar using GPT while preserving original meaning
      */
@@ -1481,32 +1469,6 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
     }
 
     /**
-     * Enhance feedback with grammar correction note
-     */
-    private String enhanceFeedbackWithCorrectionNote(
-            String originalFeedback,
-            String originalText,
-            String correctedText) {
-
-        // If no changes were made
-        if (originalText.equalsIgnoreCase(correctedText)) {
-            return originalFeedback;
-        }
-
-        // Add grammar note at the beginning
-        StringBuilder enhanced = new StringBuilder();
-
-        enhanced.append("<p><strong>📝 Ghi chú ngữ pháp:</strong> ");
-        enhanced.append("Hệ thống đã tự động điều chỉnh ngữ pháp để đánh giá phát âm chính xác hơn. ");
-        enhanced.append("Câu gốc: \"").append(originalText).append("\". ");
-        enhanced.append("Câu đã sửa: \"").append(correctedText).append("\".</p>");
-
-        enhanced.append(originalFeedback);
-
-        return enhanced.toString();
-    }
-
-    /**
      * Get prosody score safely
      */
     private Double getProsodyScore(PronunciationAssessmentResult pronResult) {
@@ -1523,26 +1485,6 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
     private int countWords(String text) {
         if (text == null || text.trim().isEmpty()) return 0;
         return text.trim().split("\\s+").length;
-    }
-
-    // Supporting classes
-    @Data
-    @Builder
-    private static class ContinuousPronunciationResult {
-        private String fullText;
-        private List<String> allJsonResults;
-        private List<PronunciationScores> allScores;
-    }
-
-    @Data
-    @Builder
-    private static class PronunciationScores {
-        private double pronunciationScore;
-        private double accuracyScore;
-        private double fluencyScore;
-        private double completenessScore;
-        private Double prosodyScore;
-        private int wordCount;
     }
 
     /**
@@ -2227,14 +2169,6 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
         }
     }
 
-    // Supporting class
-    @Data
-    @Builder
-    private static class ContinuousRecognitionResult {
-        private String fullText;
-        private List<String> allJsonResults;
-    }
-
     /**
      * Convert Azure ticks (100-nanosecond units) to milliseconds
      */
@@ -2255,21 +2189,6 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
             log.warn("Could not get audio duration, using default: {}", e.getMessage());
             return 0;
         }
-    }
-
-    /**
-     * Generate AI-powered assessment from speech analysis
-     */
-    private PronunciationAssessmentResponse generateAIAssessment(SpeechAnalysisResult analysis) {
-
-        // Build prompt for AI
-        String prompt = buildAIAssessmentPrompt(analysis);
-
-        // Call OpenAI
-        String aiResponse = openAiServiceImpl.callOpenAI(prompt);
-
-        // Parse AI response
-        return parseAIAssessmentResponse(aiResponse, analysis);
     }
 
     /**
@@ -2500,31 +2419,6 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
         }
     }
 
-    // Supporting classes
-    @Data
-    @Builder
-    private static class SpeechAnalysisResult {
-        private String recognizedText;
-        private double overallConfidence;
-        private int wordCount;
-        private List<WordAnalysis> words;
-        private double avgConfidence;
-        private double speakingRate;
-        private double pauseRatio;
-        private long totalDurationMs;
-        private long speechDurationMs;
-        private long lowConfidenceWordCount;
-    }
-
-    @Data
-    @Builder
-    private static class WordAnalysis {
-        private String word;
-        private double confidence;
-        private double durationMs;
-        private double offsetMs;
-    }
-
     @Override
     @Transactional(readOnly = true)
     public SseEmitter gradeWritingStream(GradingWritingRequest request) {
@@ -2611,117 +2505,5 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
 //
 //        return emitter;
         return null;
-    }
-
-    /**
-     * Call OpenAI with progress updates
-     */
-    private String callOpenAIWithProgress(String prompt, SseEmitter emitter) {
-        int maxRetries = 3;
-        Exception lastException = null;
-
-        for (int attempt = 1; attempt <= maxRetries; attempt++) {
-            try {
-                // Update progress based on attempt
-                int baseProgress = 50 + (attempt - 1) * 10;
-                sendProgress(emitter, "ai_analysis", baseProgress,
-                        String.format("Đang gọi AI (lần thử %d/%d)...", attempt, maxRetries));
-
-                String response = openAiServiceImpl.callOpenAIForFeedback(prompt);
-
-                // Success
-                sendProgress(emitter, "ai_analysis", 80, "AI đã phân tích xong!");
-                return response;
-
-            } catch (Exception e) {
-                lastException = e;
-                log.warn("OpenAI call failed on attempt {}/{}: {}", attempt, maxRetries, e.getMessage());
-
-                if (attempt < maxRetries) {
-                    sendProgress(emitter, "ai_analysis", 50 + attempt * 10,
-                            String.format("Lỗi, đang thử lại (%d/%d)...", attempt, maxRetries));
-
-                    try {
-                        Thread.sleep(1000L * attempt);
-                    } catch (InterruptedException ie) {
-                        Thread.currentThread().interrupt();
-                    }
-                }
-            }
-        }
-
-        throw new RuntimeException("Failed to get AI response after " + maxRetries + " attempts: "
-                + (lastException != null ? lastException.getMessage() : "unknown error"));
-    }
-
-    /**
-     * Send progress event
-     */
-    private void sendProgress(SseEmitter emitter, String stage, int percent, String message) {
-        try {
-            GradingStreamEvent event = GradingStreamEvent.builder()
-                    .eventType("progress")
-                    .stage(stage)
-                    .progressPercent(percent)
-                    .message(message)
-                    .build();
-
-            emitter.send(SseEmitter.event()
-                    .name("grading-progress")
-                    .data(event));
-
-        } catch (IOException e) {
-            log.error("Failed to send progress event: {}", e.getMessage());
-            emitter.completeWithError(e);
-        }
-    }
-
-    /**
-     * Send complete event with final result
-     */
-    private void sendComplete(SseEmitter emitter, GradingWritingResponse result) {
-        try {
-            GradingStreamEvent event = GradingStreamEvent.builder()
-                    .eventType("complete")
-                    .stage("done")
-                    .progressPercent(100)
-                    .message("Chấm điểm hoàn tất!")
-                    .finalResult(result)
-                    .build();
-
-            emitter.send(SseEmitter.event()
-                    .name("grading-complete")
-                    .data(event));
-
-            emitter.complete();
-
-        } catch (IOException e) {
-            log.error("Failed to send complete event: {}", e.getMessage());
-            emitter.completeWithError(e);
-        }
-    }
-
-    /**
-     * Send error event
-     */
-    private void sendError(SseEmitter emitter, String errorMessage) {
-        try {
-            GradingStreamEvent event = GradingStreamEvent.builder()
-                    .eventType("error")
-                    .stage("error")
-                    .errorMessage(errorMessage)
-                    .message("Có lỗi xảy ra: " + errorMessage)
-                    .build();
-
-            emitter.send(SseEmitter.event()
-                    .name("grading-error")
-                    .data(event));
-
-            emitter.completeWithError(new RuntimeException(errorMessage));
-
-        } catch (IOException e) {
-            log.error("Failed to send error event: {}", e.getMessage());
-            emitter.completeWithError(e);
-        }
     }
 }

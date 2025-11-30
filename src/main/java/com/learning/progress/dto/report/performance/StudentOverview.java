@@ -1,4 +1,4 @@
-package com.learning.progress.dto.report;
+package com.learning.progress.dto.report.performance;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -16,7 +16,7 @@ import java.time.OffsetDateTime;
 @AllArgsConstructor
 public class StudentOverview {
     private OffsetDateTime firstClassJoinedAt;
-    private StudentPerformanceDTO.LevelInfo currentLevel;
-    private StudentPerformanceDTO.ClassInfo currentClass;
-    private StudentPerformanceDTO.ChallengeProgress challengeProgress;
+    private LevelInfo currentLevel;
+    private ClassInfo currentClass;
+    private ChallengeProgress challengeProgress;
 }

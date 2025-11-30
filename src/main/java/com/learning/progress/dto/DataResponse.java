@@ -117,20 +117,4 @@ public class DataResponse<T> {
         this.timestamp = LocalDateTime.now();
         return this;
     }
-
-
-    // =====================================================================
-    // BUILDER: TỰ ĐỘNG GÁN KHI BUILD
-    // =====================================================================
-
-    public static class DataResponseBuilder<T> {
-        public DataResponse<T> build() {
-            DataResponse<T> response = new DataResponse<>(
-                    traceId, success, message, data, error,
-                    startDate, endDate, status, timestamp, path, requestId,
-                    page, size, totalElements, totalPages
-            );
-            return response.withCurrentTraceId().withCurrentTimestamp();
-        }
-    }
 }
