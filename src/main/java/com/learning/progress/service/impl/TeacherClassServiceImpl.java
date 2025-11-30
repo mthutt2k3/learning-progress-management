@@ -1,5 +1,6 @@
 package com.learning.progress.service.impl;
 
+import com.learning.progress.common.CommonStatus;
 import com.learning.progress.common.*;
 import com.learning.progress.dto.clazz.ClassDTO;
 import com.learning.progress.dto.clazz.ClassOverviewDTO;
@@ -175,7 +176,7 @@ public class TeacherClassServiceImpl implements ClassServiceStrategy {
         }
 
         // Check if teacher is in class
-        classTeacherRepository.findByUserIdAndClazzIdAndStatus(currentUser.getId(), id, ClassTeacherStatus.ACTIVE)
+        classTeacherRepository.findByUserIdAndClazzIdAndStatus(currentUser.getId(), id, CommonStatus.ACTIVE)
                 .orElseThrow(() -> {
                     log.error("[{}] traceId={} Teacher not active in class userId={} classId={}", method, traceId, currentUser.getId(), id);
                     return new ApiException(Const.SECURITY.FORBIDDEN_ROLE, HttpStatus.FORBIDDEN.value());
@@ -220,7 +221,7 @@ public class TeacherClassServiceImpl implements ClassServiceStrategy {
         );
 
         // Teacher: Only view ACTIVE classes
-        List<Long> teacherClassIds = classTeacherRepository.findByUserIdAndStatus(currentUser.getId(), ClassTeacherStatus.ACTIVE)
+        List<Long> teacherClassIds = classTeacherRepository.findByUserIdAndStatus(currentUser.getId(), CommonStatus.ACTIVE)
                 .stream()
                 .map(classTeacher -> classTeacher.getClazz().getId())
                 .toList();

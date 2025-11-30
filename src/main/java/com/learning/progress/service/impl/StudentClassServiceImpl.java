@@ -169,7 +169,7 @@ public class StudentClassServiceImpl implements ClassServiceStrategy {
         }
 
         // Check if student is in class
-        classStudentRepository.findByUserIdAndClazzIdAndStatus(currentUser.getId(), id, ClassStudentStatus.ACTIVE)
+        classStudentRepository.findByUserIdAndClazzIdAndStatus(currentUser.getId(), id, CommonStatus.ACTIVE)
                 .orElseThrow(() -> {
                     log.error("[{}] traceId={} Student not active in class userId={} classId={}", method, traceId, currentUser.getId(), id);
                     return new ApiException(Const.SECURITY.FORBIDDEN_ROLE, HttpStatus.FORBIDDEN.value());
@@ -214,7 +214,7 @@ public class StudentClassServiceImpl implements ClassServiceStrategy {
         );
 
         // Student: Only view ACTIVE classes
-        List<Long> studentClassIds = classStudentRepository.findByUserIdAndStatus(currentUser.getId(), ClassStudentStatus.ACTIVE)
+        List<Long> studentClassIds = classStudentRepository.findByUserIdAndStatus(currentUser.getId(), CommonStatus.ACTIVE)
                 .stream()
                 .map(classStudent -> classStudent.getClazz().getId())
                 .toList();

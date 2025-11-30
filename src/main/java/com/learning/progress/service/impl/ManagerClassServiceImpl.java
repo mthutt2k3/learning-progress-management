@@ -444,11 +444,11 @@ public class ManagerClassServiceImpl implements ClassServiceStrategy {
 
         // Lấy tất cả học sinh
         List<User> students = classStudentRepository
-                .findUsersByClazzIdAndStatus(clazz.getId(), ClassStudentStatus.ACTIVE);
+                .findUsersByClazzIdAndStatus(clazz.getId(), CommonStatus.ACTIVE);
 
         // Lấy tất cả giáo viên + trợ giảng
         List<ClassTeacher> teachers = classTeacherRepository
-                .findByClazzIdAndStatusIn(clazz.getId(), List.of(ClassTeacherStatus.ACTIVE));
+                .findByClazzIdAndStatusIn(clazz.getId(), List.of(CommonStatus.ACTIVE));
 
         log.debug("[{}] traceId={} Notifying {} students and {} teachers about status change", method, traceId, students.size(), teachers.size());
 

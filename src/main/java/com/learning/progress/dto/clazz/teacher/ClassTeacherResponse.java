@@ -1,6 +1,6 @@
 package com.learning.progress.dto.clazz.teacher;
 
-import com.learning.progress.common.ClassTeacherStatus;
+import com.learning.progress.common.CommonStatus;
 import com.learning.progress.common.RoleInClass;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -18,7 +18,7 @@ public class ClassTeacherResponse {
     private String email;
     @Enumerated(EnumType.STRING)
     private RoleInClass roleInClass;
-    private ClassTeacherStatus status;
+    private CommonStatus status;
     private OffsetDateTime joinedAt;
     private OffsetDateTime leftAt;
 }

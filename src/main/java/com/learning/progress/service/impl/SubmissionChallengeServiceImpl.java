@@ -36,7 +36,6 @@ import java.time.OffsetDateTime;
 import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 /**
  * SubmissionChallengeServiceImpl
@@ -128,7 +127,7 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
         Pageable pageable = PageRequest.of(0, pageSize);
         Page<ClassStudent> page;
         do {
-            page = classStudentRepository.findByClassIdAndStatus(classId, List.of(ClassStudentStatus.ACTIVE), pageable);
+            page = classStudentRepository.findByClassIdAndStatus(classId, List.of(CommonStatus.ACTIVE), pageable);
             List<SubmissionDailyChallenge> newSubs = page.getContent().stream()
                     .map(ClassStudent::getUser)
                     .filter(Objects::nonNull)
@@ -241,11 +240,6 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
 
         Long classId = challenge.getClassLesson().getClassChapter().getClazz().getId();
         appValidator.validateUserAccessToClass(classId);
-        String role = jwtUtil.extractRoleFromCurrentRequest();
-        if (!RoleName.TEACHER.name().equals(role) && !RoleName.TEACHING_ASSISTANT.name().equals(role)) {
-            log.warn("[{}] unauthorized role={} for challengeId={}", action, role, challengeId);
-            throw new ApiException(Const.SUBMISSION.UNAUTHORIZED_VIEW_SUBMISSIONS, HttpStatus.FORBIDDEN.value());
-        }
 
         Sort sort = Sort.by(sortDir.equalsIgnoreCase("asc") ? Sort.Direction.ASC : Sort.Direction.DESC, sortBy);
         Pageable pageable = PageRequest.of(page, size, sort);
@@ -315,12 +309,12 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
 
 // Lấy danh sách giáo viên + trợ giảng
         List<ClassTeacher> teachers = classTeacherRepository
-                .findByClazzIdAndStatusIn(classId, List.of(ClassTeacherStatus.ACTIVE));
+                .findByClazzIdAndStatusIn(classId, List.of(CommonStatus.ACTIVE));
 
         long submittedCount = submissionDailyChallengeRepository
                 .countByChallengeIdAndSubmittedAtIsNotNullAndDeletedAtIsNull(challengeId);
         long totalStudents = classStudentRepository
-                .countByClassIdAndStatus(classId, ClassStudentStatus.ACTIVE);
+                .countByClassIdAndStatus(classId, CommonStatus.ACTIVE);
 
         for (ClassTeacher ct : teachers) {
             String basePath = RoleInClass.TEACHER.equals(ct.getRoleInClass())

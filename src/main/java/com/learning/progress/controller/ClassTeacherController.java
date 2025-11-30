@@ -1,6 +1,6 @@
 package com.learning.progress.controller;
 
-import com.learning.progress.common.ClassTeacherStatus;
+import com.learning.progress.common.CommonStatus;
 import com.learning.progress.common.Const;
 import com.learning.progress.dto.clazz.teacher.AddTeacherToClassRequest;
 import com.learning.progress.dto.clazz.teacher.ClassTeacherResponse;
@@ -49,7 +49,7 @@ public class ClassTeacherController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(required = false) String text,
-            @RequestParam(required = false, defaultValue = "ACTIVE") List<ClassTeacherStatus> status,
+            @RequestParam(required = false, defaultValue = "ACTIVE") List<CommonStatus> status,
             @RequestParam(defaultValue = "joinedAt") String sortBy,
             @RequestParam(defaultValue = "desc") String sortDir) {
         return new ResponseEntity<>(
