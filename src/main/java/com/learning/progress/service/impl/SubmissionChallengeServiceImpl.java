@@ -151,7 +151,7 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
                     try {
                         String title = Const.NOTIFICATION.NEW_TEMP_SUBMISSION_TITLE;
                         String message = String.format(Const.NOTIFICATION.NEW_TEMP_SUBMISSION_MESSAGE_TEMPLATE, challenge.getChallengeName());
-                        notificationService.createNotification(s.getUser().getId(), null, title, message, null, null);
+                        notificationService.createNotifications(s.getUser().getId(), null, title, message, null, null);
                     } catch (Exception ex) {
                         log.debug("[{}] {} Failed to send temp submission notification userId={} error={}", traceId, method, s.getUser().getId(), ex.getMessage());
                     }
@@ -325,7 +325,7 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
             String title = Const.NOTIFICATION.SUBMISSION_STATUS_UPDATE_TITLE;
             String message = String.format(Const.NOTIFICATION.SUBMISSION_STATUS_UPDATE_MESSAGE_TEMPLATE, submittedCount, totalStudents);
 
-            notificationService.createNotification(ct.getUser().getId(), challengeId, title, message, teacherUrl, null);
+            notificationService.createNotifications(ct.getUser().getId(), challengeId, title, message, teacherUrl, null);
         }
 // === KẾT THÚC ===
     }
@@ -508,12 +508,12 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
             // notify users for restored/created
             for (SubmissionDailyChallenge s : toRestore) {
                 try {
-                    notificationService.createNotification(s.getUser().getId(), null, "Submission phục hồi", "Submission của bạn đã được phục hồi cho bài " + s.getChallenge().getChallengeName(), null, null);
+                    notificationService.createNotifications(s.getUser().getId(), null, "Submission phục hồi", "Submission của bạn đã được phục hồi cho bài " + s.getChallenge().getChallengeName(), null, null);
                 } catch (Exception ex) { log.debug("notify restore error: {}", ex.getMessage()); }
             }
             for (SubmissionDailyChallenge s : toCreate) {
                 try {
-                    notificationService.createNotification(s.getUser().getId(), null, "Submission tạm tạo", "Submission tạm đã được tạo cho bài " + s.getChallenge().getChallengeName(), null, null);
+                    notificationService.createNotifications(s.getUser().getId(), null, "Submission tạm tạo", "Submission tạm đã được tạo cho bài " + s.getChallenge().getChallengeName(), null, null);
                 } catch (Exception ex) { log.debug("notify create error: {}", ex.getMessage()); }
             }
 
@@ -559,7 +559,7 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
         try {
             String title = "Các bài nộp của bạn đã bị ẩn";
             String message = "Một số submission của bạn trong lớp đã bị ẩn/gỡ bởi " + deletedBy;
-            notificationService.createNotification(userId, null, title, message, null, null);
+            notificationService.createNotifications(userId, null, title, message, null, null);
         } catch (Exception ex) {
             log.debug("Failed to send soft-delete notification to userId={} error={}", userId, ex.getMessage());
         }
@@ -648,7 +648,7 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
             try {
                 String title = "Thời hạn nộp bài đã được gia hạn";
                 String message = "Thời hạn nộp bài cho \"" + s.getChallenge().getChallengeName() + "\" đã được gia hạn tới " + request.getNewExpiredAt();
-                notificationService.createNotification(s.getUser().getId(), null, title, message, null, null);
+                notificationService.createNotifications(s.getUser().getId(), null, title, message, null, null);
             } catch (Exception ex) {
                 log.debug("Failed to send extend deadline notification userId={} error={}", s.getUser().getId(), ex.getMessage());
             }
@@ -761,7 +761,7 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
             try {
                 String title = Const.NOTIFICATION.RESET_SUBMISSION_TITLE;
                 String message = String.format(Const.NOTIFICATION.RESET_SUBMISSION_MESSAGE_TEMPLATE, s.getChallenge().getChallengeName(), newStart, newEnd);
-                notificationService.createNotification(s.getUser().getId(), null, title, message, null, null);
+                notificationService.createNotifications(s.getUser().getId(), null, title, message, null, null);
             } catch (Exception ex) {
                 log.debug("[{}] {} Failed to send reset notification userId={} error={}", traceId, action, s.getUser().getId(), ex.getMessage());
             }

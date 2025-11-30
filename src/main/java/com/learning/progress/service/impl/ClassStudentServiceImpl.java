@@ -298,7 +298,7 @@ public class ClassStudentServiceImpl implements ClassStudentService {
                 String title = String.format(Const.CLASS_STUDENT.NOTIFY_ADDED_TITLE, clazz.getClassName());
                 String message = String.format(Const.CLASS_STUDENT.NOTIFY_ADDED_MESSAGE, jwtUtil.extractUsernameFromCurrentRequest(), clazz.getClassName());
                 try {
-                    notificationService.createNotification(u.getId(), null, title, message, url, null);
+                    notificationService.createNotifications(u.getId(), null, title, message, url, null);
                 } catch (Exception ex) {
                     log.debug("[{}] traceId={} Failed to notify new student userId={} error={}", method, traceId, u.getId(), ex.getMessage());
                 }
@@ -315,7 +315,7 @@ public class ClassStudentServiceImpl implements ClassStudentService {
                 String title = String.format(Const.CLASS_STUDENT.NOTIFY_REACTIVATED_TITLE, clazz.getClassName());
                 String message = String.format(Const.CLASS_STUDENT.NOTIFY_REACTIVATED_MESSAGE, jwtUtil.extractUsernameFromCurrentRequest(), clazz.getClassName());
                 try {
-                    notificationService.createNotification(u.getId(), null, title, message, null, null);
+                    notificationService.createNotifications(u.getId(), null, title, message, null, null);
                 } catch (Exception ex) {
                     log.debug("[{}] traceId={} Failed to notify reactivated student userId={} error={}", method, traceId, u.getId(), ex.getMessage());
                 }
@@ -406,7 +406,7 @@ public class ClassStudentServiceImpl implements ClassStudentService {
             String title = String.format(Const.CLASS_STUDENT.NOTIFY_REMOVED_TITLE, clazz.getClassName());
             String message = String.format(Const.CLASS_STUDENT.NOTIFY_REMOVED_MESSAGE, jwtUtil.extractUsernameFromCurrentRequest(), clazz.getClassName());
 
-            notificationService.createNotification(user.getId(), clazz.getId(), title, message, null, null);
+            notificationService.createNotifications(user.getId(), clazz.getId(), title, message, null, null);
         } catch (Exception ex) {
             log.warn("[{}] traceId={} Failed to send notification to removed student userId={} error={}", method, traceId, userId, ex.getMessage());
         }

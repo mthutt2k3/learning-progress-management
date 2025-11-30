@@ -291,7 +291,7 @@ public class SubmissionLogServiceImpl implements SubmissionLogService {
                         submission.getUser().getFullName(), submission.getChallenge().getChallengeName());
                 String targetUrl = "/app/submissions/" + submission.getId();
 
-                notificationService.createNotification(teacherIds, null, title, message, targetUrl, null);
+                notificationService.createNotifications(teacherIds, null, title, message, targetUrl, null);
                 log.info("[{}] {} Notified {} teachers about device mismatch for submission {}", traceId, action, teacherIds.size(), submission.getId());
             } else {
                 log.debug("[{}] {} no active teachers to notify for submission {}", traceId, action, submission.getId());

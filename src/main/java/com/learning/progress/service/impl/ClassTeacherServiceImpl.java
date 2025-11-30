@@ -352,7 +352,7 @@ public class ClassTeacherServiceImpl implements ClassTeacherService {
                 String message = String.format(Const.CLASS_TEACHER.NOTIFY_ADDED_AS_TEACHER_MESSAGE, jwtUtil.extractUsernameFromCurrentRequest(), clazz.getClassName());
                 String url = "/teacher/classes/menu/" + clazz.getId();
                 try {
-                    notificationService.createNotification(u.getId(), clazz.getId(), title, message, url, null);
+                    notificationService.createNotifications(u.getId(), clazz.getId(), title, message, url, null);
                 } catch (Exception ex) {
                     log.debug("[{}] traceId={} Failed to notify new teacher userId={} error={}", method, traceId, u.getId(), ex.getMessage());
                 }
@@ -385,7 +385,7 @@ public class ClassTeacherServiceImpl implements ClassTeacherService {
                 String message = String.format(Const.CLASS_TEACHER.NOTIFY_ADDED_AS_TA_MESSAGE, jwtUtil.extractUsernameFromCurrentRequest(), clazz.getClassName());
                 String url = "/teaching-assistant/classes/menu/" + clazz.getId();
                 try {
-                    notificationService.createNotification(u.getId(), clazz.getId(), title, message, url, null);
+                    notificationService.createNotifications(u.getId(), clazz.getId(), title, message, url, null);
                 } catch (Exception ex) {
                     log.debug("[{}] traceId={} Failed to notify new TA userId={} error={}", method, traceId, u.getId(), ex.getMessage());
                 }
@@ -418,7 +418,7 @@ public class ClassTeacherServiceImpl implements ClassTeacherService {
                 String message = String.format(Const.CLASS_TEACHER.NOTIFY_REACTIVATED_MESSAGE, jwtUtil.extractUsernameFromCurrentRequest(), clazz.getClassName());
                 String url = "/teacher/classes/menu/" + clazz.getId();
                 try {
-                    notificationService.createNotification(u.getId(), clazz.getId(), title, message, url, null);
+                    notificationService.createNotifications(u.getId(), clazz.getId(), title, message, url, null);
                 } catch (Exception ex) {
                     log.debug("[{}] traceId={} Failed to notify reactivated teacher userId={} error={}", method, traceId, u.getId(), ex.getMessage());
                 }
@@ -451,7 +451,7 @@ public class ClassTeacherServiceImpl implements ClassTeacherService {
                 String message = String.format(Const.CLASS_TEACHER.NOTIFY_REACTIVATED_MESSAGE, jwtUtil.extractUsernameFromCurrentRequest(), clazz.getClassName());
                 String url = "/teaching-assistant/classes/menu/" + clazz.getId();
                 try {
-                    notificationService.createNotification(u.getId(), clazz.getId(), title, message, url, null);
+                    notificationService.createNotifications(u.getId(), clazz.getId(), title, message, url, null);
                 } catch (Exception ex) {
                     log.debug("[{}] traceId={} Failed to notify reactivated TA userId={} error={}", method, traceId, u.getId(), ex.getMessage());
                 }
@@ -545,7 +545,7 @@ public class ClassTeacherServiceImpl implements ClassTeacherService {
                     ? "/teacher/classes/menu/" + clazz.getId()
                     : "/teaching-assistant/classes/menu/" + clazz.getId();
 
-            notificationService.createNotification(user.getId(), null, title, message, url, null);
+            notificationService.createNotifications(user.getId(), null, title, message, url, null);
         } catch (Exception ex) {
             log.debug("[{}] traceId={} Failed to notify removed userId={} error={}", method, traceId, userId, ex.getMessage());
         }
