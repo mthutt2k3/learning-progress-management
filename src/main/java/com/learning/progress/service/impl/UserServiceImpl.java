@@ -1,7 +1,6 @@
 package com.learning.progress.service.impl;
 
 import com.learning.progress.common.*;
-import com.learning.progress.controller.SyllabusController;
 import com.learning.progress.dto.excel.*;
 import com.learning.progress.dto.clazz.ClassInfo;
 import com.learning.progress.dto.user.*;
@@ -468,7 +467,7 @@ public class UserServiceImpl implements UserService {
 
         classStudentRepository.findFirstByUserIdAndStatusOrderByJoinedAtDesc(
                 user.getId(),
-                ClassStudentStatus.ACTIVE
+                CommonStatus.ACTIVE
         ).ifPresent(cs -> {
             ClassInfo classInfo = ClassInfo.builder()
                     .id(cs.getClazz().getId())

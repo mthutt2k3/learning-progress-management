@@ -1,6 +1,6 @@
 package com.learning.progress.entity;
 
-import com.learning.progress.common.ClassStudentStatus;
+import com.learning.progress.common.CommonStatus;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -41,6 +41,6 @@ public class ClassStudent extends BaseEntity{
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
-    private ClassStudentStatus status = ClassStudentStatus.ACTIVE;
+    private CommonStatus status = CommonStatus.ACTIVE;
 
 }

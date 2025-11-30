@@ -1,6 +1,6 @@
 package com.learning.progress.entity;
 
-import com.learning.progress.common.ClassTeacherStatus;
+import com.learning.progress.common.CommonStatus;
 import com.learning.progress.common.RoleInClass;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
@@ -46,5 +46,5 @@ public class ClassTeacher extends BaseEntity{
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
-    private ClassTeacherStatus status = ClassTeacherStatus.ACTIVE;
+    private CommonStatus status = CommonStatus.ACTIVE;
 }

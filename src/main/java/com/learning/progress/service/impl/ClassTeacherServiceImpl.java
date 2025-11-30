@@ -1,5 +1,6 @@
 package com.learning.progress.service.impl;
 
+import com.learning.progress.common.CommonStatus;
 import com.learning.progress.common.*;
 import com.learning.progress.dto.clazz.teacher.AddTeacherToClassRequest;
 import com.learning.progress.dto.clazz.teacher.ClassTeacherResponse;
@@ -69,7 +70,7 @@ public class ClassTeacherServiceImpl implements ClassTeacherService {
     private int maxTeacherInClass;
 
     @Override
-    public DataResponse<List<ClassTeacherResponse>> getTeachersInClass(Long classId, int page, int size, String text, List<ClassTeacherStatus> status, String sortBy, String sortDir) {
+    public DataResponse<List<ClassTeacherResponse>> getTeachersInClass(Long classId, int page, int size, String text, List<CommonStatus> status, String sortBy, String sortDir) {
         final String method = "getTeachersInClass";
         long startNs = System.nanoTime();
         String traceId = TraceUtil.getTraceId();
@@ -87,9 +88,9 @@ public class ClassTeacherServiceImpl implements ClassTeacherService {
                 .orElseThrow(() -> new ApiException(Const.CLASS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         // Nếu không truyền status thì lấy tất cả
-        List<ClassTeacherStatus> statuses;
+        List<CommonStatus> statuses;
         if (status == null || status.isEmpty()) {
-            statuses = Arrays.asList(ClassTeacherStatus.values());
+            statuses = Arrays.asList(CommonStatus.values());
         } else {
             statuses = status;
         }
@@ -223,7 +224,7 @@ public class ClassTeacherServiceImpl implements ClassTeacherService {
         // Check if class already has a TEACHER
         if (teacherCount == maxTeacherInClass) {
             boolean hasExistingTeacher = classTeacherRepository
-                    .existsByClazzIdAndRoleInClassAndStatus(classId, RoleInClass.TEACHER, ClassTeacherStatus.ACTIVE);
+                    .existsByClazzIdAndRoleInClassAndStatus(classId, RoleInClass.TEACHER, CommonStatus.ACTIVE);
 
             if (hasExistingTeacher) {
                 throw new ApiException(
@@ -238,7 +239,7 @@ public class ClassTeacherServiceImpl implements ClassTeacherService {
                 .filter(t -> RoleInClass.TEACHING_ASSISTANT.equals(t.getRoleInClass()))
                 .count();
         long existingAssistantCount = classTeacherRepository
-                .countByClazzIdAndRoleInClassAndStatus(classId, RoleInClass.TEACHING_ASSISTANT, ClassTeacherStatus.ACTIVE);
+                .countByClazzIdAndRoleInClassAndStatus(classId, RoleInClass.TEACHING_ASSISTANT, CommonStatus.ACTIVE);
 
         if (existingAssistantCount + newAssistantCount > maxTeachingAssistantInClass) {
             throw new ApiException(
@@ -250,7 +251,7 @@ public class ClassTeacherServiceImpl implements ClassTeacherService {
 
         // 8️⃣ Check existing ACTIVE teachers
         List<Long> existingActiveUserIds = classTeacherRepository
-                .findUserIdsByClazzIdAndUserIdInAndStatus(classId, userIds, ClassTeacherStatus.ACTIVE);
+                .findUserIdsByClazzIdAndUserIdInAndStatus(classId, userIds, CommonStatus.ACTIVE);
 
         if (!existingActiveUserIds.isEmpty()) {
             throw new ApiException(
@@ -261,7 +262,7 @@ public class ClassTeacherServiceImpl implements ClassTeacherService {
 
         // 9️⃣ Handle INACTIVE teachers (re-activate instead of creating new)
         List<ClassTeacher> existingInactiveTeachers = classTeacherRepository
-                .findByClazzIdAndUserIdInAndStatus(classId, userIds, ClassTeacherStatus.INACTIVE);
+                .findByClazzIdAndUserIdInAndStatus(classId, userIds, CommonStatus.INACTIVE);
 
         List<ClassTeacher> classTeachersToSave = new ArrayList<>();
         List<User> newTeachers = new ArrayList<>();
@@ -283,7 +284,7 @@ public class ClassTeacherServiceImpl implements ClassTeacherService {
                 // Re-activate existing record
                 ClassTeacher classTeacher = existingInactive.get();
                 classTeacher.setRoleInClass(teacherWithRole.getRoleInClass());
-                classTeacher.setStatus(ClassTeacherStatus.ACTIVE);
+                classTeacher.setStatus(CommonStatus.ACTIVE);
                 classTeacher.setJoinedAt(now);
                 classTeacher.setDeletedAt(null);
                 classTeacher.setUpdatedAt(now);
@@ -303,7 +304,7 @@ public class ClassTeacherServiceImpl implements ClassTeacherService {
                 classTeacher.setClazz(clazz);
                 classTeacher.setUser(user);
                 classTeacher.setRoleInClass(teacherWithRole.getRoleInClass());
-                classTeacher.setStatus(ClassTeacherStatus.ACTIVE);
+                classTeacher.setStatus(CommonStatus.ACTIVE);
                 classTeacher.setJoinedAt(now);
                 classTeachersToSave.add(classTeacher);
 
@@ -498,11 +499,11 @@ public class ClassTeacherServiceImpl implements ClassTeacherService {
         ClassTeacher classTeacher = classTeacherRepository.findByClazzIdAndUserId(classId, userId)
                 .orElseThrow(() -> new ApiException(Const.CLASS_TEACHER.TEACHER_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
-        if (!ClassTeacherStatus.ACTIVE.equals(classTeacher.getStatus())) {
+        if (!CommonStatus.ACTIVE.equals(classTeacher.getStatus())) {
             throw new ApiException(Const.CLASS_TEACHER.TEACHER_NOT_FOUND, HttpStatus.BAD_REQUEST.value());
         }
 
-        classTeacher.setStatus(ClassTeacherStatus.INACTIVE);
+        classTeacher.setStatus(CommonStatus.INACTIVE);
         classTeacher.setLeftAt(OffsetDateTime.now());
 
         classTeacherRepository.save(classTeacher);

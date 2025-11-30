@@ -1,7 +1,7 @@
 package com.learning.progress.dto.clazz.student;
 
 import com.learning.progress.common.ClassStatus;
-import com.learning.progress.common.ClassStudentStatus;
+import com.learning.progress.common.CommonStatus;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import lombok.Data;
@@ -19,7 +19,7 @@ public class ClassStudentResponse {
     private Long syllabusId;
     private ClassStatus classStatus;
     @Enumerated(EnumType.STRING)
-    private ClassStudentStatus status;
+    private CommonStatus status;
     private OffsetDateTime joinedAt;
     private OffsetDateTime leftAt;
 }

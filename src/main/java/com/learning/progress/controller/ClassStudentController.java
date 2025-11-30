@@ -1,6 +1,6 @@
 package com.learning.progress.controller;
 
-import com.learning.progress.common.ClassStudentStatus;
+import com.learning.progress.common.CommonStatus;
 import com.learning.progress.common.Const;
 import com.learning.progress.dto.clazz.student.AddStudentToClassRequest;
 import com.learning.progress.dto.clazz.student.ClassStudentResponse;
@@ -10,17 +10,11 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.core.io.ByteArrayResource;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.multipart.MultipartFile;
 
-import java.text.SimpleDateFormat;
-import java.util.Date;
 import java.util.List;
 
 @RestController
@@ -39,7 +33,7 @@ public class ClassStudentController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(required = false) String text,
-            @RequestParam(required = false, defaultValue = "ACTIVE") List<ClassStudentStatus> status,
+            @RequestParam(required = false, defaultValue = "ACTIVE") List<CommonStatus> status,
             @RequestParam(defaultValue = "joinedAt") String sortBy,
             @RequestParam(defaultValue = "desc") String sortDir) {
         return new ResponseEntity<>(
