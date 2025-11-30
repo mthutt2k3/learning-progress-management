@@ -273,7 +273,7 @@ public class LessonServiceImpl implements LessonService {
             Long actor = jwtUtil.extractUserIdFromCurrentRequest();
             String title = "Sync lessons completed";
             String message = "Sync for chapterId=" + chapterId + " completed.";
-            notificationService.createNotification(actor, null, title, message, null, null);
+            notificationService.createNotifications(actor, null, title, message, null, null);
             log.debug("[{}] traceId={} sent sync notification actor={}", method, traceId, actor);
         } catch (Exception ex) {
             log.debug("[{}] traceId={} Failed to send syncLessons notification: {}", method, traceId, ex.getMessage());
@@ -496,7 +496,7 @@ public class LessonServiceImpl implements LessonService {
             Long actor = jwtUtil.extractUserIdFromCurrentRequest();
             String title = "Import lessons completed";
             String message = "Imported " + result.size() + " lessons successfully.";
-            notificationService.createNotification(actor, null, title, message, null, null);
+            notificationService.createNotifications(actor, null, title, message, null, null);
             log.debug("[{}] traceId={} import notification sent actor={}", method, traceId, actor);
         } catch (Exception ex) {
             log.debug("[{}] traceId={} Failed to send importLessons notification: {}", method, traceId, ex.getMessage());

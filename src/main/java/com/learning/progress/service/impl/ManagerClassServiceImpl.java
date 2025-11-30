@@ -13,6 +13,7 @@ import com.learning.progress.exception.ApiException;
 import com.learning.progress.mapper.ClassMapper;
 import com.learning.progress.repository.*;
 import com.learning.progress.service.ClassHistoryService;
+import com.learning.progress.service.NotificationService;
 import com.learning.progress.service.strategy.ClassServiceStrategy;
 import com.learning.progress.util.*;
 import lombok.extern.slf4j.Slf4j;
@@ -60,7 +61,7 @@ public class ManagerClassServiceImpl implements ClassServiceStrategy {
     @Autowired
     private ClassStudentRepository classStudentRepository;
     @Autowired
-    private NotificationServiceImpl notificationServiceImpl;
+    private NotificationService notificationService;
 
     @Override
     public boolean supports(RoleName role) {
@@ -458,7 +459,7 @@ public class ManagerClassServiceImpl implements ClassServiceStrategy {
                     ? "/test-taker/classes/menu/"
                     : "/student/classes/menu/";
             String url = basePath + clazz.getId();
-            notificationServiceImpl.createNotification(student.getId(), clazz.getId(), title, message, url, null);
+            notificationService.createNotifications(student.getId(), clazz.getId(), title, message, url, null);
         }
 
         // Gửi cho giáo viên + trợ giảng
@@ -467,7 +468,7 @@ public class ManagerClassServiceImpl implements ClassServiceStrategy {
                     ? "/teacher/classes/menu/"
                     : "/teaching-assistant/classes/menu/";
             String url = basePath + clazz.getId();
-            notificationServiceImpl.createNotification(ct.getUser().getId(), clazz.getId(), title, message, url, null);
+            notificationService.createNotifications(ct.getUser().getId(), clazz.getId(), title, message, url, null);
         }
         // === KẾT THÚC ===
 

@@ -223,7 +223,7 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
                 String title = Const.GRADING.AUTO_GRADE_NOTIFICATION_TITLE;
                 String message = String.format(Const.GRADING.AUTO_GRADE_NOTIFICATION_TEMPLATE,
                         challenge != null ? challenge.getChallengeName() : "", autoData.rawScore());
-                notificationService.createNotification(submission.getUser().getId(), null, title, message, null, null);
+                notificationService.createNotifications(submission.getUser().getId(), null, title, message, null, null);
                 log.debug("[{}] [{}] sent auto-grade notification userId={} submissionId={}", traceId, method, submission.getUser().getId(), submissionId);
             }
         } catch (Exception ex) {
@@ -510,7 +510,7 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
                 String title = Const.GRADING.MANUAL_GRADE_NOTIFICATION_TITLE;
                 String message = String.format(Const.GRADING.MANUAL_GRADE_NOTIFICATION_TEMPLATE,
                         challenge != null ? challenge.getChallengeName() : "", request.getRawScore());
-                notificationService.createNotification(submission.getUser().getId(), null, title, message, null, null);
+                notificationService.createNotifications(submission.getUser().getId(), null, title, message, null, null);
                 log.debug("[{}] [{}] sent manual-grade notification userId={} submissionId={}", traceId, method, submission.getUser().getId(), submissionId);
             }
         } catch (Exception ex) {
@@ -594,7 +594,7 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
             if (submission.getUser() != null && submission.getUser().getId() != null) {
                 String title = Const.GRADING.PER_QUESTION_GRADE_NOTIFICATION_TITLE;
                 String message = String.format(Const.GRADING.PER_QUESTION_GRADE_NOTIFICATION_TEMPLATE, submission.getId());
-                notificationService.createNotification(submission.getUser().getId(), null, title, message, null, null);
+                notificationService.createNotifications(submission.getUser().getId(), null, title, message, null, null);
                 log.debug("[{}] [{}] sent per-question notification userId={} submissionId={} sqId={}", traceId, method, submission.getUser().getId(), submission.getId(), submissionQuestionId);
             }
         } catch (Exception ex) {
