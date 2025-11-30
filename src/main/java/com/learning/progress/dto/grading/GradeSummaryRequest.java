@@ -1,10 +1,7 @@
 package com.learning.progress.dto.grading;
 
 import com.learning.progress.common.Const;
-import jakarta.validation.constraints.Max;
-import jakarta.validation.constraints.Min;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.*;
 import lombok.*;
 
 @Getter
@@ -22,5 +19,6 @@ public class GradeSummaryRequest {
     @Max(value = 1, message = Const.GRADING.PENALTY_RANGE)
     private Double penaltyApplied;
 
+    @Size(max = Const.GRADING.MAX_OVERALL_FEEDBACK_LENGTH_VALUE, message = Const.GRADING.OVERALL_FEEDBACK_LENGTH_INVALID)
     private String overallFeedback;
 }

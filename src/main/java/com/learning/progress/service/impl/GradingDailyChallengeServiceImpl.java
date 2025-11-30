@@ -469,7 +469,7 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
         String traceId = TraceUtil.getTraceId();
         log.info("[{}] [{}] enter submissionId={} rawScore={} penalty={}", traceId, method, submissionId, request.getRawScore(), request.getPenaltyApplied());
 
-        SubmissionDailyChallenge submission = loadSubmissionOrThrow(submissionId);
+        SubmissionDailyChallenge submission = appValidator.validateUserAccessToSubmissionResult(submissionId);
         DailyChallenge challenge = submission.getChallenge();
         log.debug("[{}] [{}] validate access classId={}", traceId, method, getClassId(challenge));
         appValidator.validateUserAccessToClass(getClassId(challenge));
