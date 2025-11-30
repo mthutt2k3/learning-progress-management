@@ -1,8 +1,8 @@
 package com.learning.progress.service.impl;
 
 import com.learning.progress.cache.CacheService;
+import com.learning.progress.common.CommonStatus;
 import com.learning.progress.common.Const;
-import com.learning.progress.common.ClassTeacherStatus;
 import com.learning.progress.dto.notification.DeviceMismatchNotification;
 import com.learning.progress.dto.submission.AppendSubmissionLogRequest;
 import com.learning.progress.dto.submission.SubmissionLogsResponse;
@@ -12,7 +12,6 @@ import com.learning.progress.entity.User;
 import com.learning.progress.exception.ApiException;
 import com.learning.progress.messaging.RedisPublisher;
 import com.learning.progress.repository.SubmissionDailyChallengeRepository;
-import com.learning.progress.service.SseService;
 import com.learning.progress.service.SubmissionLogService;
 import com.learning.progress.util.*;
 import jakarta.validation.Valid;
@@ -279,7 +278,7 @@ public class SubmissionLogServiceImpl implements SubmissionLogService {
                     .map(Clazz::getClassTeachers)
                     .orElse(Collections.emptyList())
                     .stream()
-                    .filter(ct -> ct != null && ct.getStatus() == ClassTeacherStatus.ACTIVE)
+                    .filter(ct -> ct != null && ct.getStatus() == CommonStatus.ACTIVE)
                     .map(ct -> ct.getUser())
                     .filter(Objects::nonNull)
                     .map(User::getId)

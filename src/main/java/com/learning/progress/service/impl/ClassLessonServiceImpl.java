@@ -1,5 +1,6 @@
 package com.learning.progress.service.impl;
 
+import com.learning.progress.common.CommonStatus;
 import com.learning.progress.common.*;
 import com.learning.progress.dto.clazz.lesson.ClassLessonDTO;
 import com.learning.progress.dto.clazz.lesson.SyncClassLessonRequest;
@@ -375,7 +376,7 @@ public class ClassLessonServiceImpl implements ClassLessonService {
         appValidator.validateUserAccessToClass(classId);
         // Validate teacher assignment
         Long currentUserId = jwtUtil.extractUserIdFromCurrentRequest();
-        if (!classTeacherRepository.existsByClazz_IdAndUser_IdAndStatus(classId, currentUserId, ClassTeacherStatus.ACTIVE)) {
+        if (!classTeacherRepository.existsByClazz_IdAndUser_IdAndStatus(classId, currentUserId, CommonStatus.ACTIVE)) {
             log.error("[{}] traceId={} teacher not assigned userId={} classId={}", method, traceId, currentUserId, classId);
             throw new ApiException(Const.CLASS.TEACHER_NOT_ASSIGNED, HttpStatus.FORBIDDEN.value());
         }
@@ -488,7 +489,7 @@ public class ClassLessonServiceImpl implements ClassLessonService {
         // Bước 2: Validate teacher assignment
         Long currentUserId = jwtUtil.extractUserIdFromCurrentRequest();
         if (!classTeacherRepository.existsByClazz_IdAndUser_IdAndStatus(
-                classId, currentUserId, ClassTeacherStatus.ACTIVE)) {
+                classId, currentUserId, CommonStatus.ACTIVE)) {
             result.setTotalRows(0);
             result.setValidRows(0);
             result.setInvalidRows(0);

@@ -73,8 +73,8 @@ public class DailyChallengeController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasRole('TEACHER') or hasRole('MANAGER')")
-    @Operation(summary = "Delete daily challenge", description = "Soft delete a daily challenge (ADMIN or MANAGER)")
+    @PreAuthorize("hasRole('TEACHER')")
+    @Operation(summary = "Delete daily challenge", description = "Soft delete a daily challenge")
     public ResponseEntity<DataResponse<Void>> deleteChallenge(@PathVariable Long id) {
         dailyChallengeService.deleteChallenge(id);
         return new ResponseEntity<>(DataResponse.success(null, Const.RESULT_MESSAGE_CODE.DELETE_SUCCESSFUL), HttpStatus.OK);

@@ -129,7 +129,7 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
 
         // compute total students for the class using direct count (avoid page trick)
         long totalStudents = classStudentRepository
-                .countByClassIdAndStatus(classId, ClassStudentStatus.ACTIVE);
+                .countByClassIdAndStatus(classId, CommonStatus.ACTIVE);
 
         List<DailyChallengeListDTO> data = lessonPage.getContent().stream()
                 .map(lesson -> {
@@ -341,7 +341,7 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
         List<User> students = classStudentRepository
                 .findUsersByClazzIdAndStatus(
                         challenge.getClassLesson().getClassChapter().getClazz().getId(),
-                        ClassStudentStatus.ACTIVE
+                        CommonStatus.ACTIVE
                 );
 
         String classId = challenge.getClassLesson().getClassChapter().getClazz().getId().toString();
@@ -558,13 +558,13 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
                     // === THÊM NOTIFICATION CHO GIÁO VIÊN ===
                     Long classId = ch.getClassLesson().getClassChapter().getClazz().getId();
                     List<Long> teacherIds = classTeacherRepository
-                            .findUserIdsByClazzIdAndStatusIn(classId, List.of(ClassTeacherStatus.ACTIVE));
+                            .findUserIdsByClazzIdAndStatusIn(classId, List.of(CommonStatus.ACTIVE));
 
                     long submitted = submissionDailyChallengeRepository
                             .countByChallengeIdAndSubmittedAtIsNotNullAndDeletedAtIsNull(ch.getId());
                     long late = submissionDailyChallengeRepository
                             .countByChallengeIdAndSubmittedAtAfterAndDeletedAtIsNull(ch.getId(), ch.getEndDate());
-                    long totalStudents = classStudentRepository.countByClassIdAndStatus(classId, ClassStudentStatus.ACTIVE);
+                    long totalStudents = classStudentRepository.countByClassIdAndStatus(classId, CommonStatus.ACTIVE);
                     long missing = totalStudents - submitted;
 
                     String url = "/teacher/daily-challenges/detail/" + ch.getId() + "/submissions";

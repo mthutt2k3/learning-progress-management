@@ -382,13 +382,13 @@ public class SubmissionQuestionServiceImpl implements SubmissionQuestionService 
 
         // Lấy danh sách giáo viên + trợ giảng
         List<ClassTeacher> teachers = classTeacherRepository
-                .findByClazzIdAndStatusIn(classId, List.of(ClassTeacherStatus.ACTIVE));
+                .findByClazzIdAndStatusIn(classId, List.of(CommonStatus.ACTIVE));
         log.debug("[{}] {} notifying {} teachers for challengeId={}", traceId, action, teachers.size(), challengeId);
 
         long submittedCount = submissionDailyChallengeRepository
                 .countByChallengeIdAndSubmittedAtIsNotNullAndDeletedAtIsNull(challengeId);
         long totalStudents = classStudentRepository
-                .countByClassIdAndStatus(classId, ClassStudentStatus.ACTIVE);
+                .countByClassIdAndStatus(classId, CommonStatus.ACTIVE);
 
         for (ClassTeacher ct : teachers) {
             String basePath = RoleInClass.TEACHER.equals(ct.getRoleInClass())

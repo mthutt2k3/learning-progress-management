@@ -273,8 +273,8 @@ public class Const {
         public static final String ACCESS_TOKEN_ALREADY_BLACKLISTED = "Access token is already blacklisted";
     }
     public static class USERNAME {
-        public static final String REQUIRED = "User Name is required";
-        public static final String LENGTH_INVALID = "Username must be between 3 and 30 characters";
+        public static final String REQUIRED = "Username is required";
+        public static final String LENGTH_INVALID = "Invalid username format. Username must be between 3 and 30 characters";
         public static final int MAX_LENGTH_VALUE = 30;
         public static final int MIN_LENGTH_VALUE = 3;
 

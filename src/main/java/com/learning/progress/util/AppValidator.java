@@ -16,7 +16,6 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -86,12 +85,12 @@ public class AppValidator {
 
         // Teacher in this class?
         if (roleName == RoleName.TEACHER || roleName == RoleName.TEACHING_ASSISTANT) {
-            hasAccess = classTeacherRepository.existsByUser_IdAndClazz_IdAndStatus(user.getId(), classId, ClassTeacherStatus.ACTIVE);
+            hasAccess = classTeacherRepository.existsByUser_IdAndClazz_IdAndStatus(user.getId(), classId, CommonStatus.ACTIVE);
         }
 
         // Student in this class?
         if (roleName == RoleName.STUDENT ||  roleName == RoleName.TEST_TAKER) {
-            hasAccess = classStudentRepository.existsByUser_IdAndClazz_IdAndStatus(user.getId(), classId, ClassStudentStatus.ACTIVE);
+            hasAccess = classStudentRepository.existsByUser_IdAndClazz_IdAndStatus(user.getId(), classId, CommonStatus.ACTIVE);
         }
 
         if (!hasAccess) {
@@ -129,7 +128,7 @@ public class AppValidator {
 
         // Teachers allowed only when they belong to the class
         if (roleName == RoleName.TEACHER || roleName == RoleName.TEACHING_ASSISTANT) {
-            boolean isTeacher = classTeacherRepository.existsByUser_IdAndClazz_IdAndStatus(currentUserId, classId, ClassTeacherStatus.ACTIVE);
+            boolean isTeacher = classTeacherRepository.existsByUser_IdAndClazz_IdAndStatus(currentUserId, classId, CommonStatus.ACTIVE);
             if (!isTeacher) {
                 log.warn("Access denied: user {} role {} is not teacher of class {}", currentUserId, roleName, classId);
                 throw new ApiException(Const.SECURITY.FORBIDDEN_ROLE, HttpStatus.FORBIDDEN.value());
@@ -198,7 +197,7 @@ public class AppValidator {
 
         // Teachers allowed only when they belong to the class
         if (roleName == RoleName.TEACHER || roleName == RoleName.TEACHING_ASSISTANT) {
-            boolean isTeacher = classTeacherRepository.existsByUser_IdAndClazz_IdAndStatus(currentUserId, classId, ClassTeacherStatus.ACTIVE);
+            boolean isTeacher = classTeacherRepository.existsByUser_IdAndClazz_IdAndStatus(currentUserId, classId, CommonStatus.ACTIVE);
             if (!isTeacher) {
                 log.warn("Access denied: user {} role {} is not teacher of class {}", currentUserId, roleName, classId);
                 throw new ApiException(Const.SECURITY.FORBIDDEN_ROLE, HttpStatus.FORBIDDEN.value());

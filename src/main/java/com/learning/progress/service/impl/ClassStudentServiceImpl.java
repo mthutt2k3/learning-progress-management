@@ -2,9 +2,7 @@ package com.learning.progress.service.impl;
 
 import com.learning.progress.common.*;
 import com.learning.progress.dto.clazz.student.*;
-import com.learning.progress.dto.excel.ImportStudentToClass;
 import com.learning.progress.dto.DataResponse;
-import com.learning.progress.dto.excel.ValidationResult;
 import com.learning.progress.entity.ClassStudent;
 import com.learning.progress.entity.Clazz;
 import com.learning.progress.entity.User;
@@ -31,9 +29,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.multipart.MultipartFile;
 
-import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.util.*;
@@ -89,7 +85,7 @@ public class ClassStudentServiceImpl implements ClassStudentService {
     private int maxStudentInClass;
 
     @Override
-    public DataResponse<List<ClassStudentResponse>> getStudentsInClass(Long classId, int page, int size, String text, List<ClassStudentStatus> status, String sortBy, String sortDir) {
+    public DataResponse<List<ClassStudentResponse>> getStudentsInClass(Long classId, int page, int size, String text, List<CommonStatus> status, String sortBy, String sortDir) {
         final String method = "getStudentsInClass";
         long startNs = System.nanoTime();
         String traceId = TraceUtil.getTraceId();
@@ -111,9 +107,9 @@ public class ClassStudentServiceImpl implements ClassStudentService {
 
         appValidator.validateUserAccessToClass(classId);
 
-        List<ClassStudentStatus> statuses;
+        List<CommonStatus> statuses;
         if (status == null || status.isEmpty()) {
-            statuses = Arrays.asList(ClassStudentStatus.values());
+            statuses = Arrays.asList(CommonStatus.values());
         } else {
             statuses = status;
         }
@@ -177,7 +173,7 @@ public class ClassStudentServiceImpl implements ClassStudentService {
         }
 
         // 3. Check student limit
-        long existingCount = classStudentRepository.countByClassIdAndStatus(classId, ClassStudentStatus.ACTIVE);
+        long existingCount = classStudentRepository.countByClassIdAndStatus(classId, CommonStatus.ACTIVE);
         if (existingCount + userIds.size() > maxStudentInClass) {
             throw new ApiException(
                     String.format(Const.CLASS_STUDENT.STUDENT_LIMIT_EXCEEDED, maxStudentInClass, existingCount, userIds.size()),
@@ -214,7 +210,7 @@ public class ClassStudentServiceImpl implements ClassStudentService {
         }
 
         // 6. Prevent enrolling in multiple active classes
-        List<ClassStudent> activeEnrollments = classStudentRepository.findByUserIdInAndStatus(userIds, ClassStudentStatus.ACTIVE);
+        List<ClassStudent> activeEnrollments = classStudentRepository.findByUserIdInAndStatus(userIds, CommonStatus.ACTIVE);
         Map<Long, List<Long>> userToOtherClasses = activeEnrollments.stream()
                 .filter(cs -> !cs.getClazz().getId().equals(classId))
                 .collect(Collectors.groupingBy(
@@ -231,7 +227,7 @@ public class ClassStudentServiceImpl implements ClassStudentService {
 
         // 7. Prevent duplicate ACTIVE in current class
         List<Long> alreadyActiveInClass = classStudentRepository
-                .findUserIdsByClassIdAndUserIdInAndStatus(classId, userIds, ClassStudentStatus.ACTIVE);
+                .findUserIdsByClassIdAndUserIdInAndStatus(classId, userIds, CommonStatus.ACTIVE);
 
         if (!alreadyActiveInClass.isEmpty()) {
             String names = users.stream()
@@ -243,7 +239,7 @@ public class ClassStudentServiceImpl implements ClassStudentService {
 
         // 8. Prepare ClassStudent records (reactivate or create)
         List<ClassStudent> existingInactive = classStudentRepository
-                .findByClassIdAndUserIdInAndStatus(classId, userIds, ClassStudentStatus.INACTIVE);
+                .findByClassIdAndUserIdInAndStatus(classId, userIds, CommonStatus.INACTIVE);
 
         Map<Long, ClassStudent> inactiveMap = existingInactive.stream()
                 .collect(Collectors.toMap(cs -> cs.getUser().getId(), Function.identity()));
@@ -257,7 +253,7 @@ public class ClassStudentServiceImpl implements ClassStudentService {
             ClassStudent cs = inactiveMap.get(user.getId());
             if (cs != null) {
                 // Reactivate
-                cs.setStatus(ClassStudentStatus.ACTIVE);
+                cs.setStatus(CommonStatus.ACTIVE);
                 cs.setJoinedAt(now);
                 cs.setDeletedAt(null);
                 cs.setDeletedBy(null);
@@ -270,7 +266,7 @@ public class ClassStudentServiceImpl implements ClassStudentService {
                 ClassStudent newCs = new ClassStudent();
                 newCs.setClazz(clazz);
                 newCs.setUser(user);
-                newCs.setStatus(ClassStudentStatus.ACTIVE);
+                newCs.setStatus(CommonStatus.ACTIVE);
                 newCs.setJoinedAt(now);
                 toSave.add(newCs);
                 newlyAdded.add(user);
@@ -374,12 +370,12 @@ public class ClassStudentServiceImpl implements ClassStudentService {
                 .orElseThrow(() -> new ApiException(Const.CLASS_STUDENT.STUDENT_NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         // Validate class-student status
-        if (!ClassStudentStatus.ACTIVE.equals(classStudent.getStatus())) {
+        if (!CommonStatus.ACTIVE.equals(classStudent.getStatus())) {
             throw new ApiException(Const.CLASS_STUDENT.STUDENT_NOT_FOUND, HttpStatus.BAD_REQUEST.value());
         }
 
         // Update class-student status and audit fields
-        classStudent.setStatus(ClassStudentStatus.INACTIVE);
+        classStudent.setStatus(CommonStatus.INACTIVE);
         classStudent.setLeftAt(OffsetDateTime.now());
 
         // Save the updated class-student relationship
