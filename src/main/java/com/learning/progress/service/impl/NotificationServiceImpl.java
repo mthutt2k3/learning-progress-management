@@ -171,7 +171,7 @@ public class NotificationServiceImpl implements NotificationService {
      */
     @Override
     @Async("notificationExecutor")
-    public void createNotification(
+    public void createNotifications(
             Long receiverId, Long creatorId, String title,
             String message, String targetUrl, String avatarUrl) {
 
@@ -224,9 +224,10 @@ public class NotificationServiceImpl implements NotificationService {
      * Tạo thông báo cho nhiều người nhận cùng lúc.
      * Trả về danh sách NotificationDTO đã được lưu.
      */
+    @Override
     @Transactional
     @Async("notificationExecutor")
-    public void createNotification(
+    public void createNotifications(
             List<Long> receiverIds, Long creatorId, String title,
             String message, String targetUrl, String avatarUrl) {
 

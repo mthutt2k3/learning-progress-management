@@ -21,12 +21,6 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class QuestionValidator {
 
-    private static final Set<QuestionType> QUESTION_TYPES_WITH_POSITION_ORDER = Set.of(
-            QuestionType.MULTIPLE_CHOICE,
-            QuestionType.MULTIPLE_SELECT,
-            QuestionType.TRUE_OR_FALSE
-    );
-
     private static final Set<QuestionType> QUESTION_TYPES_WITH_POSITION_ID = Set.of(
             QuestionType.FILL_IN_THE_BLANK,
             QuestionType.DROPDOWN,
@@ -78,13 +72,6 @@ public class QuestionValidator {
             return true;
         } catch (IllegalArgumentException e) {
             return false;
-        }
-    }
-
-    private void validateQuestionContent(DataContent content, String traceId) {
-        if (content == null || content.getData() == null || content.getData().isEmpty()) {
-            log.error("[{}] {}", traceId, Const.QUESTION.EMPTY_CONTENT);
-            throw new ApiException(Const.QUESTION.EMPTY_CONTENT, HttpStatus.BAD_REQUEST.value());
         }
     }
 

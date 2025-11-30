@@ -91,7 +91,7 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
             Long actor = jwtUtil.extractUserIdFromCurrentRequest();
             String title = Const.CHALLENGE.NOTIFY_CREATE_TITLE;
             String message = String.format(Const.CHALLENGE.NOTIFY_CREATE_MESSAGE, challenge.getChallengeName());
-            notificationService.createNotification(actor, null, title, message, null, null);
+            notificationService.createNotifications(actor, null, title, message, null, null);
             log.debug("[{}] traceId={} sent create notification actor={}", method, traceId, actor);
         } catch (Exception ex) {
             log.debug("[{}] traceId={} Failed to send createChallenge notification: {}", method, traceId, ex.getMessage());
@@ -261,7 +261,7 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
             Long actor = jwtUtil.extractUserIdFromCurrentRequest();
             String title = Const.CHALLENGE.NOTIFY_UPDATE_TITLE;
             String message = String.format(Const.CHALLENGE.NOTIFY_UPDATE_MESSAGE, challenge.getChallengeName());
-            notificationService.createNotification(actor, null, title, message, null, null);
+            notificationService.createNotifications(actor, null, title, message, null, null);
             log.debug("[{}] traceId={} sent update notification actor={}", method, traceId, actor);
         } catch (Exception ex) {
             log.debug("[{}] traceId={} Failed to send updateChallenge notification: {}", method, traceId, ex.getMessage());
@@ -298,7 +298,7 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
             Long actor = jwtUtil.extractUserIdFromCurrentRequest();
             String title = Const.CHALLENGE.NOTIFY_DELETE_TITLE;
             String message = String.format(Const.CHALLENGE.NOTIFY_DELETE_MESSAGE, challenge.getChallengeName());
-            notificationService.createNotification(actor, null, title, message, null, null);
+            notificationService.createNotifications(actor, null, title, message, null, null);
             log.debug("[{}] traceId={} sent delete notification actor={}", method, traceId, actor);
         } catch (Exception ex) {
             log.debug("[{}] traceId={} Failed to send deleteChallenge notification: {}", method, traceId, ex.getMessage());
@@ -355,7 +355,7 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
             String title = String.format(Const.CHALLENGE.NOTIFY_NEW_CHALLENGE_TITLE, challenge.getChallengeName());
             String message = Const.CHALLENGE.NOTIFY_NEW_CHALLENGE_MESSAGE;
 
-            notificationService.createNotification(
+            notificationService.createNotifications(
                     student.getId(),
                     challenge.getId(),
                     title,
@@ -572,7 +572,7 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
                     for (Long teacherId : teacherIds) {
                         String title = "Bài tập kết thúc: " + ch.getChallengeName();
                         String message = String.format("Kết thúc: %d nộp, %d muộn, %d thiếu", submitted, late, missing);
-                        notificationService.createNotification(teacherId, ch.getId(), title, message, url, null);
+                        notificationService.createNotifications(teacherId, ch.getId(), title, message, url, null);
                     }
                     // === KẾT THÚC ===
                 }

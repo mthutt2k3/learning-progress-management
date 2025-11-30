@@ -366,7 +366,7 @@ public class SubmissionQuestionServiceImpl implements SubmissionQuestionService 
 
             String title = Const.NOTIFICATION.SUBMISSION_TITLE;
             String message = String.format(Const.NOTIFICATION.SUBMISSION_MESSAGE_TEMPLATE, dailyChallenge.getChallengeName());
-            notificationService.createNotification(userId, null, title, message, null, null);
+            notificationService.createNotifications(userId, null, title, message, null, null);
             log.debug("[{}] {} notification sent for submissionId={} userId={}", traceId, action, submission.getId(), userId);
 
             cacheService.clearSubmissionsCacheForChallenge(dailyChallenge.getId());
@@ -400,7 +400,7 @@ public class SubmissionQuestionServiceImpl implements SubmissionQuestionService 
             String message = String.format(Const.NOTIFICATION.SUBMISSION_STATUS_UPDATE_MESSAGE_TEMPLATE, submittedCount, totalStudents);
 
             try {
-                notificationService.createNotification(ct.getUser().getId(), challengeId, title, message, url, null);
+                notificationService.createNotifications(ct.getUser().getId(), challengeId, title, message, url, null);
                 log.debug("[{}] {} teacher notified userId={} url={}", traceId, action, ct.getUser().getId(), url);
             } catch (Exception ex) {
                 log.warn("[{}] {} failed to notify teacherId={} error={}", traceId, action, ct.getUser().getId(), ex.getMessage());
