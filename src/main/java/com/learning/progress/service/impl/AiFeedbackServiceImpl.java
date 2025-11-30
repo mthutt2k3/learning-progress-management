@@ -1,8 +1,5 @@
 package com.learning.progress.service.impl;
 
-import com.learning.progress.dto.ai.GradingWritingRequest;
-import com.learning.progress.dto.ai.GradingWritingResponse;
-import com.learning.progress.entity.SubmissionQuestion;
 import com.learning.progress.exception.ApiException;
 import com.learning.progress.service.AiFeedbackService;
 import lombok.Builder;
@@ -38,8 +35,6 @@ import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
-
-import java.util.List;
 
 @Service
 @Slf4j

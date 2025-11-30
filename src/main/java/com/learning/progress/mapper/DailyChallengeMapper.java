@@ -7,7 +7,6 @@ import com.learning.progress.entity.ClassLesson;
 import com.learning.progress.entity.DailyChallenge;
 import com.learning.progress.util.JsonUtil;
 import org.mapstruct.*;
-import org.mapstruct.ReportingPolicy;
 
 @Mapper(
         componentModel = "spring",

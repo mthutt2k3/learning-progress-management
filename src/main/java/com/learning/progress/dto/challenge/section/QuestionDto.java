@@ -1,7 +1,6 @@
 package com.learning.progress.dto.challenge.section;
 
 import com.learning.progress.common.Const;
-import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.*;
 import lombok.*;
 

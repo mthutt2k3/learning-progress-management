@@ -2,7 +2,6 @@ package com.learning.progress.dto.submission;
 
 import com.learning.progress.common.QuestionType;
 import com.learning.progress.common.SubmissionStatus;
-import com.learning.progress.dto.challenge.section.DataContent;
 import com.learning.progress.dto.challenge.section.SectionDto;
 import com.learning.progress.dto.challenge.section.StudentDataContent;
 import lombok.*;

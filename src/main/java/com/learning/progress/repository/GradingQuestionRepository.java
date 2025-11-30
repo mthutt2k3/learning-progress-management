@@ -16,9 +16,6 @@ public interface GradingQuestionRepository extends JpaRepository<GradingQuestion
 
     List<GradingQuestion> findByGradingDailyIdAndDeletedAtIsNull(Long id);
 
-    // NEW: batch load grading questions for multiple gradingDaily ids to avoid N+1
-    List<GradingQuestion> findByGradingDailyIdInAndDeletedAtIsNull(List<Long> gradingDailyIds);
-
     /**
      * Grouped sum of receivedWeight for a list of gradingDaily ids.
      * Returns list of [gradingDailyId, sumReceivedWeight] rows.

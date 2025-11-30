@@ -13,7 +13,6 @@ import com.learning.progress.exception.ApiException;
 import com.learning.progress.mapper.ChallengeSectionMapper;
 import com.learning.progress.repository.*;
 import com.learning.progress.service.ChallengeSectionService;
-import com.learning.progress.service.GradingDailyChallengeService;
 import com.learning.progress.service.QuestionService;
 import com.learning.progress.util.AppValidator;
 import com.learning.progress.util.JwtUtil;
@@ -501,7 +500,7 @@ public class ChallengeSectionServiceImpl implements ChallengeSectionService {
 
     private void validateOrderNumbers(List<QuickBulkSectionRequest> nonDeleted, int expectedCount) {
         nonDeleted.forEach(dto -> validateBean(dto, QuickBulkSectionRequest.NotDeleted.class));
-        AppValidator.validateSequentialOrderNumbers(nonDeleted, QuickBulkSectionRequest::getOrderNumber,
+        appValidator.validateSequentialOrderNumbers(nonDeleted, QuickBulkSectionRequest::getOrderNumber,
                 expectedCount, "Section");
     }
 

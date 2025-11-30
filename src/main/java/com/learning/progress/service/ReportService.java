@@ -3,9 +3,8 @@ package com.learning.progress.service;
 import com.learning.progress.common.ChallengeType;
 import com.learning.progress.dto.report.ChallengeReportDTO;
 import com.learning.progress.dto.report.ClassReportDTO;
+import com.learning.progress.dto.report.StudentOverview;
 import com.learning.progress.dto.report.StudentPerformanceDTO;
-
-import java.util.Map;
 
 public interface ReportService {
 
@@ -37,7 +36,7 @@ public interface ReportService {
      * STUDENT PERFORMANCE APIs
      * -------------------------------------------------------- */
 
-    StudentPerformanceDTO.StudentOverview getStudentOverview(Long userId);
+    StudentOverview getStudentOverview(Long userId);
 
     StudentPerformanceDTO.LevelHistory getStudentLevelHistory(Long userId);
 

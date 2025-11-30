@@ -1,6 +1,5 @@
 package com.learning.progress.dto.challenge.section;
 
-import com.learning.progress.common.ResourceType;
 import lombok.*;
 
 @Getter

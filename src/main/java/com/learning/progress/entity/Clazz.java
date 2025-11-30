@@ -4,12 +4,10 @@ import com.learning.progress.common.ClassStatus;
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
-import org.hibernate.annotations.ColumnDefault;
 import org.hibernate.annotations.OnDelete;
 import org.hibernate.annotations.OnDeleteAction;
 import org.hibernate.annotations.Where;
 
-import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
 

@@ -1,6 +1,5 @@
 package com.learning.progress.filter;
 
-import com.learning.progress.common.Const;
 import com.learning.progress.common.UserStatus;
 import com.learning.progress.entity.User;
 import com.learning.progress.repository.UserRepository;
@@ -9,7 +8,6 @@ import com.learning.progress.util.JwtUtil;
 import com.learning.progress.util.TraceUtil;
 import io.jsonwebtoken.JwtException;
 import lombok.extern.slf4j.Slf4j;
-import org.slf4j.MDC;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;

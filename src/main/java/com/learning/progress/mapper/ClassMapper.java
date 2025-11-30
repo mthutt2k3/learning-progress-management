@@ -1,7 +1,6 @@
 package com.learning.progress.mapper;
 
 import com.learning.progress.dto.clazz.ClassDTO;
-import com.learning.progress.dto.clazz.CreateClassRequest;
 import com.learning.progress.dto.user.TeacherInfo;
 import com.learning.progress.entity.ClassTeacher;
 import com.learning.progress.entity.Clazz;

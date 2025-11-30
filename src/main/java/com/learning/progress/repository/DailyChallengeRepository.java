@@ -1,6 +1,5 @@
 package com.learning.progress.repository;
 
-import com.learning.progress.common.ChallengeStatus;
 import com.learning.progress.entity.ClassLesson;
 import com.learning.progress.entity.DailyChallenge;
 import org.springframework.data.domain.Page;

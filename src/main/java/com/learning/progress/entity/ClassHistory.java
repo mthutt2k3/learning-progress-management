@@ -1,6 +1,5 @@
 package com.learning.progress.entity;
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.learning.progress.common.ActionType;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Pattern;

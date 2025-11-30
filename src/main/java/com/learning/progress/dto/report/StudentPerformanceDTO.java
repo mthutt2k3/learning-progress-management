@@ -15,20 +15,6 @@ import java.util.List;
  */
 public class StudentPerformanceDTO {
 
-    /* --------------------------------------------------------
-     * 1. STUDENT OVERVIEW
-     * -------------------------------------------------------- */
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
-    public static class StudentOverview {
-        private OffsetDateTime firstClassJoinedAt;
-        private LevelInfo currentLevel;
-        private ClassInfo currentClass;
-        private ChallengeProgress challengeProgress;
-    }
-
     @Data
     @Builder
     @NoArgsConstructor

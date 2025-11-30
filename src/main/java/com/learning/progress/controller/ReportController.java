@@ -5,6 +5,7 @@ import com.learning.progress.common.Const;
 import com.learning.progress.dto.DataResponse;
 import com.learning.progress.dto.report.ChallengeReportDTO;
 import com.learning.progress.dto.report.ClassReportDTO;
+import com.learning.progress.dto.report.StudentOverview;
 import com.learning.progress.dto.report.StudentPerformanceDTO;
 import com.learning.progress.service.ReportService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -154,10 +155,10 @@ public class ReportController {
             summary = "Student Overview",
             description = "Tổng quan của học sinh: thời gian bắt đầu học, level hiện tại, lớp hiện tại, tỷ lệ làm DC"
     )
-    public ResponseEntity<DataResponse<StudentPerformanceDTO.StudentOverview>> getStudentOverview(
+    public ResponseEntity<DataResponse<StudentOverview>> getStudentOverview(
             @RequestParam(required = false) Long userId
     ) {
-        StudentPerformanceDTO.StudentOverview overview = reportService.getStudentOverview(userId);
+        StudentOverview overview = reportService.getStudentOverview(userId);
         return new ResponseEntity<>(
                 DataResponse.success(overview, Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL),
                 HttpStatus.OK

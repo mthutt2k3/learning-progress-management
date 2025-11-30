@@ -2,7 +2,6 @@ package com.learning.progress.dto.ai;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.learning.progress.common.Const;
-import com.learning.progress.common.DifficultyLevel;
 import com.learning.progress.common.LessonFocus;
 import jakarta.validation.constraints.*;
 import lombok.Data;

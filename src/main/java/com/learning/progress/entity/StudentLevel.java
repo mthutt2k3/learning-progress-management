@@ -16,10 +16,6 @@ import java.time.OffsetDateTime;
 @Table(name = "student_levels")
 public class StudentLevel extends BaseEntity {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
-
     @ManyToOne
     @OnDelete(action = OnDeleteAction.CASCADE)
     @JoinColumn(name = "user_id", nullable = false)
