@@ -1,6 +1,5 @@
 package com.learning.progress.repository;
 
-import com.learning.progress.entity.Chapter;
 import com.learning.progress.entity.ClassChapter;
 import com.learning.progress.entity.Clazz;
 import org.springframework.data.domain.Page;

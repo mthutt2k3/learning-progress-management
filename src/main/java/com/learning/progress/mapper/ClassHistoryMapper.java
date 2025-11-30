@@ -3,9 +3,7 @@ package com.learning.progress.mapper;
 import com.learning.progress.dto.clazz.history.ClassHistoryDTO;
 import com.learning.progress.entity.ClassHistory;
 import com.learning.progress.util.DataUtil;
-import com.learning.progress.util.JsonUtil;
 import org.mapstruct.*;
-import org.mapstruct.ReportingPolicy;
 
 @Mapper(
         componentModel = "spring",

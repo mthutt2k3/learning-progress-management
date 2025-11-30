@@ -4,7 +4,6 @@ import com.learning.progress.common.LevelEnum;
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
-import org.hibernate.annotations.ColumnDefault;
 
 @SuperBuilder
 @NoArgsConstructor

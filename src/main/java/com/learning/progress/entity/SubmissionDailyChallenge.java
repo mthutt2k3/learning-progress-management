@@ -11,9 +11,6 @@ import org.hibernate.annotations.OnDeleteAction;
 import org.hibernate.type.SqlTypes;
 
 import java.time.OffsetDateTime;
-import java.util.Collection;
-import java.util.List;
-import java.util.Map;
 
 @SuperBuilder
 @NoArgsConstructor

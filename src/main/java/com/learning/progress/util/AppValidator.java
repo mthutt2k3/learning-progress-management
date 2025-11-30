@@ -43,7 +43,7 @@ public class AppValidator {
      * @param <T>               Type of DTO
      * @throws ApiException if order numbers are not sequential or do not match expected count
      */
-    public static <T> void validateSequentialOrderNumbers(List<T> dtos, Function<T, Integer> orderNumberMapper,
+    public <T> void validateSequentialOrderNumbers(List<T> dtos, Function<T, Integer> orderNumberMapper,
                                                           int expectedCount, String entityName) {
         Set<Integer> orderNumbers = dtos.stream()
                 .map(orderNumberMapper)

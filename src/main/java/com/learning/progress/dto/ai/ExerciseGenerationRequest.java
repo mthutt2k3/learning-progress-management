@@ -1,7 +1,6 @@
 package com.learning.progress.dto.ai;
 
 import com.learning.progress.common.Const;
-import com.learning.progress.common.QuestionType;
 import jakarta.validation.constraints.*;
 import lombok.AllArgsConstructor;
 import lombok.Getter;

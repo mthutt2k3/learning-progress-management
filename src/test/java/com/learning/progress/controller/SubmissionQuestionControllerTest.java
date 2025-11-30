@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.learning.progress.common.Const;
 import com.learning.progress.common.QuestionType;
 import com.learning.progress.common.SubmissionStatus;
-import com.learning.progress.dto.DataResponse;
 import com.learning.progress.dto.submission.*;
 import com.learning.progress.exception.ApiException;
 import com.learning.progress.exception.GlobalExceptionHandler;
@@ -23,8 +22,6 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import java.util.List;
 
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;

@@ -2,7 +2,6 @@ package com.learning.progress.config;
 
 import com.learning.progress.util.DataUtil;
 import com.learning.progress.util.JwtUtil;
-import lombok.Data;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.AuditorAware;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
