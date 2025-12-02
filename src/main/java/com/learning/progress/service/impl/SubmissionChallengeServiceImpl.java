@@ -14,6 +14,7 @@ import com.learning.progress.mapper.DailyChallengeMapper;
 import com.learning.progress.mapper.SubmissionMapper;
 import com.learning.progress.repository.*;
 import com.learning.progress.cache.CacheService;
+import com.learning.progress.service.NotificationService;
 import com.learning.progress.service.SubmissionChallengeService;
 import com.learning.progress.util.AppValidator;
 import com.learning.progress.util.JwtUtil;
@@ -66,7 +67,7 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
 
     // NEW: notification service
     @Autowired
-    private com.learning.progress.service.NotificationService notificationService;
+    private NotificationService notificationService;
     @Autowired
     private ClassTeacherRepository classTeacherRepository;
 

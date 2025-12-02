@@ -10,12 +10,8 @@ import com.learning.progress.exception.ApiException;
 import com.learning.progress.mapper.ClassStudentMapper;
 import com.learning.progress.repository.ClassRepository;
 import com.learning.progress.repository.ClassStudentRepository;
-import com.learning.progress.repository.SubmissionDailyChallengeRepository;
 import com.learning.progress.repository.UserRepository;
-import com.learning.progress.service.BlobSasService;
-import com.learning.progress.service.ClassHistoryService;
-import com.learning.progress.service.ClassStudentService;
-import com.learning.progress.service.FileService;
+import com.learning.progress.service.*;
 import com.learning.progress.util.AppValidator;
 import com.learning.progress.util.JwtUtil;
 import com.learning.progress.util.TraceUtil;
@@ -59,27 +55,15 @@ public class ClassStudentServiceImpl implements ClassStudentService {
     private JwtUtil jwtUtil;
 
     @Autowired
-    private FileService fileService;
-
-    @Autowired
     private AppValidator appValidator;
-
-    @Autowired
-    private BlobSasService blobSasService;
-
-    @Autowired
-    private SubmissionDailyChallengeRepository submissionRepository;
 
     // NEW: submission service to create/restore/soft-delete submissions
     @Autowired
-    private com.learning.progress.service.SubmissionChallengeService submissionChallengeService;
+    private SubmissionChallengeService submissionChallengeService;
 
     // NEW: notification service
     @Autowired
-    private com.learning.progress.service.NotificationService notificationService;
-
-    @Value("${azure.storage.student-to-class-template}")
-    private String studentToClassTemplate;
+    private NotificationService notificationService;
 
     @Value("${env.class.max-student-in-class}")
     private int maxStudentInClass;

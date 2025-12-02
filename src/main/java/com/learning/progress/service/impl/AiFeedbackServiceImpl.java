@@ -3,7 +3,9 @@ package com.learning.progress.service.impl;
 import com.learning.progress.dto.ai.ContentAssessmentResult;
 import com.learning.progress.exception.ApiException;
 import com.learning.progress.service.AiFeedbackService;
+import com.learning.progress.service.OpenAiService;
 import lombok.extern.slf4j.Slf4j;
+import org.hibernate.Hibernate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -16,7 +18,9 @@ import com.microsoft.cognitiveservices.speech.*;
 import com.microsoft.cognitiveservices.speech.audio.AudioConfig;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
+import org.springframework.web.client.RestTemplate;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+import org.springframework.web.util.UriComponentsBuilder;
 import ws.schild.jave.Encoder;
 import ws.schild.jave.EncoderException;
 import ws.schild.jave.MultimediaObject;
@@ -42,20 +46,32 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final SubmissionQuestionRepository submissionQuestionRepository;
 
+    private RestTemplate restTemplate;
+
+    @Value("${azure.openai.endpoint}")
+    private String endpoint;
+
+    @Value("${azure.openai.api-key}")
+    private String apiKey;
+
+    private static final String API_VERSION = "2025-04-01-preview";
+
+    private static final String SYSTEM_ROLE_JSON_INSTRUCTION =
+            "You are an expert English teacher. Return ONLY valid JSON (no markdown, no comments, no extra text). " +
+                    "Do NOT include trailing commas or non-standard JSON syntax.";
+
+
     @Value("${azure.speech.key}")
     private String speechKey;
 
     @Value("${azure.speech.region}")
     private String speechRegion;
 
-    private final OpenAiServiceImpl openAiServiceImpl;
-    private static final String SYSTEM_ROLE_JSON_INSTRUCTION =
-            "You are an expert English teacher. Return ONLY valid JSON (no markdown, no comments, no extra text). " +
-                    "Do NOT include trailing commas or non-standard JSON syntax.";
+    private final OpenAiService openAiService;
 
-    public AiFeedbackServiceImpl(OpenAiServiceImpl openAiServiceImpl, SubmissionQuestionRepository submissionQuestionRepository) {
+    public AiFeedbackServiceImpl(OpenAiService openAiService, SubmissionQuestionRepository submissionQuestionRepository) {
         this.submissionQuestionRepository = submissionQuestionRepository;
-        this.openAiServiceImpl = openAiServiceImpl;
+        this.openAiService = openAiService;
     }
 
     @Override
@@ -109,7 +125,7 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
         Question question = submissionQuestion.getQuestion();
         ChallengeSection section = question.getSection();
         DailyChallenge challenge = section.getChallenge();
-        OpenAiServiceImpl.ChallengeContext context = openAiServiceImpl.eagerLoadChallengeContext(challenge);
+        OpenAiServiceImpl.ChallengeContext context = eagerLoadChallengeContext(challenge);
 
         // 7. Build prompt
         String prompt = buildWritingGradingPrompt(context, question.getQuestionText(), studentWriting);
@@ -122,7 +138,7 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
         for (int attempt = 1; attempt <= maxRetries; attempt++) {
             try {
                 log.info("[{}] Calling OpenAI (attempt {}/{}) ...", traceId, attempt, maxRetries);
-                aiResponse = openAiServiceImpl.callOpenAIForFeedback(prompt);
+                aiResponse = openAiService.callOpenAI(prompt);
                 break;
             } catch (Exception e) {
                 lastException = e;
@@ -153,6 +169,52 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
         log.info("[{}] Successfully graded writing. Overall score: {}", traceId, result.getSuggestedScore());
 
         return result;
+    }
+
+    public OpenAiServiceImpl.ChallengeContext eagerLoadChallengeContext(DailyChallenge challenge) {
+        OpenAiServiceImpl.ChallengeContext context = new OpenAiServiceImpl.ChallengeContext();
+
+        if (challenge.getClassLesson() != null) {
+            context.classLessonContent = challenge.getClassLesson().getClassLessonContent();
+            context.classLessonName = challenge.getClassLesson().getClassLessonName();
+
+            if (challenge.getClassLesson().getClassChapter() != null) {
+                Hibernate.initialize(challenge.getClassLesson().getClassChapter());
+                context.classChapterName = challenge.getClassLesson().getClassChapter().getClassChapterName();
+
+                if (challenge.getClassLesson().getClassChapter().getClazz() != null) {
+                    Hibernate.initialize(challenge.getClassLesson().getClassChapter().getClazz());
+
+                    if (challenge.getClassLesson().getClassChapter().getClazz().getSyllabus() != null) {
+                        Syllabus syllabus = challenge.getClassLesson().getClassChapter().getClazz().getSyllabus();
+                        Hibernate.initialize(syllabus);
+
+                        if (syllabus.getLevel() != null) {
+                            Hibernate.initialize(syllabus.getLevel());
+                            context.studentLevel = syllabus.getLevel().getLevelName();
+                        }
+                    }
+                }
+            }
+        }
+
+        if (context.classLessonContent == null) {
+            context.classLessonContent = "No lesson content available";
+        }
+        if (context.classLessonName == null) {
+            context.classLessonName = "No lesson name available";
+        }
+        if (context.classChapterName == null) {
+            context.classChapterName = "No chapter name available";
+        }
+        if (context.studentLevel == null) {
+            context.studentLevel = "Intermediate";
+        }
+
+        log.debug("Loaded challenge context - Level: {}, Lesson: {}, ContentLength: {}",
+                context.studentLevel, context.classLessonName, context.classLessonContent.length());
+
+        return context;
     }
 
     /**
@@ -328,7 +390,7 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
             for (int attempt = 1; attempt <= maxRetries; attempt++) {
                 try {
                     log.info("Calling OpenAI Vision for OCR (attempt {}/{})...", attempt, maxRetries);
-                    extractedText = openAiServiceImpl.callOpenAIVisionForOCR(prompt, base64Image);
+                    extractedText = callOpenAIVisionForOCR(prompt, base64Image);
                     break;
                 } catch (Exception e) {
                     lastException = e;
@@ -362,11 +424,90 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
     }
 
     /**
+     * Call Azure OpenAI Vision API for OCR (extract text from image)
+     */
+    public String callOpenAIVisionForOCR(String prompt, String base64Image) {
+        log.info("Azure OpenAI Vision start OCR");
+
+        // Build Azure OpenAI endpoint for vision model
+        String url = UriComponentsBuilder
+                .fromHttpUrl(endpoint + "/openai/deployments/gpt-5-mini/chat/completions")
+                .queryParam("api-version", API_VERSION)
+                .toUriString();
+
+        // Build message content with text + image
+        List<Map<String, Object>> contentList = new ArrayList<>();
+
+        // Add text prompt
+        contentList.add(Map.of("type", "text", "content", prompt));
+
+        // Add image
+        contentList.add(Map.of(
+                "type", "image_url",
+                "image_url", Map.of("url", "data:image/jpeg;base64," + base64Image)
+        ));
+
+        // Build request body
+        Map<String, Object> requestBody = Map.of(
+                "messages", new Object[]{
+                        // System message để bắt buộc JSON response
+                        Map.of(
+                                "role", "system",
+                                "content",
+                                "You are a JSON-only API. You MUST respond with ONLY valid JSON. " +
+                                        "No markdown, no code blocks, no explanations. " +
+                                        "Your entire response must be a single JSON object and nothing else.\n\n" +
+
+                                        // 🔹 Thêm phần định dạng JSON mẫu
+                                        "CRITICAL: You MUST respond with ONLY valid JSON in this exact format, no markdown, no extra text:\n\n" +
+                                        "{\n" +
+                                        "  \"status\": \"SUCCESS\" | \"ILLEGIBLE_HANDWRITING\" | \"NO_TEXT_FOUND\" | \"BLANK_IMAGE\",\n" +
+                                        "  \"text\": \"the exact raw text as read from the image, with no corrections or modifications (only if status is SUCCESS)\",\n" +
+                                        "}\n\n" +
+                                        "IMPORTANT: You must NOT correct, interpret, or modify the text. The 'text' must match exactly what you read in the image."
+                        ),
+                        // User message with prompt và image
+                        Map.of("role", "user", "content", contentList)
+                },
+                "max_completion_tokens", 16000, // Giảm xuống vì chỉ cần JSON ngắn
+                "response_format", Map.of("type", "json_object") // ⭐ CRITICAL: Bắt buộc JSON mode
+        );
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.set("api-key", apiKey);
+
+        HttpEntity<Map<String, Object>> requestEntity = new HttpEntity<>(requestBody, headers);
+
+        try {
+            ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.POST, requestEntity, Map.class);
+
+            if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
+                var choices = (List<Map<String, Object>>) response.getBody().get("choices");
+                if (choices != null && !choices.isEmpty()) {
+                    Map<String, Object> message = (Map<String, Object>) choices.get(0).get("message");
+                    String content = (String) message.get("content");
+
+                    log.debug("OCR extracted text (first 500 chars): {}",
+                            content.length() > 500 ? content.substring(0, 500) : content);
+
+                    return content.trim();
+                }
+            }
+        } catch (Exception e) {
+            log.error("Error calling Azure OpenAI Vision for OCR: {}", e.getMessage(), e);
+            throw new RuntimeException("Failed to call Azure OpenAI Vision: " + e.getMessage(), e);
+        }
+
+        throw new RuntimeException("No response from Azure OpenAI Vision");
+    }
+
+    /**
      * Parse OCR JSON response and handle different status codes
      */
     private String parseOCRResponse(String jsonResponse) {
         try {
-            String cleaned = openAiServiceImpl.cleanJsonResponse(jsonResponse);
+            String cleaned = cleanJsonResponse(jsonResponse);
             JsonNode root = objectMapper.readTree(cleaned);
 
             String status = root.hasNonNull("status") ? root.get("status").asText() : "UNKNOWN";
@@ -400,6 +541,26 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
             log.error("Failed to parse OCR response: {}", e.getMessage(), e);
             throw new ApiException("Không thể xử lý kết quả OCR: " + e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR.value());
         }
+    }
+
+    public String cleanJsonResponse(String content) {
+        if (content == null) return "";
+
+        String s = content.trim();
+        s = s.replaceAll("(?s)^```(?:json)?\\s*", "");
+        s = s.replaceAll("(?s)\\s*```\\s*$", "");
+        s = s.replaceFirst("(?i)^\\s*here('?s)?\\s*the\\s*json[:\\s]*", "");
+        s = s.replaceFirst("(?i)^\\s*response[:\\s]*", "");
+        s = s.replaceAll("(?m)//.*?$", "");
+        s = s.replaceAll("(?s)/\\*.*?\\*/", "");
+        s = s.replaceAll(",\\s*}", "}");
+        s = s.replaceAll(",\\s*\\]", "]");
+
+        if ((s.startsWith("\"{") && s.endsWith("}\"")) || (s.startsWith("'{" ) && s.endsWith("}'"))) {
+            s = s.substring(1, s.length() - 1).replace("\\\"", "\"");
+        }
+
+        return s.trim();
     }
 
     /**
@@ -555,7 +716,7 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
 
     private GradingWritingResponse parseGradingResponse(String jsonResponse, String studentWriting) {
         try {
-            String cleaned = openAiServiceImpl.cleanJsonResponse(jsonResponse);
+            String cleaned = cleanJsonResponse(jsonResponse);
             JsonNode root = objectMapper.readTree(cleaned);
 
             String overallFeedback = root.hasNonNull("overallFeedback") ? root.get("overallFeedback").asText().trim() : "";
@@ -1113,7 +1274,7 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
             for (int attempt = 1; attempt <= maxRetries; attempt++) {
                 try {
                     log.info("Calling OpenAI for content assessment (attempt {}/{})...", attempt, maxRetries);
-                    aiResponse = openAiServiceImpl.callOpenAIForFeedback(prompt);
+                    aiResponse = openAiService.callOpenAI(prompt);
                     break;
                 } catch (Exception e) {
                     log.warn("Content assessment failed on attempt {}/{}: {}", attempt, maxRetries, e.getMessage());
@@ -1211,7 +1372,7 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
      */
     private ContentAssessmentResult parseContentAssessmentResponse(String jsonResponse) {
         try {
-            String cleaned = openAiServiceImpl.cleanJsonResponse(jsonResponse);
+            String cleaned = cleanJsonResponse(jsonResponse);
             JsonNode root = objectMapper.readTree(cleaned);
 
             double taskAchievementScore = root.has("taskAchievementScore")
@@ -1330,7 +1491,7 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
             for (int attempt = 1; attempt <= maxRetries; attempt++) {
                 try {
                     log.info("Calling OpenAI for grammar correction (attempt {}/{})...", attempt, maxRetries);
-                    aiResponse = openAiServiceImpl.callOpenAI(prompt);
+                    aiResponse = openAiService.callOpenAI(prompt);
                     break;
                 } catch (Exception e) {
                     log.warn("Grammar correction failed on attempt {}/{}: {}", attempt, maxRetries, e.getMessage());
@@ -1417,7 +1578,7 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
      */
     private String parseGrammarCorrectionResponse(String jsonResponse) {
         try {
-            String cleaned = openAiServiceImpl.cleanJsonResponse(jsonResponse);
+            String cleaned = cleanJsonResponse(jsonResponse);
             JsonNode root = objectMapper.readTree(cleaned);
 
             if (root.has("correctedText")) {
@@ -1749,7 +1910,7 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
             );
 
             // Call OpenAI to generate feedback
-            String aiFeedback = openAiServiceImpl.callOpenAIForFeedback(prompt);
+            String aiFeedback = openAiService.callOpenAI(prompt);
 
             // Clean and return
             return extractFeedbackFromJson(aiFeedback.trim());
@@ -2278,7 +2439,7 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
             SpeechAnalysisResult analysis) {
 
         try {
-            String cleaned = openAiServiceImpl.cleanJsonResponse(jsonResponse);
+            String cleaned = cleanJsonResponse(jsonResponse);
             JsonNode root = objectMapper.readTree(cleaned);
 
             double pronunciationScore = root.has("pronunciationScore")
