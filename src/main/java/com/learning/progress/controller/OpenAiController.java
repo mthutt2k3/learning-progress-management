@@ -4,17 +4,14 @@ import com.learning.progress.common.Const;
 import com.learning.progress.dto.DataResponse;
 import com.learning.progress.dto.ai.*;
 import com.learning.progress.dto.challenge.section.SectionWithQuestionsDto;
-import com.learning.progress.service.AiFeedbackService;
 import com.learning.progress.service.OpenAiService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
-import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.util.List;
 
@@ -25,11 +22,8 @@ public class OpenAiController {
 
     private final OpenAiService openAiService;
 
-    private final AiFeedbackService aiFeedbackService;
-
-    public OpenAiController(OpenAiService openAiService,AiFeedbackService aiFeedbackService) {
+    public OpenAiController(OpenAiService openAiService) {
         this.openAiService = openAiService;
-        this.aiFeedbackService = aiFeedbackService;
     }
 
     @PostMapping("/generate-reading-passage")
@@ -119,61 +113,5 @@ public class OpenAiController {
                 DataResponse.success(result, Const.RESULT_MESSAGE_CODE.CREATE_SUCCESSFUL),
                 HttpStatus.OK
         );
-    }
-
-    @PostMapping("/translate")
-    @Operation(summary = "Translate text", description = "Translate text from English to Vietnamese using Azure Translator")
-    public ResponseEntity<DataResponse<TranslationResponse>> translate(
-            @Valid @RequestBody TranslationRequest request) {
-        TranslationResponse response = openAiService.translate(request.getText());
-        return ResponseEntity.ok(DataResponse.success(response, Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL));
-    }
-
-    @PostMapping("/grade-writing")
-    @Operation(summary = "Grade student's writing submission",
-            description = "AI grades writing based on lesson content, level, and question requirements")
-    public ResponseEntity<DataResponse<GradingWritingResponse>> gradeWriting(
-            @Valid @RequestBody GradingWritingRequest request) {
-
-        GradingWritingResponse result = aiFeedbackService.gradeWriting(request);
-
-        return new ResponseEntity<>(
-                DataResponse.success(result, Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL),
-                HttpStatus.OK
-        );
-    }
-
-    @PostMapping("/pronunciation-assessment")
-    @Operation(summary = "Assess pronunciation from audio file",
-            description = "Upload audio file and get pronunciation assessment with scores for accuracy, fluency, prosody")
-    public ResponseEntity<DataResponse<PronunciationAssessmentResponse>> assessPronunciation(
-            @RequestParam(value = "audioUrl", required = false) String audioUrl,
-            @RequestParam(value = "questionText", required = false) String questionText,
-            @RequestParam(value = "referenceText", required = false) String referenceText){
-
-        PronunciationAssessmentRequest request = PronunciationAssessmentRequest.builder()
-                .audioUrl(audioUrl)
-                .referenceText(referenceText)
-                .enableMiscue(true)
-                .enableProsody(true)
-                .gradingSystem("HundredMark")
-                .granularity("Phoneme")
-                .build();
-
-        PronunciationAssessmentResponse result = aiFeedbackService.assessPronunciation(request, questionText);
-
-        return new ResponseEntity<>(
-                DataResponse.success(result, Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL),
-                HttpStatus.OK
-        );
-    }
-
-    @GetMapping(value = "/writing/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public SseEmitter gradeWritingStream(@RequestParam Long submissionQuestionId) {
-
-        GradingWritingRequest request = new GradingWritingRequest();
-        request.setSubmissionQuestionId(submissionQuestionId);
-
-        return aiFeedbackService.gradeWritingStream(request);
     }
 }
