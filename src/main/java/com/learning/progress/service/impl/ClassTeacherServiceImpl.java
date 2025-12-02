@@ -15,6 +15,7 @@ import com.learning.progress.repository.ClassTeacherRepository;
 import com.learning.progress.repository.UserRepository;
 import com.learning.progress.service.ClassHistoryService;
 import com.learning.progress.service.ClassTeacherService;
+import com.learning.progress.service.NotificationService;
 import com.learning.progress.util.AppValidator;
 import com.learning.progress.util.JwtUtil;
 import com.learning.progress.util.TraceUtil;
@@ -60,7 +61,7 @@ public class ClassTeacherServiceImpl implements ClassTeacherService {
 
     // NEW: notification service
     @Autowired
-    private com.learning.progress.service.NotificationService notificationService;
+    private NotificationService notificationService;
 
     @Value("${env.class.max-teaching-assistant-in-class}")
     private int maxTeachingAssistantInClass;

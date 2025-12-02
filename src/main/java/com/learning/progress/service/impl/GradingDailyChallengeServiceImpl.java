@@ -12,6 +12,7 @@ import com.learning.progress.exception.ApiException;
 import com.learning.progress.repository.*;
 import com.learning.progress.cache.CacheService;
 import com.learning.progress.service.GradingDailyChallengeService;
+import com.learning.progress.service.NotificationService;
 import com.learning.progress.util.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -36,7 +37,6 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
     private final GradingDailyChallengeRepository gradingRepo;
     private final SubmissionQuestionRepository submissionQuestionRepo;
     private final GradingQuestionRepository gradingQuestionRepo;
-    private final QuestionRepository questionRepo;
     private final ChallengeSectionRepository sectionRepo;
     private final UserRepository userRepo;
     private final CacheService cacheService;
@@ -47,7 +47,7 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
 
     // NEW: notification service
     @Autowired
-    private com.learning.progress.service.NotificationService notificationService;
+    private NotificationService notificationService;
 
     private static final Set<ChallengeType> AUTO_GRADABLE_TYPES = Set.of(
             ChallengeType.GV, ChallengeType.RE, ChallengeType.LI
