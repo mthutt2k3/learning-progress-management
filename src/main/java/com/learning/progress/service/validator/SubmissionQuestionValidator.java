@@ -26,7 +26,6 @@ import java.util.stream.Collectors;
 public class SubmissionQuestionValidator {
 
     private final QuestionRepository questionRepository;
-    private final QuestionMapper questionMapper;
 
     public void validateSubmissionQuestions(Long challengeId, SaveSubmissionRequest request) {
         List<SaveSubmissionRequest.QuestionAnswer> questionAnswers = request.getQuestionAnswers();

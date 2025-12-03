@@ -291,31 +291,31 @@ public class OpenAiServiceImpl implements OpenAiService {
                 String enhancedContent = section.getSectionsContent();
 
                 // ✅ Chỉ với READING + có sectionUrl + là ảnh → OCR
-                if ("RE".equals(dailyChallengeType) &&
-                        section.getSectionsUrl() != null &&
-                        !section.getSectionsUrl().trim().isEmpty()) {
-
-                    String sectionUrl = section.getSectionsUrl().trim();
-
-                    if (isImageUrl(sectionUrl)) {
-                        log.info("Detected image URL in reading section, performing OCR: {}", sectionUrl);
-
-                        try {
-                            String traceId = TraceUtil.getTraceId();
-                            String ocrText = extractTextFromImageUrl(sectionUrl, traceId);
-
-                            if (ocrText != null && !ocrText.trim().isEmpty()) {
-                                // ✅ Ghép OCR text vào content gốc
-                                enhancedContent = section.getSectionsContent() + "\n\n" + ocrText;
-                                log.info("Successfully appended OCR text ({} chars) to section content",
-                                        ocrText.length());
-                            }
-                        } catch (Exception e) {
-                            log.error("Failed to extract text from section image: {}", e.getMessage());
-                            // Continue với content gốc thay vì fail
-                        }
-                    }
-                }
+//                if ("RE".equals(dailyChallengeType) &&
+//                        section.getSectionsUrl() != null &&
+//                        !section.getSectionsUrl().trim().isEmpty()) {
+//
+//                    String sectionUrl = section.getSectionsUrl().trim();
+//
+//                    if (isImageUrl(sectionUrl)) {
+//                        log.info("Detected image URL in reading section, performing OCR: {}", sectionUrl);
+//
+//                        try {
+//                            String traceId = TraceUtil.getTraceId();
+//                            String ocrText = extractTextFromImageUrl(sectionUrl, traceId);
+//
+//                            if (ocrText != null && !ocrText.trim().isEmpty()) {
+//                                // ✅ Ghép OCR text vào content gốc
+//                                enhancedContent = section.getSectionsContent() + "\n\n" + ocrText;
+//                                log.info("Successfully appended OCR text ({} chars) to section content",
+//                                        ocrText.length());
+//                            }
+//                        } catch (Exception e) {
+//                            log.error("Failed to extract text from section image: {}", e.getMessage());
+//                            // Continue với content gốc thay vì fail
+//                        }
+//                    }
+//                }
 
                 // ✅ Tạo section với content đã enhance (để không modify request object)
                 SectionDto enhancedSection = new SectionDto();
@@ -445,31 +445,31 @@ public class OpenAiServiceImpl implements OpenAiService {
     /**
      * Extract text from image URL using OCR
      */
-    private String extractTextFromImageUrl(String imageUrl, String traceId) {
-        File imageFile = null;
-
-        try {
-            log.info("[{}] Downloading image from URL...", traceId);
-            imageFile = downloadImageFromUrl(imageUrl);
-
-            log.info("[{}] Extracting text from image using OCR...", traceId);
-            return extractTextFromImage(imageFile);
-
-        } catch (Exception e) {
-            log.error("[{}] Failed to extract text from image URL: {}", traceId, e.getMessage(), e);
-            throw new ApiException("Failed to extract text from image: " + e.getMessage(),
-                    HttpStatus.INTERNAL_SERVER_ERROR.value());
-        } finally {
-            if (imageFile != null && imageFile.exists()) {
-                try {
-                    imageFile.delete();
-                    log.debug("[{}] Cleaned up temp image file", traceId);
-                } catch (Exception e) {
-                    log.warn("[{}] Failed to delete temp image file: {}", traceId, e.getMessage());
-                }
-            }
-        }
-    }
+//    private String extractTextFromImageUrl(String imageUrl, String traceId) {
+//        File imageFile = null;
+//
+//        try {
+//            log.info("[{}] Downloading image from URL...", traceId);
+//            imageFile = downloadImageFromUrl(imageUrl);
+//
+//            log.info("[{}] Extracting text from image using OCR...", traceId);
+//            return extractTextFromImage(imageFile);
+//
+//        } catch (Exception e) {
+//            log.error("[{}] Failed to extract text from image URL: {}", traceId, e.getMessage(), e);
+//            throw new ApiException("Failed to extract text from image: " + e.getMessage(),
+//                    HttpStatus.INTERNAL_SERVER_ERROR.value());
+//        } finally {
+//            if (imageFile != null && imageFile.exists()) {
+//                try {
+//                    imageFile.delete();
+//                    log.debug("[{}] Cleaned up temp image file", traceId);
+//                } catch (Exception e) {
+//                    log.warn("[{}] Failed to delete temp image file: {}", traceId, e.getMessage());
+//                }
+//            }
+//        }
+//    }
 
     /**
      * Download image from URL to temp file
@@ -511,48 +511,48 @@ public class OpenAiServiceImpl implements OpenAiService {
     /**
      * Extract text from image using OpenAI Vision API
      */
-    private String extractTextFromImage(File imageFile) {
-        try {
-            String base64Image = convertImageToBase64(imageFile);
-            String prompt = buildOCRPrompt();
-
-            String extractedText = null;
-            int maxRetries = 3;
-            Exception lastException = null;
-
-            for (int attempt = 1; attempt <= maxRetries; attempt++) {
-                try {
-                    log.info("Calling OpenAI Vision for OCR (attempt {}/{})...", attempt, maxRetries);
-                    extractedText = callOpenAIVisionForOCR(prompt, base64Image);
-                    break;
-                } catch (Exception e) {
-                    lastException = e;
-                    log.warn("OCR failed on attempt {}/{}: {}", attempt, maxRetries, e.getMessage());
-
-                    if (attempt < maxRetries) {
-                        try {
-                            Thread.sleep(1000L * attempt);
-                        } catch (InterruptedException ie) {
-                            Thread.currentThread().interrupt();
-                        }
-                    }
-                }
-            }
-
-            if (extractedText == null) {
-                throw new RuntimeException("Failed to extract text after " + maxRetries + " attempts: "
-                        + (lastException != null ? lastException.getMessage() : "unknown error"));
-            }
-
-            return parseOCRResponse(extractedText.trim());
-
-        } catch (ApiException e) {
-            throw e;
-        } catch (Exception e) {
-            log.error("Failed to extract text from image: {}", e.getMessage(), e);
-            throw new RuntimeException("Failed to extract text from image", e);
-        }
-    }
+//    private String extractTextFromImage(File imageFile) {
+//        try {
+//            String base64Image = convertImageToBase64(imageFile);
+//            String prompt = buildOCRPrompt();
+//
+//            String extractedText = null;
+//            int maxRetries = 3;
+//            Exception lastException = null;
+//
+//            for (int attempt = 1; attempt <= maxRetries; attempt++) {
+//                try {
+//                    log.info("Calling OpenAI Vision for OCR (attempt {}/{})...", attempt, maxRetries);
+//                    extractedText = callOpenAIVisionForOCR(prompt, base64Image);
+//                    break;
+//                } catch (Exception e) {
+//                    lastException = e;
+//                    log.warn("OCR failed on attempt {}/{}: {}", attempt, maxRetries, e.getMessage());
+//
+//                    if (attempt < maxRetries) {
+//                        try {
+//                            Thread.sleep(1000L * attempt);
+//                        } catch (InterruptedException ie) {
+//                            Thread.currentThread().interrupt();
+//                        }
+//                    }
+//                }
+//            }
+//
+//            if (extractedText == null) {
+//                throw new RuntimeException("Failed to extract text after " + maxRetries + " attempts: "
+//                        + (lastException != null ? lastException.getMessage() : "unknown error"));
+//            }
+//
+//            return parseOCRResponse(extractedText.trim());
+//
+//        } catch (ApiException e) {
+//            throw e;
+//        } catch (Exception e) {
+//            log.error("Failed to extract text from image: {}", e.getMessage(), e);
+//            throw new RuntimeException("Failed to extract text from image", e);
+//        }
+//    }
 
     /**
      * Parse OCR JSON response
@@ -2279,10 +2279,6 @@ public class OpenAiServiceImpl implements OpenAiService {
         }
     }
 
-    public String callOpenAIForFeedback(String prompt) {
-        return callOpenAI(prompt);
-    }
-
     private LevelInfo parseLevelInfo(String level) {
         if (level == null || level.isBlank()) {
             throw new ApiException("Level is required", HttpStatus.BAD_REQUEST.value());
@@ -2302,85 +2298,6 @@ public class OpenAiServiceImpl implements OpenAiService {
                         HttpStatus.BAD_REQUEST.value());
             }
         }
-    }
-
-    /**
-     * Call Azure OpenAI Vision API for OCR (extract text from image)
-     */
-    public String callOpenAIVisionForOCR(String prompt, String base64Image) {
-        log.info("Azure OpenAI Vision start OCR");
-
-        // Build Azure OpenAI endpoint for vision model
-        String url = UriComponentsBuilder
-                .fromHttpUrl(endpoint + "/openai/deployments/gpt-5-mini/chat/completions")
-                .queryParam("api-version", API_VERSION)
-                .toUriString();
-
-        // Build message content with text + image
-        List<Map<String, Object>> contentList = new ArrayList<>();
-
-        // Add text prompt
-        contentList.add(Map.of("type", "text", "content", prompt));
-
-        // Add image
-        contentList.add(Map.of(
-                "type", "image_url",
-                "image_url", Map.of("url", "data:image/jpeg;base64," + base64Image)
-        ));
-
-        // Build request body
-        Map<String, Object> requestBody = Map.of(
-                "messages", new Object[]{
-                        // System message để bắt buộc JSON response
-                        Map.of(
-                                "role", "system",
-                                "content",
-                                "You are a JSON-only API. You MUST respond with ONLY valid JSON. " +
-                                        "No markdown, no code blocks, no explanations. " +
-                                        "Your entire response must be a single JSON object and nothing else.\n\n" +
-
-                                        // 🔹 Thêm phần định dạng JSON mẫu
-                                        "CRITICAL: You MUST respond with ONLY valid JSON in this exact format, no markdown, no extra text:\n\n" +
-                                        "{\n" +
-                                        "  \"status\": \"SUCCESS\" | \"ILLEGIBLE_HANDWRITING\" | \"NO_TEXT_FOUND\" | \"BLANK_IMAGE\",\n" +
-                                        "  \"text\": \"the exact raw text as read from the image, with no corrections or modifications (only if status is SUCCESS)\",\n" +
-                                        "}\n\n" +
-                                        "IMPORTANT: You must NOT correct, interpret, or modify the text. The 'text' must match exactly what you read in the image."
-                        ),
-                        // User message with prompt và image
-                        Map.of("role", "user", "content", contentList)
-                },
-                "max_completion_tokens", 16000, // Giảm xuống vì chỉ cần JSON ngắn
-                "response_format", Map.of("type", "json_object") // ⭐ CRITICAL: Bắt buộc JSON mode
-        );
-
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_JSON);
-        headers.set("api-key", apiKey);
-
-        HttpEntity<Map<String, Object>> requestEntity = new HttpEntity<>(requestBody, headers);
-
-        try {
-            ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.POST, requestEntity, Map.class);
-
-            if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
-                var choices = (List<Map<String, Object>>) response.getBody().get("choices");
-                if (choices != null && !choices.isEmpty()) {
-                    Map<String, Object> message = (Map<String, Object>) choices.get(0).get("message");
-                    String content = (String) message.get("content");
-
-                    log.debug("OCR extracted text (first 500 chars): {}",
-                            content.length() > 500 ? content.substring(0, 500) : content);
-
-                    return content.trim();
-                }
-            }
-        } catch (Exception e) {
-            log.error("Error calling Azure OpenAI Vision for OCR: {}", e.getMessage(), e);
-            throw new RuntimeException("Failed to call Azure OpenAI Vision: " + e.getMessage(), e);
-        }
-
-        throw new RuntimeException("No response from Azure OpenAI Vision");
     }
 
     /**

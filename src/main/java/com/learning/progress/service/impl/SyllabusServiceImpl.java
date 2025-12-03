@@ -109,7 +109,7 @@ public class SyllabusServiceImpl implements SyllabusService {
             Long actor = jwtUtil.extractUserIdFromCurrentRequest();
             String title = "Tạo syllabus thành công";
             String message = "Bạn đã tạo syllabus \"" + syllabus.getSyllabusName() + "\".";
-            notificationService.createNotification(actor, null, title, message, null, null);
+            notificationService.createNotifications(actor, null, title, message, null, null);
             log.debug("[{}] traceId={} notification sent for created syllabus id={}", method, traceId, syllabus.getId());
         } catch (Exception ex) {
             log.debug("[{}] traceId={} Failed to send createSyllabus notification: {}", method, traceId, ex.getMessage());
@@ -152,7 +152,7 @@ public class SyllabusServiceImpl implements SyllabusService {
             Long actor = jwtUtil.extractUserIdFromCurrentRequest();
             String title = "Cập nhật syllabus thành công";
             String message = "Bạn đã cập nhật syllabus \"" + syllabus.getSyllabusName() + "\".";
-            notificationService.createNotification(actor, null, title, message, null, null);
+            notificationService.createNotifications(actor, null, title, message, null, null);
             log.debug("[{}] traceId={} notification sent for updated syllabus id={}", method, traceId, id);
         } catch (Exception ex) {
             log.debug("[{}] traceId={} Failed to send updateSyllabus notification: {}", method, traceId, ex.getMessage());
@@ -195,7 +195,7 @@ public class SyllabusServiceImpl implements SyllabusService {
             Long actor = jwtUtil.extractUserIdFromCurrentRequest();
             String title = "Xóa syllabus";
             String message = "Bạn đã xóa syllabus \"" + syllabus.getSyllabusName() + "\".";
-            notificationService.createNotification(actor, null, title, message, null, null);
+            notificationService.createNotifications(actor, null, title, message, null, null);
             log.debug("[{}] traceId={} notification sent for deleted syllabus id={}", method, traceId, id);
         } catch (Exception ex) {
             log.debug("[{}] traceId={} Failed to send deleteSyllabus notification: {}", method, traceId, ex.getMessage());
@@ -403,7 +403,7 @@ public class SyllabusServiceImpl implements SyllabusService {
             Long actor = jwtUtil.extractUserIdFromCurrentRequest();
             String title = "Import syllabus hoàn tất";
             String message = "Bạn đã import " + result.size() + " syllabus thành công.";
-            notificationService.createNotification(actor, null, title, message, null, null);
+            notificationService.createNotifications(actor, null, title, message, null, null);
             log.debug("[{}] traceId={} import notification sent count={}", method, traceId, result.size());
         } catch (Exception ex) {
             log.debug("[{}] traceId={} Failed to send importSyllabus notification: {}", method, traceId, ex.getMessage());

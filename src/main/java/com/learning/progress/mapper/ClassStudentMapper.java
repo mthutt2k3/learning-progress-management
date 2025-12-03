@@ -16,8 +16,5 @@ public interface ClassStudentMapper {
     @Mapping(source = "clazz.className", target = "className")
     @Mapping(source = "clazz.syllabus.id", target = "syllabusId")
     @Mapping(source = "clazz.status", target = "classStatus")
-    @Mapping(source = "status", target = "status")
-    @Mapping(source = "joinedAt", target = "joinedAt")
-    @Mapping(source = "leftAt", target = "leftAt")
     ClassStudentResponse toClassStudentResponse(ClassStudent classStudent);
 }

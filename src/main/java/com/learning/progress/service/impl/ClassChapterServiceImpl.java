@@ -20,6 +20,7 @@ import com.learning.progress.service.FileService;
 import com.learning.progress.util.AppValidator;
 import com.learning.progress.util.DataUtil;
 import com.learning.progress.util.JwtUtil;
+import com.learning.progress.util.TraceUtil;
 import jakarta.transaction.Transactional;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validator;
@@ -73,7 +74,7 @@ public class ClassChapterServiceImpl implements ClassChapterService {
     public List<ClassChapterDTO> syncClassChapters(Long classId, List<SyncClassChapterRequest> request) {
         final String method = "syncClassChapters";
         long startNs = System.nanoTime();
-        String traceId = com.learning.progress.util.TraceUtil.getTraceId();
+        String traceId = TraceUtil.getTraceId();
         log.info("[{}] enter traceId={} classId={} requestSize={}", method, traceId, classId, request != null ? request.size() : 0);
 
         // Validate class

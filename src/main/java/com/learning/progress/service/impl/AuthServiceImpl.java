@@ -13,6 +13,7 @@ import com.learning.progress.repository.RefreshTokenRepository;
 import com.learning.progress.repository.UserRepository;
 import com.learning.progress.service.AuthService;
 import com.learning.progress.service.EmailService;
+import com.learning.progress.service.NotificationService;
 import com.learning.progress.service.TokenService;
 import com.learning.progress.util.DataUtil;
 import com.learning.progress.util.JwtUtil;
@@ -27,7 +28,6 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
-import org.thymeleaf.spring6.SpringTemplateEngine;
 
 import java.time.Instant;
 import java.util.List;
@@ -60,12 +60,9 @@ public class AuthServiceImpl implements AuthService {
     private AuthMapper authMapper;
 
     @Autowired
-    private SpringTemplateEngine templateEngine;
-
-    @Autowired
     private EmailService emailService;
     @Autowired
-    private NotificationServiceImpl notificationServiceImpl;
+    private NotificationService notificationService;
 
     /**
      * Authenticates a user and generates access and refresh tokens.
@@ -205,7 +202,7 @@ public class AuthServiceImpl implements AuthService {
             // 4. Send to teachers with teacher URL
             if (!teacherIds.isEmpty()) {
                 String teacherUrl = "/teacher/student/" + user.getId() + "/profile";
-                notificationServiceImpl.createNotification(
+                notificationService.createNotifications(
                         teacherIds,
                         user.getId(),  // creatorId = student
                         title,
@@ -219,7 +216,7 @@ public class AuthServiceImpl implements AuthService {
             // 5. Send to managers with manager URL
             if (!managerIds.isEmpty()) {
                 String managerUrl = "/manager/student/" + user.getId() + "/profile";
-                notificationServiceImpl.createNotification(
+                notificationService.createNotifications(
                         managerIds,
                         user.getId(),  // creatorId = student
                         title,

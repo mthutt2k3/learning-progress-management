@@ -10,12 +10,8 @@ import com.learning.progress.exception.ApiException;
 import com.learning.progress.mapper.ClassStudentMapper;
 import com.learning.progress.repository.ClassRepository;
 import com.learning.progress.repository.ClassStudentRepository;
-import com.learning.progress.repository.SubmissionDailyChallengeRepository;
 import com.learning.progress.repository.UserRepository;
-import com.learning.progress.service.BlobSasService;
-import com.learning.progress.service.ClassHistoryService;
-import com.learning.progress.service.ClassStudentService;
-import com.learning.progress.service.FileService;
+import com.learning.progress.service.*;
 import com.learning.progress.util.AppValidator;
 import com.learning.progress.util.JwtUtil;
 import com.learning.progress.util.TraceUtil;
@@ -59,27 +55,15 @@ public class ClassStudentServiceImpl implements ClassStudentService {
     private JwtUtil jwtUtil;
 
     @Autowired
-    private FileService fileService;
-
-    @Autowired
     private AppValidator appValidator;
-
-    @Autowired
-    private BlobSasService blobSasService;
-
-    @Autowired
-    private SubmissionDailyChallengeRepository submissionRepository;
 
     // NEW: submission service to create/restore/soft-delete submissions
     @Autowired
-    private com.learning.progress.service.SubmissionChallengeService submissionChallengeService;
+    private SubmissionChallengeService submissionChallengeService;
 
     // NEW: notification service
     @Autowired
-    private com.learning.progress.service.NotificationService notificationService;
-
-    @Value("${azure.storage.student-to-class-template}")
-    private String studentToClassTemplate;
+    private NotificationService notificationService;
 
     @Value("${env.class.max-student-in-class}")
     private int maxStudentInClass;
@@ -298,7 +282,7 @@ public class ClassStudentServiceImpl implements ClassStudentService {
                 String title = String.format(Const.CLASS_STUDENT.NOTIFY_ADDED_TITLE, clazz.getClassName());
                 String message = String.format(Const.CLASS_STUDENT.NOTIFY_ADDED_MESSAGE, jwtUtil.extractUsernameFromCurrentRequest(), clazz.getClassName());
                 try {
-                    notificationService.createNotification(u.getId(), null, title, message, url, null);
+                    notificationService.createNotifications(u.getId(), null, title, message, url, null);
                 } catch (Exception ex) {
                     log.debug("[{}] traceId={} Failed to notify new student userId={} error={}", method, traceId, u.getId(), ex.getMessage());
                 }
@@ -315,7 +299,7 @@ public class ClassStudentServiceImpl implements ClassStudentService {
                 String title = String.format(Const.CLASS_STUDENT.NOTIFY_REACTIVATED_TITLE, clazz.getClassName());
                 String message = String.format(Const.CLASS_STUDENT.NOTIFY_REACTIVATED_MESSAGE, jwtUtil.extractUsernameFromCurrentRequest(), clazz.getClassName());
                 try {
-                    notificationService.createNotification(u.getId(), null, title, message, null, null);
+                    notificationService.createNotifications(u.getId(), null, title, message, null, null);
                 } catch (Exception ex) {
                     log.debug("[{}] traceId={} Failed to notify reactivated student userId={} error={}", method, traceId, u.getId(), ex.getMessage());
                 }
@@ -406,7 +390,7 @@ public class ClassStudentServiceImpl implements ClassStudentService {
             String title = String.format(Const.CLASS_STUDENT.NOTIFY_REMOVED_TITLE, clazz.getClassName());
             String message = String.format(Const.CLASS_STUDENT.NOTIFY_REMOVED_MESSAGE, jwtUtil.extractUsernameFromCurrentRequest(), clazz.getClassName());
 
-            notificationService.createNotification(user.getId(), clazz.getId(), title, message, null, null);
+            notificationService.createNotifications(user.getId(), clazz.getId(), title, message, null, null);
         } catch (Exception ex) {
             log.warn("[{}] traceId={} Failed to send notification to removed student userId={} error={}", method, traceId, userId, ex.getMessage());
         }

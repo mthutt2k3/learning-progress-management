@@ -850,6 +850,9 @@ public class Const {
         public static final String HIGHLIGHT_START_NON_NEGATIVE = "Start index must be non-negative";
         public static final String HIGHLIGHT_END_REQUIRED = "End index is required";
         public static final String HIGHLIGHT_END_NON_NEGATIVE = "End index must be non-negative";
+
+        public static final String OVERALL_FEEDBACK_LENGTH_INVALID = "Overall feedback must be less than 5000 characters.";
+        public static final int MAX_OVERALL_FEEDBACK_LENGTH_VALUE = 5000;
     }
     public static class SUBMISSION_LOG {
         public static final String INVALID_REQUEST_PARAMS = "Invalid request parameters";

@@ -3,10 +3,9 @@ package com.learning.progress.service.impl;
 import com.learning.progress.common.ChallengeType;
 import com.learning.progress.common.Const;
 import com.learning.progress.common.RiskType;
-import com.learning.progress.dto.report.ChallengeReportDTO;
-import com.learning.progress.dto.report.ClassReportDTO;
-import com.learning.progress.dto.report.StudentOverview;
-import com.learning.progress.dto.report.StudentPerformanceDTO;
+import com.learning.progress.dto.report.challenge.*;
+import com.learning.progress.dto.report.clazz.*;
+import com.learning.progress.dto.report.performance.*;
 import com.learning.progress.entity.DailyChallenge;
 import com.learning.progress.exception.ApiException;
 import com.learning.progress.repository.ClassRepository;
@@ -50,7 +49,7 @@ public class ReportServiceImpl implements ReportService {
 
     @Override
     @Transactional(readOnly = true)
-    public ClassReportDTO.ClassOverview getClassOverview(Long classId) {
+    public ClassOverview getClassOverview(Long classId) {
         final String method = "getClassOverview";
         long startNs = System.nanoTime();
         String traceId = TraceUtil.getTraceId();
@@ -77,7 +76,7 @@ public class ReportServiceImpl implements ReportService {
 
         // Get member count by role
         List<Map<String, Object>> memberCounts = reportRepository.getMemberCountByRole(classId);
-        ClassReportDTO.MemberCount memberCount = buildMemberCount(memberCounts);
+        MemberCount memberCount = buildMemberCount(memberCounts);
         log.debug("[{}] {} memberCount={}", traceId, method, memberCount);
 
         // Get total challenges
@@ -87,7 +86,7 @@ public class ReportServiceImpl implements ReportService {
         long durationMs = (System.nanoTime() - startNs) / 1_000_000;
         log.info("[{}] {} exit classId={} durationMs={}", traceId, method, classId, durationMs);
 
-        return ClassReportDTO.ClassOverview.builder()
+        return ClassOverview.builder()
                 .averageScore(averageScore.setScale(2, RoundingMode.HALF_UP))
                 .completionRate(completionRate.setScale(2, RoundingMode.HALF_UP))
                 .totalLessons(totalLessons)
@@ -99,7 +98,7 @@ public class ReportServiceImpl implements ReportService {
 
     @Override
     @Transactional(readOnly = true)
-    public ClassReportDTO.MembersDetail getMembersDetail(Long classId) {
+    public MembersDetail getMembersDetail(Long classId) {
         final String method = "getMembersDetail";
         long startNs = System.nanoTime();
         String traceId = TraceUtil.getTraceId();
@@ -110,19 +109,19 @@ public class ReportServiceImpl implements ReportService {
 
         // Role distribution
         List<Map<String, Object>> memberCounts = reportRepository.getMemberCountByRole(classId);
-        List<ClassReportDTO.RoleDistribution> roleDistribution = buildRoleDistribution(memberCounts);
+        List<RoleDistribution> roleDistribution = buildRoleDistribution(memberCounts);
         log.debug("[{}] {} roleDistributionSize={}", traceId, method, roleDistribution.size());
 
         // Teacher activities
         List<Map<String, Object>> teacherActivitiesData = reportRepository.getTeacherActivities(classId);
-        List<ClassReportDTO.TeacherActivity> teacherActivities = teacherActivitiesData.stream()
+        List<TeacherActivity> teacherActivities = teacherActivitiesData.stream()
                 .map(this::buildTeacherActivity)
                 .collect(Collectors.toList());
         log.debug("[{}] {} teacherActivitiesSize={}", traceId, method, teacherActivities.size());
 
         // Student rankings
         List<Map<String, Object>> studentRankingsData = reportRepository.getStudentRankings(classId);
-        List<ClassReportDTO.StudentRanking> studentRankings = studentRankingsData.stream()
+        List<StudentRanking> studentRankings = studentRankingsData.stream()
                 .map(this::buildStudentRanking)
                 .collect(Collectors.toList());
         log.debug("[{}] {} studentRankingsSize={}", traceId, method, studentRankings.size());
@@ -130,7 +129,7 @@ public class ReportServiceImpl implements ReportService {
         long durationMs = (System.nanoTime() - startNs) / 1_000_000;
         log.info("[{}] {} exit classId={} durationMs={}", traceId, method, classId, durationMs);
 
-        return ClassReportDTO.MembersDetail.builder()
+        return MembersDetail.builder()
                 .roleDistribution(roleDistribution)
                 .teacherActivities(teacherActivities)
                 .studentRankings(studentRankings)
@@ -139,7 +138,7 @@ public class ReportServiceImpl implements ReportService {
 
     @Override
     @Transactional(readOnly = true)
-    public ClassReportDTO.ChallengeStatsBySkill getChallengeStatsBySkill(Long classId, ChallengeType skill) {
+    public ChallengeStatsBySkill getChallengeStatsBySkill(Long classId, ChallengeType skill) {
         final String method = "getChallengeStatsBySkill";
         String traceId = TraceUtil.getTraceId();
         log.info("[{}] {} enter classId={} skill={}", traceId, method, classId, skill);
@@ -148,13 +147,13 @@ public class ReportServiceImpl implements ReportService {
         log.debug("[{}] {} access validated for classId={}", traceId, method, classId);
 
         List<Map<String, Object>> challengeData = reportRepository.getChallengeStatsBySkill(classId, skill.toString());
-        List<ClassReportDTO.ChallengeData> challenges = challengeData.stream()
+        List<ChallengeData> challenges = challengeData.stream()
                 .map(this::buildChallengeData)
                 .collect(Collectors.toList());
         log.debug("[{}] {} challengesCount={}", traceId, method, challenges.size());
 
         log.info("[{}] {} exit classId={}", traceId, method, classId);
-        return ClassReportDTO.ChallengeStatsBySkill.builder()
+        return ChallengeStatsBySkill.builder()
                 .skill(skill.toString())
                 .challenges(challenges)
                 .build();
@@ -162,7 +161,7 @@ public class ReportServiceImpl implements ReportService {
 
     @Override
     @Transactional(readOnly = true)
-    public ClassReportDTO.ChallengeProgressBySkill getChallengeProgressBySkill(Long classId) {
+    public ChallengeProgressBySkill getChallengeProgressBySkill(Long classId) {
         final String method = "getChallengeProgressBySkill";
         String traceId = TraceUtil.getTraceId();
         log.info("[{}] {} enter classId={}", traceId, method, classId);
@@ -174,7 +173,7 @@ public class ReportServiceImpl implements ReportService {
         Map<String, List<Map<String, Object>>> groupedBySkill = progressData.stream()
                 .collect(Collectors.groupingBy(m -> (String) m.get("skill")));
 
-        List<ClassReportDTO.SkillProgress> skills = Arrays.stream(ChallengeType.values())
+        List<SkillProgress> skills = Arrays.stream(ChallengeType.values())
                 .map(skillType -> buildSkillProgress(
                         skillType.toString(),
                         groupedBySkill.getOrDefault(skillType.toString(), Collections.emptyList())
@@ -183,7 +182,7 @@ public class ReportServiceImpl implements ReportService {
 
         log.debug("[{}] {} skillCount={}", traceId, method, skills.size());
         log.info("[{}] {} exit classId={}", traceId, method, classId);
-        return ClassReportDTO.ChallengeProgressBySkill.builder()
+        return ChallengeProgressBySkill.builder()
                 .skills(skills)
                 .build();
     }
@@ -194,7 +193,7 @@ public class ReportServiceImpl implements ReportService {
 
     @Override
     @Transactional(readOnly = true)
-    public ChallengeReportDTO.ChallengeOverview getChallengeOverview(Long challengeId) {
+    public ChallengeOverview getChallengeOverview(Long challengeId) {
         final String method = "getChallengeOverview";
         long startNs = System.nanoTime();
         String traceId = TraceUtil.getTraceId();
@@ -219,7 +218,7 @@ public class ReportServiceImpl implements ReportService {
         );
         log.debug("[{}] {} totalStudents={}", traceId, method, totalStudents);
 
-        ChallengeReportDTO.SubmissionStats submissionStats = ChallengeReportDTO.SubmissionStats.builder()
+        SubmissionStats submissionStats = SubmissionStats.builder()
                 .completedCount(completedCount)
                 .inProgressCount(inProgressCount)
                 .notStartedCount(notStartedCount)
@@ -229,7 +228,7 @@ public class ReportServiceImpl implements ReportService {
         long durationMs = (System.nanoTime() - startNs) / 1_000_000;
         log.info("[{}] {} exit challengeId={} durationMs={}", traceId, method, challengeId, durationMs);
 
-        return ChallengeReportDTO.ChallengeOverview.builder()
+        return ChallengeOverview.builder()
                 .challengeId(challenge.getId())
                 .challengeName(challenge.getChallengeName())
                 .challengeType(challenge.getChallengeType().name())
@@ -242,7 +241,7 @@ public class ReportServiceImpl implements ReportService {
 
     @Override
     @Transactional(readOnly = true)
-    public ChallengeReportDTO.StudentPerformanceList getStudentPerformanceList(Long challengeId) {
+    public StudentPerformanceList getStudentPerformanceList(Long challengeId) {
         final String method = "getStudentPerformanceList";
         String traceId = TraceUtil.getTraceId();
         log.info("[{}] {} enter challengeId={}", traceId, method, challengeId);
@@ -251,20 +250,20 @@ public class ReportServiceImpl implements ReportService {
         log.debug("[{}] {} challenge validated challengeId={}", traceId, method, challengeId);
 
         List<Map<String, Object>> performanceData = reportRepository.getStudentPerformanceByChallenge(challengeId);
-        List<ChallengeReportDTO.StudentPerformance> students = performanceData.stream()
+        List<StudentPerformance> students = performanceData.stream()
                 .map(this::buildStudentPerformance)
                 .collect(Collectors.toList());
         log.debug("[{}] {} studentsSize={}", traceId, method, students.size());
 
         log.info("[{}] {} exit challengeId={}", traceId, method, challengeId);
-        return ChallengeReportDTO.StudentPerformanceList.builder()
+        return StudentPerformanceList.builder()
                 .students(students)
                 .build();
     }
 
     @Override
     @Transactional(readOnly = true)
-    public ChallengeReportDTO.ChallengeChartData getChallengeChartData(Long challengeId) {
+    public ChallengeChartData getChallengeChartData(Long challengeId) {
         final String method = "getChallengeChartData";
         String traceId = TraceUtil.getTraceId();
         log.info("[{}] {} enter challengeId={}", traceId, method, challengeId);
@@ -273,13 +272,13 @@ public class ReportServiceImpl implements ReportService {
         log.debug("[{}] {} challenge validated challengeId={}", traceId, method, challengeId);
 
         List<Map<String, Object>> performanceData = reportRepository.getStudentPerformanceByChallenge(challengeId);
-        List<ChallengeReportDTO.StudentChartPoint> dataPoints = performanceData.stream()
+        List<StudentChartPoint> dataPoints = performanceData.stream()
                 .map(this::buildStudentChartPoint)
                 .collect(Collectors.toList());
         log.debug("[{}] {} dataPointsSize={}", traceId, method, dataPoints.size());
 
         log.info("[{}] {} exit challengeId={}", traceId, method, challengeId);
-        return ChallengeReportDTO.ChallengeChartData.builder()
+        return ChallengeChartData.builder()
                 .dataPoints(dataPoints)
                 .build();
     }
@@ -326,14 +325,14 @@ public class ReportServiceImpl implements ReportService {
 
         Long classId = getLongValue(currentClassData, "class_id");
 
-        StudentPerformanceDTO.LevelInfo levelInfo = StudentPerformanceDTO.LevelInfo.builder()
+        LevelInfo levelInfo = LevelInfo.builder()
                 .levelId(getLongValue(currentClassData, "level_id"))
                 .levelName((String) currentClassData.get("level_name"))
                 .levelCode((String) currentClassData.get("level_code"))
                 .description((String) currentClassData.get("description"))
                 .build();
 
-        StudentPerformanceDTO.ClassInfo classInfo = StudentPerformanceDTO.ClassInfo.builder()
+        ClassInfo classInfo = ClassInfo.builder()
                 .classId(classId)
                 .className((String) currentClassData.get("class_name"))
                 .classCode((String) currentClassData.get("class_code"))
@@ -344,7 +343,7 @@ public class ReportServiceImpl implements ReportService {
 
         // Get challenge progress
         Map<String, Object> progressData = reportRepository.getStudentChallengeProgress(targetUserId, classId);
-        StudentPerformanceDTO.ChallengeProgress challengeProgress = buildChallengeProgress(progressData);
+        ChallengeProgress challengeProgress = buildChallengeProgress(progressData);
         log.debug("[{}] {} challengeProgress={}", traceId, method, challengeProgress);
 
         long durationMs = (System.nanoTime() - startNs) / 1_000_000;
@@ -360,7 +359,7 @@ public class ReportServiceImpl implements ReportService {
 
     @Override
     @Transactional(readOnly = true)
-    public StudentPerformanceDTO.LevelHistory getStudentLevelHistory(Long userId) {
+    public LevelHistory getStudentLevelHistory(Long userId) {
         final String method = "getStudentLevelHistory";
         String traceId = TraceUtil.getTraceId();
         String currentUserRole = jwtUtil.extractRoleFromCurrentRequest();
@@ -385,7 +384,7 @@ public class ReportServiceImpl implements ReportService {
                 .filter(m -> m.get("level_id") != null)
                 .collect(Collectors.groupingBy(m -> getLongValue(m, "level_id")));
 
-        List<StudentPerformanceDTO.LevelDetail> levels = groupedByLevel.entrySet().stream()
+        List<LevelDetail> levels = groupedByLevel.entrySet().stream()
                 .map(entry -> buildLevelDetail(entry.getKey(), entry.getValue(), targetUserId))
                 .sorted(Comparator.comparing(ld ->
                                 ld.getClasses().isEmpty() ? OffsetDateTime.MIN :
@@ -394,12 +393,12 @@ public class ReportServiceImpl implements ReportService {
                 .collect(Collectors.toList());
 
         log.info("[{}] {} exit targetUserId={} levelsReturned={}", traceId, method, targetUserId, levels.size());
-        return StudentPerformanceDTO.LevelHistory.builder()
+        return LevelHistory.builder()
                 .levels(levels)
                 .build();
     }
 
-    private StudentPerformanceDTO.LevelDetail buildLevelDetail(
+    private LevelDetail buildLevelDetail(
             Long levelId,
             List<Map<String, Object>> classData,
             Long userId) {
@@ -412,16 +411,16 @@ public class ReportServiceImpl implements ReportService {
                 .collect(Collectors.groupingBy(m -> getLongValue(m, "class_id")));
 
         // SỬA: Dùng buildClassDetail thay vì mapToClassDetail
-        List<StudentPerformanceDTO.ClassDetail> classes = groupedByClass.entrySet().stream()
+        List<ClassDetail> classes = groupedByClass.entrySet().stream()
                 .map(entry -> buildClassDetail(entry.getKey(), entry.getValue(), userId))
-                .sorted(Comparator.comparing(StudentPerformanceDTO.ClassDetail::getJoinedAt,
+                .sorted(Comparator.comparing(ClassDetail::getJoinedAt,
                         Comparator.reverseOrder()))
                 .collect(Collectors.toList());
 
         // Check late pattern cho level này
-        StudentPerformanceDTO.LateSubmissionWarning warning = checkLatePatternForLevel(userId, levelId);
+        LateSubmissionWarning warning = checkLatePatternForLevel(userId, levelId);
 
-        return StudentPerformanceDTO.LevelDetail.builder()
+        return LevelDetail.builder()
                 .levelId(levelId)
                 .levelName(getStringValue(firstRow, "level_name"))
                 .levelCode(getStringValue(firstRow, "level_code"))
@@ -430,11 +429,11 @@ public class ReportServiceImpl implements ReportService {
                 .build();
     }
 
-    private StudentPerformanceDTO.LateSubmissionWarning checkLatePatternForLevel(Long userId, Long levelId) {
+    private LateSubmissionWarning checkLatePatternForLevel(Long userId, Long levelId) {
         List<Map<String, Object>> recentChallenges = reportRepository.getRecentChallengesByLevel(userId, levelId);
 
         if (recentChallenges.isEmpty()) {
-            return StudentPerformanceDTO.LateSubmissionWarning.builder()
+            return LateSubmissionWarning.builder()
                     .hasHighLateRate(false)
                     .windowSize(0)
                     .lateCount(0)
@@ -469,7 +468,7 @@ public class ReportServiceImpl implements ReportService {
                         .multiply(BigDecimal.valueOf(100))
                         .divide(BigDecimal.valueOf(windowSize), 2, RoundingMode.HALF_UP);
 
-                return StudentPerformanceDTO.LateSubmissionWarning.builder()
+                return LateSubmissionWarning.builder()
                         .hasHighLateRate(true)
                         .windowSize(windowSize)
                         .lateCount((int) lateCount)
@@ -479,7 +478,7 @@ public class ReportServiceImpl implements ReportService {
         }
 
         // Không có window nào vượt 50%
-        return StudentPerformanceDTO.LateSubmissionWarning.builder()
+        return LateSubmissionWarning.builder()
                 .hasHighLateRate(false)
                 .windowSize(isLateList.size())
                 .lateCount((int) isLateList.stream().filter(late -> late).count())
@@ -507,7 +506,7 @@ public class ReportServiceImpl implements ReportService {
 
     @Override
     @Transactional(readOnly = true)
-    public StudentPerformanceDTO.ClassChallengeDetail getStudentClassChallengeDetail(Long classId, Long userId) {
+    public ClassChallengeDetail getStudentClassChallengeDetail(Long classId, Long userId) {
         final String method = "getStudentClassChallengeDetail";
         long startNs = System.nanoTime();
         String traceId = TraceUtil.getTraceId();
@@ -537,7 +536,7 @@ public class ReportServiceImpl implements ReportService {
             return null;
         }
 
-        StudentPerformanceDTO.LevelInfo levelInfo = StudentPerformanceDTO.LevelInfo.builder()
+        LevelInfo levelInfo = LevelInfo.builder()
                 .levelId(getLongValue(classData, "level_id"))
                 .levelName((String) classData.get("level_name"))
                 .levelCode((String) classData.get("level_code"))
@@ -546,7 +545,7 @@ public class ReportServiceImpl implements ReportService {
 
         // Get challenge data
         List<Map<String, Object>> challengeData = reportRepository.getStudentChallengesByClass(targetUserId, classId);
-        List<StudentPerformanceDTO.ChallengeScore> challenges = challengeData.stream()
+        List<ChallengeScore> challenges = challengeData.stream()
                 .map(this::buildChallengeScore)
                 .collect(Collectors.toList());
 
@@ -573,7 +572,7 @@ public class ReportServiceImpl implements ReportService {
         long durationMs = (System.nanoTime() - startNs) / 1_000_000;
         log.info("[{}] {} exit classId={} userId={} durationMs={}", traceId, method, classId, userId, durationMs);
 
-        return StudentPerformanceDTO.ClassChallengeDetail.builder()
+        return ClassChallengeDetail.builder()
                 .classId(classId)
                 .className((String) classData.get("class_name"))
                 .classCode((String) classData.get("class_code"))
@@ -621,7 +620,7 @@ public class ReportServiceImpl implements ReportService {
      * HELPER METHODS - BUILDERS
      * -------------------------------------------------------- */
 
-    private ClassReportDTO.MemberCount buildMemberCount(List<Map<String, Object>> memberCounts) {
+    private MemberCount buildMemberCount(List<Map<String, Object>> memberCounts) {
         Map<String, Long> countMap = memberCounts.stream()
                 .collect(Collectors.toMap(
                         m -> (String) m.get("role_name"),
@@ -629,7 +628,7 @@ public class ReportServiceImpl implements ReportService {
                         (a, b) -> a
                 ));
 
-        return ClassReportDTO.MemberCount.builder()
+        return MemberCount.builder()
                 .teachers(countMap.getOrDefault("TEACHER", 0L))
                 .teachingAssistants(countMap.getOrDefault("TEACHING_ASSISTANT", 0L))
                 .students(countMap.getOrDefault("STUDENT", 0L))
@@ -637,7 +636,7 @@ public class ReportServiceImpl implements ReportService {
                 .build();
     }
 
-    private List<ClassReportDTO.RoleDistribution> buildRoleDistribution(List<Map<String, Object>> memberCounts) {
+    private List<RoleDistribution> buildRoleDistribution(List<Map<String, Object>> memberCounts) {
         long total = memberCounts.stream()
                 .mapToLong(m -> getLongValue(m, "count"))
                 .sum();
@@ -652,7 +651,7 @@ public class ReportServiceImpl implements ReportService {
                                     .setScale(2, RoundingMode.HALF_UP)
                             : BigDecimal.ZERO;
 
-                    return ClassReportDTO.RoleDistribution.builder()
+                    return RoleDistribution.builder()
                             .roleName((String) m.get("role_name"))
                             .count(count)
                             .percentage(percentage)
@@ -661,8 +660,8 @@ public class ReportServiceImpl implements ReportService {
                 .collect(Collectors.toList());
     }
 
-    private ClassReportDTO.TeacherActivity buildTeacherActivity(Map<String, Object> data) {
-        return ClassReportDTO.TeacherActivity.builder()
+    private TeacherActivity buildTeacherActivity(Map<String, Object> data) {
+        return TeacherActivity.builder()
                 .userId(getLongValue(data, "user_id"))
                 .fullName((String) data.get("full_name"))
                 .email((String) data.get("email"))
@@ -673,12 +672,12 @@ public class ReportServiceImpl implements ReportService {
                 .build();
     }
 
-    private ClassReportDTO.StudentRanking buildStudentRanking(Map<String, Object> data) {
+    private StudentRanking buildStudentRanking(Map<String, Object> data) {
         Long totalSubmissions = getLongValue(data, "total_submissions");
         Long lateSubmissions = getLongValue(data, "late_submissions");
         Long onTimeSubmissions = getLongValue(data, "ontime_submissions");
 
-        return ClassReportDTO.StudentRanking.builder()
+        return StudentRanking.builder()
                 .userId(getLongValue(data, "user_id"))
                 .fullName((String) data.get("full_name"))
                 .email((String) data.get("email"))
@@ -691,8 +690,8 @@ public class ReportServiceImpl implements ReportService {
                 .build();
     }
 
-    private ClassReportDTO.ChallengeData buildChallengeData(Map<String, Object> data) {
-        return ClassReportDTO.ChallengeData.builder()
+    private ChallengeData buildChallengeData(Map<String, Object> data) {
+        return ChallengeData.builder()
                 .challengeId(getLongValue(data, "challenge_id"))
                 .challengeName((String) data.get("challenge_name"))
                 .onTimeCount(getLongValue(data, "ontime_count"))
@@ -702,7 +701,7 @@ public class ReportServiceImpl implements ReportService {
                 .build();
     }
 
-    private ClassReportDTO.SkillProgress buildSkillProgress(String skillType, List<Map<String, Object>> data) {
+    private SkillProgress buildSkillProgress(String skillType, List<Map<String, Object>> data) {
         Map<String, Integer> statusCounts = new HashMap<>();
         statusCounts.put("DRAFT", 0);
         statusCounts.put("PUBLISHED", 0);
@@ -719,7 +718,7 @@ public class ReportServiceImpl implements ReportService {
 
         int total = statusCounts.values().stream().mapToInt(Integer::intValue).sum();
 
-        ClassReportDTO.StatusBreakdown breakdown = ClassReportDTO.StatusBreakdown.builder()
+        StatusBreakdown breakdown = StatusBreakdown.builder()
                 .draft(statusCounts.get("DRAFT"))
                 .draftPercentage(calculatePercentage(statusCounts.get("DRAFT"), total))
                 .published(statusCounts.get("PUBLISHED"))
@@ -730,15 +729,15 @@ public class ReportServiceImpl implements ReportService {
                 .finishedPercentage(calculatePercentage(statusCounts.get("FINISHED"), total))
                 .build();
 
-        return ClassReportDTO.SkillProgress.builder()
+        return SkillProgress.builder()
                 .skill(skillType)
                 .statusBreakdown(breakdown)
                 .totalChallenges(total)
                 .build();
     }
 
-    private ChallengeReportDTO.StudentPerformance buildStudentPerformance(Map<String, Object> data) {
-        return ChallengeReportDTO.StudentPerformance.builder()
+    private StudentPerformance buildStudentPerformance(Map<String, Object> data) {
+        return StudentPerformance.builder()
                 .userId(getLongValue(data, "user_id"))
                 .fullName((String) data.get("full_name"))
                 .email((String) data.get("email"))
@@ -761,8 +760,8 @@ public class ReportServiceImpl implements ReportService {
                 .build();
     }
 
-    private ChallengeReportDTO.StudentChartPoint buildStudentChartPoint(Map<String, Object> data) {
-        return ChallengeReportDTO.StudentChartPoint.builder()
+    private StudentChartPoint buildStudentChartPoint(Map<String, Object> data) {
+        return StudentChartPoint.builder()
                 .userId(getLongValue(data, "user_id"))
                 .fullName((String) data.get("full_name"))
                 .score(getBigDecimalValue(data, "score").setScale(2, RoundingMode.HALF_UP))
@@ -771,7 +770,7 @@ public class ReportServiceImpl implements ReportService {
                 .build();
     }
 
-    private StudentPerformanceDTO.ChallengeProgress buildChallengeProgress(Map<String, Object> data) {
+    private ChallengeProgress buildChallengeProgress(Map<String, Object> data) {
         Long completedCount = getLongValue(data, "completed_count");
         Long lateCount = getLongValue(data, "late_count");
         Long notStartedCount = getLongValue(data, "not_started_count");
@@ -791,7 +790,7 @@ public class ReportServiceImpl implements ReportService {
                         .setScale(2, RoundingMode.HALF_UP)
                 : BigDecimal.ZERO;
 
-        return StudentPerformanceDTO.ChallengeProgress.builder()
+        return ChallengeProgress.builder()
                 .completedCount(completedCount)
                 .lateCount(lateCount)
                 .notStartedCount(notStartedCount)
@@ -801,15 +800,15 @@ public class ReportServiceImpl implements ReportService {
                 .build();
     }
 
-    private StudentPerformanceDTO.ClassDetail buildClassDetail(
+    private ClassDetail buildClassDetail(
             Long classId,
             List<Map<String, Object>> classData,
             Long userId
     ) {
         if (classData.isEmpty()) {
-            return StudentPerformanceDTO.ClassDetail.builder()
+            return ClassDetail.builder()
                     .classId(classId)
-                    .scoreByType(new StudentPerformanceDTO.ScoreByType())
+                    .scoreByType(new ScoreByType())
                     .build();
         }
 
@@ -871,7 +870,7 @@ public class ReportServiceImpl implements ReportService {
                         (a, b) -> a
                 ));
 
-        StudentPerformanceDTO.ScoreByType scoreByType = StudentPerformanceDTO.ScoreByType.builder()
+        ScoreByType scoreByType = ScoreByType.builder()
                 .vocabularyAvg(scoresByType.getOrDefault("GV", BigDecimal.ZERO))
                 .readingAvg(scoresByType.getOrDefault("RE", BigDecimal.ZERO))
                 .listeningAvg(scoresByType.getOrDefault("LI", BigDecimal.ZERO))
@@ -879,7 +878,7 @@ public class ReportServiceImpl implements ReportService {
                 .speakingAvg(scoresByType.getOrDefault("SP", BigDecimal.ZERO))
                 .build();
 
-        return StudentPerformanceDTO.ClassDetail.builder()
+        return ClassDetail.builder()
                 .classId(classId)
                 .className((String) firstData.get("class_name"))
                 .classCode((String) firstData.get("class_code"))
@@ -907,8 +906,8 @@ public class ReportServiceImpl implements ReportService {
                 .build();
     }
 
-    private StudentPerformanceDTO.ChallengeScore buildChallengeScore(Map<String, Object> data) {
-        return StudentPerformanceDTO.ChallengeScore.builder()
+    private ChallengeScore buildChallengeScore(Map<String, Object> data) {
+        return ChallengeScore.builder()
                 .challengeId(getLongValue(data, "challenge_id"))
                 .challengeName((String) data.get("challenge_name"))
                 .challengeType((String) data.get("challenge_type"))
@@ -927,7 +926,7 @@ public class ReportServiceImpl implements ReportService {
 
     @Override
     @Transactional(readOnly = true)
-    public ChallengeReportDTO.QuestionStatsReport getQuestionStats(Long challengeId) {
+    public QuestionStatsReport getQuestionStats(Long challengeId) {
         String traceId = TraceUtil.getTraceId();
         log.info("[{}] Getting question stats for challengeId: {}", traceId, challengeId);
 
@@ -944,7 +943,7 @@ public class ReportServiceImpl implements ReportService {
                 .collect(Collectors.groupingBy(m -> getLongValue(m, "question_id")));
 
         // Build question stats với student performances
-        List<ChallengeReportDTO.QuestionStats> questions = questionStatsData.stream()
+        List<QuestionStats> questions = questionStatsData.stream()
                 .map(row -> {
                     Long questionId = getLongValue(row, "question_id");
                     Long totalAttempts = getLongValue(row, "total_attempts");
@@ -958,13 +957,13 @@ public class ReportServiceImpl implements ReportService {
                             : BigDecimal.ZERO;
 
                     // Build student performances cho question này
-                    List<ChallengeReportDTO.StudentQuestionPerformance> studentPerformances =
+                    List<StudentQuestionPerformance> studentPerformances =
                             performancesByQuestion.getOrDefault(questionId, Collections.emptyList())
                                     .stream()
                                     .map(this::buildStudentQuestionPerformance)
                                     .collect(Collectors.toList());
 
-                    return ChallengeReportDTO.QuestionStats.builder()
+                    return QuestionStats.builder()
                             .sectionId(getLongValue(row, "section_id"))
                             .sectionTitle((String) row.get("section_title"))
                             .sectionOrder(getIntValue(row, "section_order"))
@@ -981,7 +980,7 @@ public class ReportServiceImpl implements ReportService {
                 })
                 .collect(Collectors.toList());
 
-        return ChallengeReportDTO.QuestionStatsReport.builder()
+        return QuestionStatsReport.builder()
                 .challengeId(challenge.getId())
                 .challengeName(challenge.getChallengeName())
                 .questions(questions)
@@ -989,7 +988,7 @@ public class ReportServiceImpl implements ReportService {
     }
 
     // Thêm helper method mới
-    private ChallengeReportDTO.StudentQuestionPerformance buildStudentQuestionPerformance(Map<String, Object> data) {
+    private StudentQuestionPerformance buildStudentQuestionPerformance(Map<String, Object> data) {
 
         String submissionStatus = (String) data.get("submission_status");
 
@@ -997,7 +996,7 @@ public class ReportServiceImpl implements ReportService {
         if (submissionStatus == null ||
                 (!submissionStatus.equals("SUBMITTED") && !submissionStatus.equals("GRADED"))) {
 
-            return ChallengeReportDTO.StudentQuestionPerformance.builder()
+            return StudentQuestionPerformance.builder()
                     .userId(getLongValue(data, "user_id"))
                     .fullName((String) data.get("full_name"))
                     .email((String) data.get("email"))
@@ -1021,7 +1020,7 @@ public class ReportServiceImpl implements ReportService {
         // Check xem có đúng hoàn toàn không
         Boolean isCorrect = receivedWeight.compareTo(totalWeight) == 0 && totalWeight.compareTo(BigDecimal.ZERO) > 0;
 
-        return ChallengeReportDTO.StudentQuestionPerformance.builder()
+        return StudentQuestionPerformance.builder()
                 .userId(getLongValue(data, "user_id"))
                 .fullName((String) data.get("full_name"))
                 .email((String) data.get("email"))
@@ -1047,7 +1046,7 @@ public class ReportServiceImpl implements ReportService {
 
     @Override
     @Transactional(readOnly = true)
-    public ClassReportDTO.AtRiskReport getAtRiskStudents(Long classId) {
+    public AtRiskReport getAtRiskStudents(Long classId) {
         String traceId = TraceUtil.getTraceId();
         log.info("[{}] Getting at-risk students for classId: {}", traceId, classId);
 
@@ -1059,15 +1058,15 @@ public class ReportServiceImpl implements ReportService {
                 MIN_CHALLENGES_REQUIRED
         );
 
-        List<ClassReportDTO.AtRiskStudent> atRiskStudents = studentsData.stream()
+        List<AtRiskStudent> atRiskStudents = studentsData.stream()
                 .map(data -> analyzeStudentRisk(data, classId))
                 .filter(student -> !student.getRiskTypes().isEmpty())
-                .sorted(Comparator.comparing(ClassReportDTO.AtRiskStudent::getRiskScore).reversed())
+                .sorted(Comparator.comparing(AtRiskStudent::getRiskScore).reversed())
                 .collect(Collectors.toList());
 
         Map<String, Object> classData = classRepository.getClassWithLevelInfo(classId);
 
-        return ClassReportDTO.AtRiskReport.builder()
+        return AtRiskReport.builder()
                 .classId(classId)
                 .className((String) classData.get("class_name"))
                 .minChallengesRequired(MIN_CHALLENGES_REQUIRED)
@@ -1077,7 +1076,7 @@ public class ReportServiceImpl implements ReportService {
 
     // File: ReportServiceImpl.java - SỬA analyzeStudentRisk
 
-    private ClassReportDTO.AtRiskStudent analyzeStudentRisk(
+    private AtRiskStudent analyzeStudentRisk(
             Map<String, Object> studentData,
             Long classId
     ) {
@@ -1087,7 +1086,7 @@ public class ReportServiceImpl implements ReportService {
         Integer lateCount = getIntValue(studentData, "late_count");
 
         List<String> riskTypes = new ArrayList<>();
-        List<ClassReportDTO.DecliningSkillDetail> decliningSkills = new ArrayList<>();
+        List<DecliningSkillDetail> decliningSkills = new ArrayList<>();
         int riskScore = 0;
 
         // 1. CHECK: 3 bài liền < 6 điểm
@@ -1122,7 +1121,7 @@ public class ReportServiceImpl implements ReportService {
                     riskTypes.add(riskType.name());
                     riskScore += 15;
 
-                    ClassReportDTO.DecliningSkillDetail skillDetail = ClassReportDTO.DecliningSkillDetail.builder()
+                    DecliningSkillDetail skillDetail = DecliningSkillDetail.builder()
                             .skillType(skillType)
                             .skillName(getSkillName(skillType))
                             .latestScore(latestScore.setScale(2, RoundingMode.HALF_UP))
@@ -1135,7 +1134,7 @@ public class ReportServiceImpl implements ReportService {
             }
         }
 
-        return ClassReportDTO.AtRiskStudent.builder()
+        return AtRiskStudent.builder()
                 .userId(userId)
                 .fullName((String) studentData.get("full_name"))
                 .email((String) studentData.get("email"))
