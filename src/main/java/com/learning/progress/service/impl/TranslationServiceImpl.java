@@ -1,7 +1,8 @@
 package com.learning.progress.service.impl;
 
 import com.learning.progress.common.Const;
-import com.learning.progress.dto.ai.*;
+import com.learning.progress.dto.ai.TranslationRequest;
+import com.learning.progress.dto.ai.TranslationResponse;
 import com.learning.progress.exception.ApiException;
 import com.learning.progress.service.TranslationService;
 import com.learning.progress.util.TraceUtil;
@@ -34,10 +35,10 @@ public class TranslationServiceImpl implements TranslationService {
     }
 
     @Override
-    public TranslationResponse translate(String text) {
+    public TranslationResponse translate(TranslationRequest request) {
         String traceId = TraceUtil.getTraceId();
 
-        if (text == null || text.trim().isEmpty()) {
+        if (request.getText() == null || request.getText().trim().isEmpty()) {
             throw new ApiException(Const.VALIDATION.MISSING_FIELD, HttpStatus.BAD_REQUEST.value());
         }
 
@@ -49,7 +50,7 @@ public class TranslationServiceImpl implements TranslationService {
             headers.set("Ocp-Apim-Subscription-Key", translatorKey);
             headers.set("Ocp-Apim-Subscription-Region", translatorRegion);
 
-            List<Map<String, String>> body = List.of(Map.of("text", text));
+            List<Map<String, String>> body = List.of(Map.of("text", request.getText()));
             HttpEntity<List<Map<String, String>>> entity = new HttpEntity<>(body, headers);
 
             ResponseEntity<List> response = restTemplate.exchange(url, HttpMethod.POST, entity, List.class);
@@ -63,7 +64,7 @@ public class TranslationServiceImpl implements TranslationService {
             String translatedText = (String) translations.get(0).get("text");
 
             return TranslationResponse.builder()
-                    .originalText(text)
+                    .originalText(request.getText())
                     .translatedText(translatedText)
                     .fromLanguage("en")
                     .toLanguage("vi")
