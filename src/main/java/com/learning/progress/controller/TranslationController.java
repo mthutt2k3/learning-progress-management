@@ -26,7 +26,7 @@ public class TranslationController {
     @Operation(summary = "Translate text", description = "Translate text from English to Vietnamese using Azure Translator")
     public ResponseEntity<DataResponse<TranslationResponse>> translate(
             @Valid @RequestBody TranslationRequest request) {
-        TranslationResponse response = translationService.translate(request.getText());
+        TranslationResponse response = translationService.translate(request);
         return ResponseEntity.ok(DataResponse.success(response, Const.RESULT_MESSAGE_CODE.RETRIEVE_SUCCESSFUL));
     }
 }

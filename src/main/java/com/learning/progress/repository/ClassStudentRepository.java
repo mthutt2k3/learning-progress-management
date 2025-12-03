@@ -15,7 +15,7 @@ import java.util.Optional;
 public interface ClassStudentRepository extends JpaRepository<ClassStudent, Long> {
     Optional<ClassStudent> findByUserIdAndStatus(Long userId, CommonStatus status);
 
-    @Query("SELECT cs FROM ClassStudent cs WHERE cs.clazz.id = :classId AND cs.status IN :statuses " +
+    @Query("SELECT cs FROM ClassStudent cs WHERE cs.clazz.id = :classId AND cs.status IN :statuses AND cs.deletedAt IS NULL " +
             "AND (LOWER(cs.user.fullName) LIKE LOWER(CONCAT('%', :text, '%')) " +
             "OR LOWER(cs.user.email) LIKE LOWER(CONCAT('%', :text, '%')) " +
             "OR LOWER(cs.user.userName) LIKE LOWER(CONCAT('%', :text, '%')))")
@@ -24,7 +24,7 @@ public interface ClassStudentRepository extends JpaRepository<ClassStudent, Long
                                             @Param("statuses") List<CommonStatus> statuses,
                                             Pageable pageable);
 
-    @Query("SELECT cs FROM ClassStudent cs WHERE cs.clazz.id = :classId AND cs.status IN :statuses")
+    @Query("SELECT cs FROM ClassStudent cs WHERE cs.clazz.id = :classId AND cs.status IN :statuses AND cs.deletedAt IS NULL")
     Page<ClassStudent> findByClassIdAndStatus(@Param("classId") Long classId,
                                               @Param("statuses") List<CommonStatus> statuses,
                                               Pageable pageable);
