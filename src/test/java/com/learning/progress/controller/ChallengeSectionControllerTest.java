@@ -948,6 +948,463 @@ class ChallengeSectionControllerTest {
         verify(sectionService, times(1)).bulkOrderSection(eq(CHALLENGE_ID), anyList());
     }
 
+    // ====================== ADDITIONAL SAVE SECTION TEST CASES ======================
+
+    @Test
+    @DisplayName("46. Save section - invalid enum value for resourceType → 400")
+    void saveSection_invalidEnumResourceType_400() throws Exception {
+        String json = """
+            {
+              "section": { "sectionTitle": "Test", "resourceType": "INVALID_TYPE", "orderNumber": 1 },
+              "questions": [ { "questionText": "Q1", "orderNumber": 1, "questionType": "MCQ", "weight": 1.0, "content": {"data": []} } ]
+            }
+            """;
+
+        doThrow(new ApiException("Invalid enum value: INVALID_TYPE for ResourceType", HttpStatus.BAD_REQUEST.value()))
+                .when(sectionService).saveSection(eq(CHALLENGE_ID), any());
+
+        mockMvc.perform(post("/api/v1/sections/{challengeId}", CHALLENGE_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("Invalid enum value: INVALID_TYPE for ResourceType"));
+
+        verify(sectionService, times(1)).saveSection(eq(CHALLENGE_ID), any());
+    }
+
+    @Test
+    @DisplayName("47. Save section - section with video resourceType → 200")
+    void saveSection_videoResourceType_success() throws Exception {
+        SectionDto sectionDto = new SectionDto(null, "Video Section", "https://example.com/video", "Content", 1, "VIDEO");
+        QuestionDto q = new QuestionDto(null, "Q1", 1, 1.0, "MCQ",
+                new DataContent(List.of(new DataItem("1", "A", true, null))), false);
+        SectionWithQuestionsDto request = new SectionWithQuestionsDto(sectionDto, List.of(q));
+
+        SectionWithQuestionsDto response = SectionWithQuestionsDto.builder()
+                .section(SectionDto.builder().id(SECTION_ID).resourceType("VIDEO").build())
+                .questions(List.of(q))
+                .build();
+
+        when(sectionService.saveSection(eq(CHALLENGE_ID), any())).thenReturn(response);
+
+        mockMvc.perform(post("/api/v1/sections/{challengeId}", CHALLENGE_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.section.resourceType").value("VIDEO"));
+
+        verify(sectionService, times(1)).saveSection(eq(CHALLENGE_ID), any());
+    }
+
+    @Test
+    @DisplayName("48. Save section - section with image resourceType → 200")
+    void saveSection_imageResourceType_success() throws Exception {
+        SectionDto sectionDto = new SectionDto(null, "Image Section", "https://example.com/image.png", "Content", 1, "IMAGE");
+        QuestionDto q = new QuestionDto(null, "Q1", 1, 1.0, "MCQ",
+                new DataContent(List.of(new DataItem("1", "A", true, null))), false);
+        SectionWithQuestionsDto request = new SectionWithQuestionsDto(sectionDto, List.of(q));
+
+        SectionWithQuestionsDto response = SectionWithQuestionsDto.builder()
+                .section(SectionDto.builder().id(SECTION_ID).resourceType("IMAGE").build())
+                .questions(List.of(q))
+                .build();
+
+        when(sectionService.saveSection(eq(CHALLENGE_ID), any())).thenReturn(response);
+
+        mockMvc.perform(post("/api/v1/sections/{challengeId}", CHALLENGE_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.section.resourceType").value("IMAGE"));
+
+        verify(sectionService, times(1)).saveSection(eq(CHALLENGE_ID), any());
+    }
+
+    @Test
+    @DisplayName("49. Save section - multiple questions with different types → 200")
+    void saveSection_multipleQuestionTypes_success() throws Exception {
+        SectionDto sectionDto = new SectionDto(null, "Mixed", null, "Content", 1, "TEXT");
+
+        List<QuestionDto> questions = List.of(
+                new QuestionDto(null, "MCQ Question", 1, 1.0, "MCQ",
+                        new DataContent(List.of(new DataItem("1", "A", true, null))), false),
+                new QuestionDto(null, "TRUE_FALSE Question", 2, 1.0, "TRUE_FALSE",
+                        new DataContent(List.of(new DataItem("1", "True", true, null))), false),
+                new QuestionDto(null, "ESSAY Question", 3, 2.0, "ESSAY",
+                        new DataContent(List.of()), false)
+        );
+
+        SectionWithQuestionsDto request = new SectionWithQuestionsDto(sectionDto, questions);
+        SectionWithQuestionsDto response = SectionWithQuestionsDto.builder()
+                .section(SectionDto.builder().id(SECTION_ID).build())
+                .questions(questions)
+                .build();
+
+        when(sectionService.saveSection(eq(CHALLENGE_ID), any())).thenReturn(response);
+
+        mockMvc.perform(post("/api/v1/sections/{challengeId}", CHALLENGE_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.questions.length()").value(3));
+
+        verify(sectionService, times(1)).saveSection(eq(CHALLENGE_ID), any());
+    }
+
+    @Test
+    @DisplayName("50. Save section - question with negative weight → 400")
+    void saveSection_negativeWeight_400() throws Exception {
+        SectionDto sectionDto = new SectionDto(null, "Test", null, "Content", 1, "TEXT");
+        QuestionDto q = new QuestionDto(null, "Q1", 1, -1.0, "MCQ",
+                new DataContent(List.of(new DataItem("1", "A", true, null))), false);
+        SectionWithQuestionsDto request = new SectionWithQuestionsDto(sectionDto, List.of(q));
+
+        when(sectionService.saveSection(eq(CHALLENGE_ID), any()))
+                .thenThrow(new ApiException("Question weight must be non-negative", HttpStatus.BAD_REQUEST.value()));
+
+        mockMvc.perform(post("/api/v1/sections/{challengeId}", CHALLENGE_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("Question weight must be non-negative"));
+
+        verify(sectionService, times(1)).saveSection(eq(CHALLENGE_ID), any());
+    }
+
+    @Test
+    @DisplayName("51. Save section - question with null orderNumber → 400")
+    void saveSection_nullQuestionOrder_400() throws Exception {
+        SectionDto sectionDto = new SectionDto(null, "Test", null, "Content", 1, "TEXT");
+        QuestionDto q = new QuestionDto(null, "Q1", 0, 1.0, "MCQ",
+                new DataContent(List.of(new DataItem("1", "A", true, null))), false);
+        SectionWithQuestionsDto request = new SectionWithQuestionsDto(sectionDto, List.of(q));
+
+        when(sectionService.saveSection(eq(CHALLENGE_ID), any()))
+                .thenThrow(new ApiException("Question order number is required", HttpStatus.BAD_REQUEST.value()));
+
+        mockMvc.perform(post("/api/v1/sections/{challengeId}", CHALLENGE_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("Question order number is required"));
+
+        verify(sectionService, times(1)).saveSection(eq(CHALLENGE_ID), any());
+    }
+
+    @Test
+    @DisplayName("52. Save section - section with empty sectionsContent → 200")
+    void saveSection_emptySectionsContent_success() throws Exception {
+        SectionDto sectionDto = new SectionDto(null, "Test", null, "", 1, "TEXT");
+        QuestionDto q = new QuestionDto(null, "Q1", 1, 1.0, "MCQ",
+                new DataContent(List.of(new DataItem("1", "A", true, null))), false);
+        SectionWithQuestionsDto request = new SectionWithQuestionsDto(sectionDto, List.of(q));
+
+        SectionWithQuestionsDto response = SectionWithQuestionsDto.builder()
+                .section(SectionDto.builder().id(SECTION_ID).sectionsContent("").build())
+                .questions(List.of(q))
+                .build();
+
+        when(sectionService.saveSection(eq(CHALLENGE_ID), any())).thenReturn(response);
+
+        mockMvc.perform(post("/api/v1/sections/{challengeId}", CHALLENGE_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.section.sectionsContent").value(""));
+
+        verify(sectionService, times(1)).saveSection(eq(CHALLENGE_ID), any());
+    }
+
+    @Test
+    @DisplayName("53. Save section - section with null sectionsContent → 200")
+    void saveSection_nullSectionsContent_success() throws Exception {
+        SectionDto sectionDto = new SectionDto(null, "Test", null, null, 1, "TEXT");
+        QuestionDto q = new QuestionDto(null, "Q1", 1, 1.0, "MCQ",
+                new DataContent(List.of(new DataItem("1", "A", true, null))), false);
+        SectionWithQuestionsDto request = new SectionWithQuestionsDto(sectionDto, List.of(q));
+
+        SectionWithQuestionsDto response = SectionWithQuestionsDto.builder()
+                .section(SectionDto.builder().id(SECTION_ID).sectionsContent(null).build())
+                .questions(List.of(q))
+                .build();
+
+        when(sectionService.saveSection(eq(CHALLENGE_ID), any())).thenReturn(response);
+
+        mockMvc.perform(post("/api/v1/sections/{challengeId}", CHALLENGE_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk());
+
+        verify(sectionService, times(1)).saveSection(eq(CHALLENGE_ID), any());
+    }
+
+    @Test
+    @DisplayName("54. Save section - update existing section, change resourceType → 200")
+    void saveSection_updateResourceType_success() throws Exception {
+        SectionDto sectionDto = new SectionDto(SECTION_ID, "Updated", "https://example.com/video", "Content", 1, "VIDEO");
+        QuestionDto q = new QuestionDto(300L, "Q1", 1, 1.0, "MCQ",
+                new DataContent(List.of(new DataItem("1", "A", true, null))), false);
+        SectionWithQuestionsDto request = new SectionWithQuestionsDto(sectionDto, List.of(q));
+
+        SectionWithQuestionsDto response = SectionWithQuestionsDto.builder()
+                .section(SectionDto.builder().id(SECTION_ID).resourceType("VIDEO").build())
+                .questions(List.of(q))
+                .build();
+
+        when(sectionService.saveSection(eq(CHALLENGE_ID), any())).thenReturn(response);
+
+        mockMvc.perform(post("/api/v1/sections/{challengeId}", CHALLENGE_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.section.resourceType").value("VIDEO"));
+
+        verify(sectionService, times(1)).saveSection(eq(CHALLENGE_ID), any());
+    }
+
+    @Test
+    @DisplayName("55. Save section - update existing, change orderNumber → 200")
+    void saveSection_updateOrderNumber_success() throws Exception {
+        SectionDto sectionDto = new SectionDto(SECTION_ID, "Test", null, "Content", 5, "TEXT");
+        QuestionDto q = new QuestionDto(300L, "Q1", 1, 1.0, "MCQ",
+                new DataContent(List.of(new DataItem("1", "A", true, null))), false);
+        SectionWithQuestionsDto request = new SectionWithQuestionsDto(sectionDto, List.of(q));
+
+        SectionWithQuestionsDto response = SectionWithQuestionsDto.builder()
+                .section(SectionDto.builder().id(SECTION_ID).orderNumber(5).build())
+                .questions(List.of(q))
+                .build();
+
+        when(sectionService.saveSection(eq(CHALLENGE_ID), any())).thenReturn(response);
+
+        mockMvc.perform(post("/api/v1/sections/{challengeId}", CHALLENGE_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.section.orderNumber").value(5));
+
+        verify(sectionService, times(1)).saveSection(eq(CHALLENGE_ID), any());
+    }
+
+    @Test
+    @DisplayName("56. Save section - section with null orderNumber, should use default → 200")
+    void saveSection_nullOrderNumber_success() throws Exception {
+        SectionDto sectionDto = new SectionDto(null, "Test", null, "Content", null, "TEXT");
+        QuestionDto q = new QuestionDto(null, "Q1", 1, 1.0, "MCQ",
+                new DataContent(List.of(new DataItem("1", "A", true, null))), false);
+        SectionWithQuestionsDto request = new SectionWithQuestionsDto(sectionDto, List.of(q));
+
+        SectionWithQuestionsDto response = SectionWithQuestionsDto.builder()
+                .section(SectionDto.builder().id(SECTION_ID).orderNumber(1).build())
+                .questions(List.of(q))
+                .build();
+
+        when(sectionService.saveSection(eq(CHALLENGE_ID), any())).thenReturn(response);
+
+        mockMvc.perform(post("/api/v1/sections/{challengeId}", CHALLENGE_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.section.orderNumber").exists());
+
+        verify(sectionService, times(1)).saveSection(eq(CHALLENGE_ID), any());
+    }
+
+    @Test
+    @DisplayName("57. Save section - MCQ question with no correct answer → 400")
+    void saveSection_mcqNoCorrectAnswer_400() throws Exception {
+        SectionDto sectionDto = new SectionDto(null, "Test", null, "Content", 1, "TEXT");
+        QuestionDto q = new QuestionDto(null, "Q1", 1, 1.0, "MCQ",
+                new DataContent(List.of(
+                        new DataItem("1", "A", false, null),
+                        new DataItem("2", "B", false, null)
+                )), false);
+        SectionWithQuestionsDto request = new SectionWithQuestionsDto(sectionDto, List.of(q));
+
+        when(sectionService.saveSection(eq(CHALLENGE_ID), any()))
+                .thenThrow(new ApiException("MCQ must have at least one correct answer", HttpStatus.BAD_REQUEST.value()));
+
+        mockMvc.perform(post("/api/v1/sections/{challengeId}", CHALLENGE_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("MCQ must have at least one correct answer"));
+
+        verify(sectionService, times(1)).saveSection(eq(CHALLENGE_ID), any());
+    }
+
+    @Test
+    @DisplayName("58. Save section - question with null content → 400")
+    void saveSection_nullQuestionContent_400() throws Exception {
+        SectionDto sectionDto = new SectionDto(null, "Test", null, "Content", 1, "TEXT");
+        QuestionDto q = new QuestionDto(null, "Q1", 1, 1.0, "MCQ", null, false);
+        SectionWithQuestionsDto request = new SectionWithQuestionsDto(sectionDto, List.of(q));
+
+        when(sectionService.saveSection(eq(CHALLENGE_ID), any()))
+                .thenThrow(new ApiException("Question content is required", HttpStatus.BAD_REQUEST.value()));
+
+        mockMvc.perform(post("/api/v1/sections/{challengeId}", CHALLENGE_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("Question content is required"));
+
+        verify(sectionService, times(1)).saveSection(eq(CHALLENGE_ID), any());
+    }
+
+    @Test
+    @DisplayName("59. Save section - question with null questionType → 400")
+    void saveSection_nullQuestionType_400() throws Exception {
+        SectionDto sectionDto = new SectionDto(null, "Test", null, "Content", 1, "TEXT");
+        QuestionDto q = new QuestionDto(null, "Q1", 1, 1.0, null,
+                new DataContent(List.of(new DataItem("1", "A", true, null))), false);
+        SectionWithQuestionsDto request = new SectionWithQuestionsDto(sectionDto, List.of(q));
+
+        when(sectionService.saveSection(eq(CHALLENGE_ID), any()))
+                .thenThrow(new ApiException("Question type is required", HttpStatus.BAD_REQUEST.value()));
+
+        mockMvc.perform(post("/api/v1/sections/{challengeId}", CHALLENGE_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("Question type is required"));
+
+        verify(sectionService, times(1)).saveSection(eq(CHALLENGE_ID), any());
+    }
+
+    @Test
+    @DisplayName("60. Save section - update non-existent section ID → 404")
+    void saveSection_updateNonExistentSection_404() throws Exception {
+        SectionDto sectionDto = new SectionDto(999L, "Test", null, "Content", 1, "TEXT");
+        QuestionDto q = new QuestionDto(null, "Q1", 1, 1.0, "MCQ",
+                new DataContent(List.of(new DataItem("1", "A", true, null))), false);
+        SectionWithQuestionsDto request = new SectionWithQuestionsDto(sectionDto, List.of(q));
+
+        when(sectionService.saveSection(eq(CHALLENGE_ID), any()))
+                .thenThrow(new ApiException(Const.SECTION.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
+
+        mockMvc.perform(post("/api/v1/sections/{challengeId}", CHALLENGE_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error").value(Const.SECTION.NOT_FOUND));
+
+        verify(sectionService, times(1)).saveSection(eq(CHALLENGE_ID), any());
+    }
+
+    @Test
+    @DisplayName("61. Save section - with sectionsUrl → 200")
+    void saveSection_withSectionsUrl_success() throws Exception {
+        SectionDto sectionDto = new SectionDto(null, "Test", "https://example.com/resource", "Content", 1, "TEXT");
+        QuestionDto q = new QuestionDto(null, "Q1", 1, 1.0, "MCQ",
+                new DataContent(List.of(new DataItem("1", "A", true, null))), false);
+        SectionWithQuestionsDto request = new SectionWithQuestionsDto(sectionDto, List.of(q));
+
+        SectionWithQuestionsDto response = SectionWithQuestionsDto.builder()
+                .section(SectionDto.builder()
+                        .id(SECTION_ID)
+                        .sectionsUrl("https://example.com/resource")
+                        .build())
+                .questions(List.of(q))
+                .build();
+
+        when(sectionService.saveSection(eq(CHALLENGE_ID), any())).thenReturn(response);
+
+        mockMvc.perform(post("/api/v1/sections/{challengeId}", CHALLENGE_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.section.sectionsUrl").value("https://example.com/resource"));
+
+        verify(sectionService, times(1)).saveSection(eq(CHALLENGE_ID), any());
+    }
+
+    @Test
+    @DisplayName("62. Save section - very long section title → 200")
+    void saveSection_longTitle_success() throws Exception {
+        String longTitle = "A".repeat(500);
+        SectionDto sectionDto = new SectionDto(null, longTitle, null, "Content", 1, "TEXT");
+        QuestionDto q = new QuestionDto(null, "Q1", 1, 1.0, "MCQ",
+                new DataContent(List.of(new DataItem("1", "A", true, null))), false);
+        SectionWithQuestionsDto request = new SectionWithQuestionsDto(sectionDto, List.of(q));
+
+        SectionWithQuestionsDto response = SectionWithQuestionsDto.builder()
+                .section(SectionDto.builder().id(SECTION_ID).sectionTitle(longTitle).build())
+                .questions(List.of(q))
+                .build();
+
+        when(sectionService.saveSection(eq(CHALLENGE_ID), any())).thenReturn(response);
+
+        mockMvc.perform(post("/api/v1/sections/{challengeId}", CHALLENGE_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.section.sectionTitle").value(longTitle));
+
+        verify(sectionService, times(1)).saveSection(eq(CHALLENGE_ID), any());
+    }
+
+    @Test
+    @DisplayName("63. Save section - question with very high weight → 200")
+    void saveSection_highWeight_success() throws Exception {
+        SectionDto sectionDto = new SectionDto(null, "Test", null, "Content", 1, "TEXT");
+        QuestionDto q = new QuestionDto(null, "Q1", 1, 999.99, "MCQ",
+                new DataContent(List.of(new DataItem("1", "A", true, null))), false);
+        SectionWithQuestionsDto request = new SectionWithQuestionsDto(sectionDto, List.of(q));
+
+        SectionWithQuestionsDto response = SectionWithQuestionsDto.builder()
+                .section(SectionDto.builder().id(SECTION_ID).build())
+                .questions(List.of(q))
+                .build();
+
+        when(sectionService.saveSection(eq(CHALLENGE_ID), any())).thenReturn(response);
+
+        mockMvc.perform(post("/api/v1/sections/{challengeId}", CHALLENGE_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.questions[0].weight").value(999.99));
+
+        verify(sectionService, times(1)).saveSection(eq(CHALLENGE_ID), any());
+    }
+
+    @Test
+    @DisplayName("64. Save section - concurrent modification → 409")
+    void saveSection_concurrentModification_409() throws Exception {
+        SectionDto sectionDto = new SectionDto(SECTION_ID, "Test", null, "Content", 1, "TEXT");
+        QuestionDto q = new QuestionDto(300L, "Q1", 1, 1.0, "MCQ",
+                new DataContent(List.of(new DataItem("1", "A", true, null))), false);
+        SectionWithQuestionsDto request = new SectionWithQuestionsDto(sectionDto, List.of(q));
+
+        when(sectionService.saveSection(eq(CHALLENGE_ID), any()))
+                .thenThrow(new ApiException("Concurrent modification detected", HttpStatus.CONFLICT.value()));
+
+        mockMvc.perform(post("/api/v1/sections/{challengeId}", CHALLENGE_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.error").value("Concurrent modification detected"));
+
+        verify(sectionService, times(1)).saveSection(eq(CHALLENGE_ID), any());
+    }
+
+    @Test
+    @DisplayName("65. Save section - unauthorized user → 401")
+    void saveSection_unauthorized_401() throws Exception {
+        SectionWithQuestionsDto request = createSampleSectionWithQuestions("Test", 1);
+
+        when(sectionService.saveSection(eq(CHALLENGE_ID), any()))
+                .thenThrow(new ApiException("Unauthorized", HttpStatus.UNAUTHORIZED.value()));
+
+        mockMvc.perform(post("/api/v1/sections/{challengeId}", CHALLENGE_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.error").value("Unauthorized"));
+
+        verify(sectionService, times(1)).saveSection(eq(CHALLENGE_ID), any());
+    }
+
     // ====================== HELPER METHOD ======================
 
     private SectionWithQuestionsDto createSampleSectionWithQuestions(String title, int order) {
