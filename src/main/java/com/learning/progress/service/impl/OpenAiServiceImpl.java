@@ -13,7 +13,6 @@ import com.learning.progress.repository.DailyChallengeRepository;
 import com.learning.progress.repository.LevelRepository;
 import com.learning.progress.service.OpenAiService;
 import com.learning.progress.util.FileContentExtractor;
-import com.learning.progress.util.TraceUtil;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
@@ -61,14 +60,20 @@ public class OpenAiServiceImpl implements OpenAiService {
     @Value("${azure.openai.reading-passage.words-per-paragraph}")
     private int wordsPerParagraphDefault;
 
-    @Value("${azure.translator.endpoint}")
-    private String translatorEndpoint;
+    @Value("${azure.openai.connect-timeout-ms:5000}")
+    private int connectTimeoutMs;
 
-    @Value("${azure.translator.key}")
-    private String translatorKey;
+    @Value("${azure.openai.read-timeout-ms:300000}")
+    private int readTimeoutMs;
 
-    @Value("${azure.translator.region}")
-    private String translatorRegion;
+    @Value("${azure.openai.generation-timeout-minutes:10}")
+    private int generationTimeoutMinutes;
+
+    @Value("${azure.openai.batch-retry.max-attempts:3}")
+    private int batchRetryMaxAttempts;
+
+    @Value("${azure.openai.batch-retry.delay-ms:2000}")
+    private int batchRetryDelayMs;
 
     private RestTemplate restTemplate;
 
@@ -91,8 +96,6 @@ public class OpenAiServiceImpl implements OpenAiService {
         log.info("Initialized thread pool with size: {}", threadPoolSize);
 
         SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
-        int connectTimeoutMs = 5000;
-        int readTimeoutMs = 300000;
         requestFactory.setConnectTimeout(connectTimeoutMs);
         requestFactory.setReadTimeout(readTimeoutMs);
 
@@ -195,7 +198,7 @@ public class OpenAiServiceImpl implements OpenAiService {
         );
 
         try {
-            allOf.get(5, TimeUnit.MINUTES);
+            allOf.get(generationTimeoutMinutes, TimeUnit.MINUTES);
         } catch (Exception e) {
             log.error("Error waiting for parallel batch completion: {}", e.getMessage(), e);
             throw new RuntimeException("Failed to generate questions in parallel: " + e.getMessage(), e);
@@ -372,7 +375,7 @@ public class OpenAiServiceImpl implements OpenAiService {
                         futures.toArray(new CompletableFuture[0])
                 );
 
-                allOf.get(5, TimeUnit.MINUTES);
+                allOf.get(generationTimeoutMinutes, TimeUnit.MINUTES);
 
                 List<QuestionWithOrderDto> allGeneratedQuestions = futures.stream()
                         .map(future -> {
@@ -794,7 +797,7 @@ public class OpenAiServiceImpl implements OpenAiService {
     }
 
     private List<QuestionWithOrderDto> generateBatchOfGVQuestions(List<QuestionGenerationTask> batch) {
-        int maxRetries = 2;
+        int maxRetries = batchRetryMaxAttempts;
         int attempt = 0;
         Exception lastException = null;
 
@@ -2235,48 +2238,6 @@ public class OpenAiServiceImpl implements OpenAiService {
         }
 
         return sections;
-    }
-
-    @Override
-    public TranslationResponse translate(String text) {
-        String traceId = TraceUtil.getTraceId();
-
-        if (text == null || text.trim().isEmpty()) {
-            throw new ApiException(Const.VALIDATION.MISSING_FIELD, HttpStatus.BAD_REQUEST.value());
-        }
-
-        try {
-            String url = String.format("%stranslate?api-version=3.0&from=en&to=vi", translatorEndpoint);
-
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            headers.set("Ocp-Apim-Subscription-Key", translatorKey);
-            headers.set("Ocp-Apim-Subscription-Region", translatorRegion);
-
-            List<Map<String, String>> body = List.of(Map.of("text", text));
-            HttpEntity<List<Map<String, String>>> entity = new HttpEntity<>(body, headers);
-
-            ResponseEntity<List> response = restTemplate.exchange(url, HttpMethod.POST, entity, List.class);
-
-            if (response.getStatusCode() != HttpStatus.OK || response.getBody() == null) {
-                throw new ApiException(Const.TRANSLATOR.API_ERROR, HttpStatus.INTERNAL_SERVER_ERROR.value());
-            }
-
-            Map<String, Object> first = (Map<String, Object>) response.getBody().get(0);
-            List<Map<String, Object>> translations = (List<Map<String, Object>>) first.get("translations");
-            String translatedText = (String) translations.get(0).get("text");
-
-            return TranslationResponse.builder()
-                    .originalText(text)
-                    .translatedText(translatedText)
-                    .fromLanguage("en")
-                    .toLanguage("vi")
-                    .build();
-
-        } catch (Exception e) {
-            log.error("[{}] Translation failed: {}", traceId, e.getMessage(), e);
-            throw new ApiException(Const.TRANSLATOR.TRANSLATION_FAILED, HttpStatus.INTERNAL_SERVER_ERROR.value());
-        }
     }
 
     private LevelInfo parseLevelInfo(String level) {

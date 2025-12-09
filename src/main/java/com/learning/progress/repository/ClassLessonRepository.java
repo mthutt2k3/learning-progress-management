@@ -37,5 +37,9 @@ public interface ClassLessonRepository extends JpaRepository<ClassLesson, Long> 
             String classLessonName
     );
 
+    boolean existsByClassChapter_IdAndClassLessonNameIgnoreCaseAndDeletedAtIsNull(
+            Long classChapterId,
+            String classLessonName
+    );
 
 }

@@ -57,4 +57,5 @@ public interface LessonRepository extends JpaRepository<Lesson, Long> {
 
     boolean existsByChapterAndLessonNameIgnoreCaseAndDeletedAtIsNull(Chapter chapter, String lessonName);
 
+    int countByChapterIdAndDeletedAtIsNull(Long chapterId);
 }

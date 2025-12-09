@@ -34,7 +34,7 @@ public class ReportController {
      * -------------------------------------------------------- */
 
     @GetMapping("/class/{classId}/overview")
-    @PreAuthorize("hasAnyRole('TEACHER', 'TEACHING_ASSISTANT')")
+    @PreAuthorize("hasAnyRole('TEACHER', 'TEACHING_ASSISTANT', 'MANAGER')")
     @Operation(
             summary = "Class Overview",
             description = "Lấy thông tin tổng quan của lớp: điểm TB, tỷ lệ hoàn thành DC, số lesson, số thành viên theo role, tổng số DC"
@@ -50,7 +50,7 @@ public class ReportController {
     }
 
     @GetMapping("/class/{classId}/members")
-    @PreAuthorize("hasAnyRole('TEACHER', 'TEACHING_ASSISTANT')")
+    @PreAuthorize("hasAnyRole('TEACHER', 'TEACHING_ASSISTANT', 'MANAGER')")
     @Operation(
             summary = "Members Detail",
             description = "Chi tiết thành viên: biểu đồ tròn phân bố role, hoạt động của teacher/TA (giao bài, chấm bài), danh sách học sinh xếp hạng"
@@ -65,7 +65,7 @@ public class ReportController {
     }
 
     @GetMapping("/class/{classId}/challenges/skill")
-    @PreAuthorize("hasAnyRole('TEACHER', 'TEACHING_ASSISTANT')")
+    @PreAuthorize("hasAnyRole('TEACHER', 'TEACHING_ASSISTANT', 'MANAGER')")
     @Operation(
             summary = "Challenge Stats by Skill",
             description = "Biểu đồ cột chồng + đường theo skill: số HS nộp đúng hạn/muộn/chưa nộp và điểm TB của từng DC (chỉ DC FINISHED)"
@@ -82,7 +82,7 @@ public class ReportController {
     }
 
     @GetMapping("/class/{classId}/challenges/progress")
-    @PreAuthorize("hasAnyRole('TEACHER', 'TEACHING_ASSISTANT')")
+    @PreAuthorize("hasAnyRole('TEACHER', 'TEACHING_ASSISTANT', 'MANAGER')")
     @Operation(
             summary = "Challenge Progress by All Skills",
             description = "Tiến trình DC theo tất cả 5 skill: số lượng và % DC theo từng status (DRAFT, PUBLISHED, IN_PROGRESS, FINISHED)"
@@ -102,7 +102,7 @@ public class ReportController {
      * -------------------------------------------------------- */
 
     @GetMapping("/challenge/{challengeId}/overview")
-    @PreAuthorize("hasAnyRole('TEACHER', 'TEACHING_ASSISTANT')")
+    @PreAuthorize("hasAnyRole('TEACHER', 'TEACHING_ASSISTANT', 'MANAGER')")
     @Operation(
             summary = "Challenge Overview",
             description = "Tổng quan DC: điểm TB, điểm cao nhất/thấp nhất, số HS hoàn thành/nộp muộn/chưa làm"
@@ -118,7 +118,7 @@ public class ReportController {
     }
 
     @GetMapping("/challenge/{challengeId}/students")
-    @PreAuthorize("hasAnyRole('TEACHER', 'TEACHING_ASSISTANT')")
+    @PreAuthorize("hasAnyRole('TEACHER', 'TEACHING_ASSISTANT', 'MANAGER')")
     @Operation(
             summary = "Student Performance List",
             description = "Danh sách học sinh với điểm và thời gian làm bài (mặc định sắp xếp theo điểm)"
@@ -134,7 +134,7 @@ public class ReportController {
     }
 
     @GetMapping("/challenge/{challengeId}/chart")
-    @PreAuthorize("hasAnyRole('TEACHER', 'TEACHING_ASSISTANT')")
+    @PreAuthorize("hasAnyRole('TEACHER', 'TEACHING_ASSISTANT', 'MANAGER')")
     @Operation(
             summary = "Challenge Chart Data",
             description = "Dữ liệu biểu đồ cột + đường: điểm và thời gian hoàn thành của từng học sinh"
@@ -154,7 +154,7 @@ public class ReportController {
      * -------------------------------------------------------- */
 
     @GetMapping("/student/overview")
-    @PreAuthorize("hasAnyRole('STUDENT', 'TEST_TAKER', 'TEACHER', 'TEACHING_ASSISTANT')")
+    @PreAuthorize("hasAnyRole('STUDENT', 'TEST_TAKER', 'TEACHER', 'TEACHING_ASSISTANT', 'MANAGER')")
     @Operation(
             summary = "Student Overview",
             description = "Tổng quan của học sinh: thời gian bắt đầu học, level hiện tại, lớp hiện tại, tỷ lệ làm DC"
@@ -170,7 +170,7 @@ public class ReportController {
     }
 
     @GetMapping("/student/level-history")
-    @PreAuthorize("hasAnyRole('STUDENT', 'TEST_TAKER', 'TEACHER', 'TEACHING_ASSISTANT')")
+    @PreAuthorize("hasAnyRole('STUDENT', 'TEST_TAKER', 'TEACHER', 'TEACHING_ASSISTANT', 'MANAGER')")
     @Operation(
             summary = "Student Level History",
             description = "Lịch sử các level đã học: thông tin level, các lớp đã học, điểm TB theo từng loại DC"
@@ -186,7 +186,7 @@ public class ReportController {
     }
 
     @GetMapping("/student/class/{classId}/challenges")
-    @PreAuthorize("hasAnyRole('STUDENT', 'TEST_TAKER', 'TEACHER', 'TEACHING_ASSISTANT')")
+    @PreAuthorize("hasAnyRole('STUDENT', 'TEST_TAKER', 'TEACHER', 'TEACHING_ASSISTANT', 'MANAGER')")
     @Operation(
             summary = "Student Class Challenge Detail",
             description = "Chi tiết DC của học sinh trong 1 lớp: list DC kèm điểm, type, status, tỷ lệ hoàn thành đúng hạn"
@@ -203,7 +203,7 @@ public class ReportController {
     }
 
     @GetMapping("/challenge/{challengeId}/question-stats")
-    @PreAuthorize("hasAnyRole('TEACHER', 'TEACHING_ASSISTANT')")
+    @PreAuthorize("hasAnyRole('TEACHER', 'TEACHING_ASSISTANT', 'MANAGER')")
     @Operation(
             summary = "Question Statistics",
             description = "Thống kê từng câu hỏi: số lần làm và tỷ lệ đúng"
@@ -219,7 +219,7 @@ public class ReportController {
     }
 
     @GetMapping("/class/{classId}/at-risk")
-    @PreAuthorize("hasAnyRole('TEACHER', 'TEACHING_ASSISTANT')")
+    @PreAuthorize("hasAnyRole('TEACHER', 'TEACHING_ASSISTANT', 'MANAGER')")
     @Operation(
             summary = "At-Risk Students Alert",
             description = "Cảnh báo học sinh có nguy cơ: 3 bài liền < 6đ, nộp muộn >= 50%, cheat nhiều, giảm điểm liên tục theo skill"
