@@ -12,6 +12,7 @@ import com.learning.progress.repository.*;
 import com.learning.progress.service.*;
 import com.learning.progress.util.*;
 import jakarta.persistence.EntityManager;
+import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -665,6 +666,11 @@ public class UserServiceImpl implements UserService {
                 break;
             }
 
+            if (record.getEmail() == null || record.getEmail().isBlank()) {
+                firstError = String.format(Const.IMPORT_STUDENT.ROW_EMAIL_REQUIRED, row);
+                break;
+            }
+
             // Full name
             if (record.getFullName() == null || record.getFullName().trim().isEmpty()) {
                 firstError = String.format(Const.IMPORT_STUDENT.ROW_FULL_NAME_REQUIRED, row);
@@ -704,6 +710,15 @@ public class UserServiceImpl implements UserService {
                 boolean levelExists = levelRepository.findByLevelCodeIgnoreCase(record.getLevelCode()).isPresent();
                 if (!levelExists) {
                     firstError = String.format(Const.IMPORT_STUDENT.ROW_LEVEL_NOT_FOUND, row, record.getLevelCode());
+                    break;
+                }
+            }
+
+            if (record.getDateOfBirth() != null) {
+                try {
+                    DataUtil.validateDateOfBirth(record.getDateOfBirth());
+                } catch (ApiException ex) {
+                    firstError = String.format(Const.IMPORT_STUDENT.ROW_INVALID_DOB, row);
                     break;
                 }
             }
@@ -813,6 +828,15 @@ public class UserServiceImpl implements UserService {
 
                 firstError = String.format(Const.IMPORT_TEACHER.ROW_INVALID_GENDER, row, record.getGender());
                 break;
+            }
+
+            if (record.getDateOfBirth() != null) {
+                try {
+                    DataUtil.validateDateOfBirth(record.getDateOfBirth());
+                } catch (ApiException ex) {
+                    firstError = String.format(Const.IMPORT_STUDENT.ROW_INVALID_DOB, row);
+                    break;
+                }
             }
         }
 
@@ -1434,6 +1458,13 @@ public class UserServiceImpl implements UserService {
                         errors.append("• Level Code không tồn tại: " + record.getLevelCode() + "\n");
                     }
                 }
+                if (record.getDateOfBirth() != null) {
+                    try {
+                        DataUtil.validateDateOfBirth(record.getDateOfBirth());
+                    } catch (ApiException ex) {
+                        errors.append("• Date of bird phải nằm trong khoảng độ tuổi từ 3 đến 100." + "\n");
+                    }
+                }
 
                 if (errors.length() > 0) {
                     validatedRow.setValid(false);
@@ -1512,6 +1543,13 @@ public class UserServiceImpl implements UserService {
                 if (record.getGender() != null && !record.getGender().trim().isEmpty()) {
                     if (!EnumUtil.isValidEnum(Gender.class, record.getGender())) {
                         errors.append("• Gender không hợp lệ\n");
+                    }
+                }
+                if (record.getDateOfBirth() != null) {
+                    try {
+                        DataUtil.validateDateOfBirth(record.getDateOfBirth());
+                    } catch (ApiException ex) {
+                        errors.append("• Date of bird phải nằm trong khoảng độ tuổi từ 3 đến 100." + "\n");
                     }
                 }
 

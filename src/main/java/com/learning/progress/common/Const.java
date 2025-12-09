@@ -160,6 +160,7 @@ public class Const {
         public static final String UNHANDLED_IN_SYNC_REQUEST = "The following chapters are not handled in sync request: %s. FE must include all active chapters!";
         public static final String NON_DELETED_COUNT_MISMATCH = "Number of non-deleted chapters does not match! Expected: %d, Actual: %d";
         public static final String ORDER_NUMBER_SEQUENCE_INVALID_VN = "Order numbers must be sequential from 1 to %d. Current: %s";
+        public static final String IMPORT_EXCEEDS_MAX_CHAPTERS = "Import failed: cannot add %d chapters. Syllabus already has %d → total would be %d (maximum allowed: 100 per syllabus)";
     }
 
     public static class LESSON {
@@ -193,6 +194,7 @@ public class Const {
 
         // New: Vietnamese/localized validation message for lesson content length
         public static final String LESSON_CONTENT_TOO_LONG_VN = "Nội dung của lesson không được vượt quá 1000 ký tự";
+        public static final String IMPORT_EXCEEDS_MAX_LESSONS_PER_CHAPTER = "Import failed: chapter '%s' would have %d lessons after import (currently %d), maximum allowed is 100";
     }
     public static class CHALLENGE {
         // validation / not found
@@ -412,6 +414,9 @@ public class Const {
         public static final String VALIDATION_ORDER_NUMBER_POSITIVE = "• Order Number must be positive: %s";
         public static final String VALIDATION_ORDER_NUMBER_DUPLICATE_IN_FILE = "• Duplicate Order Number in file: %s";
         public static final String VALIDATION_ORDER_SEQUENCE_GAP = "• Order Number not sequential from 1 to %d. Missing: %s";
+        // In your Const.CLASS_LESSON class
+        public static final String LESSON_NAME_DUPLICATE_IN_EXCEL = "Lesson name '%s' is duplicated in the Excel file (chapter %s)";
+        public static final String LESSON_NAME_ALREADY_EXISTS = "Lesson name '%s' already exists in chapter '%s'";
     }
 
     public static class CLASS_CHAPTER {
@@ -506,6 +511,7 @@ public class Const {
         public static final String ROW_INVALID_GENDER = "Row %d: Invalid gender: %s";
         public static final String ROW_INVALID_PARENT_EMAIL = "Row %d: Invalid parent email: %s";
         public static final String ROW_LEVEL_NOT_FOUND = "Row %d: Level not found with code: %s";
+        public static final String ROW_INVALID_DOB = "Row %d: Date of birth must be between 3 and 100 years old";
     }
 
     public static class IMPORT_TEACHER {
@@ -684,7 +690,7 @@ public class Const {
         public static final String STUDENT_NOT_FOUND = "Student not found in class";
         public static final String DUPLICATE_ID = "Duplicate user IDs found in request: %s";
         public static final String STUDENT_LIMIT_EXCEEDED = "Cannot add more than %d students. Current: %d, Requested: %d";
-        public static final String USER_EXISTS = "User %d is already active in classes %s";
+        public static final String USER_EXISTS = "User %s is already active in classes %s";
         public static final String USER_ALREADY_ENROLLED = "Some students are already active in other classes: ";
         public static final String USERS_ALREADY_ACTIVE_IN_CLASS = "Users %s are already active in the class";
         public static final String ADD_STUDENT_SUCCESSFULLY = "Added %d student(s) to class '%s': %s";
@@ -836,7 +842,7 @@ public class Const {
         public static final String MANUAL_GRADE_NOTIFICATION_TEMPLATE = "Bài làm của bạn cho bài \"%s\" đã được chấm. Điểm: %s";
 
         public static final String PER_QUESTION_GRADE_NOTIFICATION_TITLE = "Cập nhật điểm câu hỏi";
-        public static final String PER_QUESTION_GRADE_NOTIFICATION_TEMPLATE = "Một câu hỏi trong bài làm của bạn đã được chấm. SubmissionId=%d";
+        public static final String PER_QUESTION_GRADE_NOTIFICATION_TEMPLATE = "Một câu hỏi trong bài \"%s\" của bạn đã được chấm.";
 
         // New validation messages for DTOs (used by Grade* DTOs)
         public static final String RECEIVED_WEIGHT_REQUIRED = "receivedWeight is required";

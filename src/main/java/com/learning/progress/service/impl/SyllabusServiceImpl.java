@@ -129,7 +129,7 @@ public class SyllabusServiceImpl implements SyllabusService {
         log.info("[{}] enter traceId={} syllabusId={} syllabusName={}", method, traceId, id, request.getSyllabusName());
 
         String syllabusNameNormalized = DataUtil.normalize(request.getSyllabusName());
-        if (syllabusRepository.existsBySyllabusNameIgnoreCaseAndIdNot(syllabusNameNormalized, id)) {
+        if (syllabusRepository.existsBySyllabusNameIgnoreCaseAndIdNotAndDeletedAtIsNull(syllabusNameNormalized, id)) {
             log.error("[{}] traceId={} duplicate syllabus name for update: {}", method, traceId, syllabusNameNormalized);
             throw new ApiException(Const.SYLLABUS.EXIST_NAME, HttpStatus.BAD_REQUEST.value());
         }

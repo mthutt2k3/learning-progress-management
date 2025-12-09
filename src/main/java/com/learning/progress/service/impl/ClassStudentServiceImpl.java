@@ -195,11 +195,11 @@ public class ClassStudentServiceImpl implements ClassStudentService {
 
         // 6. Prevent enrolling in multiple active classes
         List<ClassStudent> activeEnrollments = classStudentRepository.findByUserIdInAndStatus(userIds, CommonStatus.ACTIVE);
-        Map<Long, List<Long>> userToOtherClasses = activeEnrollments.stream()
+        Map<String, List<String>> userToOtherClasses = activeEnrollments.stream()
                 .filter(cs -> !cs.getClazz().getId().equals(classId))
                 .collect(Collectors.groupingBy(
-                        cs -> cs.getUser().getId(),
-                        Collectors.mapping(cs -> cs.getClazz().getId(), Collectors.toList())
+                        cs -> cs.getUser().getFullName(),
+                        Collectors.mapping(cs -> cs.getClazz().getClassName(), Collectors.toList())
                 ));
 
         if (!userToOtherClasses.isEmpty()) {

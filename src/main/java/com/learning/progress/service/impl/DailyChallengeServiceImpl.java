@@ -123,7 +123,8 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
 
         Pageable pageable = PageRequest.of(page, size);
 
-        boolean isTeacher = appValidator.hasRole(RoleName.TEACHER);
+        boolean isTeacher = appValidator.hasRole(RoleName.TEACHER)
+                || appValidator.hasRole(RoleName.TEACHING_ASSISTANT);
         Page<ClassLesson> lessonPage = dailyChallengeRepository.findLessonsWithChallengesByClassId(
                 classId, (text == null || text.isBlank()) ? "" : text, isTeacher, pageable);
 
@@ -215,7 +216,7 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
         // - Once CLOSED, teacher cannot change endDate.
         // ✅ Start date must be >= now
         OffsetDateTime now = OffsetDateTime.now();
-        if (challenge.getChallengeStatus() == ChallengeStatus.DRAFT && challenge.getStartDate().isBefore(now)) {
+        if (challenge.getChallengeStatus() == ChallengeStatus.DRAFT && challenge.getStartDate().toInstant().isBefore(now.toInstant())) {
             throw badRequest(Const.CHALLENGE.START_DATE_MUST_BE_FUTURE);
         }
         if ((challenge.getChallengeStatus() == ChallengeStatus.IN_PROGRESS
@@ -227,7 +228,7 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
 
         if (challenge.getChallengeStatus() == ChallengeStatus.FINISHED
                 && dto.getEndDate() != null
-                && !dto.getEndDate().equals(challenge.getEndDate())) {
+                && !dto.getEndDate().toInstant().equals(challenge.getEndDate().toInstant())) {
             throw badRequest(Const.CHALLENGE.CANNOT_CHANGE_END_DATE);
         }
 

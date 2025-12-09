@@ -223,6 +223,22 @@ public class LessonServiceImpl implements LessonService {
         List<SyncLessonRequest> newRequests = nonDeletedRequests.stream().filter(req -> req.getId() == null).collect(Collectors.toList());
         log.info("[{}] traceId={} willDeleteIds={} willUpdateIds={} willCreateCount={}", method, traceId, toDeleteIds, toUpdateIds, newRequests.size());
 
+        int currentCount = existingActiveLessons.size();
+        int deleteCount = requestDeleteIds.size();
+        int newCount = newRequests.size();
+
+        int finalLessonCount = currentCount - deleteCount + newCount;
+
+        if (finalLessonCount > 100) {
+            log.error("[{}] traceId={} syncLessons failed: resulting lesson count {} exceeds maximum of 100 (current={}, delete={}, new={})",
+                    method, traceId, finalLessonCount, currentCount, deleteCount, newCount);
+
+            throw new ApiException(
+                    String.format("Cannot sync lessons: resulting number of lessons (%d) exceeds the maximum of 100 per chapter", finalLessonCount),
+                    HttpStatus.BAD_REQUEST.value()
+            );
+        }
+
         // Process DELETE
         for (Long deleteId : requestDeleteIds) {
             Lesson lesson = lessonRepository.findById(deleteId)
@@ -475,6 +491,16 @@ public class LessonServiceImpl implements LessonService {
 
             log.info("[{}] traceId={} Validation passed for chapterCode={}: total lessons={}", method, traceId, chapterCode, lessonSize);
 
+            int currentActiveLessonsInChapter = lessonRepository.countByChapterIdAndDeletedAtIsNull(chapter.getId());
+            int importingCount = lessons.size();
+            int finalTotal = currentActiveLessonsInChapter + importingCount;
+
+            if (finalTotal > 100) {
+                throw new ApiException(
+                        String.format(Const.LESSON.IMPORT_EXCEEDS_MAX_LESSONS_PER_CHAPTER, chapterCode, finalTotal, currentActiveLessonsInChapter),
+                        HttpStatus.BAD_REQUEST.value()
+                );
+            }
             // 4. Tạo mới lessons
             for (ImportLessonDTO req : lessons) {
                 Lesson newLesson = new Lesson();
