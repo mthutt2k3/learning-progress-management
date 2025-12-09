@@ -414,6 +414,28 @@ public class ClassLessonServiceImpl implements ClassLessonService {
                 }
             }
 
+            Set<String> lessonNamesInExcel = new HashSet<>();
+            for (ImportLessonDTO req : lessons) {
+                String name = req.getLessonName().trim();
+
+                // Check trùng trong file Excel
+                if (!lessonNamesInExcel.add(name)) {
+                    throw new ApiException(
+                            String.format(Const.CLASS_LESSON.LESSON_NAME_DUPLICATE_IN_EXCEL, name, chapterCode),
+                            HttpStatus.BAD_REQUEST.value());
+                }
+
+                // Check trùng với lesson đã tồn tại trong chapter này (trong DB)
+                boolean existsInDb = classLessonRepository.existsByClassChapter_IdAndClassLessonNameIgnoreCaseAndDeletedAtIsNull(
+                        chapter.getId(), name);
+
+                if (existsInDb) {
+                    throw new ApiException(
+                            String.format(Const.CLASS_LESSON.LESSON_NAME_ALREADY_EXISTS, name, chapterCode),
+                            HttpStatus.BAD_REQUEST.value());
+                }
+            }
+
             // 3. Validate order numbers
             Set<Integer> orderNumbers = lessons.stream()
                     .map(ImportLessonDTO::getOrderNumber)

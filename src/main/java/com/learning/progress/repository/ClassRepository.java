@@ -78,4 +78,6 @@ public interface ClassRepository extends JpaRepository<Clazz, Long> {
     Long countActiveStudentsByClassId(@Param("classId") Long classId);
 
     List<Clazz> findByStatusInAndDeletedAtIsNull(List<ClassStatus> statuses);
+
+    boolean existsByClassNameIgnoreCaseAndIdNotAndDeletedAtIsNull(String classNameNormalized, Long id);
 }

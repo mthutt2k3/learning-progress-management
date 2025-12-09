@@ -216,19 +216,6 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
         long totalMs = (System.nanoTime() - startNs) / 1_000_000;
         log.info("[{}] [{}] exit submissionId={} totalMs={} achieved={} maxPossible={} rawScore={}",
                 traceId, method, submissionId, totalMs, autoData.totalAchieved(), autoData.maxPossible(), autoData.rawScore());
-
-        // notify student about auto grading
-        try {
-            if (submission.getUser() != null && submission.getUser().getId() != null) {
-                String title = Const.GRADING.AUTO_GRADE_NOTIFICATION_TITLE;
-                String message = String.format(Const.GRADING.AUTO_GRADE_NOTIFICATION_TEMPLATE,
-                        challenge != null ? challenge.getChallengeName() : "", autoData.rawScore());
-                notificationService.createNotifications(submission.getUser().getId(), null, title, message, null, null);
-                log.debug("[{}] [{}] sent auto-grade notification userId={} submissionId={}", traceId, method, submission.getUser().getId(), submissionId);
-            }
-        } catch (Exception ex) {
-            log.debug("[{}] [{}] Failed to send autoGrade notification for submissionId={} error={}", traceId, method, submissionId, ex.getMessage());
-        }
     }
 
     private boolean isAlreadyFinalized(SubmissionDailyChallenge submission) {
@@ -593,7 +580,7 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
         try {
             if (submission.getUser() != null && submission.getUser().getId() != null) {
                 String title = Const.GRADING.PER_QUESTION_GRADE_NOTIFICATION_TITLE;
-                String message = String.format(Const.GRADING.PER_QUESTION_GRADE_NOTIFICATION_TEMPLATE, submission.getId());
+                String message = String.format(Const.GRADING.PER_QUESTION_GRADE_NOTIFICATION_TEMPLATE, submission.getChallenge().getChallengeName());
                 notificationService.createNotifications(submission.getUser().getId(), null, title, message, null, null);
                 log.debug("[{}] [{}] sent per-question notification userId={} submissionId={} sqId={}", traceId, method, submission.getUser().getId(), submission.getId(), submissionQuestionId);
             }

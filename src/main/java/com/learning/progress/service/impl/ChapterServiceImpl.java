@@ -321,6 +321,20 @@ public class ChapterServiceImpl implements ChapterService {
             throw new ApiException(String.format(Const.CHAPTER.CHAPTER_COUNT_MISMATCH, finalCount, maxChaptersPerSyllabus), HttpStatus.BAD_REQUEST.value());
         }
 
+        int currentActiveCount = existingActiveChapters.size();
+        int deletedCount = requestDeleteIds.size();
+        int newCount = newRequests.size();
+
+        int finalChapterCount = currentActiveCount - deletedCount + newCount;
+
+        if (finalChapterCount > 100) {
+            log.error("[{}] traceId={} sync failed: resulting chapter count {} exceeds maximum allowed 100",
+                    "(current={}, delete={}, new={})",
+                    method, traceId, finalChapterCount, currentActiveCount, deletedCount, newCount);
+
+            throw new ApiException(String.format(Const.CHAPTER.CHAPTER_COUNT_MISMATCH, finalChapterCount, maxChaptersPerSyllabus), HttpStatus.BAD_REQUEST.value());
+        }
+
         // 7. Process DELETE (chỉ cần ID)
         for (SyncChapterRequest deleteReq : deleteRequests) {
             Chapter chapter = chapterRepository.findById(deleteReq.getId())
@@ -428,6 +442,18 @@ public class ChapterServiceImpl implements ChapterService {
                 });
 
         List<Chapter> existingChapters = chapterRepository.findBySyllabusAndDeletedAtIsNullOrderByOrderNumberAsc(syllabus);
+
+        int currentCount = existingChapters.size();
+        int newCount = importList.size();
+        int totalAfterImport = currentCount + newCount;
+
+        if (totalAfterImport > 100) {
+            throw new ApiException(
+                    String.format(Const.CHAPTER.IMPORT_EXCEEDS_MAX_CHAPTERS, newCount, currentCount, totalAfterImport),
+                    HttpStatus.BAD_REQUEST.value()
+            );
+        }
+
         int lastOrderNumber = existingChapters.isEmpty() ? 0 : existingChapters.get(existingChapters.size() - 1).getOrderNumber();
 
         int totalChaptersAfterImport = existingChapters.size() + importList.size();
