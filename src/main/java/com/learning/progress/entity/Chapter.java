@@ -1,0 +1,42 @@
+package com.learning.progress.entity;
+
+import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.experimental.SuperBuilder;
+import org.hibernate.annotations.OnDelete;
+import org.hibernate.annotations.OnDeleteAction;
+import org.hibernate.annotations.Where;
+
+import java.util.List;
+
+@SuperBuilder
+@NoArgsConstructor
+@AllArgsConstructor
+@Getter
+@Setter
+@Entity
+@Table(name = "chapters")
+public class Chapter extends BaseEntity{
+    
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @OnDelete(action = OnDeleteAction.CASCADE)
+    @JoinColumn(name = "syllabus_id", nullable = false)
+    private Syllabus syllabus;
+
+    @Column(name = "chapter_name", nullable = false, length = 100)
+    private String chapterName;
+
+    @Column(name = "order_number", nullable = false)
+    private Integer orderNumber;
+
+    @Column(name = "chapter_code", length = 20)
+    private String chapterCode;
+
+    @OneToMany(mappedBy = "chapter", fetch = FetchType.LAZY, cascade = CascadeType.ALL)
+    @Where(clause = "deleted_at IS NULL")
+    private List<Lesson> lessons;
+
+}

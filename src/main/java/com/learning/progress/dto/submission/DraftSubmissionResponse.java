@@ -1,0 +1,40 @@
+package com.learning.progress.dto.submission;
+
+import com.learning.progress.common.QuestionType;
+import com.learning.progress.common.SubmissionStatus;
+import com.learning.progress.dto.challenge.section.SectionDto;
+import com.learning.progress.dto.challenge.section.StudentDataContent;
+import lombok.*;
+
+import java.util.ArrayList;
+import java.util.List;
+
+@Getter
+@Setter
+@Builder
+@AllArgsConstructor
+@NoArgsConstructor
+public class DraftSubmissionResponse {
+    private Long challengeId;
+    private Long submissionChallengeId;
+    private SubmissionStatus status;
+    private List<SectionDraftDTO> sectionDetails = new ArrayList<>();
+
+    @Getter @Setter
+    public static class SectionDraftDTO {
+        private SectionDto section;
+        private List<QuestionDraftDTO> questions;
+    }
+
+    @Getter @Setter
+    public static class QuestionDraftDTO {
+        private Long questionId;
+        private Long submissionQuestionId;
+        private String questionText;
+        private int orderNumber;
+        private Double score;
+        private QuestionType questionType;
+        private StudentDataContent content;
+        private AnswerContent submittedContent;
+    }
+}

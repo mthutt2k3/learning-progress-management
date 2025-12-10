@@ -1,0 +1,48 @@
+package com.learning.progress.dto.ai;
+
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.learning.progress.common.Const;
+import com.learning.progress.dto.challenge.section.SectionDto;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.*;
+import lombok.Data;
+
+import java.util.List;
+
+@Data
+@JsonIgnoreProperties(ignoreUnknown = true)
+public class GenerateContentBasedQuestionsRequest {
+
+    @NotNull(message = Const.AI.CHALLENGE_ID_REQUIRED)
+    private Long challengeId;
+
+    @NotNull(message = Const.AI.SECTIONS_REQUIRED)
+    @NotEmpty(message = Const.AI.AT_LEAST_ONE_SECTION_REQUIRED)
+    private List<SectionWithConfig> sections;
+
+    private String description; // Optional additional context for AI
+
+    @NotBlank(message = Const.AI.LEVEL_REQUIRED)
+    private String level;
+
+    @Data
+    public static class SectionWithConfig {
+        @NotNull(message = Const.AI.SECTION_REQUIRED)
+        @Valid
+        private SectionDto section; // Must contain sectionTitle, sectionsContent, resourceType
+
+        @NotNull(message = Const.AI.QUESTION_TYPE_CONFIGS_REQUIRED)
+        @NotEmpty(message = Const.AI.AT_LEAST_ONE_QUESTION_TYPE_CONFIG_REQUIRED)
+        private List<QuestionTypeConfig> questionTypeConfigs;
+    }
+
+    @Data
+    public static class QuestionTypeConfig {
+        @NotNull(message = Const.AI.QUESTION_TYPE_REQUIRED)
+        private String questionType; // e.g. "MULTIPLE_CHOICE", "FILL_IN_THE_BLANK"
+
+        @NotNull(message = Const.AI.NUMBER_OF_QUESTIONS_REQUIRED)
+        @Min(value = 1, message = Const.AI.NUMBER_OF_QUESTIONS_MIN)
+        private Integer numberOfQuestions; // How many questions of this type
+    }
+}

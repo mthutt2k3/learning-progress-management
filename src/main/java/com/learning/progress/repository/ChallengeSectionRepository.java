@@ -1,0 +1,49 @@
+package com.learning.progress.repository;
+
+import com.learning.progress.entity.ChallengeSection;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+
+import java.util.Collection;
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
+
+public interface ChallengeSectionRepository extends JpaRepository<ChallengeSection, Long> {
+
+    /**
+     * Find a ChallengeSection by ID where deletedAt is null.
+     *
+     * @param id The ID of the ChallengeSection.
+     * @return Optional containing the ChallengeSection if found and not deleted.
+     */
+    Optional<ChallengeSection> findByIdAndDeletedAtIsNull(Long id);
+
+    /**
+     * Find ChallengeSections by challenge ID and text search in sectionTitle or sectionsContent, with soft deletion check.
+     *
+     * @param challengeId The ID of the DailyChallenge to filter by.
+     * @param text        The search text to match against sectionTitle or sectionsContent.
+     * @param pageable    Pagination and sorting information.
+     * @return A Page of ChallengeSections matching the criteria.
+     */
+    @Query("SELECT s FROM ChallengeSection s WHERE s.challenge.id = :challengeId AND s.deletedAt IS NULL " +
+            "AND (:text IS NULL OR LOWER(s.sectionTitle) LIKE LOWER(CONCAT('%', :text, '%')) " +
+            "OR LOWER(s.sectionsContent) LIKE LOWER(CONCAT('%', :text, '%'))) order by s.orderNumber asc ")
+    Page<ChallengeSection> findByChallengeIdAndTextAndDeletedAtIsNull(@Param("challengeId") Long challengeId, @Param("text") String text, Pageable pageable);
+
+    List<ChallengeSection> findByChallengeIdAndDeletedAtIsNullOrderByOrderNumberAsc(Long challengeId);
+
+    @Query("SELECT s FROM ChallengeSection s " +
+            "JOIN FETCH s.questions q " +
+            "WHERE s.challenge.id = :challengeId " +
+            "AND s.deletedAt IS NULL " +
+            "AND q.deletedAt IS NULL")
+    List<ChallengeSection> findByChallengeIdWithQuestions(@Param("challengeId") Long challengeId);
+
+    Collection<ChallengeSection> findByIdInAndDeletedAtIsNull(Set<Long> allSectionIds);
+
+}
