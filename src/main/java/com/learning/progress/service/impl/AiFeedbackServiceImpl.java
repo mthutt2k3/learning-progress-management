@@ -69,9 +69,10 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
 
     private final OpenAiService openAiService;
 
-    public AiFeedbackServiceImpl(OpenAiService openAiService, SubmissionQuestionRepository submissionQuestionRepository) {
+    public AiFeedbackServiceImpl(OpenAiService openAiService, SubmissionQuestionRepository submissionQuestionRepository, RestTemplate restTemplate) {
         this.submissionQuestionRepository = submissionQuestionRepository;
         this.openAiService = openAiService;
+        this.restTemplate = restTemplate;
     }
 
     @Override
