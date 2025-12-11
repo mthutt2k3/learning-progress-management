@@ -593,7 +593,7 @@ public class FileServiceImpl implements FileService {
 
         if (!missingColumns.isEmpty()) {
             throw new ApiException(
-                    "Thiếu các cột bắt buộc trong header: " + String.join(", ", missingColumns),
+                    "Missing required columns in header: " + String.join(", ", missingColumns),
                     HttpStatus.BAD_REQUEST.value()
             );
         }
