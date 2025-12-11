@@ -56,6 +56,9 @@ public class DataUtil {
         if (dateStr == null || dateStr.trim().isEmpty()) {
             return null;
         }
+        if (dateStr.contains("T")) {
+            return OffsetDateTime.parse(dateStr);
+        }
 
         try {
             DateTimeFormatter formatter = DateTimeFormatter.ofPattern(pattern);
