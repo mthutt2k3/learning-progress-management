@@ -202,7 +202,7 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
         OffsetDateTime now = OffsetDateTime.now();
 
         List<StudentChallengeListDTO> result = lessonPage.getContent().stream()
-                .map(lesson -> buildLessonDto(lesson, challengesByLesson.getOrDefault(lesson.getId(), List.of()),
+                .map(lesson -> buildStudentChallengeListDTO(lesson, challengesByLesson.getOrDefault(lesson.getId(), List.of()),
                         submissionByChallengeId, gradingBySubmissionId, achievedByGradingId, maxWeightByChallengeId, now))
                 .collect(Collectors.toList());
 
@@ -1042,7 +1042,7 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
                 .stream().collect(Collectors.toMap(g -> g.getSubmissionDaily().getId(), Function.identity(), (a,b)->a));
     }
 
-    private StudentChallengeListDTO buildLessonDto(
+    private StudentChallengeListDTO buildStudentChallengeListDTO(
             ClassLesson lesson,
             List<DailyChallenge> challenges,
             Map<Long, SubmissionDailyChallenge> submissionByChallengeId,
