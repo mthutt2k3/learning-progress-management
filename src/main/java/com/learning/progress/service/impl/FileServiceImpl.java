@@ -593,7 +593,7 @@ public class FileServiceImpl implements FileService {
 
         if (!missingColumns.isEmpty()) {
             throw new ApiException(
-                    "Thiếu các cột bắt buộc trong header: " + String.join(", ", missingColumns),
+                    "Missing required columns in header: " + String.join(", ", missingColumns),
                     HttpStatus.BAD_REQUEST.value()
             );
         }
@@ -2267,7 +2267,7 @@ public class FileServiceImpl implements FileService {
     // ===== FILL_IN_THE_BLANK: câu hỏi có chỗ trống để học sinh viết vào =====
     private void addFillInTheBlankQuestion(XWPFDocument document, String questionText) {
         // Replace [[pos_xxx]] với ____________
-        String displayText = questionText.replaceAll("\\[\\[pos_\\w+\\]\\]", "____________");
+        String displayText = questionText.replaceAll("\\\\[\\\\[[^\\\\]]*\\\\]\\\\]", "____________");
         displayText = cleanHtmlTags(displayText);
 
         XWPFParagraph qPara = document.createParagraph();
@@ -2322,7 +2322,7 @@ public class FileServiceImpl implements FileService {
 
     private void addDragAndDropQuestion(XWPFDocument document, String questionText, Map<String, Object> content) {
         // Display question với ... thay cho placeholder
-        String displayText = questionText.replaceAll("\\[\\[pos_\\w+\\]\\]", "........");
+        String displayText = questionText.replaceAll("\\\\[\\\\[[^\\\\]]*\\\\]\\\\]", "........");
         displayText = cleanHtmlTags(displayText);
 
         XWPFParagraph qPara = document.createParagraph();
@@ -2395,7 +2395,7 @@ public class FileServiceImpl implements FileService {
     private void addRewriteQuestion(XWPFDocument document, String questionText) {
         // Remove HTML tags và placeholders
         String cleanText = cleanHtmlTags(questionText);
-        cleanText = cleanText.replaceAll("\\[\\[pos_[^\\]]+\\]\\]", "").trim();
+        cleanText = cleanText.replaceAll("\\\\[\\\\[[^\\\\]]*\\\\]\\\\]", "").trim();
 
         XWPFParagraph qPara = document.createParagraph();
         qPara.setIndentationLeft(720);
@@ -2421,7 +2421,7 @@ public class FileServiceImpl implements FileService {
     private void addWritingQuestion(XWPFDocument document, String questionText) {
         // Remove HTML tags và placeholders
         String cleanText = cleanHtmlTags(questionText);
-        cleanText = cleanText.replaceAll("\\[\\[pos_[^\\]]+\\]\\]", "").trim();
+        cleanText = cleanText.replaceAll("\\\\[\\\\[[^\\\\]]*\\\\]\\\\]", "").trim();
 
         XWPFParagraph qPara = document.createParagraph();
         qPara.setIndentationLeft(720);

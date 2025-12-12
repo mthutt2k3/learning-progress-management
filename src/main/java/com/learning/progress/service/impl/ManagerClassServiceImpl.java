@@ -357,6 +357,22 @@ public class ManagerClassServiceImpl implements ClassServiceStrategy {
         Long actionByUserId = jwtUtil.extractUserIdFromCurrentRequest();
         StringBuilder details = new StringBuilder();
 
+        if (request.getClassName() != null
+                && !request.getClassName().equals(clazz.getClassName())) {
+
+            if (classRepository.existsByClassNameIgnoreCaseAndIdNotAndDeletedAtIsNull(
+                    request.getClassName(), id)) {
+
+                log.error("[{}] traceId={} duplicate class name for update: {}",
+                        method, traceId, request.getClassName());
+                throw new ApiException(Const.CLASS.EXIST_NAME, HttpStatus.BAD_REQUEST.value());
+            }
+
+            details.append(String.format("name changed to '%s'; ", request.getClassName()));
+            clazz.setClassName(request.getClassName());
+        }
+
+
         if (request.getClassName() != null && !request.getClassName().equals(clazz.getClassName())) {
             details.append(String.format("name changed to '%s'; ", request.getClassName()));
             clazz.setClassName(request.getClassName());

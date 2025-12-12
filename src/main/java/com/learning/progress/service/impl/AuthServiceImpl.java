@@ -359,6 +359,12 @@ public class AuthServiceImpl implements AuthService {
                     log.error("[{}] traceId={} Invalid reset token: {}", method, traceId, request.getToken());
                     return new ApiException(Const.USER.NOT_FOUND, HttpStatus.BAD_REQUEST.value());
                 });
+
+        if (passwordEncoder.matches(request.getNewPassword(), user.getPassword())) {
+            log.error("[{}] traceId={} New password same as old for username: {}", method, traceId, user.getUserName());
+            throw new ApiException(Const.AUTH.NEW_PASSWORD_SAME_AS_OLD, HttpStatus.BAD_REQUEST.value());
+        }
+
         if (user.getStatus() == UserStatus.INACTIVE) {
             log.error("[{}] traceId={} User inactive: {}", method, traceId, user.getUserName());
             throw new ApiException(Const.USER.USER_INACTIVE, HttpStatus.FORBIDDEN.value());
