@@ -8,14 +8,14 @@ import java.io.IOException;
 import java.util.List;
 
 public interface OpenAiService {
-//    List<SectionWithQuestionsDto> generateExercise(ExerciseGenerationRequest request);
-    List<SectionWithQuestionsDto> parseQuestionsFromFile(
+
+    GenerateQuestionsResponse parseQuestionsFromFile(
             MultipartFile file,
             String description) throws IOException;
 
-    List<SectionWithQuestionsDto> generateGVQuestions(GenerateGVQuestionsRequest request);
+    GenerateQuestionsResponse generateGVQuestions(GenerateGVQuestionsRequest request);
 
-    List<SectionWithQuestionsDto> generateContentBasedQuestions(GenerateContentBasedQuestionsRequest request);
+    GenerateQuestionsResponse generateContentBasedQuestions(GenerateContentBasedQuestionsRequest request);
 
     GenerateReadingPassageResponse generateReadingPassage(GenerateReadingPassageRequest request);
 
