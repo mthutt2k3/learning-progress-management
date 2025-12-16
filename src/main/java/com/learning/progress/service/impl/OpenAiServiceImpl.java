@@ -62,9 +62,6 @@ public class OpenAiServiceImpl implements OpenAiService {
     @Value("${azure.openai.api-key}")
     private String apiKey;
 
-    @Value("${azure.openai.reading-passage.words-per-paragraph}")
-    private int wordsPerParagraphDefault;
-
     @Value("${azure.openai.connect-timeout-ms:5000}")
     private int connectTimeoutMs;
 
@@ -119,31 +116,54 @@ public class OpenAiServiceImpl implements OpenAiService {
         }
     }
 
-    private InputValidationResponse validateInputContent(String description, String vocabularyList,
-                                                         List<LessonFocus> lessonFocus, String customLessonFocus) {
+    /**
+     * ✅ UPDATED: Validate input content with context-specific rules
+     */
+    private InputValidationResponse validateInputContent(
+            String description,
+            String vocabularyList,
+            List<LessonFocus> lessonFocus,
+            String customLessonFocus,
+            String sectionContent,
+            String fileContent,
+            ChallengeContext context,
+            ValidationType validationType) {
         try {
-            log.info("Validating input content for inappropriate material");
+            log.info("Validating input content for type: {}", validationType);
 
             StringBuilder contentToCheck = new StringBuilder();
 
-            if (description != null && !description.isBlank()) {
-                contentToCheck.append("Description: ").append(description).append("\n");
-            }
+            // Build content based on validation type
+            switch (validationType) {
+                case GV:
+                    // GV: Only check description, vocabulary, lesson focus
+                    if (description != null && !description.isBlank()) {
+                        contentToCheck.append("Description: ").append(description).append("\n");
+                    }
+                    if (vocabularyList != null && !vocabularyList.isBlank()) {
+                        contentToCheck.append("Vocabulary: ").append(vocabularyList).append("\n");
+                    }
+                    if (customLessonFocus != null && !customLessonFocus.isBlank()) {
+                        contentToCheck.append("Custom Focus: ").append(customLessonFocus).append("\n");
+                    }
+                    break;
 
-            if (vocabularyList != null && !vocabularyList.isBlank()) {
-                contentToCheck.append("Vocabulary: ").append(vocabularyList).append("\n");
-            }
+                case CONTENT_BASED:
+                    // BASED: Check section content and description
+                    if (sectionContent != null && !sectionContent.isBlank()) {
+                        contentToCheck.append("Section Content: ").append(sectionContent).append("\n");
+                    }
+                    if (description != null && !description.isBlank()) {
+                        contentToCheck.append("Description: ").append(description).append("\n");
+                    }
+                    break;
 
-            if (customLessonFocus != null && !customLessonFocus.isBlank()) {
-                contentToCheck.append("Custom Focus: ").append(customLessonFocus).append("\n");
-            }
-
-            if (lessonFocus != null && !lessonFocus.isEmpty()) {
-                contentToCheck.append("Lesson Focus: ");
-                for (LessonFocus focus : lessonFocus) {
-                    contentToCheck.append(focus.getDisplayName()).append(" ");
-                }
-                contentToCheck.append("\n");
+                case FILE:
+                    // FILE: Check file content
+                    if (fileContent != null && !fileContent.isBlank()) {
+                        contentToCheck.append("File Content: ").append(fileContent).append("\n");
+                    }
+                    break;
             }
 
             // If nothing to check, return valid
@@ -151,7 +171,25 @@ public class OpenAiServiceImpl implements OpenAiService {
                 return new InputValidationResponse(null, null);
             }
 
-            String prompt = buildInputValidationPrompt(contentToCheck.toString());
+            // Build lesson context
+            StringBuilder lessonContext = new StringBuilder();
+            if (context != null) {
+                lessonContext.append("Lesson: ").append(context.classLessonName).append("\n");
+                lessonContext.append("Chapter: ").append(context.classChapterName).append("\n");
+                if (context.classLessonContent != null && !context.classLessonContent.isBlank()) {
+                    lessonContext.append("Lesson Content: ")
+                            .append(context.classLessonContent.length() > 500
+                                    ? context.classLessonContent.substring(0, 500) + "..."
+                                    : context.classLessonContent)
+                            .append("\n");
+                }
+            }
+
+            String prompt = buildInputValidationPrompt(
+                    contentToCheck.toString(),
+                    lessonContext.toString(),
+                    validationType
+            );
             String aiResponse = callOpenAI(prompt);
 
             return parseInputValidationResponse(aiResponse);
@@ -160,60 +198,104 @@ public class OpenAiServiceImpl implements OpenAiService {
             log.error("Error validating input content: {}", e.getMessage(), e);
             // In case of error, return warning
             return new InputValidationResponse(null,
-                    "Could not validate content due to system error. Please review manually.");
+                    "Could not validate content. Please review manually.");
         }
     }
 
     /**
-     * ✅ NEW: Build prompt for input content validation
+     * ✅ UPDATED: Build prompt for input content validation with context-specific rules
      */
-    private String buildInputValidationPrompt(String content) {
+    private String buildInputValidationPrompt(String content, String lessonContext, ValidationType validationType) {
         StringBuilder prompt = new StringBuilder();
 
-        prompt.append("You are a content safety moderator for an educational English learning platform.\n\n");
+        prompt.append("You are a content safety and quality checker for an educational English learning platform.\n\n");
 
-        prompt.append("🚨 YOUR TASK: Analyze the following user input and check for:\n\n");
+        // Lesson context
+        if (!lessonContext.isBlank()) {
+            prompt.append("LESSON CONTEXT:\n");
+            prompt.append(lessonContext).append("\n");
+        }
 
-        prompt.append("❌ SEVERE ISSUES (Must reject - set error field):\n");
-        prompt.append("- Violence, hate speech, discrimination, racism, or offensive content\n");
+        prompt.append("YOUR TASK:\n");
+        prompt.append("Check the provided content for safety and appropriateness.\n\n");
+
+        // ❌ ERROR cases (apply to ALL types)
+        prompt.append("❌ SEVERE ISSUES - Set 'error' field (MUST REJECT):\n");
+        prompt.append("- Violence, hate speech, discrimination, racism\n");
         prompt.append("- Sexual, adult, or inappropriate content\n");
-        prompt.append("- Profanity, vulgar language, or explicit terms\n");
-        prompt.append("- Political propaganda or controversial ideologies\n");
-        prompt.append("- Harmful, dangerous, or illegal activities\n");
-        prompt.append("- Drug abuse, alcohol abuse, or substance references\n");
-        prompt.append("- Self-harm or mental health triggering content\n");
-        prompt.append("- Misleading, false, or deceptive information\n");
-        prompt.append("- Personal attacks or cyberbullying\n");
-        prompt.append("- Any content that could harm students\n\n");
+        prompt.append("- Profanity or offensive language\n");
+        prompt.append("- Political propaganda or extremist ideology\n");
+        prompt.append("- Drugs, illegal activities, dangerous behavior\n");
+        prompt.append("- Self-harm or psychologically harmful content\n");
+        prompt.append("- Any content unsafe for students\n");
+        prompt.append("- Misleading or deceptive information\n\n");
 
-        prompt.append("⚠️ MINOR ISSUES (Set warning field):\n");
-        prompt.append("- Content contains Vietnamese language (should be English only)\n");
-        prompt.append("- Content is not well-aligned with educational purposes\n");
-        prompt.append("- Content is too vague or unclear\n");
-        prompt.append("- Content quality could be improved\n\n");
+        // ⚠️ WARNING cases (depend on validation type)
+        prompt.append("⚠️ MINOR ISSUES - Set 'warning' field:\n");
 
-        prompt.append("📋 CONTENT TO CHECK:\n");
-        prompt.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+        switch (validationType) {
+            case GV:
+                prompt.append("FOR GRAMMAR/VOCABULARY QUESTIONS:\n");
+                prompt.append("- Content is NOT relevant to the lesson topic\n");
+                prompt.append("- Content is completely unrelated to English learning\n");
+                prompt.append("NOTE: Spelling errors, grammar mistakes, and Vietnamese text are ACCEPTABLE - do NOT warn about these.\n\n");
+                break;
+
+            case CONTENT_BASED:
+                prompt.append("FOR CONTENT-BASED QUESTIONS:\n");
+                prompt.append("- Section content contains EXCESSIVE Vietnamese (more than 30% of content)\n");
+                prompt.append("- Content is NOT relevant or appropriate for the lesson\n");
+                prompt.append("- Description does not match section content\n\n");
+                break;
+
+            case FILE:
+                prompt.append("FOR FILE UPLOAD:\n");
+                prompt.append("- File contains duplicate questions (same or very similar)\n");
+                prompt.append("- File contains images or non-text content\n");
+                prompt.append("- Question content is NOT relevant to the lesson\n");
+                prompt.append("- Questions are not educational or appropriate for students\n\n");
+                prompt.append("- File contains extra descriptive text or paragraphs outside of the questions\n\n");
+                break;
+        }
+
+        prompt.append("CONTENT TO CHECK:\n");
+        prompt.append("--------------------------------------------------\n");
         prompt.append(content).append("\n");
-        prompt.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n");
+        prompt.append("--------------------------------------------------\n\n");
 
-        prompt.append("RETURN FORMAT (JSON only):\n");
+        prompt.append("OUTPUT FORMAT (JSON ONLY):\n");
         prompt.append("{\n");
-        prompt.append("  \"error\": \"string or null\",\n");
-        prompt.append("  \"warning\": \"string or null\"\n");
+        prompt.append("  \"error\": \"short message in English or null\",\n");
+        prompt.append("  \"warning\": \"short message in English or null\"\n");
         prompt.append("}\n\n");
 
-        prompt.append("CRITICAL RULES:\n");
-        prompt.append("- Set 'error' field ONLY if content has severe issues that could harm students\n");
-        prompt.append("- Set 'warning' field for minor issues (Vietnamese text, unclear content)\n");
-        prompt.append("- Both can be null if content is appropriate\n");
-        prompt.append("- Be strict with harmful content, but reasonable with language/quality issues\n");
-        prompt.append("- Return ONLY valid JSON\n\n");
+        prompt.append("RULES:\n");
+        prompt.append("- Messages must be SHORT (max 1 sentence)\n");
+        prompt.append("- Use clear, user-friendly language\n");
+        prompt.append("- Set ONLY ONE of error or warning if applicable\n");
+        prompt.append("- Both must be null if content is acceptable\n");
+        prompt.append("- Return valid JSON only\n\n");
 
-        prompt.append("Analyze now:\n");
+        prompt.append("Examples of good messages:\n");
+        prompt.append("- error: \"Content contains inappropriate material for students.\"\n");
+        prompt.append("- warning: \"Content may not be relevant to the lesson topic.\"\n");
+        prompt.append("- warning: \"Section contains significant Vietnamese text.\"\n");
+        prompt.append("- warning: \"File contains duplicate questions.\"\n\n");
+
+        prompt.append("Analyze now.\n");
 
         return prompt.toString();
     }
+
+    /**
+     * Enum for validation types
+     */
+    private enum ValidationType {
+        GV,              // Grammar/Vocabulary questions
+        CONTENT_BASED,   // Content-based questions
+        FILE             // File upload
+    }
+
 
     /**
      * ✅ NEW: Parse input validation response
@@ -512,25 +594,6 @@ public class OpenAiServiceImpl implements OpenAiService {
     public GenerateQuestionsResponse generateGVQuestions(GenerateGVQuestionsRequest request) {
         LevelInfo levelInfo = parseLevelInfo(request.getLevel());
 
-
-        InputValidationResponse validation = validateInputContent(
-                request.getDescription(),
-                request.getVocabularyList(),
-                request.getLessonFocus(),
-                request.getCustomLessonFocus()
-        );
-
-        int totalQuestions = request.getQuestionTypeConfigs().stream()
-                .mapToInt(GenerateGVQuestionsRequest.QuestionTypeConfig::getNumberOfQuestions)
-                .sum();
-
-        if (totalQuestions > maxQuestion) {
-            log.error("Total questions exceeds limit: {} > {}", totalQuestions, maxQuestion);
-            throw new ApiException("Total number of questions cannot exceed " + maxQuestion +
-                    ". Requested: " + totalQuestions, HttpStatus.BAD_REQUEST.value());
-        }
-
-        log.info("Total questions to generate: {}", totalQuestions);
         log.info("Starting GV question generation for challengeId: {}", request.getChallengeId());
 
         DailyChallenge challenge = dailyChallengeRepository.findByIdWithFullHierarchy(request.getChallengeId())
@@ -539,7 +602,43 @@ public class OpenAiServiceImpl implements OpenAiService {
                     return new ApiException(Const.CHALLENGE.NOT_FOUND, HttpStatus.NOT_FOUND.value());
                 });
 
+        int existingQuestionsCount = countExistingQuestions(challenge);
+        int remainingQuota = maxQuestion - existingQuestionsCount;
+
+        log.info("Existing questions: {}, Remaining quota: {}/{}",
+                existingQuestionsCount, remainingQuota, maxQuestion);
+
+        if (remainingQuota <= 0) {
+            log.error("Challenge already has maximum questions: {}/{}", existingQuestionsCount, maxQuestion);
+            throw new ApiException("Challenge already has maximum " + maxQuestion +
+                    " questions. Cannot generate more.", HttpStatus.BAD_REQUEST.value());
+        }
+
+        int totalQuestions = request.getQuestionTypeConfigs().stream()
+                .mapToInt(GenerateGVQuestionsRequest.QuestionTypeConfig::getNumberOfQuestions)
+                .sum();
+
+        if (totalQuestions > remainingQuota) {
+            log.error("Total questions exceeds remaining quota: {} > {}", totalQuestions, remainingQuota);
+            throw new ApiException("You can only generate " + remainingQuota + " more questions.",
+                    HttpStatus.BAD_REQUEST.value());
+        }
+
+        log.info("Total questions to generate: {}", totalQuestions);
+
+
         ChallengeContext context = eagerLoadChallengeContext(challenge);
+
+        InputValidationResponse validation = validateInputContent(
+                request.getDescription(),
+                request.getVocabularyList(),
+                request.getLessonFocus(),
+                request.getCustomLessonFocus(),
+                null,  // sectionContent
+                null,  // fileContent
+                context,  // ChallengeContext
+                ValidationType.GV
+        );
 
         log.info("Level info - Name: {}, Description: {}", levelInfo.levelName, levelInfo.levelDescription);
 
@@ -666,34 +765,56 @@ public class OpenAiServiceImpl implements OpenAiService {
 
         LevelInfo levelInfo = parseLevelInfo(request.getLevel());
 
-        // ✅ Validate input content - chỉ validate description
-        InputValidationResponse validation = validateInputContent(
-                request.getDescription(),
-                null,
-                null,
-                null
-        );
-
-        int totalQuestions = request.getSections().stream()
-                .flatMap(section -> section.getQuestionTypeConfigs().stream())
-                .mapToInt(GenerateContentBasedQuestionsRequest.QuestionTypeConfig::getNumberOfQuestions)
-                .sum();
-
-        if (totalQuestions > maxQuestion) {
-            log.error("Total questions across all sections exceeds limit: {}", totalQuestions);
-            throw new ApiException("Total number of questions across all sections cannot exceed " +
-                    maxQuestion + ". Requested: " + totalQuestions, HttpStatus.BAD_REQUEST.value());
-        }
-
-        log.info("Total questions to generate across all sections: {}", totalQuestions);
-
         DailyChallenge challenge = dailyChallengeRepository.findByIdAndDeletedAtIsNull(request.getChallengeId())
                 .orElseThrow(() -> {
                     log.error("DailyChallenge not found: {}", request.getChallengeId());
                     return new ApiException(Const.CHALLENGE.NOT_FOUND, HttpStatus.NOT_FOUND.value());
                 });
 
+        int existingQuestionsCount = countExistingQuestions(challenge);
+        int remainingQuota = maxQuestion - existingQuestionsCount;
+
+        log.info("Existing questions: {}, Remaining quota: {}/{}",
+                existingQuestionsCount, remainingQuota, maxQuestion);
+
+        if (remainingQuota <= 0) {
+            log.error("Challenge already has maximum questions: {}/{}", existingQuestionsCount, maxQuestion);
+            throw new ApiException("Challenge already has maximum " + maxQuestion +
+                    " questions. Cannot generate more.", HttpStatus.BAD_REQUEST.value());
+        }
+
+        int totalQuestions = request.getSections().stream()
+                .flatMap(section -> section.getQuestionTypeConfigs().stream())
+                .mapToInt(GenerateContentBasedQuestionsRequest.QuestionTypeConfig::getNumberOfQuestions)
+                .sum();
+
+        if (totalQuestions > remainingQuota) {
+            log.error("Total questions exceeds remaining quota: {} > {}", totalQuestions, remainingQuota);
+            throw new ApiException("You can only generate " + remainingQuota + " more questions.",
+                    HttpStatus.BAD_REQUEST.value());
+        }
+
         ChallengeContext context = eagerLoadChallengeContext(challenge);
+
+        // ✅ Validate input content - chỉ validate description
+        StringBuilder allSectionContent = new StringBuilder();
+        for (GenerateContentBasedQuestionsRequest.SectionWithConfig sectionConfig : request.getSections()) {
+            if (sectionConfig.getSection().getSectionsContent() != null) {
+                allSectionContent.append(sectionConfig.getSection().getSectionsContent()).append("\n");
+            }
+        }
+
+        InputValidationResponse validation = validateInputContent(
+                request.getDescription(),
+                null,
+                null,
+                null,
+                allSectionContent.toString(),  // sectionContent
+                null,  // fileContent
+                context,  // ChallengeContext
+                ValidationType.CONTENT_BASED
+        );
+
         String dailyChallengeType = challenge.getChallengeType().toString();
 
         log.info("Daily Challenge Type: {}, Level: {}", dailyChallengeType, levelInfo.levelName);
@@ -713,7 +834,7 @@ public class OpenAiServiceImpl implements OpenAiService {
                 }
 
                 // ✅ CRITICAL: Validate section content is English only
-                validateEnglishOnlyContent(section.getSectionsContent(), "Section content");
+//                validateEnglishOnlyContent(section.getSectionsContent(), "Section content");
 
                 String enhancedContent = section.getSectionsContent();
 
@@ -833,25 +954,22 @@ public class OpenAiServiceImpl implements OpenAiService {
         );
     }
 
-    /**
-     * ✅ UPDATED: Validate that content contains only English text
-     */
-    private void validateEnglishOnlyContent(String content, String fieldName) {
-        if (content == null || content.trim().isEmpty()) {
-            return;
+    private int countExistingQuestions(DailyChallenge challenge) {
+        if (challenge.getSections() == null) {
+            return 0;
         }
 
-        // Check for Vietnamese characters
-        Pattern vietnamesePattern = Pattern.compile("[àáảãạăằắẳẵặâầấẩẫậèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵđ]", Pattern.CASE_INSENSITIVE);
-        Matcher matcher = vietnamesePattern.matcher(content);
-
-        if (matcher.find()) {
-            log.error("Vietnamese characters detected in {}: {}", fieldName, content);
-            throw new ApiException(
-                    fieldName + " must contain only English text. Vietnamese characters are not allowed.",
-                    HttpStatus.BAD_REQUEST.value()
-            );
-        }
+        return challenge.getSections().stream()
+                .filter(section -> section.getDeletedAt() == null)
+                .mapToInt(section -> {
+                    if (section.getQuestions() == null) {
+                        return 0;
+                    }
+                    return (int) section.getQuestions().stream()
+                            .filter(question -> question.getDeletedAt() == null)
+                            .count();
+                })
+                .sum();
     }
 
     public ChallengeContext eagerLoadChallengeContext(DailyChallenge challenge) {
@@ -1785,12 +1903,28 @@ public class OpenAiServiceImpl implements OpenAiService {
                 prompt.append("- NO alternative or multiple correct answers allowed\n\n");
 
                 if (dailyChallengeType != null && dailyChallengeType.equals("GV")) {
-                    prompt.append("⚠️ CRITICAL FORMAT:\n");
+                    prompt.append("⚠️ FORMAT FOR GV (GRAMMAR/VOCABULARY) QUESTIONS:\n\n");
+
+                    prompt.append("📌 TYPE 1: WORD FORM / VERB CONJUGATION (with hint)\n");
+                    prompt.append("When testing grammar (verb tenses, word forms), provide the BASE WORD as a hint:\n");
                     prompt.append("FORMAT: \"Text [[pos_xxxxxx]](base word) more text.\"\n");
-                    prompt.append("- xxxxxx is a random 6-character ID (lowercase a-z and 0-9)\n");
-                    prompt.append("- The word inside parentheses ( ) is the ORIGINAL / BASE FORM of the missing word (used as a hint)\n");
-                    prompt.append("- positionId in data MUST match the xxxxxx\n\n");
-                    prompt.append("EXAMPLE:\n");
+                    prompt.append("- The word in parentheses ( ) is the BASE/INFINITIVE form\n");
+                    prompt.append("- Students must transform it to the correct form\n");
+                    prompt.append("EXAMPLES:\n");
+                    prompt.append("• Verb tense: \"If I [[pos_a7k3m2]](know) her address, I would visit her.\" → knew\n");
+                    prompt.append("• Word form: \"She speaks English [[pos_b8n4k1]](fluent).\" → fluently\n");
+                    prompt.append("• Verb form: \"He enjoys [[pos_c2m9p5]](read) books.\" → reading\n\n");
+
+                    prompt.append("📌 TYPE 2: VOCABULARY / CONTENT WORDS (without hint)\n");
+                    prompt.append("When testing vocabulary or lesson content, NO hint needed:\n");
+                    prompt.append("FORMAT: \"Text [[pos_xxxxxx]] more text.\"\n");
+                    prompt.append("- Students must recall the word from context or lesson vocabulary\n");
+                    prompt.append("EXAMPLES:\n");
+                    prompt.append("• Vocabulary: \"A place where you buy books is called a [[pos_d3t6r8]].\" → bookstore\n");
+                    prompt.append("• Preposition: \"She is good [[pos_e5h2w9]] mathematics.\" → at\n");
+                    prompt.append("• Collocation: \"Please [[pos_f7k4n1]] attention to the lesson.\" → pay\n\n");
+
+                    prompt.append("COMPLETE EXAMPLE (Grammar with hint):\n");
                     prompt.append("{\n")
                             .append("  \"questionText\": \"If I [[pos_a7k3m2]](know) her address, I would visit her tomorrow.\",\n")
                             .append("  \"orderNumber\": 1,\n")
@@ -1802,23 +1936,61 @@ public class OpenAiServiceImpl implements OpenAiService {
                             .append("    ]\n")
                             .append("  }\n")
                             .append("}\n\n");
-                } else {
-                    prompt.append("⚠️ CRITICAL FORMAT:\n");
-                    prompt.append("FORMAT: \"Text [[pos_xxxxxx]] more text.\"\n");
-                    prompt.append("- xxxxxx is a random 6-character ID (lowercase a-z and 0-9)\n");
-                    prompt.append("- positionId in data MUST match the xxxxxx\n\n");
-                    prompt.append("EXAMPLE:\n");
+
+                    prompt.append("COMPLETE EXAMPLE (Vocabulary without hint):\n");
                     prompt.append("{\n")
-                            .append("  \"questionText\": \"If I knew her [[pos_a7k3m2]], I would visit her tomorrow.\",\n")
+                            .append("  \"questionText\": \"She is very good [[pos_t9m3k7]] playing the piano.\",\n")
                             .append("  \"orderNumber\": 1,\n")
                             .append("  \"score\": 1.0,\n")
                             .append("  \"questionType\": \"FILL_IN_THE_BLANK\",\n")
                             .append("  \"content\": {\n")
                             .append("    \"data\": [\n")
-                            .append("      {\"id\": \"ans1\", \"value\": \"address\", \"isCorrect\": true, \"positionId\": \"a7k3m2\"}\n")
+                            .append("      {\"id\": \"ans1\", \"value\": \"at\", \"isCorrect\": true, \"positionId\": \"t9m3k7\"}\n")
                             .append("    ]\n")
                             .append("  }\n")
                             .append("}\n\n");
+
+                } else {
+                    prompt.append("⚠️ FORMAT FOR CONTENT-BASED QUESTIONS (READING/LISTENING):\n\n");
+
+                    prompt.append("📌 CRITICAL: NO HINTS ALLOWED\n");
+                    prompt.append("Fill in the blank for reading/listening tests information recall from the passage/audio.\n");
+                    prompt.append("Students must find the answer IN THE PASSAGE/TRANSCRIPT.\n");
+                    prompt.append("FORMAT: \"Text [[pos_xxxxxx]] more text.\"\n");
+                    prompt.append("- NO parentheses ( ) hints\n");
+                    prompt.append("- Answer must be a word/phrase that appears in or can be inferred from the passage\n\n");
+
+                    prompt.append("QUESTION TYPES:\n");
+                    prompt.append("• Factual detail: \"According to the passage, the author moved to [[pos_a7k3m2]] in 2010.\"\n");
+                    prompt.append("• Number/Date: \"The research was conducted over [[pos_b8n4k1]] years.\"\n");
+                    prompt.append("• Key term: \"The process of plants making food is called [[pos_c2m9p5]].\"\n");
+                    prompt.append("• Summary: \"The main character felt [[pos_d3t6r8]] after hearing the news.\"\n\n");
+
+                    prompt.append("❌ WRONG (Don't do this for content-based):\n");
+                    prompt.append("• \"The author [[pos_xxx]](move) to London in 2010.\" ← NO! This is grammar, not content\n");
+                    prompt.append("• \"She [[pos_xxx]](feel) happy.\" ← NO! This tests grammar, not reading comprehension\n\n");
+
+                    prompt.append("✅ CORRECT:\n");
+                    prompt.append("• \"The author moved to [[pos_xxx]] in 2010.\" → London (from passage)\n");
+                    prompt.append("• \"She felt [[pos_xxx]] after the news.\" → happy/sad/surprised (from passage)\n\n");
+
+                    prompt.append("COMPLETE EXAMPLE:\n");
+                    prompt.append("{\n")
+                            .append("  \"questionText\": \"According to the passage, the scientist discovered the element in [[pos_a7k3m2]].\",\n")
+                            .append("  \"orderNumber\": 1,\n")
+                            .append("  \"score\": 1.0,\n")
+                            .append("  \"questionType\": \"FILL_IN_THE_BLANK\",\n")
+                            .append("  \"content\": {\n")
+                            .append("    \"data\": [\n")
+                            .append("      {\"id\": \"ans1\", \"value\": \"1869\", \"isCorrect\": true, \"positionId\": \"a7k3m2\"}\n")
+                            .append("    ]\n")
+                            .append("  }\n")
+                            .append("}\n\n");
+
+                    prompt.append("REMEMBER:\n");
+                    prompt.append("- Reading/Listening fill-in-the-blank = FIND information from passage\n");
+                    prompt.append("- NOT about grammar transformation\n");
+                    prompt.append("- NO hints in parentheses ( )\n\n");
                 }
                 break;
 
@@ -2231,10 +2403,14 @@ public class OpenAiServiceImpl implements OpenAiService {
         log.info("Extracted {} characters from file", fileContent.length());
 
         InputValidationResponse validation = validateInputContent(
-                fileContent,
-                null,
-                null,
-                null
+                null,  // description
+                null,  // vocabularyList
+                null,  // lessonFocus
+                null,  // customLessonFocus
+                null,  // sectionContent
+                fileContent,  // fileContent
+                null,  // ChallengeContext (cần load từ challengeId)
+                ValidationType.FILE
         );
 
         String prompt = buildParsingPrompt(fileContent, description);
@@ -2287,130 +2463,7 @@ public class OpenAiServiceImpl implements OpenAiService {
     @Override
     @Transactional(readOnly = true)
     public GenerateReadingPassageResponse generateReadingPassage(GenerateReadingPassageRequest request) {
-        log.info("Generating reading passage for challengeId: {}", request.getChallengeId());
-
-        LevelInfo levelInfo = parseLevelInfo(request.getLevel());
-
-        // ✅ NEW: Validate input content
-        InputValidationResponse validation = validateInputContent(
-                request.getDescription(),
-                request.getVocabularyList(),
-                null,
-                null
-        );
-
-        if (validation.getWarning() != null) {
-            log.warn("Input validation warning for reading passage: {}", validation.getWarning());
-        }
-
-        DailyChallenge challenge = dailyChallengeRepository.findByIdAndDeletedAtIsNull(request.getChallengeId())
-                .orElseThrow(() -> {
-                    log.error("DailyChallenge not found: {}", request.getChallengeId());
-                    return new ApiException(Const.CHALLENGE.NOT_FOUND, HttpStatus.NOT_FOUND.value());
-                });
-
-        String prompt = buildReadingPassagePrompt(
-                request.getNumberOfParagraphs(),
-                wordsPerParagraphDefault,
-                request.getDescription(),
-                levelInfo,
-                request.getVocabularyList()
-        );
-
-        String aiResponse = callOpenAI(prompt);
-        GenerateReadingPassageResponse response = parseReadingPassageResponse(aiResponse, levelInfo.levelName);
-
-        log.info("Successfully generated passage: {} paragraphs", response.getNumberOfParagraphs());
-        return response;
-    }
-
-    private String buildReadingPassagePrompt(
-            int numberOfParagraphs,
-            int wordsPerParagraph,
-            String description,
-            LevelInfo levelInfo,
-            String vocabularyList) {
-
-        StringBuilder prompt = new StringBuilder();
-
-        prompt.append("You are an expert English teacher creating reading passages.\n\n");
-
-        // Content moderation
-        prompt.append(getContentModerationInstructions());
-
-        prompt.append(getDifficultyLevelInstructions(levelInfo));
-        prompt.append(buildVocabularyPrompt(vocabularyList));
-
-        prompt.append("⚠️ CRITICAL REQUIREMENTS:\n");
-        prompt.append("- Passage MUST be in English ONLY\n");
-        prompt.append("- Passage MUST be appropriate for English language learners at level: ").append(levelInfo.levelName).append("\n");
-        prompt.append("- Content must be educational, age-appropriate, and culturally sensitive\n");
-        prompt.append("- Passage should have clear structure and coherent flow\n");
-        prompt.append("- Language complexity must match the student level\n\n");
-
-        prompt.append(getGrammarAndFormattingInstructions());
-
-        if (description != null && !description.isBlank()) {
-            prompt.append("💡 TOPIC/THEME SUGGESTIONS (OPTIONAL - USE ONLY IF APPROPRIATE):\n");
-            prompt.append(description).append("\n\n");
-            prompt.append("⚠️ IMPORTANT INSTRUCTION FOR TOPIC SUGGESTIONS:\n");
-            prompt.append("- These suggestions are OPTIONAL and should guide the general theme/topic\n");
-            prompt.append("- ONLY use suggestions that are:\n");
-            prompt.append("  • Appropriate for language learners\n");
-            prompt.append("  • Educational and meaningful\n");
-            prompt.append("  • Suitable for the student level (").append(levelInfo.levelName).append(")\n");
-            prompt.append("  • Culturally appropriate and not controversial\n");
-            prompt.append("  • Safe and positive\n");
-            prompt.append("- If suggestions are inappropriate, irrelevant, or too complex → CREATE a suitable alternative topic\n");
-            prompt.append("- If suggestions are too vague → Interpret them in an educational context\n");
-            prompt.append("- NEVER create passages with inappropriate, offensive, or non-educational content\n");
-            prompt.append("- Educational value and level appropriateness are ALWAYS the top priorities\n\n");
-        } else {
-            prompt.append("💡 TOPIC SELECTION:\n");
-            prompt.append("Choose an engaging, educational topic appropriate for level ").append(levelInfo.levelName).append("\n");
-            prompt.append("Examples: culture, science, technology, environment, daily life, history, etc.\n\n");
-        }
-
-        prompt.append("TASK:\n");
-        prompt.append("Generate a reading passage with EXACTLY ").append(numberOfParagraphs).append(" paragraph(s)\n");
-        prompt.append("Level: ").append(levelInfo.levelName).append("\n");
-        prompt.append("Each paragraph: approximately ").append(wordsPerParagraph).append(" words\n\n");
-
-        prompt.append("JSON FORMAT:\n");
-        prompt.append("{\n");
-        prompt.append("  \"passage\": \"Full HTML text with each paragraph wrapped in <p> tags\",\n");
-        prompt.append("  \"numberOfParagraphs\": ").append(numberOfParagraphs).append(",\n");
-        prompt.append("  \"totalWords\": <number>\n");
-        prompt.append("}\n\n");
-
-        prompt.append("⚠️ HTML FORMATTING REQUIREMENTS:\n");
-        prompt.append("- Wrap EACH paragraph in <p> tags\n");
-        prompt.append("- Format: <p>Paragraph 1 content...</p><p>Paragraph 2 content...</p>\n");
-        prompt.append("- Do NOT use \\n\\n or line breaks, use HTML tags only\n");
-        prompt.append("- Ensure proper HTML entity encoding if needed\n\n");
-
-        prompt.append("Return ONLY valid JSON.\n");
-
-        return prompt.toString();
-    }
-
-    private GenerateReadingPassageResponse parseReadingPassageResponse(String jsonResponse, String level) {
-        try {
-            String clean = cleanJsonResponse(jsonResponse);
-            JsonNode root = objectMapper.readTree(clean);
-
-            return new GenerateReadingPassageResponse(
-                    root.get("passage").asText(),
-                    root.get("numberOfParagraphs").asInt(),
-                    root.get("totalWords").asInt(),
-                    level,
-                    null,
-                    null
-            );
-        } catch (Exception e) {
-            log.error("Failed to parse reading passage: {}", e.getMessage(), e);
-            throw new RuntimeException("Failed to parse reading passage: " + e.getMessage(), e);
-        }
+        return null;
     }
 
     private String buildParsingPrompt(String fileContent, String description) {
@@ -2568,8 +2621,6 @@ public class OpenAiServiceImpl implements OpenAiService {
         prompt.append("IDENTIFICATION: Sentence with blank(s) to complete\n");
         prompt.append("FORMAT REQUIREMENTS:\n");
         prompt.append("- questionText MUST contain [[pos_xxxxxx]] placeholder(s)\n");
-        prompt.append("- Use [[pos_xxxxxx]](hint) format for GV questions (hint in parentheses)\n");
-        prompt.append("- Use [[pos_xxxxxx]] format for content-based questions (no hint)\n");
         prompt.append("- xxxxxx = random 6-character ID (lowercase a-z and 0-9 only)\n");
         prompt.append("- Each answer has matching positionId\n");
         prompt.append("- ⚠️ CRITICAL: EXACTLY 1 correct answer ONLY (NOT multiple)\n");
@@ -2577,7 +2628,7 @@ public class OpenAiServiceImpl implements OpenAiService {
         prompt.append("- Multiple blanks = multiple data items with different positionIds\n\n");
         prompt.append("EXAMPLE:\n");
         prompt.append("{\n");
-        prompt.append("  \"questionText\": \"If I [[pos_a7k3m2]](know) her address, I would visit her.\",\n");
+        prompt.append("  \"questionText\": \"If I [[pos_a7k3m2]] her address, I would visit her.\",\n");
         prompt.append("  \"orderNumber\": 1,\n");
         prompt.append("  \"score\": 1.0,\n");
         prompt.append("  \"questionType\": \"FILL_IN_THE_BLANK\",\n");
@@ -2588,10 +2639,141 @@ public class OpenAiServiceImpl implements OpenAiService {
         prompt.append("  }\n");
         prompt.append("}\n\n");
 
-        // ... Continue with other question types (same as before)
-        // DROPDOWN, REARRANGE, DRAG_AND_DROP, MULTIPLE_SELECT, REWRITE
+        // DROPDOWN
+        prompt.append("4️⃣ DROPDOWN\n");
+        prompt.append("IDENTIFICATION: Sentence with dropdown selection(s)\n");
+        prompt.append("FORMAT REQUIREMENTS:\n");
+        prompt.append("- questionText MUST contain [[pos_xxxxxx]] placeholder(s)\n");
+        prompt.append("- Each dropdown has exactly 4 options\n");
+        prompt.append("- Each dropdown has exactly 1 option with isCorrect=true\n");
+        prompt.append("- All options for same dropdown share the same positionId\n");
+        prompt.append("- xxxxxx = random 6-character ID (lowercase a-z and 0-9 only)\n\n");
+        prompt.append("EXAMPLE:\n");
+        prompt.append("{\n");
+        prompt.append("  \"questionText\": \"The company [[pos_k5l6m7]] expand into Asian markets next year.\",\n");
+        prompt.append("  \"orderNumber\": 1,\n");
+        prompt.append("  \"score\": 1.0,\n");
+        prompt.append("  \"questionType\": \"DROPDOWN\",\n");
+        prompt.append("  \"content\": {\n");
+        prompt.append("    \"data\": [\n");
+        prompt.append("      {\"id\": \"opt1\", \"value\": \"plans to\", \"isCorrect\": true, \"positionId\": \"k5l6m7\"},\n");
+        prompt.append("      {\"id\": \"opt2\", \"value\": \"is planning\", \"isCorrect\": false, \"positionId\": \"k5l6m7\"},\n");
+        prompt.append("      {\"id\": \"opt3\", \"value\": \"will plan\", \"isCorrect\": false, \"positionId\": \"k5l6m7\"},\n");
+        prompt.append("      {\"id\": \"opt4\", \"value\": \"planned\", \"isCorrect\": false, \"positionId\": \"k5l6m7\"}\n");
+        prompt.append("    ]\n");
+        prompt.append("  }\n");
+        prompt.append("}\n\n");
+
+        // REARRANGE
+        prompt.append("5️⃣ REARRANGE\n");
+        prompt.append("IDENTIFICATION: Words/phrases to arrange in correct order\n");
+        prompt.append("FORMAT REQUIREMENTS:\n");
+        prompt.append("- questionText MUST contain [[pos_xxxxxx]] placeholders for EACH word/phrase\n");
+        prompt.append("- Must be a COMPLETE sentence (5-8 words/phrases)\n");
+        prompt.append("- ALL items have isCorrect=true\n");
+        prompt.append("- Each item has unique positionId matching placeholder\n");
+        prompt.append("- xxxxxx = random 6-character ID (lowercase a-z and 0-9 only)\n\n");
+        prompt.append("EXAMPLE:\n");
+        prompt.append("{\n");
+        prompt.append("  \"questionText\": \"[[pos_a1b2c3]] [[pos_d4e5f6]] [[pos_g7h8i9]] [[pos_j1k2l3]] [[pos_m4n5o6]] [[pos_p7q8r9]]\",\n");
+        prompt.append("  \"orderNumber\": 1,\n");
+        prompt.append("  \"score\": 1.0,\n");
+        prompt.append("  \"questionType\": \"REARRANGE\",\n");
+        prompt.append("  \"content\": {\n");
+        prompt.append("    \"data\": [\n");
+        prompt.append("      {\"id\": \"item1\", \"value\": \"She\", \"isCorrect\": true, \"positionId\": \"a1b2c3\"},\n");
+        prompt.append("      {\"id\": \"item2\", \"value\": \"has\", \"isCorrect\": true, \"positionId\": \"d4e5f6\"},\n");
+        prompt.append("      {\"id\": \"item3\", \"value\": \"been\", \"isCorrect\": true, \"positionId\": \"g7h8i9\"},\n");
+        prompt.append("      {\"id\": \"item4\", \"value\": \"studying\", \"isCorrect\": true, \"positionId\": \"j1k2l3\"},\n");
+        prompt.append("      {\"id\": \"item5\", \"value\": \"English\", \"isCorrect\": true, \"positionId\": \"m4n5o6\"},\n");
+        prompt.append("      {\"id\": \"item6\", \"value\": \"recently\", \"isCorrect\": true, \"positionId\": \"p7q8r9\"}\n");
+        prompt.append("    ]\n");
+        prompt.append("  }\n");
+        prompt.append("}\n\n");
+
+        // DRAG_AND_DROP
+        prompt.append("6️⃣ DRAG_AND_DROP\n");
+        prompt.append("IDENTIFICATION: Match items to correct positions\n");
+        prompt.append("FORMAT REQUIREMENTS:\n");
+        prompt.append("- questionText contains [[pos_xxxxxx]] placeholders for drop zones\n");
+        prompt.append("- Each placeholder needs exactly 1 correct answer with matching positionId\n");
+        prompt.append("- Correct answers have isCorrect=true and matching positionId\n");
+        prompt.append("- Can include distractor answers (isCorrect=false, positionId=null)\n");
+        prompt.append("- Number of correct answers = number of placeholders\n");
+        prompt.append("- xxxxxx = random 6-character ID (lowercase a-z and 0-9 only)\n\n");
+        prompt.append("EXAMPLE:\n");
+        prompt.append("{\n");
+        prompt.append("  \"questionText\": \"Complete: [[pos_a1b2c3]] is the capital of [[pos_d4e5f6]], and [[pos_g7h8i9]] is spoken there.\",\n");
+        prompt.append("  \"orderNumber\": 1,\n");
+        prompt.append("  \"score\": 1.0,\n");
+        prompt.append("  \"questionType\": \"DRAG_AND_DROP\",\n");
+        prompt.append("  \"content\": {\n");
+        prompt.append("    \"data\": [\n");
+        prompt.append("      {\"id\": \"ans1\", \"value\": \"Paris\", \"isCorrect\": true, \"positionId\": \"a1b2c3\"},\n");
+        prompt.append("      {\"id\": \"ans2\", \"value\": \"France\", \"isCorrect\": true, \"positionId\": \"d4e5f6\"},\n");
+        prompt.append("      {\"id\": \"ans3\", \"value\": \"French\", \"isCorrect\": true, \"positionId\": \"g7h8i9\"},\n");
+        prompt.append("      {\"id\": \"dist1\", \"value\": \"Berlin\", \"isCorrect\": false, \"positionId\": null},\n");
+        prompt.append("      {\"id\": \"dist2\", \"value\": \"Spain\", \"isCorrect\": false, \"positionId\": null},\n");
+        prompt.append("      {\"id\": \"dist3\", \"value\": \"German\", \"isCorrect\": false, \"positionId\": null}\n");
+        prompt.append("    ]\n");
+        prompt.append("  }\n");
+        prompt.append("}\n\n");
+
+        // MULTIPLE_SELECT
+        prompt.append("7️⃣ MULTIPLE_SELECT\n");
+        prompt.append("IDENTIFICATION: Question with multiple correct answers\n");
+        prompt.append("FORMAT REQUIREMENTS:\n");
+        prompt.append("- 4-6 options total\n");
+        prompt.append("- 2-3 options with isCorrect=true\n");
+        prompt.append("- All options have positionId=null\n\n");
+        prompt.append("EXAMPLE:\n");
+        prompt.append("{\n");
+        prompt.append("  \"questionText\": \"Which of the following are correct uses of the present perfect tense?\",\n");
+        prompt.append("  \"orderNumber\": 1,\n");
+        prompt.append("  \"score\": 1.0,\n");
+        prompt.append("  \"questionType\": \"MULTIPLE_SELECT\",\n");
+        prompt.append("  \"content\": {\n");
+        prompt.append("    \"data\": [\n");
+        prompt.append("      {\"id\": \"opt1\", \"value\": \"I have lived here for 5 years.\", \"isCorrect\": true, \"positionId\": null},\n");
+        prompt.append("      {\"id\": \"opt2\", \"value\": \"She has just finished her homework.\", \"isCorrect\": true, \"positionId\": null},\n");
+        prompt.append("      {\"id\": \"opt3\", \"value\": \"They went to Paris last year.\", \"isCorrect\": false, \"positionId\": null},\n");
+        prompt.append("      {\"id\": \"opt4\", \"value\": \"We are studying now.\", \"isCorrect\": false, \"positionId\": null},\n");
+        prompt.append("      {\"id\": \"opt5\", \"value\": \"He has visited London twice.\", \"isCorrect\": true, \"positionId\": null}\n");
+        prompt.append("    ]\n");
+        prompt.append("  }\n");
+        prompt.append("}\n\n");
+
+        // REWRITE
+        prompt.append("8️⃣ REWRITE\n");
+        prompt.append("IDENTIFICATION: Sentence transformation or rewriting task\n");
+        prompt.append("FORMAT REQUIREMENTS:\n");
+        prompt.append("- Can have MULTIPLE correct answers (all with isCorrect=true)\n");
+        prompt.append("- No incorrect answers (no isCorrect=false)\n");
+        prompt.append("- All answers have positionId=null\n");
+        prompt.append("- Each answer is an acceptable rewrite/transformation\n\n");
+        prompt.append("EXAMPLE:\n");
+        prompt.append("{\n");
+        prompt.append("  \"questionText\": \"Rewrite this sentence in the passive voice: 'The teacher explained the lesson.'\",\n");
+        prompt.append("  \"orderNumber\": 1,\n");
+        prompt.append("  \"score\": 1.0,\n");
+        prompt.append("  \"questionType\": \"REWRITE\",\n");
+        prompt.append("  \"content\": {\n");
+        prompt.append("    \"data\": [\n");
+        prompt.append("      {\"id\": \"ans1\", \"value\": \"The lesson was explained by the teacher.\", \"isCorrect\": true, \"positionId\": null},\n");
+        prompt.append("      {\"id\": \"ans2\", \"value\": \"The lesson has been explained by the teacher.\", \"isCorrect\": true, \"positionId\": null}\n");
+        prompt.append("    ]\n");
+        prompt.append("  }\n");
+        prompt.append("}\n\n");
 
         prompt.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n");
+
+        prompt.append("⚠️ IMPORTANT NOTES:\n");
+        prompt.append("- Position IDs MUST use ONLY lowercase letters (a-z) and numbers (0-9)\n");
+        prompt.append("- Each position ID must be exactly 6 characters\n");
+        prompt.append("- Each position ID must be UNIQUE across all questions\n");
+        prompt.append("- For FILL_IN_THE_BLANK: EXACTLY 1 correct answer (NOT multiple)\n");
+        prompt.append("- For REWRITE: Can have multiple correct answers (all isCorrect=true)\n");
+        prompt.append("- For MULTIPLE_SELECT: Must have 2-3 correct answers\n\n");
     }
 
     private List<SectionWithQuestionsDto> parseMultipleSectionsResponse(String jsonResponse) {

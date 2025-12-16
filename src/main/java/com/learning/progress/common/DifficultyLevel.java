@@ -1,65 +1,266 @@
 package com.learning.progress.common;
 
 public enum DifficultyLevel {
-    // Grade levels (L1-L12)
+    // ==================== GRADE LEVELS (L1-L12) ====================
+
     L1("Level 1 - Elementary Grade 1",
-            "Very limited vocabulary (basic objects, colors, numbers). Can recognize simple sight words and read very short sentences with support. Handles extremely simple tasks such as matching pictures to words or identifying key objects."),
+            "VOCABULARY: 300-500 words (basic nouns: apple, cat, dog, colors, numbers 1-20, family members)\n" +
+                    "GRAMMAR: Present simple ('I am', 'This is'), basic pronouns (I, you, he, she)\n" +
+                    "READING: 20-30 word texts, large fonts, pictures heavily support comprehension\n" +
+                    "QUESTION TYPES:\n" +
+                    "  • MULTIPLE_CHOICE: Picture-based, very simple (\"What color is this?\")\n" +
+                    "  • TRUE_OR_FALSE: Direct facts from text (\"The cat is red. True/False?\")\n" +
+                    "  • DRAG_AND_DROP: Match pictures to words\n" +
+                    "CANNOT HANDLE: Fill-in-blanks, dropdown, complex reasoning, inference\n" +
+                    "COMPLEXITY: Direct recognition only, no interpretation needed"),
 
     L2("Level 2 - Elementary Grade 2",
-            "Basic foundational vocabulary (family, school items, simple actions). Can read short sentences and small paragraphs of 2–3 lines. Completes simple tasks like choosing correct answers from pictures or identifying main ideas."),
+            "VOCABULARY: 500-800 words (school items, basic verbs: eat, play, run, simple adjectives)\n" +
+                    "GRAMMAR: Present continuous ('I am eating'), can/can't, simple plurals\n" +
+                    "READING: 40-60 word texts (2-3 short sentences per paragraph)\n" +
+                    "QUESTION TYPES:\n" +
+                    "  • MULTIPLE_CHOICE: Simple fact recall (\"Where is Tom? A) At school B) At home\")\n" +
+                    "  • TRUE_OR_FALSE: Statements directly from text\n" +
+                    "  • FILL_IN_THE_BLANK: Single word, high-frequency words only (\"The ___ is red\" → cat)\n" +
+                    "  • DRAG_AND_DROP: Match words to pictures or complete simple sentences\n" +
+                    "CANNOT HANDLE: Inference, opinion, multiple-step reasoning\n" +
+                    "COMPLEXITY: Explicit information only, one-step tasks"),
 
     L3("Level 3 - Elementary Grade 3",
-            "Growing vocabulary on everyday topics. Can read short paragraphs (~60–80 words) and understand explicit information. Solves simple problem-based tasks using direct information from the text."),
+            "VOCABULARY: 800-1200 words (daily routines, weather, seasons, basic feelings)\n" +
+                    "GRAMMAR: Past simple regular verbs, basic prepositions (in, on, at), there is/are\n" +
+                    "READING: 60-100 word texts (simple stories with clear sequence)\n" +
+                    "QUESTION TYPES:\n" +
+                    "  • MULTIPLE_CHOICE: Detail questions (\"What did Sarah do yesterday?\")\n" +
+                    "  • TRUE_OR_FALSE: Must scan text for specific information\n" +
+                    "  • FILL_IN_THE_BLANK: Common verbs/nouns with clear context\n" +
+                    "  • REARRANGE: Simple sentences (4-5 words: \"I / go / to / school\")\n" +
+                    "  • DRAG_AND_DROP: Sequence events (First, Next, Then, Finally)\n" +
+                    "CAN START: Very simple inference (\"It's raining, so Sarah took her ___\" → umbrella)\n" +
+                    "COMPLEXITY: Mostly explicit, beginning logical connections"),
 
     L4("Level 4 - Elementary Grade 4",
-            "Wider vocabulary including hobbies, daily routines, and places. Reads short passages (~100–150 words) with some inference. Can complete tasks requiring locating details, sequencing events, and matching ideas."),
+            "VOCABULARY: 1200-1800 words (hobbies, jobs, animals, habitats, basic science terms)\n" +
+                    "GRAMMAR: Past simple irregular verbs, comparatives (bigger, better), going to future\n" +
+                    "READING: 100-150 word texts (short descriptive or narrative passages)\n" +
+                    "QUESTION TYPES:\n" +
+                    "  • MULTIPLE_CHOICE: Inference questions (\"Why did Tom feel sad?\")\n" +
+                    "  • TRUE_OR_FALSE: Requires understanding, not just word matching\n" +
+                    "  • FILL_IN_THE_BLANK: Verbs in correct tense, adjectives\n" +
+                    "  • DROPDOWN: Choose correct word form (\"She ___ to school yesterday\" → went/goes/going)\n" +
+                    "  • REARRANGE: 6-7 words including time markers\n" +
+                    "  • MULTIPLE_SELECT: 2 correct answers from 4-5 options\n" +
+                    "COMPLEXITY: Simple inference, identifying main idea, sequencing multiple events"),
 
     L5("Level 5 - Elementary Grade 5",
-            "Strong basic vocabulary and early academic terms. Reads passages (~150–200 words) with clear structure. Can solve tasks that require comparing information or identifying causes in simple contexts."),
+            "VOCABULARY: 1800-2500 words (geography terms, history basics, technology, health)\n" +
+                    "GRAMMAR: Present perfect (have/has + past participle), modal verbs (should, must, might)\n" +
+                    "READING: 150-250 word texts (informational passages with clear structure)\n" +
+                    "QUESTION TYPES:\n" +
+                    "  • MULTIPLE_CHOICE: Cause-effect, comparing information\n" +
+                    "  • TRUE_OR_FALSE: Requires synthesis of multiple sentences\n" +
+                    "  • FILL_IN_THE_BLANK: Academic vocabulary, connecting words (however, because)\n" +
+                    "  • DROPDOWN: Grammar-focused (tense, preposition, article choices)\n" +
+                    "  • REARRANGE: Complete sentences with dependent clauses\n" +
+                    "  • MULTIPLE_SELECT: Identify 2-3 supporting details\n" +
+                    "  • REWRITE: Simple transformations (active → passive, statement → question)\n" +
+                    "COMPLEXITY: Multi-step reasoning, identifying purpose, comparing ideas"),
 
     L6("Level 6 - Middle School Grade 6",
-            "Vocabulary covers school life, environment, and simple science topics. Reads 200–250 word texts and understands both general meaning and key details. Can interpret information and solve simple linguistic problems."),
+            "VOCABULARY: 2500-3500 words (academic terms: environment, culture, basic economics)\n" +
+                    "GRAMMAR: Passive voice (basic), relative clauses (who, which, that), conditionals (type 1)\n" +
+                    "READING: 250-350 word texts (structured essays, reports, short articles)\n" +
+                    "QUESTION TYPES:\n" +
+                    "  • MULTIPLE_CHOICE: Inference, author's purpose, vocabulary in context\n" +
+                    "  • TRUE_OR_FALSE: Statements requiring interpretation\n" +
+                    "  • FILL_IN_THE_BLANK: Academic vocabulary, idiomatic expressions\n" +
+                    "  • DROPDOWN: Advanced grammar (tenses, conditionals, passive/active voice)\n" +
+                    "  • REARRANGE: Complex sentences with multiple clauses\n" +
+                    "  • MULTIPLE_SELECT: Identify all supporting evidence (3 correct from 6 options)\n" +
+                    "  • REWRITE: Sentence combination, tense transformation, clause restructuring\n" +
+                    "COMPLEXITY: Identifying implicit meaning, analyzing text structure, drawing conclusions"),
 
     L7("Level 7 - Middle School Grade 7",
-            "Expanding vocabulary across academic subjects. Reads passages (~250–300 words) and recognizes relationships (reasons, results). Can complete tasks requiring inference and synthesizing simple ideas."),
+            "VOCABULARY: 3500-4500 words (scientific terms, social issues, technology, literature basics)\n" +
+                    "GRAMMAR: All conditionals (type 1, 2, 3), reported speech, complex passive forms\n" +
+                    "READING: 350-450 word texts (argumentative paragraphs, descriptive essays, news articles)\n" +
+                    "QUESTION TYPES:\n" +
+                    "  • MULTIPLE_CHOICE: Analyzing arguments, distinguishing fact vs opinion\n" +
+                    "  • TRUE_OR_FALSE: Requires understanding implied meaning\n" +
+                    "  • FILL_IN_THE_BLANK: Collocations, phrasal verbs, transition words\n" +
+                    "  • DROPDOWN: Advanced structures (wish clauses, subjunctive, inversion)\n" +
+                    "  • REARRANGE: Paragraphs or complex sentences with embedded clauses\n" +
+                    "  • MULTIPLE_SELECT: Identify all accurate interpretations\n" +
+                    "  • REWRITE: Paraphrasing, formal ↔ informal style changes\n" +
+                    "COMPLEXITY: Evaluating arguments, recognizing bias, synthesizing multiple perspectives"),
 
     L8("Level 8 - Middle School Grade 8",
-            "Rich vocabulary including abstract topics (technology, health, community). Reads 300–350 word texts and interprets viewpoints. Handles tasks requiring comparison, interpretation, and multi-step reasoning."),
+            "VOCABULARY: 4500-5500 words (abstract concepts: justice, democracy, technology ethics)\n" +
+                    "GRAMMAR: Advanced passive (all tenses), causative verbs (have/get something done), cleft sentences\n" +
+                    "READING: 450-600 word texts (opinion pieces, research summaries, literary excerpts)\n" +
+                    "QUESTION TYPES:\n" +
+                    "  • MULTIPLE_CHOICE: Analyzing tone, identifying assumptions, evaluating claims\n" +
+                    "  • TRUE_OR_FALSE: Nuanced statements requiring deep comprehension\n" +
+                    "  • FILL_IN_THE_BLANK: Academic collocations, discourse markers, fixed expressions\n" +
+                    "  • DROPDOWN: Stylistic choices, register appropriateness\n" +
+                    "  • REARRANGE: Organizing argument structure (claim, evidence, conclusion)\n" +
+                    "  • MULTIPLE_SELECT: Identify all valid inferences (multiple layers of meaning)\n" +
+                    "  • REWRITE: Advanced transformations (emphasizing, hedging, nominalizing)\n" +
+                    "COMPLEXITY: Critical analysis, understanding rhetorical devices, evaluating evidence quality"),
 
     L9("Level 9 - High School Grade 9",
-            "Strong academic vocabulary. Reads 350–450 word passages and analyzes information. Can solve problem-based tasks involving inference, summarizing, and evaluating simple arguments."),
+            "VOCABULARY: 5500-6500 words (specialized academic vocabulary across subjects)\n" +
+                    "GRAMMAR: Mastery of all tenses, advanced modals (could have, should have been), inversion for emphasis\n" +
+                    "READING: 600-800 word texts (academic articles, extended arguments, literary analysis)\n" +
+                    "QUESTION TYPES:\n" +
+                    "  • MULTIPLE_CHOICE: Analyzing complex arguments, identifying logical fallacies\n" +
+                    "  • TRUE_OR_FALSE: Statements requiring synthesis of entire passage\n" +
+                    "  • FILL_IN_THE_BLANK: Discipline-specific terms, precise vocabulary choices\n" +
+                    "  • DROPDOWN: Complex grammar in academic context, style consistency\n" +
+                    "  • REARRANGE: Organizing full paragraphs or multi-step arguments\n" +
+                    "  • MULTIPLE_SELECT: Identify all implications of an argument\n" +
+                    "  • REWRITE: Summarizing, synthesizing, maintaining coherence across transformations\n" +
+                    "COMPLEXITY: Evaluating multiple perspectives, recognizing unstated assumptions, analyzing text coherence"),
 
     L10("Level 10 - High School Grade 10",
-            "Wider academic and semi-formal vocabulary. Reads 450–550 word texts with complex structures. Can evaluate information, connect ideas, and solve tasks requiring multi-step reasoning."),
+            "VOCABULARY: 6500-7500 words (advanced academic: philosophical terms, scientific methodology)\n" +
+                    "GRAMMAR: Sophisticated sentence structures, embedded clauses, formal register\n" +
+                    "READING: 800-1000 word texts (research papers, critical essays, policy documents)\n" +
+                    "QUESTION TYPES:\n" +
+                    "  • MULTIPLE_CHOICE: Analyzing methodology, evaluating evidence strength\n" +
+                    "  • TRUE_OR_FALSE: Complex conditional statements, counterfactuals\n" +
+                    "  • FILL_IN_THE_BLANK: Technical terminology, precise academic language\n" +
+                    "  • DROPDOWN: Maintaining coherence across long passages, choosing appropriate hedging\n" +
+                    "  • REARRANGE: Organizing research structure (intro, methods, findings, discussion)\n" +
+                    "  • MULTIPLE_SELECT: Identify all valid conclusions from data/evidence\n" +
+                    "  • REWRITE: Formal academic paraphrasing, citation integration\n" +
+                    "COMPLEXITY: Meta-cognitive analysis, evaluating research design, synthesizing complex data"),
 
     L11("Level 11 - High School Grade 11",
-            "Advanced vocabulary for academic subjects. Reads texts of 600+ words with layered arguments. Can analyze viewpoints, identify assumptions, and solve higher-order comprehension problems."),
+            "VOCABULARY: 7500-9000 words (specialized discourse: linguistics, economics, philosophy)\n" +
+                    "GRAMMAR: Near-native control, sophisticated style manipulation\n" +
+                    "READING: 1000-1200 word texts (journal articles, white papers, literary criticism)\n" +
+                    "QUESTION TYPES:\n" +
+                    "  • MULTIPLE_CHOICE: Distinguishing between similar arguments, identifying subtle rhetorical moves\n" +
+                    "  • TRUE_OR_FALSE: Statements requiring understanding of theoretical frameworks\n" +
+                    "  • FILL_IN_THE_BLANK: Discipline-specific jargon, nuanced vocabulary distinctions\n" +
+                    "  • DROPDOWN: Advanced register choices, maintaining academic voice\n" +
+                    "  • REARRANGE: Complex argumentative structure with multiple supporting threads\n" +
+                    "  • MULTIPLE_SELECT: Identify all implications across multiple domains\n" +
+                    "  • REWRITE: Advanced synthesis, integrating multiple sources, maintaining authorial voice\n" +
+                    "COMPLEXITY: Theoretical analysis, evaluating paradigms, recognizing disciplinary conventions"),
 
     L12("Level 12 - High School Grade 12",
-            "Pre-university vocabulary and strong reading skills. Reads 700+ word academic passages. Capable of solving complex problem-solving tasks such as evaluating arguments and synthesizing multiple ideas."),
+            "VOCABULARY: 9000+ words (advanced academic: epistemology, quantum physics, literary theory)\n" +
+                    "GRAMMAR: Native-level sophistication, stylistic variation for effect\n" +
+                    "READING: 1200+ word texts (peer-reviewed articles, theoretical treatises, advanced literary works)\n" +
+                    "QUESTION TYPES:\n" +
+                    "  • MULTIPLE_CHOICE: Evaluating competing theories, analyzing epistemological assumptions\n" +
+                    "  • TRUE_OR_FALSE: Requires deep theoretical understanding and cross-textual synthesis\n" +
+                    "  • FILL_IN_THE_BLANK: Highly specialized terminology, precise conceptual distinctions\n" +
+                    "  • DROPDOWN: Sophisticated stylistic choices, academic convention mastery\n" +
+                    "  • REARRANGE: Complex multi-paragraph arguments with counter-arguments\n" +
+                    "  • MULTIPLE_SELECT: Identify all valid interpretations across frameworks\n" +
+                    "  • REWRITE: Sophisticated paraphrasing, theoretical reframing, critical synthesis\n" +
+                    "COMPLEXITY: Meta-theoretical analysis, evaluating foundational assumptions, advanced synthesis"),
 
-    // CEFR levels
+    // ==================== CEFR LEVELS ====================
+
     A1("A1 - Beginner",
-            "Very limited vocabulary and basic phrases. Reads extremely short, simple texts. Can complete tasks requiring recognition of familiar words or simple factual matching."),
+            "VOCABULARY: 500-800 words (survival vocabulary: greetings, numbers, basic needs)\n" +
+                    "GRAMMAR: Present simple, basic questions (What/Where/Who), singular/plural\n" +
+                    "READING: 30-50 word texts (signs, simple forms, basic messages)\n" +
+                    "QUESTION TYPES:\n" +
+                    "  • MULTIPLE_CHOICE: Recognition of familiar words/phrases\n" +
+                    "  • TRUE_OR_FALSE: Direct matching with text\n" +
+                    "  • DRAG_AND_DROP: Picture-word matching, simple categorization\n" +
+                    "CANNOT HANDLE: Inference, multi-step tasks, unfamiliar contexts\n" +
+                    "COMPLEXITY: Concrete, immediate, highly supported"),
 
     A2("A2 - Elementary",
-            "Basic everyday vocabulary. Reads simple, short paragraphs and understands routine information. Solves tasks that involve locating direct details and completing simple statements."),
+            "VOCABULARY: 1000-1500 words (everyday topics: shopping, family, work, local area)\n" +
+                    "GRAMMAR: Past simple, basic future (going to), can/should, simple connectors (and, but, because)\n" +
+                    "READING: 100-150 word texts (short personal letters, simple ads, basic instructions)\n" +
+                    "QUESTION TYPES:\n" +
+                    "  • MULTIPLE_CHOICE: Simple inference from context\n" +
+                    "  • TRUE_OR_FALSE: Requires basic comprehension\n" +
+                    "  • FILL_IN_THE_BLANK: High-frequency words in clear context\n" +
+                    "  • REARRANGE: Simple sentences (5-6 words)\n" +
+                    "COMPLEXITY: Familiar contexts, routine information, basic personal/social topics"),
 
     B1("B1 - Intermediate",
-            "Moderate vocabulary across familiar topics. Reads texts with clear structure and main ideas. Solves tasks involving summarizing, identifying key points, and interpreting straightforward information."),
+            "VOCABULARY: 2500-3500 words (work, school, leisure, travel, current events)\n" +
+                    "GRAMMAR: All basic tenses, conditionals (type 1), passive (simple), relative clauses\n" +
+                    "READING: 250-400 word texts (newspaper articles, standard letters, routine reports)\n" +
+                    "QUESTION TYPES:\n" +
+                    "  • MULTIPLE_CHOICE: Main idea, supporting details, moderate inference\n" +
+                    "  • TRUE_OR_FALSE: Requires understanding relationships\n" +
+                    "  • FILL_IN_THE_BLANK: Collocations, phrasal verbs, connectors\n" +
+                    "  • DROPDOWN: Tense/form selection based on context\n" +
+                    "  • REARRANGE: Complex sentences with clauses\n" +
+                    "  • MULTIPLE_SELECT: 2-3 correct from 5-6 options\n" +
+                    "  • REWRITE: Basic transformations\n" +
+                    "COMPLEXITY: Connected discourse, personal opinions, straightforward arguments"),
 
     B2("B2 - Upper Intermediate",
-            "Wide vocabulary for both general and semi-academic topics. Reads complex texts and understands nuance. Solves analytical tasks involving inference, comparison, and understanding implied meaning."),
+            "VOCABULARY: 4000-5500 words (abstract topics, technical in own field, complex social issues)\n" +
+                    "GRAMMAR: Advanced structures, subtle modality, complex passives, all conditionals\n" +
+                    "READING: 400-700 word texts (contemporary issues, specialized articles, literary prose)\n" +
+                    "QUESTION TYPES:\n" +
+                    "  • MULTIPLE_CHOICE: Implicit meaning, attitude, complex inference\n" +
+                    "  • TRUE_OR_FALSE: Nuanced understanding required\n" +
+                    "  • FILL_IN_THE_BLANK: Academic vocabulary, idiomatic expressions\n" +
+                    "  • DROPDOWN: Style/register appropriate choices\n" +
+                    "  • REARRANGE: Paragraph organization, argument structure\n" +
+                    "  • MULTIPLE_SELECT: Multiple layers of meaning\n" +
+                    "  • REWRITE: Maintaining meaning across significant structural changes\n" +
+                    "COMPLEXITY: Abstract argumentation, evaluating positions, recognizing viewpoint"),
 
     C1("C1 - Advanced",
-            "Very advanced vocabulary suitable for academic use. Reads long, complex texts and identifies subtle arguments. Capable of solving tasks requiring evaluation, critical reasoning, and synthesis."),
+            "VOCABULARY: 6000-8000 words (wide range of demanding topics, specialized discourse)\n" +
+                    "GRAMMAR: Full range with flexibility and precision, sophisticated stylistic control\n" +
+                    "READING: 700-1000 word texts (complex literary, technical, academic texts)\n" +
+                    "QUESTION TYPES:\n" +
+                    "  • MULTIPLE_CHOICE: Subtle distinctions, implied attitudes, rhetorical purpose\n" +
+                    "  • TRUE_OR_FALSE: Requires synthesis and interpretation\n" +
+                    "  • FILL_IN_THE_BLANK: Precise vocabulary, collocations, fixed expressions\n" +
+                    "  • DROPDOWN: Maintaining sophisticated style and coherence\n" +
+                    "  • REARRANGE: Complex multi-paragraph structures\n" +
+                    "  • MULTIPLE_SELECT: Identifying all valid implications\n" +
+                    "  • REWRITE: Sophisticated paraphrasing, synthesis, style transformation\n" +
+                    "COMPLEXITY: Recognizing finer points of meaning, understanding complex structures"),
 
     C2("C2 - Proficiency",
-            "Near-native vocabulary and comprehension. Reads highly complex and abstract texts with ease. Handles sophisticated problem-solving tasks that require deep analysis and interpretation."),
+            "VOCABULARY: 8000-10000+ words (virtually any topic with ease and precision)\n" +
+                    "GRAMMAR: Native-like command, can appreciate stylistic differences\n" +
+                    "READING: 1000+ word texts (any type of text including abstract, complex literary and technical)\n" +
+                    "QUESTION TYPES:\n" +
+                    "  • ALL TYPES: Can handle maximum complexity in any question format\n" +
+                    "  • MULTIPLE_CHOICE: Distinguishing fine shades of meaning, appreciating irony/humor\n" +
+                    "  • TRUE_OR_FALSE: Requires complete mastery of text\n" +
+                    "  • FILL_IN_THE_BLANK: Context-dependent subtle distinctions\n" +
+                    "  • DROPDOWN: Recognizing and producing appropriate style\n" +
+                    "  • REARRANGE: Any level of structural complexity\n" +
+                    "  • MULTIPLE_SELECT: Meta-level understanding\n" +
+                    "  • REWRITE: Can maintain exact meaning through major transformations\n" +
+                    "COMPLEXITY: Near-native comprehension, appreciating implicit cultural references"),
 
-    // University level
+    // ==================== UNIVERSITY LEVEL ====================
+
     UNIVERSITY("University Level",
-            "Academic and research-level vocabulary. Reads scholarly articles and technical texts. Capable of solving advanced academic problems such as analyzing arguments, interpreting data, and producing structured conclusions.");
+            "VOCABULARY: 10000+ words (academic register, discipline-specific terminology across fields)\n" +
+                    "GRAMMAR: Complete mastery, can manipulate language for precise academic purposes\n" +
+                    "READING: 1500+ word texts (research articles, theoretical works, primary sources)\n" +
+                    "QUESTION TYPES:\n" +
+                    "  • ALL TYPES at maximum sophistication:\n" +
+                    "  • MULTIPLE_CHOICE: Analyzing research methodology, evaluating theoretical frameworks\n" +
+                    "  • TRUE_OR_FALSE: Statements requiring deep disciplinary knowledge\n" +
+                    "  • FILL_IN_THE_BLANK: Highly specialized terminology, discipline conventions\n" +
+                    "  • DROPDOWN: Academic register maintenance, citation integration\n" +
+                    "  • REARRANGE: Research paper structure, complex argumentative flow\n" +
+                    "  • MULTIPLE_SELECT: Identifying all valid scholarly implications\n" +
+                    "  • REWRITE: Academic synthesis, theoretical reframing, critical engagement\n" +
+                    "COMPLEXITY: Meta-cognitive analysis, interdisciplinary synthesis, original critical thought");
 
     private final String displayName;
     private final String description;
