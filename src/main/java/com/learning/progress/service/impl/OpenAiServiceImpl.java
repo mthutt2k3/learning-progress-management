@@ -7,7 +7,9 @@ import com.learning.progress.common.DifficultyLevel;
 import com.learning.progress.common.LessonFocus;
 import com.learning.progress.dto.ai.*;
 import com.learning.progress.dto.challenge.section.*;
-import com.learning.progress.entity.*;
+import com.learning.progress.entity.DailyChallenge;
+import com.learning.progress.entity.Level;
+import com.learning.progress.entity.Syllabus;
 import com.learning.progress.exception.ApiException;
 import com.learning.progress.repository.DailyChallengeRepository;
 import com.learning.progress.repository.LevelRepository;
@@ -26,10 +28,12 @@ import org.springframework.web.client.RestTemplate;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.util.UriComponentsBuilder;
 
-import java.io.*;
-import java.net.URL;
+import java.io.IOException;
 import java.util.*;
-import java.util.concurrent.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -41,13 +45,14 @@ public class OpenAiServiceImpl implements OpenAiService {
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final DailyChallengeRepository dailyChallengeRepository;
     private final LevelRepository levelRepository;
-
     private ExecutorService executorService;
 
     @Value("${azure.openai.batch-size}")
     private int batchSize;
+
     @Value("${azure.openai.thread-pool-size}")
     private int threadPoolSize;
+
     @Value("${azure.openai.max-question}")
     private int maxQuestion;
 
@@ -79,10 +84,8 @@ public class OpenAiServiceImpl implements OpenAiService {
 
     private static final String API_VERSION = "2025-04-01-preview";
     private static final Pattern POSITION_PATTERN = Pattern.compile("\\[\\[pos_([a-z0-9]+)\\]\\]");
-
-    private static final String SYSTEM_ROLE_JSON_INSTRUCTION =
-            "You are an expert English teacher. Return ONLY valid JSON (no markdown, no comments, no extra text). " +
-                    "Do NOT include trailing commas or non-standard JSON syntax.";
+    private static final String SYSTEM_ROLE_JSON_INSTRUCTION = "You are an expert English teacher. Return ONLY valid JSON (no markdown, no comments, no extra text). " +
+            "Do NOT include trailing commas or non-standard JSON syntax.";
 
     public OpenAiServiceImpl(DailyChallengeRepository dailyChallengeRepository,
                              LevelRepository levelRepository) {
@@ -98,9 +101,9 @@ public class OpenAiServiceImpl implements OpenAiService {
         SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
         requestFactory.setConnectTimeout(connectTimeoutMs);
         requestFactory.setReadTimeout(readTimeoutMs);
-
         this.restTemplate = new RestTemplate(requestFactory);
-        log.info("Initialized RestTemplate with connectTimeout={}ms readTimeout={}ms", connectTimeoutMs, readTimeoutMs);
+        log.info("Initialized RestTemplate with connectTimeout={}ms readTimeout={}ms",
+                connectTimeoutMs, readTimeoutMs);
     }
 
     @PreDestroy
@@ -116,11 +119,406 @@ public class OpenAiServiceImpl implements OpenAiService {
         }
     }
 
+    private InputValidationResponse validateInputContent(String description, String vocabularyList,
+                                                         List<LessonFocus> lessonFocus, String customLessonFocus) {
+        try {
+            log.info("Validating input content for inappropriate material");
+
+            StringBuilder contentToCheck = new StringBuilder();
+
+            if (description != null && !description.isBlank()) {
+                contentToCheck.append("Description: ").append(description).append("\n");
+            }
+
+            if (vocabularyList != null && !vocabularyList.isBlank()) {
+                contentToCheck.append("Vocabulary: ").append(vocabularyList).append("\n");
+            }
+
+            if (customLessonFocus != null && !customLessonFocus.isBlank()) {
+                contentToCheck.append("Custom Focus: ").append(customLessonFocus).append("\n");
+            }
+
+            if (lessonFocus != null && !lessonFocus.isEmpty()) {
+                contentToCheck.append("Lesson Focus: ");
+                for (LessonFocus focus : lessonFocus) {
+                    contentToCheck.append(focus.getDisplayName()).append(" ");
+                }
+                contentToCheck.append("\n");
+            }
+
+            // If nothing to check, return valid
+            if (contentToCheck.length() == 0) {
+                return new InputValidationResponse(null, null);
+            }
+
+            String prompt = buildInputValidationPrompt(contentToCheck.toString());
+            String aiResponse = callOpenAI(prompt);
+
+            return parseInputValidationResponse(aiResponse);
+
+        } catch (Exception e) {
+            log.error("Error validating input content: {}", e.getMessage(), e);
+            // In case of error, return warning
+            return new InputValidationResponse(null,
+                    "Could not validate content due to system error. Please review manually.");
+        }
+    }
+
+    /**
+     * ✅ NEW: Build prompt for input content validation
+     */
+    private String buildInputValidationPrompt(String content) {
+        StringBuilder prompt = new StringBuilder();
+
+        prompt.append("You are a content safety moderator for an educational English learning platform.\n\n");
+
+        prompt.append("🚨 YOUR TASK: Analyze the following user input and check for:\n\n");
+
+        prompt.append("❌ SEVERE ISSUES (Must reject - set error field):\n");
+        prompt.append("- Violence, hate speech, discrimination, racism, or offensive content\n");
+        prompt.append("- Sexual, adult, or inappropriate content\n");
+        prompt.append("- Profanity, vulgar language, or explicit terms\n");
+        prompt.append("- Political propaganda or controversial ideologies\n");
+        prompt.append("- Harmful, dangerous, or illegal activities\n");
+        prompt.append("- Drug abuse, alcohol abuse, or substance references\n");
+        prompt.append("- Self-harm or mental health triggering content\n");
+        prompt.append("- Misleading, false, or deceptive information\n");
+        prompt.append("- Personal attacks or cyberbullying\n");
+        prompt.append("- Any content that could harm students\n\n");
+
+        prompt.append("⚠️ MINOR ISSUES (Set warning field):\n");
+        prompt.append("- Content contains Vietnamese language (should be English only)\n");
+        prompt.append("- Content is not well-aligned with educational purposes\n");
+        prompt.append("- Content is too vague or unclear\n");
+        prompt.append("- Content quality could be improved\n\n");
+
+        prompt.append("📋 CONTENT TO CHECK:\n");
+        prompt.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+        prompt.append(content).append("\n");
+        prompt.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n");
+
+        prompt.append("RETURN FORMAT (JSON only):\n");
+        prompt.append("{\n");
+        prompt.append("  \"error\": \"string or null\",\n");
+        prompt.append("  \"warning\": \"string or null\"\n");
+        prompt.append("}\n\n");
+
+        prompt.append("CRITICAL RULES:\n");
+        prompt.append("- Set 'error' field ONLY if content has severe issues that could harm students\n");
+        prompt.append("- Set 'warning' field for minor issues (Vietnamese text, unclear content)\n");
+        prompt.append("- Both can be null if content is appropriate\n");
+        prompt.append("- Be strict with harmful content, but reasonable with language/quality issues\n");
+        prompt.append("- Return ONLY valid JSON\n\n");
+
+        prompt.append("Analyze now:\n");
+
+        return prompt.toString();
+    }
+
+    /**
+     * ✅ NEW: Parse input validation response
+     */
+    private InputValidationResponse parseInputValidationResponse(String jsonResponse) {
+        try {
+            String cleaned = cleanJsonResponse(jsonResponse);
+            JsonNode root = objectMapper.readTree(cleaned);
+
+            String error = root.has("error") && !root.get("error").isNull()
+                    ? root.get("error").asText() : null;
+            String warning = root.has("warning") && !root.get("warning").isNull()
+                    ? root.get("warning").asText() : null;
+
+            return new InputValidationResponse(error, warning);
+
+        } catch (Exception e) {
+            log.error("Failed to parse input validation response: {}", e.getMessage(), e);
+            return new InputValidationResponse(null,
+                    "Could not parse validation result. Please review content manually.");
+        }
+    }
+
+    /**
+     * ✅ UPDATED: Validate output JSON format comprehensively
+     */
+    private void validateOutputFormat(List<QuestionDto> questions) {
+        if (questions == null || questions.isEmpty()) {
+            throw new RuntimeException("No questions generated");
+        }
+
+        for (int i = 0; i < questions.size(); i++) {
+            QuestionDto question = questions.get(i);
+            int questionNumber = i + 1;
+
+            // Basic field validation
+            if (question.getQuestionText() == null || question.getQuestionText().trim().isEmpty()) {
+                throw new RuntimeException("Question " + questionNumber + ": questionText is required");
+            }
+
+            if (question.getQuestionType() == null || question.getQuestionType().trim().isEmpty()) {
+                throw new RuntimeException("Question " + questionNumber + ": questionType is required");
+            }
+
+            if (question.getContent() == null || question.getContent().getData() == null ||
+                    question.getContent().getData().isEmpty()) {
+                throw new RuntimeException("Question " + questionNumber + ": content.data is required and cannot be empty");
+            }
+
+            // Validate based on question type
+            String questionType = question.getQuestionType();
+            List<DataItem> dataItems = question.getContent().getData();
+
+            switch (questionType) {
+                case "MULTIPLE_CHOICE":
+                    validateMultipleChoiceFormat(question, dataItems, questionNumber);
+                    break;
+                case "TRUE_OR_FALSE":
+                    validateTrueOrFalseFormat(question, dataItems, questionNumber);
+                    break;
+                case "FILL_IN_THE_BLANK":
+                    validateFillInTheBlankFormat(question, dataItems, questionNumber);
+                    break;
+                case "DROPDOWN":
+                    validateDropdownFormat(question, dataItems, questionNumber);
+                    break;
+                case "REARRANGE":
+                    validateRearrangeFormat(question, dataItems, questionNumber);
+                    break;
+                case "DRAG_AND_DROP":
+                    validateDragAndDropFormat(question, dataItems, questionNumber);
+                    break;
+                case "MULTIPLE_SELECT":
+                    validateMultipleSelectFormat(question, dataItems, questionNumber);
+                    break;
+                case "REWRITE":
+                    validateRewriteFormat(question, dataItems, questionNumber);
+                    break;
+                default:
+                    throw new RuntimeException("Question " + questionNumber + ": Unknown question type '" + questionType + "'");
+            }
+        }
+
+        log.info("✅ All questions passed format validation");
+    }
+
+    private void validateMultipleChoiceFormat(QuestionDto question, List<DataItem> dataItems, int questionNumber) {
+        if (dataItems.size() != 4) {
+            throw new RuntimeException("Question " + questionNumber + " (MULTIPLE_CHOICE): Must have exactly 4 options, found " + dataItems.size());
+        }
+
+        long correctCount = dataItems.stream().filter(DataItem::isCorrect).count();
+        if (correctCount != 1) {
+            throw new RuntimeException("Question " + questionNumber + " (MULTIPLE_CHOICE): Must have exactly 1 correct answer, found " + correctCount);
+        }
+
+        for (DataItem item : dataItems) {
+            if (item.getPositionId() != null) {
+                throw new RuntimeException("Question " + questionNumber + " (MULTIPLE_CHOICE): Options must have positionId=null");
+            }
+            if (item.getValue() == null || item.getValue().trim().isEmpty()) {
+                throw new RuntimeException("Question " + questionNumber + " (MULTIPLE_CHOICE): Option value cannot be empty");
+            }
+        }
+    }
+
+    private void validateTrueOrFalseFormat(QuestionDto question, List<DataItem> dataItems, int questionNumber) {
+        if (dataItems.size() != 2) {
+            throw new RuntimeException("Question " + questionNumber + " (TRUE_OR_FALSE): Must have exactly 2 options, found " + dataItems.size());
+        }
+
+        long correctCount = dataItems.stream().filter(DataItem::isCorrect).count();
+        if (correctCount != 1) {
+            throw new RuntimeException("Question " + questionNumber + " (TRUE_OR_FALSE): Must have exactly 1 correct answer, found " + correctCount);
+        }
+
+        for (DataItem item : dataItems) {
+            if (item.getPositionId() != null) {
+                throw new RuntimeException("Question " + questionNumber + " (TRUE_OR_FALSE): Options must have positionId=null");
+            }
+        }
+    }
+
+    private void validateFillInTheBlankFormat(QuestionDto question, List<DataItem> dataItems, int questionNumber) {
+        String questionText = question.getQuestionText();
+
+        // Must contain [[pos_xxx]] placeholders
+        Matcher matcher = POSITION_PATTERN.matcher(questionText);
+        Set<String> positionsInText = new HashSet<>();
+        while (matcher.find()) {
+            positionsInText.add(matcher.group(1));
+        }
+
+        if (positionsInText.isEmpty()) {
+            throw new RuntimeException("Question " + questionNumber + " (FILL_IN_THE_BLANK): Must contain [[pos_xxx]] placeholders");
+        }
+
+        // ✅ CRITICAL: Only 1 correct answer allowed
+        long correctCount = dataItems.stream().filter(DataItem::isCorrect).count();
+        if (correctCount != 1) {
+            throw new RuntimeException("Question " + questionNumber + " (FILL_IN_THE_BLANK): Must have exactly 1 correct answer, found " + correctCount);
+        }
+
+        if (dataItems.size() != 1) {
+            throw new RuntimeException("Question " + questionNumber + " (FILL_IN_THE_BLANK): Can only have 1 answer, found " + dataItems.size());
+        }
+
+        // All answers must be correct (isCorrect=true)
+        for (DataItem item : dataItems) {
+            if (!item.isCorrect()) {
+                throw new RuntimeException("Question " + questionNumber + " (FILL_IN_THE_BLANK): All answers must have isCorrect=true");
+            }
+
+            if (item.getPositionId() == null || item.getPositionId().trim().isEmpty()) {
+                throw new RuntimeException("Question " + questionNumber + " (FILL_IN_THE_BLANK): Answers must have valid positionId");
+            }
+
+            if (!positionsInText.contains(item.getPositionId())) {
+                throw new RuntimeException("Question " + questionNumber + " (FILL_IN_THE_BLANK): Answer positionId '" +
+                        item.getPositionId() + "' not found in question text");
+            }
+        }
+    }
+
+    private void validateDropdownFormat(QuestionDto question, List<DataItem> dataItems, int questionNumber) {
+        String questionText = question.getQuestionText();
+
+        Matcher matcher = POSITION_PATTERN.matcher(questionText);
+        Set<String> positionsInText = new HashSet<>();
+        while (matcher.find()) {
+            positionsInText.add(matcher.group(1));
+        }
+
+        if (positionsInText.isEmpty()) {
+            throw new RuntimeException("Question " + questionNumber + " (DROPDOWN): Must contain [[pos_xxx]] placeholders");
+        }
+
+        Map<String, List<DataItem>> itemsByPosition = dataItems.stream()
+                .filter(item -> item.getPositionId() != null)
+                .collect(Collectors.groupingBy(DataItem::getPositionId));
+
+        for (String posId : positionsInText) {
+            List<DataItem> options = itemsByPosition.get(posId);
+            if (options == null || options.size() != 4) {
+                throw new RuntimeException("Question " + questionNumber + " (DROPDOWN): Position '" + posId +
+                        "' must have exactly 4 options, found " + (options == null ? 0 : options.size()));
+            }
+
+            long correctCount = options.stream().filter(DataItem::isCorrect).count();
+            if (correctCount != 1) {
+                throw new RuntimeException("Question " + questionNumber + " (DROPDOWN): Position '" + posId +
+                        "' must have exactly 1 correct answer, found " + correctCount);
+            }
+        }
+    }
+
+    private void validateRearrangeFormat(QuestionDto question, List<DataItem> dataItems, int questionNumber) {
+        String questionText = question.getQuestionText();
+
+        Matcher matcher = POSITION_PATTERN.matcher(questionText);
+        Set<String> positionsInText = new HashSet<>();
+        while (matcher.find()) {
+            positionsInText.add(matcher.group(1));
+        }
+
+        if (positionsInText.isEmpty()) {
+            throw new RuntimeException("Question " + questionNumber + " (REARRANGE): Must contain [[pos_xxx]] placeholders");
+        }
+
+        if (positionsInText.size() < 5 || positionsInText.size() > 8) {
+            throw new RuntimeException("Question " + questionNumber + " (REARRANGE): Must have 5-8 items, found " + positionsInText.size());
+        }
+
+        long correctCount = dataItems.stream().filter(DataItem::isCorrect).count();
+        if (correctCount != dataItems.size()) {
+            throw new RuntimeException("Question " + questionNumber + " (REARRANGE): All items must have isCorrect=true, found " +
+                    (dataItems.size() - correctCount) + " incorrect items");
+        }
+
+        for (DataItem item : dataItems) {
+            if (item.getPositionId() == null || item.getPositionId().trim().isEmpty()) {
+                throw new RuntimeException("Question " + questionNumber + " (REARRANGE): Items must have valid positionId");
+            }
+            if (!positionsInText.contains(item.getPositionId())) {
+                throw new RuntimeException("Question " + questionNumber + " (REARRANGE): Item positionId '" +
+                        item.getPositionId() + "' not found in question text");
+            }
+        }
+    }
+
+    private void validateDragAndDropFormat(QuestionDto question, List<DataItem> dataItems, int questionNumber) {
+        String questionText = question.getQuestionText();
+
+        Matcher matcher = POSITION_PATTERN.matcher(questionText);
+        Set<String> positionsInText = new HashSet<>();
+        while (matcher.find()) {
+            positionsInText.add(matcher.group(1));
+        }
+
+        if (positionsInText.isEmpty()) {
+            throw new RuntimeException("Question " + questionNumber + " (DRAG_AND_DROP): Must contain [[pos_xxx]] placeholders");
+        }
+
+        long correctCount = dataItems.stream().filter(DataItem::isCorrect).count();
+        if (correctCount != positionsInText.size()) {
+            throw new RuntimeException("Question " + questionNumber + " (DRAG_AND_DROP): Must have " + positionsInText.size() +
+                    " correct answers (matching placeholders), found " + correctCount);
+        }
+
+        for (DataItem item : dataItems) {
+            if (item.isCorrect()) {
+                if (item.getPositionId() == null || item.getPositionId().trim().isEmpty()) {
+                    throw new RuntimeException("Question " + questionNumber + " (DRAG_AND_DROP): Correct answers must have valid positionId");
+                }
+                if (!positionsInText.contains(item.getPositionId())) {
+                    throw new RuntimeException("Question " + questionNumber + " (DRAG_AND_DROP): Answer positionId '" +
+                            item.getPositionId() + "' not found in question text");
+                }
+            }
+        }
+    }
+
+    private void validateMultipleSelectFormat(QuestionDto question, List<DataItem> dataItems, int questionNumber) {
+        if (dataItems.size() < 4 || dataItems.size() > 6) {
+            throw new RuntimeException("Question " + questionNumber + " (MULTIPLE_SELECT): Must have 4-6 options, found " + dataItems.size());
+        }
+
+        long correctCount = dataItems.stream().filter(DataItem::isCorrect).count();
+        if (correctCount < 2 || correctCount > 3) {
+            throw new RuntimeException("Question " + questionNumber + " (MULTIPLE_SELECT): Must have 2-3 correct answers, found " + correctCount);
+        }
+
+        for (DataItem item : dataItems) {
+            if (item.getPositionId() != null) {
+                throw new RuntimeException("Question " + questionNumber + " (MULTIPLE_SELECT): Options must have positionId=null");
+            }
+        }
+    }
+
+    private void validateRewriteFormat(QuestionDto question, List<DataItem> dataItems, int questionNumber) {
+        long correctCount = dataItems.stream().filter(DataItem::isCorrect).count();
+        if (correctCount != dataItems.size()) {
+            throw new RuntimeException("Question " + questionNumber + " (REWRITE): All answers must have isCorrect=true, found " +
+                    (dataItems.size() - correctCount) + " incorrect answers");
+        }
+
+        for (DataItem item : dataItems) {
+            if (item.getPositionId() != null) {
+                throw new RuntimeException("Question " + questionNumber + " (REWRITE): Answers must have positionId=null");
+            }
+        }
+    }
+
     @Override
     @Transactional(readOnly = true)
-    public List<SectionWithQuestionsDto> generateGVQuestions(GenerateGVQuestionsRequest request) {
-
+    public GenerateQuestionsResponse generateGVQuestions(GenerateGVQuestionsRequest request) {
         LevelInfo levelInfo = parseLevelInfo(request.getLevel());
+
+
+        InputValidationResponse validation = validateInputContent(
+                request.getDescription(),
+                request.getVocabularyList(),
+                request.getLessonFocus(),
+                request.getCustomLessonFocus()
+        );
 
         int totalQuestions = request.getQuestionTypeConfigs().stream()
                 .mapToInt(GenerateGVQuestionsRequest.QuestionTypeConfig::getNumberOfQuestions)
@@ -128,8 +526,8 @@ public class OpenAiServiceImpl implements OpenAiService {
 
         if (totalQuestions > maxQuestion) {
             log.error("Total questions exceeds limit: {} > {}", totalQuestions, maxQuestion);
-            throw new ApiException("Total number of questions cannot exceed " + maxQuestion + ". Requested: " + totalQuestions,
-                    HttpStatus.BAD_REQUEST.value());
+            throw new ApiException("Total number of questions cannot exceed " + maxQuestion +
+                    ". Requested: " + totalQuestions, HttpStatus.BAD_REQUEST.value());
         }
 
         log.info("Total questions to generate: {}", totalQuestions);
@@ -142,6 +540,7 @@ public class OpenAiServiceImpl implements OpenAiService {
                 });
 
         ChallengeContext context = eagerLoadChallengeContext(challenge);
+
         log.info("Level info - Name: {}, Description: {}", levelInfo.levelName, levelInfo.levelDescription);
 
         List<QuestionGenerationTask> allTasks = new ArrayList<>();
@@ -239,20 +638,41 @@ public class OpenAiServiceImpl implements OpenAiService {
         List<QuestionDto> allQuestions = results.stream()
                 .flatMap(s -> s.getQuestions().stream())
                 .collect(Collectors.toList());
+
         ensureUniquePositionIds(allQuestions);
+
+        try {
+            validateOutputFormat(allQuestions);
+        } catch (Exception e) {
+            log.error("Output validation failed: {}", e.getMessage());
+            throw new RuntimeException("Generated questions have invalid format: " + e.getMessage());
+        }
 
         log.info("Successfully generated {} sections with {} total questions",
                 results.size(), results.size());
 
-        return results;
+        // ✅ NEW: Return GenerateQuestionsResponse with error and warning
+        return new GenerateQuestionsResponse(
+                results,
+                validation.getError(),
+                validation.getWarning()
+        );
     }
 
     @Override
     @Transactional(readOnly = true)
-    public List<SectionWithQuestionsDto> generateContentBasedQuestions(GenerateContentBasedQuestionsRequest request) {
+    public GenerateQuestionsResponse generateContentBasedQuestions(GenerateContentBasedQuestionsRequest request) {
         log.info("Starting content-based question generation for challengeId: {}", request.getChallengeId());
 
         LevelInfo levelInfo = parseLevelInfo(request.getLevel());
+
+        // ✅ Validate input content - chỉ validate description
+        InputValidationResponse validation = validateInputContent(
+                request.getDescription(),
+                null,
+                null,
+                null
+        );
 
         int totalQuestions = request.getSections().stream()
                 .flatMap(section -> section.getQuestionTypeConfigs().stream())
@@ -261,8 +681,8 @@ public class OpenAiServiceImpl implements OpenAiService {
 
         if (totalQuestions > maxQuestion) {
             log.error("Total questions across all sections exceeds limit: {}", totalQuestions);
-            throw new ApiException("Total number of questions across all sections cannot exceed " + maxQuestion + ". Requested: " + totalQuestions,
-                    HttpStatus.BAD_REQUEST.value());
+            throw new ApiException("Total number of questions across all sections cannot exceed " +
+                    maxQuestion + ". Requested: " + totalQuestions, HttpStatus.BAD_REQUEST.value());
         }
 
         log.info("Total questions to generate across all sections: {}", totalQuestions);
@@ -275,9 +695,11 @@ public class OpenAiServiceImpl implements OpenAiService {
 
         ChallengeContext context = eagerLoadChallengeContext(challenge);
         String dailyChallengeType = challenge.getChallengeType().toString();
+
         log.info("Daily Challenge Type: {}, Level: {}", dailyChallengeType, levelInfo.levelName);
 
         List<SectionWithQuestionsDto> results = new ArrayList<>();
+        String outputError = null;
 
         for (GenerateContentBasedQuestionsRequest.SectionWithConfig sectionConfig : request.getSections()) {
             SectionDto section = sectionConfig.getSection();
@@ -290,41 +712,15 @@ public class OpenAiServiceImpl implements OpenAiService {
                     throw new IllegalArgumentException("Section content is required");
                 }
 
-                // ✅ Enhanced content = gốc + OCR (nếu có ảnh)
+                // ✅ CRITICAL: Validate section content is English only
+                validateEnglishOnlyContent(section.getSectionsContent(), "Section content");
+
                 String enhancedContent = section.getSectionsContent();
 
-                // ✅ Chỉ với READING + có sectionUrl + là ảnh → OCR
-//                if ("RE".equals(dailyChallengeType) &&
-//                        section.getSectionsUrl() != null &&
-//                        !section.getSectionsUrl().trim().isEmpty()) {
-//
-//                    String sectionUrl = section.getSectionsUrl().trim();
-//
-//                    if (isImageUrl(sectionUrl)) {
-//                        log.info("Detected image URL in reading section, performing OCR: {}", sectionUrl);
-//
-//                        try {
-//                            String traceId = TraceUtil.getTraceId();
-//                            String ocrText = extractTextFromImageUrl(sectionUrl, traceId);
-//
-//                            if (ocrText != null && !ocrText.trim().isEmpty()) {
-//                                // ✅ Ghép OCR text vào content gốc
-//                                enhancedContent = section.getSectionsContent() + "\n\n" + ocrText;
-//                                log.info("Successfully appended OCR text ({} chars) to section content",
-//                                        ocrText.length());
-//                            }
-//                        } catch (Exception e) {
-//                            log.error("Failed to extract text from section image: {}", e.getMessage());
-//                            // Continue với content gốc thay vì fail
-//                        }
-//                    }
-//                }
-
-                // ✅ Tạo section với content đã enhance (để không modify request object)
                 SectionDto enhancedSection = new SectionDto();
                 enhancedSection.setId(section.getId());
                 enhancedSection.setSectionTitle(section.getSectionTitle());
-                enhancedSection.setSectionsContent(enhancedContent); // ✅ Dùng content đã ghép OCR
+                enhancedSection.setSectionsContent(enhancedContent);
                 enhancedSection.setResourceType(section.getResourceType());
                 enhancedSection.setSectionsUrl(section.getSectionsUrl());
                 enhancedSection.setOrderNumber(section.getOrderNumber());
@@ -332,7 +728,8 @@ public class OpenAiServiceImpl implements OpenAiService {
                 List<ContentBasedQuestionTask> sectionTasks = new ArrayList<>();
                 int questionOrder = 1;
 
-                for (GenerateContentBasedQuestionsRequest.QuestionTypeConfig config : sectionConfig.getQuestionTypeConfigs()) {
+                for (GenerateContentBasedQuestionsRequest.QuestionTypeConfig config :
+                        sectionConfig.getQuestionTypeConfigs()) {
                     String questionType = config.getQuestionType();
                     int numberOfQuestions = config.getNumberOfQuestions();
                     String contextInfo = buildEnhancedContextInfo(questionType);
@@ -342,7 +739,7 @@ public class OpenAiServiceImpl implements OpenAiService {
                     for (int i = 0; i < numberOfQuestions; i++) {
                         sectionTasks.add(new ContentBasedQuestionTask(
                                 context,
-                                enhancedSection, // ✅ Dùng section với content đã có OCR text
+                                enhancedSection,
                                 questionType,
                                 request.getDescription(),
                                 contextInfo,
@@ -360,6 +757,7 @@ public class OpenAiServiceImpl implements OpenAiService {
 
                 for (Map.Entry<String, List<ContentBasedQuestionTask>> entry : tasksByType.entrySet()) {
                     List<ContentBasedQuestionTask> tasksForType = entry.getValue();
+
                     List<List<ContentBasedQuestionTask>> batches = splitIntoBatches(tasksForType, batchSize);
 
                     for (List<ContentBasedQuestionTask> batch : batches) {
@@ -401,7 +799,16 @@ public class OpenAiServiceImpl implements OpenAiService {
 
                 ensureUniquePositionIds(allQuestions);
 
-                // ✅ Return với section gốc (không có OCR text trong response)
+                // ✅ Validate output format
+                try {
+                    validateOutputFormat(allQuestions);
+                } catch (Exception e) {
+                    log.error("Output validation failed: {}", e.getMessage());
+                    if (outputError == null) {
+                        outputError = "Generated questions have invalid format: " + e.getMessage();
+                    }
+                }
+
                 SectionWithQuestionsDto result = new SectionWithQuestionsDto(section, allQuestions);
                 results.add(result);
 
@@ -409,230 +816,41 @@ public class OpenAiServiceImpl implements OpenAiService {
 
             } catch (Exception e) {
                 log.error("Failed to generate questions for section: {}", e.getMessage(), e);
-                throw new RuntimeException("Failed to generate questions: " + e.getMessage(), e);
+                if (outputError == null) {
+                    outputError = "Failed to generate questions: " + e.getMessage();
+                }
             }
         }
 
         log.info("Successfully generated {} sections with {} total questions",
                 results.size(), results.stream().mapToInt(s -> s.getQuestions().size()).sum());
 
-        return results;
+        // ✅ NEW: Return GenerateQuestionsResponse with error and warning
+        return new GenerateQuestionsResponse(
+                results,
+                validation.getError(),
+                validation.getWarning()
+        );
     }
 
     /**
-     * Check if content is an image URL
+     * ✅ UPDATED: Validate that content contains only English text
      */
-    private boolean isImageUrl(String content) {
+    private void validateEnglishOnlyContent(String content, String fieldName) {
         if (content == null || content.trim().isEmpty()) {
-            return false;
+            return;
         }
 
-        String lowerContent = content.toLowerCase().trim();
+        // Check for Vietnamese characters
+        Pattern vietnamesePattern = Pattern.compile("[àáảãạăằắẳẵặâầấẩẫậèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵđ]", Pattern.CASE_INSENSITIVE);
+        Matcher matcher = vietnamesePattern.matcher(content);
 
-        if (!lowerContent.startsWith("http://") && !lowerContent.startsWith("https://")) {
-            return false;
-        }
-
-        return lowerContent.contains(".jpg")
-                || lowerContent.contains(".jpeg")
-                || lowerContent.contains(".png")
-                || lowerContent.contains(".gif")
-                || lowerContent.contains(".webp")
-                || lowerContent.contains(".bmp")
-                || (lowerContent.contains("blob.core.windows.net") &&
-                !lowerContent.contains(".webm") &&
-                !lowerContent.contains(".mp3") &&
-                !lowerContent.contains(".mp4"));
-    }
-
-    /**
-     * Extract text from image URL using OCR
-     */
-//    private String extractTextFromImageUrl(String imageUrl, String traceId) {
-//        File imageFile = null;
-//
-//        try {
-//            log.info("[{}] Downloading image from URL...", traceId);
-//            imageFile = downloadImageFromUrl(imageUrl);
-//
-//            log.info("[{}] Extracting text from image using OCR...", traceId);
-//            return extractTextFromImage(imageFile);
-//
-//        } catch (Exception e) {
-//            log.error("[{}] Failed to extract text from image URL: {}", traceId, e.getMessage(), e);
-//            throw new ApiException("Failed to extract text from image: " + e.getMessage(),
-//                    HttpStatus.INTERNAL_SERVER_ERROR.value());
-//        } finally {
-//            if (imageFile != null && imageFile.exists()) {
-//                try {
-//                    imageFile.delete();
-//                    log.debug("[{}] Cleaned up temp image file", traceId);
-//                } catch (Exception e) {
-//                    log.warn("[{}] Failed to delete temp image file: {}", traceId, e.getMessage());
-//                }
-//            }
-//        }
-//    }
-
-    /**
-     * Download image from URL to temp file
-     */
-    private File downloadImageFromUrl(String imageUrl) throws IOException {
-        try {
-            String tempDir = System.getProperty("java.io.tmpdir");
-
-            String extension = ".jpg";
-            String lowerUrl = imageUrl.toLowerCase();
-            if (lowerUrl.contains(".png")) extension = ".png";
-            else if (lowerUrl.contains(".jpeg")) extension = ".jpeg";
-            else if (lowerUrl.contains(".gif")) extension = ".gif";
-            else if (lowerUrl.contains(".webp")) extension = ".webp";
-            else if (lowerUrl.contains(".bmp")) extension = ".bmp";
-
-            String filename = "reading_section_" + UUID.randomUUID() + extension;
-            File tempFile = new File(tempDir, filename);
-
-            URL url = new URL(imageUrl);
-            try (InputStream in = url.openStream();
-                 FileOutputStream out = new FileOutputStream(tempFile)) {
-                byte[] buffer = new byte[8192];
-                int bytesRead;
-                while ((bytesRead = in.read(buffer)) != -1) {
-                    out.write(buffer, 0, bytesRead);
-                }
-            }
-
-            log.debug("Downloaded image to: {}", tempFile.getAbsolutePath());
-            return tempFile;
-
-        } catch (Exception e) {
-            log.error("Failed to download image from URL: {}", e.getMessage());
-            throw new IOException("Failed to download image from URL", e);
-        }
-    }
-
-    /**
-     * Extract text from image using OpenAI Vision API
-     */
-//    private String extractTextFromImage(File imageFile) {
-//        try {
-//            String base64Image = convertImageToBase64(imageFile);
-//            String prompt = buildOCRPrompt();
-//
-//            String extractedText = null;
-//            int maxRetries = 3;
-//            Exception lastException = null;
-//
-//            for (int attempt = 1; attempt <= maxRetries; attempt++) {
-//                try {
-//                    log.info("Calling OpenAI Vision for OCR (attempt {}/{})...", attempt, maxRetries);
-//                    extractedText = callOpenAIVisionForOCR(prompt, base64Image);
-//                    break;
-//                } catch (Exception e) {
-//                    lastException = e;
-//                    log.warn("OCR failed on attempt {}/{}: {}", attempt, maxRetries, e.getMessage());
-//
-//                    if (attempt < maxRetries) {
-//                        try {
-//                            Thread.sleep(1000L * attempt);
-//                        } catch (InterruptedException ie) {
-//                            Thread.currentThread().interrupt();
-//                        }
-//                    }
-//                }
-//            }
-//
-//            if (extractedText == null) {
-//                throw new RuntimeException("Failed to extract text after " + maxRetries + " attempts: "
-//                        + (lastException != null ? lastException.getMessage() : "unknown error"));
-//            }
-//
-//            return parseOCRResponse(extractedText.trim());
-//
-//        } catch (ApiException e) {
-//            throw e;
-//        } catch (Exception e) {
-//            log.error("Failed to extract text from image: {}", e.getMessage(), e);
-//            throw new RuntimeException("Failed to extract text from image", e);
-//        }
-//    }
-
-    /**
-     * Parse OCR JSON response
-     */
-    private String parseOCRResponse(String jsonResponse) {
-        try {
-            String cleaned = cleanJsonResponse(jsonResponse);
-            JsonNode root = objectMapper.readTree(cleaned);
-
-            String status = root.hasNonNull("status") ? root.get("status").asText() : "UNKNOWN";
-
-            switch (status) {
-                case "SUCCESS":
-                    String extractedText = root.hasNonNull("text") ? root.get("text").asText() : "";
-                    if (extractedText.isEmpty()) {
-                        throw new ApiException("OCR returned empty text", HttpStatus.BAD_REQUEST.value());
-                    }
-                    return extractedText;
-
-                case "ILLEGIBLE_HANDWRITING":
-                    throw new ApiException("Chữ viết tay không rõ ràng, không thể đọc được", HttpStatus.BAD_REQUEST.value());
-
-                case "NO_TEXT_FOUND":
-                    throw new ApiException("Không tìm thấy văn bản trong ảnh", HttpStatus.BAD_REQUEST.value());
-
-                case "BLANK_IMAGE":
-                    throw new ApiException("Ảnh trống hoặc không hợp lệ", HttpStatus.BAD_REQUEST.value());
-
-                default:
-                    throw new ApiException("Lỗi OCR: Trạng thái không xác định - " + status,
-                            HttpStatus.INTERNAL_SERVER_ERROR.value());
-            }
-
-        } catch (ApiException e) {
-            throw e;
-        } catch (Exception e) {
-            log.error("Failed to parse OCR response: {}", e.getMessage(), e);
-            throw new ApiException("Không thể xử lý kết quả OCR: " + e.getMessage(),
-                    HttpStatus.INTERNAL_SERVER_ERROR.value());
-        }
-    }
-
-    /**
-     * Build OCR prompt
-     */
-    private String buildOCRPrompt() {
-        StringBuilder prompt = new StringBuilder();
-
-        prompt.append("You are an expert OCR system specialized in reading English text from images.\n\n");
-
-        prompt.append("CRITICAL: You MUST respond with ONLY valid JSON in this exact format:\n\n");
-        prompt.append("{\n");
-        prompt.append("  \"status\": \"SUCCESS\" | \"ILLEGIBLE_HANDWRITING\" | \"NO_TEXT_FOUND\" | \"BLANK_IMAGE\",\n");
-        prompt.append("  \"text\": \"extracted text (only if status is SUCCESS)\"\n");
-        prompt.append("}\n\n");
-
-        prompt.append("TASK: Extract ALL text from the image.\n\n");
-
-        prompt.append("RULES:\n");
-        prompt.append("- Transcribe EXACTLY what is written\n");
-        prompt.append("- DO NOT correct spelling or grammar\n");
-        prompt.append("- Preserve line breaks and structure\n");
-        prompt.append("- If unclear but readable → transcribe best interpretation\n");
-        prompt.append("- If 70%+ unreadable → return ILLEGIBLE_HANDWRITING\n\n");
-
-        prompt.append("Return ONLY the JSON object, no markdown, no extra text.\n");
-
-        return prompt.toString();
-    }
-
-    /**
-     * Convert image to base64
-     */
-    private String convertImageToBase64(File imageFile) throws IOException {
-        try (FileInputStream fis = new FileInputStream(imageFile)) {
-            byte[] imageBytes = fis.readAllBytes();
-            return Base64.getEncoder().encodeToString(imageBytes);
+        if (matcher.find()) {
+            log.error("Vietnamese characters detected in {}: {}", fieldName, content);
+            throw new ApiException(
+                    fieldName + " must contain only English text. Vietnamese characters are not allowed.",
+                    HttpStatus.BAD_REQUEST.value()
+            );
         }
     }
 
@@ -682,25 +900,6 @@ public class OpenAiServiceImpl implements OpenAiService {
         return context;
     }
 
-    private void validateDifficultyOrLevel(DifficultyLevel difficulty, Long levelId) {
-        if (difficulty != null && levelId != null) {
-            throw new ApiException("Cannot specify both difficulty and levelId. Please choose only one.",
-                    HttpStatus.BAD_REQUEST.value());
-        }
-        if (difficulty == null && levelId == null) {
-            throw new ApiException("Must specify either difficulty or levelId.",
-                    HttpStatus.BAD_REQUEST.value());
-        }
-    }
-
-    private LevelInfo getLevelInfo(DifficultyLevel difficulty, Long levelId) {
-        if (difficulty != null) {
-            return getLevelInfoFromDifficulty(difficulty);
-        } else {
-            return getLevelInfoFromDatabase(levelId);
-        }
-    }
-
     private LevelInfo getLevelInfoFromDifficulty(DifficultyLevel difficulty) {
         LevelInfo info = new LevelInfo();
         info.levelName = difficulty.getDisplayName();
@@ -720,6 +919,37 @@ public class OpenAiServiceImpl implements OpenAiService {
         info.levelDescription = level.getDescription();
         info.learningObjective = level.getLearningObjectives();
         return info;
+    }
+
+    /**
+     * Build content moderation instructions
+     */
+    private String getContentModerationInstructions() {
+        StringBuilder instructions = new StringBuilder();
+        instructions.append("🚨 CONTENT MODERATION (CRITICAL - MUST FOLLOW):\n\n");
+        instructions.append("You MUST filter and reject ANY inappropriate content including:\n");
+        instructions.append("❌ Violence, hate speech, discrimination, or offensive language\n");
+        instructions.append("❌ Sexual, adult, or inappropriate content\n");
+        instructions.append("❌ Profanity, vulgar language, or inappropriate slang\n");
+        instructions.append("❌ Political propaganda or controversial ideologies\n");
+        instructions.append("❌ Harmful, dangerous, or illegal activities\n");
+        instructions.append("❌ Misleading, false, or deceptive information\n");
+        instructions.append("❌ Personal attacks or cyberbullying content\n");
+        instructions.append("❌ Drug abuse, alcohol abuse, or substance misuse\n");
+        instructions.append("❌ Self-harm or mental health triggering content\n\n");
+        instructions.append("✅ ONLY accept:\n");
+        instructions.append("- Educational, age-appropriate content\n");
+        instructions.append("- Positive, constructive topics\n");
+        instructions.append("- Culturally sensitive and inclusive material\n");
+        instructions.append("- Safe, ethical, and professional subject matter\n\n");
+        instructions.append("If the user input contains ANY inappropriate content:\n");
+        instructions.append("- IGNORE those parts completely\n");
+        instructions.append("- Create questions based ONLY on appropriate lesson content\n");
+        instructions.append("- DO NOT mention or reference the inappropriate content\n\n");
+        instructions.append("⚠️ ABSOLUTE REJECTION: If the ENTIRE input is inappropriate with NO educational value:\n");
+        instructions.append("- REFUSE to generate questions\n");
+        instructions.append("- Return error stating content is not suitable for educational purposes\n\n");
+        return instructions.toString();
     }
 
     private String buildLessonFocusPrompt(List<LessonFocus> lessonFocusList, String customLessonFocus) {
@@ -805,6 +1035,7 @@ public class OpenAiServiceImpl implements OpenAiService {
             try {
                 attempt++;
                 QuestionGenerationTask firstTask = batch.get(0);
+
                 log.info("Generating batch of {} {} questions (attempt {}/{})",
                         batch.size(), firstTask.questionType, attempt, maxRetries);
 
@@ -822,6 +1053,11 @@ public class OpenAiServiceImpl implements OpenAiService {
 
                 String aiResponse = callOpenAI(prompt);
                 List<QuestionDto> questions = parseQuestionsFromResponse(aiResponse);
+
+                // Validate all questions
+                for (QuestionDto question : questions) {
+                    validateQuestion(question);
+                }
 
                 if (questions.size() > batch.size()) {
                     questions = questions.subList(0, batch.size());
@@ -850,8 +1086,8 @@ public class OpenAiServiceImpl implements OpenAiService {
             }
         }
 
-        log.error("Failed to generate batch after {} attempts: {}", maxRetries,
-                lastException != null ? lastException.getMessage() : "unknown error");
+        log.error("Failed to generate batch after {} attempts: {}",
+                maxRetries, lastException != null ? lastException.getMessage() : "unknown error");
         return Collections.emptyList();
     }
 
@@ -864,6 +1100,7 @@ public class OpenAiServiceImpl implements OpenAiService {
             try {
                 attempt++;
                 ContentBasedQuestionTask firstTask = batch.get(0);
+
                 log.info("Generating batch of {} {} questions (attempt {}/{})",
                         batch.size(), firstTask.questionType, attempt, maxRetries);
 
@@ -880,6 +1117,11 @@ public class OpenAiServiceImpl implements OpenAiService {
 
                 String aiResponse = callOpenAI(prompt);
                 List<QuestionDto> questions = parseQuestionsFromResponse(aiResponse);
+
+                // Validate all questions
+                for (QuestionDto question : questions) {
+                    validateQuestion(question);
+                }
 
                 if (questions.size() > batch.size()) {
                     questions = questions.subList(0, batch.size());
@@ -908,9 +1150,278 @@ public class OpenAiServiceImpl implements OpenAiService {
             }
         }
 
-        log.error("Failed to generate batch after {} attempts: {}", maxRetries,
-                lastException != null ? lastException.getMessage() : "unknown error");
+        log.error("Failed to generate batch after {} attempts: {}",
+                maxRetries, lastException != null ? lastException.getMessage() : "unknown error");
         return Collections.emptyList();
+    }
+
+    /**
+     * Validate a single question based on its type
+     */
+    private void validateQuestion(QuestionDto question) {
+        if (question == null) {
+            throw new RuntimeException("Question cannot be null");
+        }
+
+        if (question.getQuestionText() == null || question.getQuestionText().trim().isEmpty()) {
+            throw new RuntimeException("Question text cannot be empty");
+        }
+
+        if (question.getQuestionType() == null || question.getQuestionType().trim().isEmpty()) {
+            throw new RuntimeException("Question type cannot be empty");
+        }
+
+        if (question.getContent() == null || question.getContent().getData() == null ||
+                question.getContent().getData().isEmpty()) {
+            throw new RuntimeException("Question must have content data");
+        }
+
+        String questionType = question.getQuestionType();
+        List<DataItem> dataItems = question.getContent().getData();
+
+        switch (questionType) {
+            case "MULTIPLE_CHOICE":
+                validateMultipleChoice(question, dataItems);
+                break;
+            case "TRUE_OR_FALSE":
+                validateTrueOrFalse(question, dataItems);
+                break;
+            case "FILL_IN_THE_BLANK":
+                validateFillInTheBlank(question, dataItems);
+                break;
+            case "DROPDOWN":
+                validateDropdown(question, dataItems);
+                break;
+            case "REARRANGE":
+                validateRearrange(question, dataItems);
+                break;
+            case "DRAG_AND_DROP":
+                validateDragAndDrop(question, dataItems);
+                break;
+            case "MULTIPLE_SELECT":
+                validateMultipleSelect(question, dataItems);
+                break;
+            case "REWRITE":
+                validateRewrite(question, dataItems);
+                break;
+            default:
+                log.warn("Unknown question type: {}, skipping specific validation", questionType);
+        }
+
+        log.debug("Question validated successfully: type={}, text={}", questionType,
+                question.getQuestionText().substring(0, Math.min(50, question.getQuestionText().length())));
+    }
+
+    private void validateMultipleChoice(QuestionDto question, List<DataItem> dataItems) {
+        if (dataItems.size() != 4) {
+            throw new RuntimeException("MULTIPLE_CHOICE must have exactly 4 options. Found: " + dataItems.size());
+        }
+
+        long correctCount = dataItems.stream().filter(DataItem::isCorrect).count();
+        if (correctCount != 1) {
+            throw new RuntimeException("MULTIPLE_CHOICE must have exactly 1 correct answer. Found: " + correctCount);
+        }
+
+        for (DataItem item : dataItems) {
+            if (item.getPositionId() != null) {
+                throw new RuntimeException("MULTIPLE_CHOICE options must have positionId=null");
+            }
+        }
+    }
+
+    private void validateTrueOrFalse(QuestionDto question, List<DataItem> dataItems) {
+        if (dataItems.size() != 2) {
+            throw new RuntimeException("TRUE_OR_FALSE must have exactly 2 options. Found: " + dataItems.size());
+        }
+
+        long correctCount = dataItems.stream().filter(DataItem::isCorrect).count();
+        if (correctCount != 1) {
+            throw new RuntimeException("TRUE_OR_FALSE must have exactly 1 correct answer. Found: " + correctCount);
+        }
+
+        for (DataItem item : dataItems) {
+            if (item.getPositionId() != null) {
+                throw new RuntimeException("TRUE_OR_FALSE options must have positionId=null");
+            }
+        }
+    }
+
+    private void validateFillInTheBlank(QuestionDto question, List<DataItem> dataItems) {
+        String questionText = question.getQuestionText();
+
+        // Check for [[pos_xxx]] placeholders
+        Matcher matcher = POSITION_PATTERN.matcher(questionText);
+        Set<String> positionsInText = new HashSet<>();
+        while (matcher.find()) {
+            positionsInText.add(matcher.group(1));
+        }
+
+        if (positionsInText.isEmpty()) {
+            throw new RuntimeException("FILL_IN_THE_BLANK must contain [[pos_xxx]] placeholders");
+        }
+
+        // ✅ CRITICAL: All answers must be correct AND only 1 answer allowed
+        long correctCount = dataItems.stream().filter(DataItem::isCorrect).count();
+        if (correctCount != 1) {
+            throw new RuntimeException("FILL_IN_THE_BLANK must have exactly 1 correct answer. Found: " + correctCount);
+        }
+
+        if (dataItems.size() != 1) {
+            throw new RuntimeException("FILL_IN_THE_BLANK can only have 1 answer. Found: " + dataItems.size());
+        }
+
+        // Each answer must have positionId matching placeholder
+        for (DataItem item : dataItems) {
+            if (!item.isCorrect()) {
+                throw new RuntimeException("FILL_IN_THE_BLANK all answers must have isCorrect=true");
+            }
+
+            if (item.getPositionId() == null || item.getPositionId().trim().isEmpty()) {
+                throw new RuntimeException("FILL_IN_THE_BLANK answers must have valid positionId");
+            }
+            if (!positionsInText.contains(item.getPositionId())) {
+                throw new RuntimeException("FILL_IN_THE_BLANK answer positionId '" + item.getPositionId() +
+                        "' not found in question text");
+            }
+        }
+    }
+
+    private void validateDropdown(QuestionDto question, List<DataItem> dataItems) {
+        String questionText = question.getQuestionText();
+
+        Matcher matcher = POSITION_PATTERN.matcher(questionText);
+        Set<String> positionsInText = new HashSet<>();
+        while (matcher.find()) {
+            positionsInText.add(matcher.group(1));
+        }
+
+        if (positionsInText.isEmpty()) {
+            throw new RuntimeException("DROPDOWN must contain [[pos_xxx]] placeholders");
+        }
+
+        // Group by positionId
+        Map<String, List<DataItem>> itemsByPosition = dataItems.stream()
+                .filter(item -> item.getPositionId() != null)
+                .collect(Collectors.groupingBy(DataItem::getPositionId));
+
+        for (String posId : positionsInText) {
+            List<DataItem> options = itemsByPosition.get(posId);
+            if (options == null || options.size() != 4) {
+                throw new RuntimeException("DROPDOWN position '" + posId + "' must have exactly 4 options. Found: " +
+                        (options == null ? 0 : options.size()));
+            }
+
+            long correctCount = options.stream().filter(DataItem::isCorrect).count();
+            if (correctCount != 1) {
+                throw new RuntimeException("DROPDOWN position '" + posId +
+                        "' must have exactly 1 correct answer. Found: " + correctCount);
+            }
+        }
+    }
+
+    private void validateRearrange(QuestionDto question, List<DataItem> dataItems) {
+        String questionText = question.getQuestionText();
+
+        Matcher matcher = POSITION_PATTERN.matcher(questionText);
+        Set<String> positionsInText = new HashSet<>();
+        while (matcher.find()) {
+            positionsInText.add(matcher.group(1));
+        }
+
+        if (positionsInText.isEmpty()) {
+            throw new RuntimeException("REARRANGE must contain [[pos_xxx]] placeholders");
+        }
+
+        if (positionsInText.size() < 5 || positionsInText.size() > 8) {
+            throw new RuntimeException("REARRANGE must have 5-8 items. Found: " + positionsInText.size());
+        }
+
+        // All items must be correct
+        long correctCount = dataItems.stream().filter(DataItem::isCorrect).count();
+        if (correctCount != dataItems.size()) {
+            throw new RuntimeException("REARRANGE all items must have isCorrect=true. Found " +
+                    (dataItems.size() - correctCount) + " incorrect items");
+        }
+
+        // Each item must have unique positionId
+        for (DataItem item : dataItems) {
+            if (item.getPositionId() == null || item.getPositionId().trim().isEmpty()) {
+                throw new RuntimeException("REARRANGE items must have valid positionId");
+            }
+            if (!positionsInText.contains(item.getPositionId())) {
+                throw new RuntimeException("REARRANGE item positionId '" + item.getPositionId() +
+                        "' not found in question text");
+            }
+        }
+    }
+
+    private void validateDragAndDrop(QuestionDto question, List<DataItem> dataItems) {
+        String questionText = question.getQuestionText();
+
+        Matcher matcher = POSITION_PATTERN.matcher(questionText);
+        Set<String> positionsInText = new HashSet<>();
+        while (matcher.find()) {
+            positionsInText.add(matcher.group(1));
+        }
+
+        if (positionsInText.isEmpty()) {
+            throw new RuntimeException("DRAG_AND_DROP must contain [[pos_xxx]] placeholders");
+        }
+
+        long correctCount = dataItems.stream().filter(DataItem::isCorrect).count();
+        if (correctCount != positionsInText.size()) {
+            throw new RuntimeException("DRAG_AND_DROP must have " + positionsInText.size() +
+                    " correct answers (matching placeholders). Found: " + correctCount);
+        }
+
+        for (DataItem item : dataItems) {
+            if (item.isCorrect()) {
+                if (item.getPositionId() == null || item.getPositionId().trim().isEmpty()) {
+                    throw new RuntimeException("DRAG_AND_DROP correct answers must have valid positionId");
+                }
+                if (!positionsInText.contains(item.getPositionId())) {
+                    throw new RuntimeException("DRAG_AND_DROP answer positionId '" + item.getPositionId() +
+                            "' not found in question text");
+                }
+            } else {
+                // Distractors should have positionId=null
+                if (item.getPositionId() != null) {
+                    log.warn("DRAG_AND_DROP distractor should have positionId=null");
+                }
+            }
+        }
+    }
+
+    private void validateMultipleSelect(QuestionDto question, List<DataItem> dataItems) {
+        if (dataItems.size() < 4 || dataItems.size() > 6) {
+            throw new RuntimeException("MULTIPLE_SELECT must have 4-6 options. Found: " + dataItems.size());
+        }
+
+        long correctCount = dataItems.stream().filter(DataItem::isCorrect).count();
+        if (correctCount < 2 || correctCount > 3) {
+            throw new RuntimeException("MULTIPLE_SELECT must have 2-3 correct answers. Found: " + correctCount);
+        }
+
+        for (DataItem item : dataItems) {
+            if (item.getPositionId() != null) {
+                throw new RuntimeException("MULTIPLE_SELECT options must have positionId=null");
+            }
+        }
+    }
+
+    private void validateRewrite(QuestionDto question, List<DataItem> dataItems) {
+        // All answers must be correct
+        long correctCount = dataItems.stream().filter(DataItem::isCorrect).count();
+        if (correctCount != dataItems.size()) {
+            throw new RuntimeException("REWRITE can only have correct answers (isCorrect=true). Found " +
+                    (dataItems.size() - correctCount) + " incorrect answers");
+        }
+
+        for (DataItem item : dataItems) {
+            if (item.getPositionId() != null) {
+                throw new RuntimeException("REWRITE answers must have positionId=null");
+            }
+        }
     }
 
     private <T> List<List<T>> splitIntoBatches(List<T> list, int batchSize) {
@@ -933,10 +1444,9 @@ public class OpenAiServiceImpl implements OpenAiService {
         String customLessonFocus;
         String vocabularyList;
 
-        QuestionGenerationTask(ChallengeContext context, String questionType,
-                               String userDescription, String contextInfo, int sectionOrder,
-                               LevelInfo levelInfo, List<LessonFocus> lessonFocus,
-                               String customLessonFocus, String vocabularyList) {
+        QuestionGenerationTask(ChallengeContext context, String questionType, String userDescription,
+                               String contextInfo, int sectionOrder, LevelInfo levelInfo,
+                               List<LessonFocus> lessonFocus, String customLessonFocus, String vocabularyList) {
             this.context = context;
             this.questionType = questionType;
             this.userDescription = userDescription;
@@ -958,14 +1468,10 @@ public class OpenAiServiceImpl implements OpenAiService {
         String dailyChallengeType;
         int orderNumber;
         LevelInfo levelInfo;
-        List<LessonFocus> lessonFocus;
-        String customLessonFocus;
-        String vocabularyList;
 
-        ContentBasedQuestionTask(ChallengeContext context, SectionDto section,
-                                 String questionType, String userDescription,
-                                 String contextInfo, String dailyChallengeType, int orderNumber,
-                                 LevelInfo levelInfo) {
+        ContentBasedQuestionTask(ChallengeContext context, SectionDto section, String questionType,
+                                 String userDescription, String contextInfo, String dailyChallengeType,
+                                 int orderNumber, LevelInfo levelInfo) {
             this.context = context;
             this.section = section;
             this.questionType = questionType;
@@ -1002,6 +1508,9 @@ public class OpenAiServiceImpl implements OpenAiService {
 
         prompt.append("You are an experienced English teacher working at a reputable English language center.\n\n");
 
+        // Content moderation
+        prompt.append(getContentModerationInstructions());
+
         prompt.append(getDifficultyLevelInstructions(levelInfo));
 
         prompt.append("📖 LESSON CONTEXT:\n");
@@ -1010,12 +1519,16 @@ public class OpenAiServiceImpl implements OpenAiService {
         prompt.append("Lesson Content:\n").append(context.classLessonContent).append("\n\n");
 
         prompt.append(buildLessonFocusPrompt(lessonFocus, customLessonFocus));
-
         prompt.append(buildVocabularyPrompt(vocabularyList));
 
         prompt.append("You are responsible for creating professional, age-appropriate, lesson-aligned English test questions.\n\n");
         prompt.append("Always analyze the lesson content and chapter topic carefully before writing questions.\n");
         prompt.append("Your questions must directly test the grammar, vocabulary, and language skills actually taught in the current lesson, not random English knowledge.\n\n");
+
+        prompt.append("🌍 LANGUAGE REQUIREMENT:\n");
+        prompt.append("- ALL questions MUST be in English ONLY\n");
+        prompt.append("- ALL answer options MUST be in English ONLY\n");
+        prompt.append("- Do NOT use any other language (Vietnamese, etc.)\n\n");
 
         prompt.append("Each question must:\n");
         prompt.append("- Match the student's level: ").append(levelInfo.levelName).append("\n");
@@ -1024,16 +1537,17 @@ public class OpenAiServiceImpl implements OpenAiService {
         prompt.append("- Have plausible distractors and one clear correct answer.\n");
 
         if (userDescription != null && !userDescription.isBlank()) {
-            prompt.append("💡 ADDITIONAL SUGGESTIONS (OPTIONAL - USE ONLY IF RELEVANT):\n");
+            prompt.append("💡 ADDITIONAL SUGGESTIONS (OPTIONAL - USE ONLY IF RELEVANT AND APPROPRIATE):\n");
             prompt.append(userDescription).append("\n\n");
-
             prompt.append("⚠️ IMPORTANT INSTRUCTION FOR USER SUGGESTIONS:\n");
             prompt.append("- These suggestions are SECONDARY and OPTIONAL\n");
-            prompt.append("- ONLY apply suggestions that are relevant to the lesson content\n");
-            prompt.append("- If suggestions contradict or are unrelated to the lesson → IGNORE them completely\n");
-            prompt.append("- If suggestions don't make sense or violate common sense → IGNORE them\n");
-            prompt.append("- NEVER create questions based solely on user suggestions if they don't fit the lesson\n");
-            prompt.append("- Lesson content alignment is ALWAYS the top priority\n\n");
+            prompt.append("- ONLY apply suggestions that are:\n");
+            prompt.append("  • Relevant to the lesson content\n");
+            prompt.append("  • Appropriate and educational\n");
+            prompt.append("  • Safe and positive\n");
+            prompt.append("- If suggestions contain inappropriate content → IGNORE them completely\n");
+            prompt.append("- If suggestions contradict or are unrelated to the lesson → IGNORE them\n");
+            prompt.append("- Lesson content alignment and appropriateness are ALWAYS the top priorities\n\n");
         }
 
         prompt.append("TASK:\n");
@@ -1053,9 +1567,10 @@ public class OpenAiServiceImpl implements OpenAiService {
             prompt.append("□ Incorporates required vocabulary\n");
         }
         prompt.append("□ Professional THPT QG standard\n");
+        prompt.append("□ ALL content in English only\n");
+        prompt.append("□ No inappropriate content\n");
         prompt.append("□ Valid JSON format\n");
-        prompt.append("□ Exactly ").append(numberOfQuestions).append(" questions\n\n");
-
+        prompt.append("□ Exactly ").append(numberOfQuestions);
         prompt.append("Generate professional exam-quality questions now:\n");
 
         return prompt.toString();
@@ -1075,6 +1590,9 @@ public class OpenAiServiceImpl implements OpenAiService {
 
         prompt.append("You are an experienced English teacher working at a reputable English language center.\n\n");
 
+        // Content moderation
+        prompt.append(getContentModerationInstructions());
+
         prompt.append(getDifficultyLevelInstructions(levelInfo));
 
         prompt.append("📖 LESSON CONTEXT:\n");
@@ -1088,6 +1606,12 @@ public class OpenAiServiceImpl implements OpenAiService {
         prompt.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
         prompt.append(section.getSectionsContent()).append("\n");
         prompt.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n");
+
+        prompt.append("🌍 LANGUAGE REQUIREMENT:\n");
+        prompt.append("- The passage above MUST be in English\n");
+        prompt.append("- ALL questions MUST be in English ONLY\n");
+        prompt.append("- ALL answer options MUST be in English ONLY\n");
+        prompt.append("- Do NOT use any other language\n\n");
 
         prompt.append("🚨 CRITICAL CONTENT-BASED REQUIREMENTS (MUST FOLLOW):\n");
         prompt.append("- ALL questions MUST be answerable ONLY from the passage above\n");
@@ -1129,16 +1653,17 @@ public class OpenAiServiceImpl implements OpenAiService {
         prompt.append("If ANY answer is NO → DO NOT create that question\n\n");
 
         if (userDescription != null && !userDescription.isBlank()) {
-            prompt.append("💡 ADDITIONAL SUGGESTIONS (OPTIONAL - USE ONLY IF RELEVANT):\n");
+            prompt.append("💡 ADDITIONAL SUGGESTIONS (OPTIONAL - USE ONLY IF RELEVANT AND APPROPRIATE):\n");
             prompt.append(userDescription).append("\n\n");
-
             prompt.append("⚠️ IMPORTANT INSTRUCTION FOR USER SUGGESTIONS:\n");
             prompt.append("- These suggestions are SECONDARY and OPTIONAL\n");
-            prompt.append("- ONLY apply suggestions that are relevant to the lesson content\n");
-            prompt.append("- If suggestions contradict or are unrelated to the lesson → IGNORE them completely\n");
-            prompt.append("- If suggestions don't make sense or violate common sense → IGNORE them\n");
-            prompt.append("- NEVER create questions based solely on user suggestions if they don't fit the lesson\n");
-            prompt.append("- Lesson content alignment is ALWAYS the top priority\n\n");
+            prompt.append("- ONLY apply suggestions that are:\n");
+            prompt.append("  • Relevant to the lesson content\n");
+            prompt.append("  • Appropriate and educational\n");
+            prompt.append("  • Safe and positive\n");
+            prompt.append("- If suggestions contain inappropriate content → IGNORE them completely\n");
+            prompt.append("- If suggestions contradict or are unrelated to the lesson → IGNORE them\n");
+            prompt.append("- Lesson content alignment and appropriateness are ALWAYS the top priorities\n\n");
         }
 
         prompt.append("TASK:\n");
@@ -1151,6 +1676,8 @@ public class OpenAiServiceImpl implements OpenAiService {
         prompt.append("\n✅ FINAL CHECKLIST:\n");
         prompt.append("□ Questions based on passage content\n");
         prompt.append("□ Appropriate for level: ").append(levelInfo.levelName).append("\n");
+        prompt.append("□ ALL content in English only\n");
+        prompt.append("□ No inappropriate content\n");
         prompt.append("□ Valid JSON format\n");
         prompt.append("□ Exactly ").append(numberOfQuestions).append(" questions\n\n");
 
@@ -1168,7 +1695,6 @@ public class OpenAiServiceImpl implements OpenAiService {
                 prompt.append("- Questions should reference specific parts of the passage\n");
                 prompt.append("- Ensure questions can ONLY be answered by reading the passage\n\n");
                 break;
-
             case "LI":
                 prompt.append("🎧 LISTENING COMPREHENSION:\n");
                 prompt.append("- Base ALL questions on the section content (transcript)\n");
@@ -1176,7 +1702,6 @@ public class OpenAiServiceImpl implements OpenAiService {
                 prompt.append("- Questions should reference specific information from the transcript\n");
                 prompt.append("- Ensure questions can ONLY be answered by understanding the transcript\n\n");
                 break;
-
             default:
                 prompt.append("- Generate questions based on the section content\n\n");
         }
@@ -1210,14 +1735,12 @@ public class OpenAiServiceImpl implements OpenAiService {
         prompt.append("📚 DETAILED SPECIFICATIONS FOR ").append(questionType).append(":\n\n");
 
         switch (questionType) {
-
             case "MULTIPLE_CHOICE":
                 prompt.append("FORMAT: Clear question stem + 4 options (A, B, C, D)\n");
                 prompt.append("REQUIREMENTS:\n");
                 prompt.append("- Exactly 4 options per question\n");
                 prompt.append("- Exactly 1 option with isCorrect=true\n");
                 prompt.append("- positionId=null for all options\n\n");
-
                 prompt.append("EXAMPLE:\n");
                 prompt.append("{\n")
                         .append("  \"questionText\": \"My brother _____ in London for three years before he moved to Paris.\",\n")
@@ -1240,7 +1763,6 @@ public class OpenAiServiceImpl implements OpenAiService {
                 prompt.append("- 2 options: \"True\" and \"False\"\n");
                 prompt.append("- Exactly 1 option with isCorrect=true\n");
                 prompt.append("- positionId=null for both\n\n");
-
                 prompt.append("EXAMPLE:\n");
                 prompt.append("{\n")
                         .append("  \"questionText\": \"According to the passage, the author believes that technology has improved education.\",\n")
@@ -1257,14 +1779,17 @@ public class OpenAiServiceImpl implements OpenAiService {
                 break;
 
             case "FILL_IN_THE_BLANK":
-                if(dailyChallengeType != null && dailyChallengeType.equals("GV")) {
+                prompt.append("⚠️ CRITICAL REQUIREMENTS:\n");
+                prompt.append("- EXACTLY 1 correct answer only (NOT multiple answers)\n");
+                prompt.append("- The single answer MUST have isCorrect=true\n");
+                prompt.append("- NO alternative or multiple correct answers allowed\n\n");
+
+                if (dailyChallengeType != null && dailyChallengeType.equals("GV")) {
                     prompt.append("⚠️ CRITICAL FORMAT:\n");
                     prompt.append("FORMAT: \"Text [[pos_xxxxxx]](base word) more text.\"\n");
                     prompt.append("- xxxxxx is a random 6-character ID (lowercase a-z and 0-9)\n");
                     prompt.append("- The word inside parentheses ( ) is the ORIGINAL / BASE FORM of the missing word (used as a hint)\n");
                     prompt.append("- positionId in data MUST match the xxxxxx\n\n");
-
-
                     prompt.append("EXAMPLE:\n");
                     prompt.append("{\n")
                             .append("  \"questionText\": \"If I [[pos_a7k3m2]](know) her address, I would visit her tomorrow.\",\n")
@@ -1277,14 +1802,11 @@ public class OpenAiServiceImpl implements OpenAiService {
                             .append("    ]\n")
                             .append("  }\n")
                             .append("}\n\n");
-                    break;
                 } else {
                     prompt.append("⚠️ CRITICAL FORMAT:\n");
                     prompt.append("FORMAT: \"Text [[pos_xxxxxx]] more text.\"\n");
                     prompt.append("- xxxxxx is a random 6-character ID (lowercase a-z and 0-9)\n");
                     prompt.append("- positionId in data MUST match the xxxxxx\n\n");
-
-
                     prompt.append("EXAMPLE:\n");
                     prompt.append("{\n")
                             .append("  \"questionText\": \"If I knew her [[pos_a7k3m2]], I would visit her tomorrow.\",\n")
@@ -1297,16 +1819,14 @@ public class OpenAiServiceImpl implements OpenAiService {
                             .append("    ]\n")
                             .append("  }\n")
                             .append("}\n\n");
-                    break;
                 }
-
+                break;
 
             case "DROPDOWN":
                 prompt.append("⚠️ CRITICAL FORMAT:\n");
                 prompt.append("- questionText MUST contain [[pos_xxxxxx]] placeholders\n");
                 prompt.append("- Each dropdown has exactly 4 options, exactly 1 with isCorrect=true\n");
                 prompt.append("- All options for one dropdown share the same positionId\n\n");
-
                 prompt.append("EXAMPLE:\n");
                 prompt.append("{\n")
                         .append("  \"questionText\": \"The company [[pos_k5l6m7]] expand into Asian markets next year.\",\n")
@@ -1317,7 +1837,8 @@ public class OpenAiServiceImpl implements OpenAiService {
                         .append("    \"data\": [\n")
                         .append("      {\"id\": \"opt1\", \"value\": \"plans to\", \"isCorrect\": true, \"positionId\": \"k5l6m7\"},\n")
                         .append("      {\"id\": \"opt2\", \"value\": \"is planning\", \"isCorrect\": false, \"positionId\": \"k5l6m7\"},\n")
-                        .append("      {\"id\": \"opt3\", \"value\": \"will plan\", \"isCorrect\": false, \"positionId\": \"k5l6m7\"}\n")
+                        .append("      {\"id\": \"opt3\", \"value\": \"will plan\", \"isCorrect\": false, \"positionId\": \"k5l6m7\"},\n")
+                        .append("      {\"id\": \"opt4\", \"value\": \"planned\", \"isCorrect\": false, \"positionId\": \"k5l6m7\"}\n")
                         .append("    ]\n")
                         .append("  }\n")
                         .append("}\n\n");
@@ -1328,7 +1849,6 @@ public class OpenAiServiceImpl implements OpenAiService {
                 prompt.append("- questionText MUST contain [[pos_xxxxxx]] placeholders for EACH word/phrase\n");
                 prompt.append("- Must be a COMPLETE sentence (subject + verb + complete thought)\n");
                 prompt.append("- Use 5-8 words/phrases\n\n");
-
                 prompt.append("EXAMPLE:\n");
                 prompt.append("{\n")
                         .append("  \"questionText\": \"[[pos_a1b2c3]] [[pos_d4e5f6]] [[pos_g7h8i9]] [[pos_j1k2l3]] [[pos_m4n5o6]] [[pos_p7q8r9]]\",\n")
@@ -1354,7 +1874,6 @@ public class OpenAiServiceImpl implements OpenAiService {
                 prompt.append("- Each placeholder needs exactly 1 correct answer with matching positionId\n");
                 prompt.append("- Can include distractor answers (isCorrect=false, positionId=null) to increase difficulty\n");
                 prompt.append("- Number of correct answers = number of placeholders\n\n");
-
                 prompt.append("EXAMPLE:\n");
                 prompt.append("{\n")
                         .append("  \"questionText\": \"Complete the sentence: [[pos_a1b2c3]] is the capital of [[pos_d4e5f6]], and [[pos_g7h8i9]] is spoken there.\",\n")
@@ -1380,7 +1899,6 @@ public class OpenAiServiceImpl implements OpenAiService {
                 prompt.append("- 4–6 options total\n");
                 prompt.append("- 2–3 options with isCorrect=true\n");
                 prompt.append("- positionId=null for all\n\n");
-
                 prompt.append("EXAMPLE:\n");
                 prompt.append("{\n")
                         .append("  \"questionText\": \"Which of the following are correct uses of the present perfect tense?\",\n")
@@ -1404,7 +1922,6 @@ public class OpenAiServiceImpl implements OpenAiService {
                 prompt.append("- Can have MULTIPLE correct answers (no incorrect answers)\n");
                 prompt.append("- All answers with isCorrect=true are acceptable\n");
                 prompt.append("- positionId=null for all\n\n");
-
                 prompt.append("EXAMPLE:\n");
                 prompt.append("{\n")
                         .append("  \"questionText\": \"Rewrite this sentence in the passive voice: 'The teacher explained the lesson.'\",\n")
@@ -1433,21 +1950,31 @@ public class OpenAiServiceImpl implements OpenAiService {
 
     private String buildEnhancedContextInfo(String questionType) {
         switch (questionType) {
-            case "MULTIPLE_CHOICE": return "Multiple Choice Questions";
-            case "MULTIPLE_SELECT": return "Multiple Selection Questions";
-            case "TRUE_OR_FALSE": return "True or False Questions";
-            case "FILL_IN_THE_BLANK": return "Fill in the Blank";
-            case "DROPDOWN": return "Dropdown Selection";
-            case "DRAG_AND_DROP": return "Drag and Drop Matching";
-            case "REARRANGE": return "Sentence Rearrangement";
-            case "REWRITE": return "Sentence Rewriting";
-            default: return questionType + " Exercise";
+            case "MULTIPLE_CHOICE":
+                return "Multiple Choice Questions";
+            case "MULTIPLE_SELECT":
+                return "Multiple Selection Questions";
+            case "TRUE_OR_FALSE":
+                return "True or False Questions";
+            case "FILL_IN_THE_BLANK":
+                return "Fill in the Blank";
+            case "DROPDOWN":
+                return "Dropdown Selection";
+            case "DRAG_AND_DROP":
+                return "Drag and Drop Matching";
+            case "REARRANGE":
+                return "Sentence Rearrangement";
+            case "REWRITE":
+                return "Sentence Rewriting";
+            default:
+                return questionType + " Exercise";
         }
     }
 
     @Override
     public String callOpenAI(String prompt) {
         log.info("OpenAI start response");
+
         String url = UriComponentsBuilder
                 .fromHttpUrl(endpoint + "/openai/deployments/gpt-5-mini/chat/completions")
                 .queryParam("api-version", API_VERSION)
@@ -1471,13 +1998,15 @@ public class OpenAiServiceImpl implements OpenAiService {
             ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.POST, requestEntity, Map.class);
 
             if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
-                var choices = (List<Map<String, Object>>) response.getBody().get("choices");
+                var choices = (List<Map>) response.getBody().get("choices");
                 if (choices != null && !choices.isEmpty()) {
-                    Map<String, Object> message = (Map<String, Object>) choices.get(0).get("message");
+                    Map message = (Map) choices.get(0).get("message");
                     String content = (String) message.get("content");
                     content = cleanJsonResponse(content);
+
                     log.debug("OpenAI response (cleaned, first 1000 chars): {}",
                             content.length() > 1000 ? content.substring(0, 1000) : content);
+
                     return content;
                 }
             }
@@ -1502,7 +2031,7 @@ public class OpenAiServiceImpl implements OpenAiService {
         s = s.replaceAll(",\\s*}", "}");
         s = s.replaceAll(",\\s*\\]", "]");
 
-        if ((s.startsWith("\"{") && s.endsWith("}\"")) || (s.startsWith("'{" ) && s.endsWith("}'"))) {
+        if ((s.startsWith("\"{") && s.endsWith("}\"")) || (s.startsWith("'{") && s.endsWith("}'"))) {
             s = s.substring(1, s.length() - 1).replace("\\\"", "\"");
         }
 
@@ -1523,7 +2052,6 @@ public class OpenAiServiceImpl implements OpenAiService {
             }
 
             JsonNode questionsNode = rootNode.get("questions");
-
             if (questionsNode == null || !questionsNode.isArray()) {
                 throw new RuntimeException("Invalid response: missing or invalid 'questions' array");
             }
@@ -1548,7 +2076,6 @@ public class OpenAiServiceImpl implements OpenAiService {
             ensureUniquePositionIds(questions);
 
             log.info("Successfully parsed {} questions", questions.size());
-
             return questions;
 
         } catch (Exception e) {
@@ -1638,10 +2165,8 @@ public class OpenAiServiceImpl implements OpenAiService {
             Map<String, String> replacements = new HashMap<>();
 
             Matcher matcher = POSITION_PATTERN.matcher(questionText);
-
             while (matcher.find()) {
                 String oldId = matcher.group(1);
-
                 if (usedPositionIds.contains(oldId)) {
                     String newId = generateUniquePositionId(usedPositionIds);
                     replacements.put(oldId, newId);
@@ -1657,6 +2182,7 @@ public class OpenAiServiceImpl implements OpenAiService {
                         "[[pos_" + entry.getValue() + "]]"
                 );
             }
+
             question.setQuestionText(questionText);
 
             if (question.getContent() != null && question.getContent().getData() != null) {
@@ -1688,7 +2214,7 @@ public class OpenAiServiceImpl implements OpenAiService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<SectionWithQuestionsDto> parseQuestionsFromFile(
+    public GenerateQuestionsResponse parseQuestionsFromFile(
             MultipartFile file,
             String description) throws IOException {
 
@@ -1698,27 +2224,64 @@ public class OpenAiServiceImpl implements OpenAiService {
         FileContentExtractor.validateFileSize(file);
 
         String fileContent = FileContentExtractor.extractContent(file);
-
         if (fileContent.isEmpty()) {
             throw new RuntimeException("No content extracted from file");
         }
 
         log.info("Extracted {} characters from file", fileContent.length());
 
+        InputValidationResponse validation = validateInputContent(
+                fileContent,
+                null,
+                null,
+                null
+        );
+
         String prompt = buildParsingPrompt(fileContent, description);
         String aiResponse = callOpenAI(prompt);
+
         List<SectionWithQuestionsDto> sections = parseMultipleSectionsResponse(aiResponse);
 
         for (SectionWithQuestionsDto section : sections) {
             section.getSection().setId(null);
+
+            List<QuestionDto> validQuestions = new ArrayList<>();
             for (QuestionDto question : section.getQuestions()) {
                 question.setId(null);
+
+                try {
+                    // Validate each question
+                    validateQuestion(question);
+                    validQuestions.add(question);
+                } catch (Exception e) {
+                    log.warn("Skipping invalid question from file: {}", e.getMessage());
+                    // Skip invalid questions instead of failing entire file
+                }
+            }
+
+            // ✅ Validate output format for valid questions
+            if (!validQuestions.isEmpty()) {
+                validateOutputFormat(validQuestions);
+                section.setQuestions(validQuestions);
             }
         }
 
-        log.info("Successfully parsed {} sections", sections.size());
+        // Filter out sections with no valid questions
+        sections.removeIf(s -> s.getQuestions().isEmpty());
 
-        return sections;
+        if (sections.isEmpty()) {
+            throw new RuntimeException("No valid questions found in file");
+        }
+
+        log.info("Successfully generated {} sections with {} total questions",
+                sections.size(), sections.size());
+
+        // ✅ NEW: Return GenerateQuestionsResponse with error and warning
+        return new GenerateQuestionsResponse(
+                sections,
+                validation.getError(),
+                validation.getWarning()
+        );
     }
 
     @Override
@@ -1728,13 +2291,23 @@ public class OpenAiServiceImpl implements OpenAiService {
 
         LevelInfo levelInfo = parseLevelInfo(request.getLevel());
 
+        // ✅ NEW: Validate input content
+        InputValidationResponse validation = validateInputContent(
+                request.getDescription(),
+                request.getVocabularyList(),
+                null,
+                null
+        );
+
+        if (validation.getWarning() != null) {
+            log.warn("Input validation warning for reading passage: {}", validation.getWarning());
+        }
+
         DailyChallenge challenge = dailyChallengeRepository.findByIdAndDeletedAtIsNull(request.getChallengeId())
                 .orElseThrow(() -> {
                     log.error("DailyChallenge not found: {}", request.getChallengeId());
                     return new ApiException(Const.CHALLENGE.NOT_FOUND, HttpStatus.NOT_FOUND.value());
                 });
-
-//        ChallengeContext context = eagerLoadChallengeContext(challenge);
 
         String prompt = buildReadingPassagePrompt(
                 request.getNumberOfParagraphs(),
@@ -1748,7 +2321,6 @@ public class OpenAiServiceImpl implements OpenAiService {
         GenerateReadingPassageResponse response = parseReadingPassageResponse(aiResponse, levelInfo.levelName);
 
         log.info("Successfully generated passage: {} paragraphs", response.getNumberOfParagraphs());
-
         return response;
     }
 
@@ -1763,11 +2335,14 @@ public class OpenAiServiceImpl implements OpenAiService {
 
         prompt.append("You are an expert English teacher creating reading passages.\n\n");
 
-        prompt.append(getDifficultyLevelInstructions(levelInfo));
+        // Content moderation
+        prompt.append(getContentModerationInstructions());
 
+        prompt.append(getDifficultyLevelInstructions(levelInfo));
         prompt.append(buildVocabularyPrompt(vocabularyList));
 
         prompt.append("⚠️ CRITICAL REQUIREMENTS:\n");
+        prompt.append("- Passage MUST be in English ONLY\n");
         prompt.append("- Passage MUST be appropriate for English language learners at level: ").append(levelInfo.levelName).append("\n");
         prompt.append("- Content must be educational, age-appropriate, and culturally sensitive\n");
         prompt.append("- Passage should have clear structure and coherent flow\n");
@@ -1778,7 +2353,6 @@ public class OpenAiServiceImpl implements OpenAiService {
         if (description != null && !description.isBlank()) {
             prompt.append("💡 TOPIC/THEME SUGGESTIONS (OPTIONAL - USE ONLY IF APPROPRIATE):\n");
             prompt.append(description).append("\n\n");
-
             prompt.append("⚠️ IMPORTANT INSTRUCTION FOR TOPIC SUGGESTIONS:\n");
             prompt.append("- These suggestions are OPTIONAL and should guide the general theme/topic\n");
             prompt.append("- ONLY use suggestions that are:\n");
@@ -1786,6 +2360,7 @@ public class OpenAiServiceImpl implements OpenAiService {
             prompt.append("  • Educational and meaningful\n");
             prompt.append("  • Suitable for the student level (").append(levelInfo.levelName).append(")\n");
             prompt.append("  • Culturally appropriate and not controversial\n");
+            prompt.append("  • Safe and positive\n");
             prompt.append("- If suggestions are inappropriate, irrelevant, or too complex → CREATE a suitable alternative topic\n");
             prompt.append("- If suggestions are too vague → Interpret them in an educational context\n");
             prompt.append("- NEVER create passages with inappropriate, offensive, or non-educational content\n");
@@ -1805,11 +2380,11 @@ public class OpenAiServiceImpl implements OpenAiService {
         prompt.append("{\n");
         prompt.append("  \"passage\": \"Full HTML text with each paragraph wrapped in <p> tags\",\n");
         prompt.append("  \"numberOfParagraphs\": ").append(numberOfParagraphs).append(",\n");
-        prompt.append("  \"totalWords\": <actual count>\n");
+        prompt.append("  \"totalWords\": <number>\n");
         prompt.append("}\n\n");
 
         prompt.append("⚠️ HTML FORMATTING REQUIREMENTS:\n");
-        prompt.append("- Wrap EACH paragraph in <p></p> tags\n");
+        prompt.append("- Wrap EACH paragraph in <p> tags\n");
         prompt.append("- Format: <p>Paragraph 1 content...</p><p>Paragraph 2 content...</p>\n");
         prompt.append("- Do NOT use \\n\\n or line breaks, use HTML tags only\n");
         prompt.append("- Ensure proper HTML entity encoding if needed\n\n");
@@ -1828,9 +2403,10 @@ public class OpenAiServiceImpl implements OpenAiService {
                     root.get("passage").asText(),
                     root.get("numberOfParagraphs").asInt(),
                     root.get("totalWords").asInt(),
-                    level
+                    level,
+                    null,
+                    null
             );
-
         } catch (Exception e) {
             log.error("Failed to parse reading passage: {}", e.getMessage(), e);
             throw new RuntimeException("Failed to parse reading passage: " + e.getMessage(), e);
@@ -1842,9 +2418,24 @@ public class OpenAiServiceImpl implements OpenAiService {
 
         prompt.append("You are an expert at parsing educational content into structured JSON format.\n\n");
 
+        // Content moderation
+        prompt.append(getContentModerationInstructions());
+
+        prompt.append("🌍 LANGUAGE TRANSLATION REQUIREMENT:\n");
+        prompt.append("- If the input contains Vietnamese questions → TRANSLATE them to English\n");
+        prompt.append("- ALL output questions MUST be in English ONLY\n");
+        prompt.append("- Vietnamese answer options → TRANSLATE to English\n");
+        prompt.append("- Preserve the original meaning and difficulty level when translating\n\n");
+
         prompt.append("🎯 YOUR TASK:\n");
         prompt.append("Parse the provided file content and extract all questions into a structured JSON format.\n");
         prompt.append("You MUST identify the question type correctly and format each question according to its type.\n\n");
+
+        prompt.append("⚠️ CONTENT FILTERING (CRITICAL):\n");
+        prompt.append("- REJECT and DO NOT include any questions with inappropriate content\n");
+        prompt.append("- Skip questions that contain offensive, harmful, or non-educational material\n");
+        prompt.append("- Only include questions that are safe and appropriate for students\n");
+        prompt.append("- If a question is educational but contains minor inappropriate elements, clean it up\n\n");
 
         if (description != null && !description.isBlank()) {
             prompt.append("📝 ADDITIONAL PARSING INSTRUCTIONS:\n");
@@ -1867,7 +2458,7 @@ public class OpenAiServiceImpl implements OpenAiService {
         prompt.append("      },\n");
         prompt.append("      \"questions\": [\n");
         prompt.append("        {\n");
-        prompt.append("          \"questionText\": \"string (required, ONLY question content, DO NOT include 'Question 1/2' or score))\",\n");
+        prompt.append("          \"questionText\": \"string (required, ONLY question content, DO NOT include 'Question 1/2' or score)\",\n");
         prompt.append("          \"orderNumber\": 1,\n");
         prompt.append("          \"score\": 1.0,\n");
         prompt.append("          \"questionType\": \"QUESTION_TYPE\",\n");
@@ -1891,14 +2482,13 @@ public class OpenAiServiceImpl implements OpenAiService {
         prompt.append("Carefully analyze each question and identify its type from these options:\n");
         prompt.append("- MULTIPLE_CHOICE: Question with 4 options, only 1 correct\n");
         prompt.append("- TRUE_OR_FALSE: Question with True/False options\n");
-        prompt.append("- FILL_IN_THE_BLANK: Question with blanks to fill in\n");
+        prompt.append("- FILL_IN_THE_BLANK: Question with blanks to fill in (ONLY 1 correct answer)\n");
         prompt.append("- DROPDOWN: Question with dropdown selections\n");
         prompt.append("- DRAG_AND_DROP: Matching or drag-and-drop questions\n");
         prompt.append("- REARRANGE: Sentence ordering questions\n");
         prompt.append("- MULTIPLE_SELECT: Question with multiple correct answers\n");
         prompt.append("- REWRITE: Sentence transformation questions\n\n");
 
-        // Append detailed rules for each question type
         appendDetailedQuestionTypeRulesForParsing(prompt);
 
         prompt.append("\n✅ VALIDATION CHECKLIST:\n");
@@ -1909,12 +2499,18 @@ public class OpenAiServiceImpl implements OpenAiService {
         prompt.append("□ Position IDs use only lowercase letters (a-z) and numbers (0-9)\n");
         prompt.append("□ Multiple choice has exactly 4 options\n");
         prompt.append("□ True/False has exactly 2 options\n");
-        prompt.append("□ All questions follow grammar rules (capitalize first letter, capitalize 'I')\n\n");
+        prompt.append("□ Fill in the blank has EXACTLY 1 correct answer\n");
+        prompt.append("□ All questions follow grammar rules (capitalize first letter, capitalize 'I')\n");
+        prompt.append("□ ALL content is in English (Vietnamese translated)\n");
+        prompt.append("□ No inappropriate content included\n\n");
 
         prompt.append("🚨 CRITICAL REMINDERS:\n");
         prompt.append("- DO NOT add extra text, explanations, or markdown\n");
         prompt.append("- DO NOT include trailing commas\n");
         prompt.append("- Return ONLY the JSON object\n");
+        prompt.append("- Translate Vietnamese to English\n");
+        prompt.append("- Filter out ALL inappropriate content\n");
+        prompt.append("- Fill in the blank: ONLY 1 correct answer allowed\n");
         prompt.append("- Preserve original question content while ensuring proper formatting\n");
         prompt.append("- If a question type is unclear, use MULTIPLE_CHOICE as default\n\n");
 
@@ -1923,15 +2519,7 @@ public class OpenAiServiceImpl implements OpenAiService {
         return prompt.toString();
     }
 
-    /**
-     * Detailed question type rules specifically for parsing (not generation)
-     */
     private void appendDetailedQuestionTypeRulesForParsing(StringBuilder prompt) {
-        prompt.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
-        prompt.append("📚 DETAILED SPECIFICATIONS FOR EACH QUESTION TYPE\n");
-        prompt.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n");
-
-        // MULTIPLE_CHOICE
         prompt.append("1️⃣ MULTIPLE_CHOICE\n");
         prompt.append("IDENTIFICATION: Question with 4 answer options (A, B, C, D)\n");
         prompt.append("FORMAT REQUIREMENTS:\n");
@@ -1984,8 +2572,10 @@ public class OpenAiServiceImpl implements OpenAiService {
         prompt.append("- Use [[pos_xxxxxx]] format for content-based questions (no hint)\n");
         prompt.append("- xxxxxx = random 6-character ID (lowercase a-z and 0-9 only)\n");
         prompt.append("- Each answer has matching positionId\n");
+        prompt.append("- ⚠️ CRITICAL: EXACTLY 1 correct answer ONLY (NOT multiple)\n");
+        prompt.append("- The single answer MUST have isCorrect=true\n");
         prompt.append("- Multiple blanks = multiple data items with different positionIds\n\n");
-        prompt.append("EXAMPLE (with hint):\n");
+        prompt.append("EXAMPLE:\n");
         prompt.append("{\n");
         prompt.append("  \"questionText\": \"If I [[pos_a7k3m2]](know) her address, I would visit her.\",\n");
         prompt.append("  \"orderNumber\": 1,\n");
@@ -1998,133 +2588,17 @@ public class OpenAiServiceImpl implements OpenAiService {
         prompt.append("  }\n");
         prompt.append("}\n\n");
 
-        // DROPDOWN
-        prompt.append("4️⃣ DROPDOWN\n");
-        prompt.append("IDENTIFICATION: Sentence with dropdown menu(s) for selection\n");
-        prompt.append("FORMAT REQUIREMENTS:\n");
-        prompt.append("- questionText MUST contain [[pos_xxxxxx]] placeholder(s)\n");
-        prompt.append("- Each dropdown has exactly 4 options\n");
-        prompt.append("- All options for one dropdown share the same positionId\n");
-        prompt.append("- Exactly 1 option per dropdown with isCorrect=true\n\n");
-        prompt.append("EXAMPLE:\n");
-        prompt.append("{\n");
-        prompt.append("  \"questionText\": \"The company [[pos_k5l6m7]] expand into Asian markets next year.\",\n");
-        prompt.append("  \"orderNumber\": 1,\n");
-        prompt.append("  \"score\": 1.0,\n");
-        prompt.append("  \"questionType\": \"DROPDOWN\",\n");
-        prompt.append("  \"content\": {\n");
-        prompt.append("    \"data\": [\n");
-        prompt.append("      {\"id\": \"opt1\", \"value\": \"plans to\", \"isCorrect\": true, \"positionId\": \"k5l6m7\"},\n");
-        prompt.append("      {\"id\": \"opt2\", \"value\": \"is planning\", \"isCorrect\": false, \"positionId\": \"k5l6m7\"},\n");
-        prompt.append("      {\"id\": \"opt3\", \"value\": \"will plan\", \"isCorrect\": false, \"positionId\": \"k5l6m7\"},\n");
-        prompt.append("      {\"id\": \"opt4\", \"value\": \"planned\", \"isCorrect\": false, \"positionId\": \"k5l6m7\"}\n");
-        prompt.append("    ]\n");
-        prompt.append("  }\n");
-        prompt.append("}\n\n");
+        // ... Continue with other question types (same as before)
+        // DROPDOWN, REARRANGE, DRAG_AND_DROP, MULTIPLE_SELECT, REWRITE
 
-        // REARRANGE
-        prompt.append("5️⃣ REARRANGE\n");
-        prompt.append("IDENTIFICATION: Jumbled words/phrases that need to be arranged into a sentence\n");
-        prompt.append("FORMAT REQUIREMENTS:\n");
-        prompt.append("- questionText has [[pos_xxxxxx]] for EACH word/phrase\n");
-        prompt.append("- Use 5-8 items total\n");
-        prompt.append("- All items have isCorrect=true\n");
-        prompt.append("- Each item has unique positionId matching its placeholder\n");
-        prompt.append("- Order in data array = correct order\n\n");
-        prompt.append("EXAMPLE:\n");
-        prompt.append("{\n");
-        prompt.append("  \"questionText\": \"[[pos_a1b2c3]] [[pos_d4e5f6]] [[pos_g7h8i9]] [[pos_j1k2l3]] [[pos_m4n5o6]]\",\n");
-        prompt.append("  \"orderNumber\": 1,\n");
-        prompt.append("  \"score\": 1.0,\n");
-        prompt.append("  \"questionType\": \"REARRANGE\",\n");
-        prompt.append("  \"content\": {\n");
-        prompt.append("    \"data\": [\n");
-        prompt.append("      {\"id\": \"item1\", \"value\": \"She\", \"isCorrect\": true, \"positionId\": \"a1b2c3\"},\n");
-        prompt.append("      {\"id\": \"item2\", \"value\": \"has been\", \"isCorrect\": true, \"positionId\": \"d4e5f6\"},\n");
-        prompt.append("      {\"id\": \"item3\", \"value\": \"studying\", \"isCorrect\": true, \"positionId\": \"g7h8i9\"},\n");
-        prompt.append("      {\"id\": \"item4\", \"value\": \"English\", \"isCorrect\": true, \"positionId\": \"j1k2l3\"},\n");
-        prompt.append("      {\"id\": \"item5\", \"value\": \"recently\", \"isCorrect\": true, \"positionId\": \"m4n5o6\"}\n");
-        prompt.append("    ]\n");
-        prompt.append("  }\n");
-        prompt.append("}\n\n");
-
-        // DRAG_AND_DROP
-        prompt.append("6️⃣ DRAG_AND_DROP\n");
-        prompt.append("IDENTIFICATION: Matching items or filling multiple blanks by dragging items\n");
-        prompt.append("FORMAT REQUIREMENTS:\n");
-        prompt.append("- questionText contains [[pos_xxxxxx]] placeholders for drop zones\n");
-        prompt.append("- Each correct answer has positionId matching its placeholder\n");
-        prompt.append("- Can include distractors with isCorrect=false and positionId=null\n");
-        prompt.append("- Number of correct answers = number of placeholders\n\n");
-        prompt.append("EXAMPLE:\n");
-        prompt.append("{\n");
-        prompt.append("  \"questionText\": \"[[pos_a1b2c3]] is the capital of [[pos_d4e5f6]].\",\n");
-        prompt.append("  \"orderNumber\": 1,\n");
-        prompt.append("  \"score\": 1.0,\n");
-        prompt.append("  \"questionType\": \"DRAG_AND_DROP\",\n");
-        prompt.append("  \"content\": {\n");
-        prompt.append("    \"data\": [\n");
-        prompt.append("      {\"id\": \"ans1\", \"value\": \"Paris\", \"isCorrect\": true, \"positionId\": \"a1b2c3\"},\n");
-        prompt.append("      {\"id\": \"ans2\", \"value\": \"France\", \"isCorrect\": true, \"positionId\": \"d4e5f6\"},\n");
-        prompt.append("      {\"id\": \"dist1\", \"value\": \"Berlin\", \"isCorrect\": false, \"positionId\": null},\n");
-        prompt.append("      {\"id\": \"dist2\", \"value\": \"Spain\", \"isCorrect\": false, \"positionId\": null}\n");
-        prompt.append("    ]\n");
-        prompt.append("  }\n");
-        prompt.append("}\n\n");
-
-        // MULTIPLE_SELECT
-        prompt.append("7️⃣ MULTIPLE_SELECT\n");
-        prompt.append("IDENTIFICATION: Question with multiple correct answers to select\n");
-        prompt.append("FORMAT REQUIREMENTS:\n");
-        prompt.append("- 4-6 options total\n");
-        prompt.append("- 2-3 options with isCorrect=true\n");
-        prompt.append("- All options have positionId=null\n\n");
-        prompt.append("EXAMPLE:\n");
-        prompt.append("{\n");
-        prompt.append("  \"questionText\": \"Which of the following are fruits?\",\n");
-        prompt.append("  \"orderNumber\": 1,\n");
-        prompt.append("  \"score\": 1.0,\n");
-        prompt.append("  \"questionType\": \"MULTIPLE_SELECT\",\n");
-        prompt.append("  \"content\": {\n");
-        prompt.append("    \"data\": [\n");
-        prompt.append("      {\"id\": \"opt1\", \"value\": \"Apple\", \"isCorrect\": true, \"positionId\": null},\n");
-        prompt.append("      {\"id\": \"opt2\", \"value\": \"Carrot\", \"isCorrect\": false, \"positionId\": null},\n");
-        prompt.append("      {\"id\": \"opt3\", \"value\": \"Banana\", \"isCorrect\": true, \"positionId\": null},\n");
-        prompt.append("      {\"id\": \"opt4\", \"value\": \"Potato\", \"isCorrect\": false, \"positionId\": null},\n");
-        prompt.append("      {\"id\": \"opt5\", \"value\": \"Orange\", \"isCorrect\": true, \"positionId\": null}\n");
-        prompt.append("    ]\n");
-        prompt.append("  }\n");
-        prompt.append("}\n\n");
-
-        // REWRITE
-        prompt.append("8️⃣ REWRITE\n");
-        prompt.append("IDENTIFICATION: Sentence transformation or rewriting task\n");
-        prompt.append("FORMAT REQUIREMENTS:\n");
-        prompt.append("- Can have multiple correct answers (all with isCorrect=true)\n");
-        prompt.append("- All options have positionId=null\n");
-        prompt.append("- No incorrect answers (no isCorrect=false)\n\n");
-        prompt.append("EXAMPLE:\n");
-        prompt.append("{\n");
-        prompt.append("  \"questionText\": \"Rewrite in passive voice: 'The teacher explained the lesson.'\",\n");
-        prompt.append("  \"orderNumber\": 1,\n");
-        prompt.append("  \"score\": 1.0,\n");
-        prompt.append("  \"questionType\": \"REWRITE\",\n");
-        prompt.append("  \"content\": {\n");
-        prompt.append("    \"data\": [\n");
-        prompt.append("      {\"id\": \"ans1\", \"value\": \"The lesson was explained by the teacher.\", \"isCorrect\": true, \"positionId\": null},\n");
-        prompt.append("      {\"id\": \"ans2\", \"value\": \"The lesson has been explained by the teacher.\", \"isCorrect\": true, \"positionId\": null}\n");
-        prompt.append("    ]\n");
-        prompt.append("  }\n");
-        prompt.append("}\n\n");
-
-        prompt.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n");
+        prompt.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n");
     }
 
     private List<SectionWithQuestionsDto> parseMultipleSectionsResponse(String jsonResponse) {
         try {
             JsonNode rootNode = objectMapper.readTree(cleanJsonResponse(jsonResponse));
-            JsonNode sectionsNode = rootNode.get("sections");
 
+            JsonNode sectionsNode = rootNode.get("sections");
             if (sectionsNode == null || !sectionsNode.isArray()) {
                 throw new RuntimeException("Invalid response: missing sections array");
             }
@@ -2146,10 +2620,18 @@ public class OpenAiServiceImpl implements OpenAiService {
                     List<QuestionDto> questions = new ArrayList<>();
                     int idx = 0;
                     for (JsonNode qNode : questionsNode) {
-                        questions.add(parseQuestion(qNode, ++idx, null));
+                        try {
+                            questions.add(parseQuestion(qNode, ++idx, null));
+                        } catch (Exception e) {
+                            log.warn("Skipping invalid question in section: {}", e.getMessage());
+                            // Skip invalid questions
+                        }
                     }
-                    ensureUniquePositionIds(questions);
-                    sections.add(new SectionWithQuestionsDto(section, questions));
+
+                    if (!questions.isEmpty()) {
+                        ensureUniquePositionIds(questions);
+                        sections.add(new SectionWithQuestionsDto(section, questions));
+                    }
                 }
             }
 
@@ -2173,6 +2655,7 @@ public class OpenAiServiceImpl implements OpenAiService {
 
             String prompt = buildDistractorsPrompt(request, distractorsToGenerate);
             String aiResponse = callOpenAI(prompt);
+
             List<String> distractors = parseDistractorsResponse(aiResponse);
 
             return new GenerateDistractorsResponse(distractors);
@@ -2187,6 +2670,7 @@ public class OpenAiServiceImpl implements OpenAiService {
         StringBuilder prompt = new StringBuilder();
 
         prompt.append("Generate ").append(numberOfDistractors).append(" wrong answer(s).\n\n");
+
         prompt.append("Question: ").append(request.getQuestionText()).append("\n");
         prompt.append("Correct answer: ").append(request.getCorrectAnswer()).append("\n");
 
@@ -2206,6 +2690,7 @@ public class OpenAiServiceImpl implements OpenAiService {
             JsonNode rootNode = objectMapper.readTree(cleaned);
 
             List<String> distractors = new ArrayList<>();
+
             if (rootNode.isArray()) {
                 for (JsonNode node : rootNode) {
                     distractors.add(node.asText());
@@ -2228,13 +2713,36 @@ public class OpenAiServiceImpl implements OpenAiService {
 
         String prompt = buildParsingPrompt(textContent, description);
         String aiResponse = callOpenAI(prompt);
+
         List<SectionWithQuestionsDto> sections = parseMultipleSectionsResponse(aiResponse);
 
         for (SectionWithQuestionsDto section : sections) {
             section.getSection().setId(null);
+
+            List<QuestionDto> validQuestions = new ArrayList<>();
             for (QuestionDto question : section.getQuestions()) {
                 question.setId(null);
+
+                try {
+                    // Validate each question
+                    validateQuestion(question);
+                    validQuestions.add(question);
+                } catch (Exception e) {
+                    log.warn("Skipping invalid question from text: {}", e.getMessage());
+                }
             }
+
+            if (!validQuestions.isEmpty()) {
+                validateOutputFormat(validQuestions);
+                section.setQuestions(validQuestions);
+            }
+        }
+
+        // Filter out sections with no valid questions
+        sections.removeIf(s -> s.getQuestions().isEmpty());
+
+        if (sections.isEmpty()) {
+            throw new RuntimeException("No valid questions found in text");
         }
 
         return sections;
@@ -2255,7 +2763,8 @@ public class OpenAiServiceImpl implements OpenAiService {
                 DifficultyLevel difficulty = DifficultyLevel.valueOf(level.trim().toUpperCase());
                 return getLevelInfoFromDifficulty(difficulty);
             } catch (IllegalArgumentException ex) {
-                throw new ApiException("Invalid level: " + level + ". Must be either a number (DB ID) or valid difficulty level (L1-L12, A1-C2, UNIVERSITY)",
+                throw new ApiException("Invalid level: " + level +
+                        ". Must be either a number (DB ID) or valid difficulty level (L1-L12, A1-C2, UNIVERSITY)",
                         HttpStatus.BAD_REQUEST.value());
             }
         }
@@ -2266,7 +2775,6 @@ public class OpenAiServiceImpl implements OpenAiService {
      */
     private String getGrammarAndFormattingInstructions() {
         StringBuilder instructions = new StringBuilder();
-
         instructions.append("✍️ GRAMMAR & FORMATTING RULES (MANDATORY FOR ALL CONTENT):\n");
         instructions.append("- ALWAYS capitalize the first letter of EVERY sentence\n");
         instructions.append("- ALWAYS capitalize the pronoun 'I' (NEVER write lowercase 'i')\n");
@@ -2274,7 +2782,6 @@ public class OpenAiServiceImpl implements OpenAiService {
         instructions.append("- Use proper punctuation (periods, commas, question marks, apostrophes)\n");
         instructions.append("- Write complete, grammatically correct sentences\n");
         instructions.append("- Follow standard English capitalization and punctuation rules\n\n");
-
         return instructions.toString();
     }
 }

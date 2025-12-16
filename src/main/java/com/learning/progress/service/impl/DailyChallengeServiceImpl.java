@@ -115,8 +115,7 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
         appValidator.validatePaginationParams(page, size);
         appValidator.validateSortParams(List.of("createdAt", "challengeName", "classLessonId"), sortBy, sortDir);
 
-        classRepository.findById(classId)
-                .filter(c -> c.getDeletedAt() == null)
+        classRepository.findByIdAndDeletedAtIsNull(classId)
                 .orElseThrow(() -> new ApiException(Const.CLASS.NOT_FOUND, HttpStatus.NOT_FOUND.value()));
 
         appValidator.validateUserAccessToClass(classId);

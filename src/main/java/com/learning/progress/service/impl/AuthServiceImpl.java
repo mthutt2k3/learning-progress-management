@@ -48,9 +48,6 @@ public class AuthServiceImpl implements AuthService {
     private JwtUtil jwtUtil;
 
     @Autowired
-    private JavaMailSender mailSender;
-
-    @Autowired
     private TokenService tokenService;
 
     @Autowired
@@ -167,6 +164,12 @@ public class AuthServiceImpl implements AuthService {
                     return new ApiException(Const.USER.NOT_FOUND, HttpStatus.NOT_FOUND.value());
                 });
 
+        // Check user status
+        if (user.getStatus() == UserStatus.INACTIVE) {
+            log.error("[{}] traceId={} User inactive: {}", method, traceId, user.getUserName());
+            throw new ApiException(Const.USER.USER_INACTIVE, HttpStatus.FORBIDDEN.value());
+        }
+
         // Check user role
         if (user.getRole() == null ||
                 !(RoleName.STUDENT.equals(user.getRole().getName())
@@ -175,11 +178,6 @@ public class AuthServiceImpl implements AuthService {
                     Const.SECURITY.FORBIDDEN_ROLE_STUDENT_ONLY,
                     HttpStatus.FORBIDDEN.value()
             );
-        }
-
-        // Check user status
-        if (user.getStatus() != UserStatus.ACTIVE) {
-            throw new ApiException(Const.USER.USER_INACTIVE, HttpStatus.FORBIDDEN.value());
         }
 
         user.setRequestResetPasswordByTeacher(true);

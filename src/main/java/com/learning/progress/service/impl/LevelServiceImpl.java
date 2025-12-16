@@ -175,8 +175,7 @@ public class LevelServiceImpl implements LevelService {
         String traceId = TraceUtil.getTraceId();
         log.info("[{}] enter traceId={} levelId={}", method, traceId, id);
 
-        Level level = levelRepository.findById(id)
-                .filter(l -> l.getDeletedAt() == null)
+        Level level = levelRepository.findByIdAndDeletedAtIsNull(id)
                 .orElseThrow(() -> {
                     log.error("[{}] traceId={} level not found id={}", method, traceId, id);
                     return new ApiException(Const.LEVEL.NOT_FOUND, HttpStatus.NOT_FOUND.value());
