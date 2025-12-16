@@ -16,4 +16,8 @@ public class GenerateReadingPassageResponse {
     private Integer totalWords; // Total word count
 
     private String level; // Level of the passage (e.g. "Intermediate")
+
+    private String error;
+
+    private String warning;
 }

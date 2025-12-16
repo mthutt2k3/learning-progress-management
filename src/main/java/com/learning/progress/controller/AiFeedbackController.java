@@ -42,9 +42,9 @@ public class AiFeedbackController {
     @Operation(summary = "Assess pronunciation from audio file",
             description = "Upload audio file and get pronunciation assessment with scores for accuracy, fluency, prosody")
     public ResponseEntity<DataResponse<PronunciationAssessmentResponse>> assessPronunciation(
-            @RequestParam(value = "audioUrl", required = false) String audioUrl,
-            @RequestParam(value = "questionText", required = false) String questionText,
-            @RequestParam(value = "referenceText", required = false) String referenceText){
+            @RequestPart(value = "audioUrl", required = false) String audioUrl,
+            @RequestPart(value = "questionText", required = false) String questionText,
+            @RequestPart(value = "referenceText", required = false) String referenceText){
 
         PronunciationAssessmentRequest request = PronunciationAssessmentRequest.builder()
                 .audioUrl(audioUrl)
@@ -64,7 +64,7 @@ public class AiFeedbackController {
     }
 
     @GetMapping(value = "/writing/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public SseEmitter gradeWritingStream(@RequestParam Long submissionQuestionId) {
+    public SseEmitter gradeWritingStream(@RequestPart Long submissionQuestionId) {
 
         GradingWritingRequest request = new GradingWritingRequest();
         request.setSubmissionQuestionId(submissionQuestionId);
