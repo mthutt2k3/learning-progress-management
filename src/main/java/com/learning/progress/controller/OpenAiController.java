@@ -43,10 +43,10 @@ public class OpenAiController {
     @PostMapping("/generate-gv-questions")
     @Operation(summary = "Generate Grammar/Vocabulary questions",
             description = "Generate questions without content. Each question is in a separate section with resourceType=NONE")
-    public ResponseEntity<DataResponse<List<SectionWithQuestionsDto>>> generateGVQuestions(
+    public ResponseEntity<DataResponse<GenerateQuestionsResponse>> generateGVQuestions(
             @Valid @RequestBody GenerateGVQuestionsRequest request) {
 
-        List<SectionWithQuestionsDto> result = openAiService.generateGVQuestions(request);
+        GenerateQuestionsResponse result = openAiService.generateGVQuestions(request);
 
         return new ResponseEntity<>(
                 DataResponse.success(result, Const.RESULT_MESSAGE_CODE.CREATE_SUCCESSFUL),
@@ -57,10 +57,10 @@ public class OpenAiController {
     @PostMapping("/generate-content-based-questions")
     @Operation(summary = "Generate Reading/Listening questions",
             description = "Generate questions based on section content (reading passage or listening transcript)")
-    public ResponseEntity<DataResponse<List<SectionWithQuestionsDto>>> generateContentBasedQuestions(
+    public ResponseEntity<DataResponse<GenerateQuestionsResponse>> generateContentBasedQuestions(
             @Valid @RequestBody GenerateContentBasedQuestionsRequest request) {
 
-        List<SectionWithQuestionsDto> result = openAiService.generateContentBasedQuestions(request);
+        GenerateQuestionsResponse result = openAiService.generateContentBasedQuestions(request);
 
         return new ResponseEntity<>(
                 DataResponse.success(result, Const.RESULT_MESSAGE_CODE.CREATE_SUCCESSFUL),
@@ -69,13 +69,13 @@ public class OpenAiController {
     }
 
     @PostMapping("/parse-questions-from-file")
-    public ResponseEntity<List<SectionWithQuestionsDto>> parseQuestionsFromFile(
-            @RequestParam("file") MultipartFile file,
-            @RequestParam(value = "description", required = false) String description) {
+    public ResponseEntity<GenerateQuestionsResponse> parseQuestionsFromFile(
+            @RequestPart("file") MultipartFile file,
+            @RequestPart(value = "description", required = false) String description) {
 
         try {
 
-            List<SectionWithQuestionsDto> result = openAiService.parseQuestionsFromFile(file, description);
+            GenerateQuestionsResponse result = openAiService.parseQuestionsFromFile(file, description);
 
             return ResponseEntity.ok(result);
 
