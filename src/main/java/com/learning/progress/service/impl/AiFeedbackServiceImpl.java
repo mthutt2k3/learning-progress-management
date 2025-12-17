@@ -50,7 +50,7 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final SubmissionQuestionRepository submissionQuestionRepository;
 
-    private RestTemplate restTemplate;
+    private final RestTemplate restTemplate;
 
     @Value("${azure.openai.endpoint}")
     private String endpoint;

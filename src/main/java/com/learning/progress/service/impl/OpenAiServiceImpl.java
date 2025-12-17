@@ -130,7 +130,8 @@ public class OpenAiServiceImpl implements OpenAiService {
             String sectionContent,
             String fileContent,
             ChallengeContext context,
-            ValidationType validationType) {
+            ValidationType validationType,
+            LevelInfo levelInfo) {
         try {
             log.info("Validating input content for type: {}", validationType);
 
@@ -191,7 +192,8 @@ public class OpenAiServiceImpl implements OpenAiService {
             String prompt = buildInputValidationPrompt(
                     contentToCheck.toString(),
                     lessonContext.toString(),
-                    validationType
+                    validationType,
+                    levelInfo
             );
             String aiResponse = callOpenAI(prompt);
 
@@ -205,10 +207,22 @@ public class OpenAiServiceImpl implements OpenAiService {
         }
     }
 
-    private String buildInputValidationPrompt(String content, String lessonContext, ValidationType validationType) {
+    private String buildInputValidationPrompt(String content, String lessonContext, ValidationType validationType, LevelInfo levelInfo) {
         StringBuilder prompt = new StringBuilder();
 
         prompt.append("You are a content safety and quality checker for an educational English learning platform.\n\n");
+
+        if (levelInfo != null) {
+            prompt.append("STUDENT LEVEL:\n");
+            prompt.append("Level: ").append(levelInfo.levelName).append("\n");
+            if (levelInfo.levelDescription != null && !levelInfo.levelDescription.isBlank()) {
+                prompt.append("Description: ").append(levelInfo.levelDescription).append("\n");
+            }
+            if (levelInfo.learningObjective != null && !levelInfo.learningObjective.isBlank()) {
+                prompt.append("Learning Objective: ").append(levelInfo.learningObjective).append("\n");
+            }
+            prompt.append("\n");
+        }
 
         // Lesson context
         if (!lessonContext.isBlank()) {
@@ -228,7 +242,8 @@ public class OpenAiServiceImpl implements OpenAiService {
         prompt.append("- Political propaganda or extremist ideology\n");
         prompt.append("- Drugs, illegal activities, dangerous behavior\n");
         prompt.append("- Self-harm or psychologically harmful content\n");
-        prompt.append("- Any content unsafe for students\n");
+        prompt.append("- Content NOT related to English learning (e.g., math problems like '1+1=?', pure science, history facts without English context)\n");
+        prompt.append("- Any content unsafe for students\n\n");
 
         // ⚠️ WARNING cases (depend on validation type)
         prompt.append("⚠️ MINOR ISSUES - Set 'warning' field:\n");
@@ -236,6 +251,9 @@ public class OpenAiServiceImpl implements OpenAiService {
         switch (validationType) {
             case GV:
                 prompt.append("FOR GRAMMAR/VOCABULARY QUESTIONS:\n");
+                prompt.append("- Requests for Vietnamese language questions (all questions MUST be in English)\n");
+                prompt.append("- Requests to change the number of questions in description (use configured count only)\n");
+                prompt.append("- Vocabulary or grammar concepts are TOO ADVANCED or TOO BASIC for the selected student level\n");
                 prompt.append("- Content is NOT relevant to the lesson topic\n");
                 prompt.append("- Content is completely unrelated to English learning\n");
                 prompt.append("NOTE: Spelling errors, grammar mistakes, and Vietnamese text are ACCEPTABLE - do NOT warn about these.\n\n");
@@ -243,7 +261,31 @@ public class OpenAiServiceImpl implements OpenAiService {
 
             case CONTENT_BASED:
                 prompt.append("FOR CONTENT-BASED QUESTIONS:\n");
-                prompt.append("- Section content contains EXCESSIVE Vietnamese (more than 30% of content)\n");
+                prompt.append("- Section content must be at least 90% English; excessive use of any other language is not allowed\n");
+
+                // Độ khó & level
+                prompt.append("- Content difficulty is TOO ADVANCED or TOO BASIC for the selected student level\n");
+                prompt.append("- Vocabulary level is not aligned with the lesson or student level\n");
+                prompt.append("- Sentence structures are too complex or too simple for the target level\n");
+
+                // Độ dài & chất lượng bài đọc
+                prompt.append("- Content is TOO SHORT to be meaningful (may cause repetitive or trivial questions)\n");
+                prompt.append("- Content lacks sufficient information to generate diverse questions\n");
+
+                // Lặp & chất lượng ngôn ngữ
+                prompt.append("- Excessive sentence repetition or paraphrased repetition\n");
+                prompt.append("- Unnatural, machine-like, or poorly written English\n");
+                prompt.append("- Content contains many broken or incomplete sentences\n");
+
+                // Liên quan & tính giáo dục
+                prompt.append("- Content is NOT relevant to the lesson topic\n");
+                prompt.append("- Content is not educational or suitable for students\n");
+                prompt.append("- Content focuses on opinions, ads, or storytelling unrelated to learning goals\n");
+
+                // Logic & nhất quán
+                prompt.append("- Description does not match the section content\n");
+                prompt.append("- Content lacks a clear topic, context, or logical flow\n");
+
                 prompt.append("- Content is NOT relevant or appropriate for the lesson\n");
                 prompt.append("- Description does not match section content\n\n");
                 break;
@@ -752,7 +794,8 @@ public class OpenAiServiceImpl implements OpenAiService {
                 null,  // sectionContent
                 null,  // fileContent
                 context,  // ChallengeContext
-                ValidationType.GV
+                ValidationType.GV,
+                levelInfo
         );
 
         String descriptionToUse = validation.getTranslatedDescription() != null
@@ -936,7 +979,7 @@ public class OpenAiServiceImpl implements OpenAiService {
 
         ChallengeContext context = eagerLoadChallengeContext(challenge);
 
-        // ✅ Validate input content - chỉ validate description
+        // ✅ Build section content for validation
         StringBuilder allSectionContent = new StringBuilder();
         for (GenerateContentBasedQuestionsRequest.SectionWithConfig sectionConfig : request.getSections()) {
             if (sectionConfig.getSection().getSectionsContent() != null) {
@@ -944,15 +987,27 @@ public class OpenAiServiceImpl implements OpenAiService {
             }
         }
 
-        InputValidationResponse validation = validateInputContent(
-                request.getDescription(),
-                null,
-                null,
-                null,
-                allSectionContent.toString(),  // sectionContent
-                null,  // fileContent
-                context,  // ChallengeContext
-                ValidationType.CONTENT_BASED
+        // ✅ Start validation async - không wait kết quả
+        CompletableFuture<InputValidationResponse> validationFuture = CompletableFuture.supplyAsync(
+                () -> {
+                    try {
+                        return validateInputContent(
+                                request.getDescription(),
+                                null,
+                                null,
+                                null,
+                                allSectionContent.toString(),
+                                null,
+                                context,
+                                ValidationType.CONTENT_BASED,
+                                levelInfo
+                        );
+                    } catch (Exception e) {
+                        log.error("Validation failed: {}", e.getMessage(), e);
+                        return new InputValidationResponse(null, null, null, null, null);
+                    }
+                },
+                executorService
         );
 
         String dailyChallengeType = challenge.getChallengeType().toString();
@@ -972,9 +1027,6 @@ public class OpenAiServiceImpl implements OpenAiService {
                 if (section.getSectionsContent() == null || section.getSectionsContent().isBlank()) {
                     throw new ApiException("Section content is required", HttpStatus.BAD_REQUEST.value());
                 }
-
-                // ✅ CRITICAL: Validate section content is English only
-//                validateEnglishOnlyContent(section.getSectionsContent(), "Section content");
 
                 String enhancedContent = section.getSectionsContent();
 
@@ -1086,7 +1138,16 @@ public class OpenAiServiceImpl implements OpenAiService {
         log.info("Successfully generated {} sections with {} total questions",
                 results.size(), results.stream().mapToInt(s -> s.getQuestions().size()).sum());
 
-        // ✅ NEW: Return GenerateQuestionsResponse with error and warning
+        // ✅ Get validation result (không block vì đã chạy song song)
+        InputValidationResponse validation;
+        try {
+            validation = validationFuture.get(5, TimeUnit.SECONDS); // timeout ngắn vì đã chạy song song
+        } catch (Exception e) {
+            log.error("Failed to get validation result: {}", e.getMessage());
+            validation = new InputValidationResponse(null, null, null, null, null);
+        }
+
+        // ✅ Return với validation result
         return new GenerateQuestionsResponse(
                 results,
                 validation.getError(),
@@ -2186,27 +2247,77 @@ public class OpenAiServiceImpl implements OpenAiService {
                 break;
 
             case "REARRANGE":
-                prompt.append("⚠️ CRITICAL FORMAT:\n");
-                prompt.append("- questionText MUST contain [[pos_xxxxxx]] placeholders for EACH word/phrase\n");
-                prompt.append("- Must be a COMPLETE sentence (subject + verb + complete thought)\n");
-                prompt.append("- Use 5-8 words/phrases\n\n");
-                prompt.append("EXAMPLE:\n");
-                prompt.append("{\n")
-                        .append("  \"questionText\": \"[[pos_a1b2c3]] [[pos_d4e5f6]] [[pos_g7h8i9]] [[pos_j1k2l3]] [[pos_m4n5o6]] [[pos_p7q8r9]]\",\n")
-                        .append("  \"orderNumber\": 1,\n")
-                        .append("  \"score\": 1.0,\n")
-                        .append("  \"questionType\": \"REARRANGE\",\n")
-                        .append("  \"content\": {\n")
-                        .append("    \"data\": [\n")
-                        .append("      {\"id\": \"item1\", \"value\": \"She\", \"isCorrect\": true, \"positionId\": \"a1b2c3\"},\n")
-                        .append("      {\"id\": \"item2\", \"value\": \"has\", \"isCorrect\": true, \"positionId\": \"d4e5f6\"},\n")
-                        .append("      {\"id\": \"item3\", \"value\": \"been\", \"isCorrect\": true, \"positionId\": \"g7h8i9\"},\n")
-                        .append("      {\"id\": \"item4\", \"value\": \"studying\", \"isCorrect\": true, \"positionId\": \"j1k2l3\"},\n")
-                        .append("      {\"id\": \"item5\", \"value\": \"English\", \"isCorrect\": true, \"positionId\": \"m4n5o6\"},\n")
-                        .append("      {\"id\": \"item6\", \"value\": \"recently\", \"isCorrect\": true, \"positionId\": \"p7q8r9\"}\n")
-                        .append("    ]\n")
-                        .append("  }\n")
-                        .append("}\n\n");
+                if ("GV".equalsIgnoreCase(dailyChallengeType)) {
+                    // Grammar: Sắp xếp từ thành câu
+                    prompt.append("⚠️ REARRANGE TYPE: GRAMMAR - Sắp xếp TỪ/CỤM TỪ thành CÂU đúng\n\n");
+                    prompt.append("CRITICAL FORMAT:\n");
+                    prompt.append("- questionText MUST contain [[pos_xxxxxx]] placeholders for EACH word/phrase\n");
+                    prompt.append("- Each item in data[] is a WORD or SHORT PHRASE (1-3 words max)\n");
+                    prompt.append("- Must form a COMPLETE, GRAMMATICALLY CORRECT sentence\n");
+                    prompt.append("- Use 5-10 words/phrases total\n");
+                    prompt.append("- Items in data[] should be SHUFFLED (not in correct order)\n");
+                    prompt.append("- Placeholders in questionText must be in CORRECT order\n\n");
+                    prompt.append("EXAMPLE:\n");
+                    prompt.append("{\n")
+                            .append("  \"questionText\": \"Rearrange the words: [[pos_a1b2c3]] [[pos_d4e5f6]] [[pos_g7h8i9]] [[pos_j1k2l3]] [[pos_m4n5o6]]\",\n")
+                            .append("  \"orderNumber\": 1,\n")
+                            .append("  \"score\": 1.0,\n")
+                            .append("  \"questionType\": \"REARRANGE\",\n")
+                            .append("  \"content\": {\n")
+                            .append("    \"data\": [\n")
+                            .append("      {\"id\": \"item1\", \"value\": \"has been\", \"isCorrect\": true, \"positionId\": \"d4e5f6\"},\n")
+                            .append("      {\"id\": \"item2\", \"value\": \"She\", \"isCorrect\": true, \"positionId\": \"a1b2c3\"},\n")
+                            .append("      {\"id\": \"item3\", \"value\": \"English\", \"isCorrect\": true, \"positionId\": \"j1k2l3\"},\n")
+                            .append("      {\"id\": \"item4\", \"value\": \"studying\", \"isCorrect\": true, \"positionId\": \"g7h8i9\"},\n")
+                            .append("      {\"id\": \"item5\", \"value\": \"recently\", \"isCorrect\": true, \"positionId\": \"m4n5o6\"}\n")
+                            .append("    ]\n")
+                            .append("  }\n")
+                            .append("}\n");
+                    prompt.append("Correct answer: She has been studying English recently\n\n");
+                } else {
+                    // Reading/Listening: Sắp xếp events/paragraphs
+                    prompt.append("⚠️ REARRANGE TYPE: READING/LISTENING - Sắp xếp SỰ KIỆN hoặc ĐOẠN VĂN theo thứ tự logic\n\n");
+                    prompt.append("CRITICAL FORMAT:\n");
+                    prompt.append("- questionText MUST contain [[pos_xxxxxx]] placeholders for EACH event/paragraph\n");
+                    prompt.append("- Each item in data[] is a COMPLETE SENTENCE or PARAGRAPH\n");
+                    prompt.append("- Use 4-6 items total\n");
+                    prompt.append("- For LISTENING: Events in chronological order from the audio\n");
+                    prompt.append("- For READING: Paragraphs in logical order (use discourse markers: First, However, Finally)\n");
+                    prompt.append("- Items in data[] should be SHUFFLED (not in correct order)\n");
+                    prompt.append("- Placeholders in questionText must be in CORRECT order\n\n");
+                    prompt.append("EXAMPLE (Listening - Events):\n");
+                    prompt.append("{\n")
+                            .append("  \"questionText\": \"Listen and arrange events: [[pos_a1b2]] [[pos_c3d4]] [[pos_e5f6]] [[pos_g7h8]]\",\n")
+                            .append("  \"orderNumber\": 1,\n")
+                            .append("  \"score\": 1.0,\n")
+                            .append("  \"questionType\": \"REARRANGE\",\n")
+                            .append("  \"content\": {\n")
+                            .append("    \"instruction\": \"Put the events in chronological order.\",\n")
+                            .append("    \"data\": [\n")
+                            .append("      {\"id\": \"item1\", \"value\": \"They arrived at the airport\", \"isCorrect\": true, \"positionId\": \"c3d4\"},\n")
+                            .append("      {\"id\": \"item2\", \"value\": \"Sarah checked in online\", \"isCorrect\": true, \"positionId\": \"a1b2\"},\n")
+                            .append("      {\"id\": \"item3\", \"value\": \"The flight was delayed\", \"isCorrect\": true, \"positionId\": \"e5f6\"},\n")
+                            .append("      {\"id\": \"item4\", \"value\": \"They boarded at 3 PM\", \"isCorrect\": true, \"positionId\": \"g7h8\"}\n")
+                            .append("    ]\n")
+                            .append("  }\n")
+                            .append("}\n\n");
+                    prompt.append("EXAMPLE (Reading - Paragraphs):\n");
+                    prompt.append("{\n")
+                            .append("  \"questionText\": \"Arrange paragraphs: [[pos_a1]] [[pos_b2]] [[pos_c3]] [[pos_d4]]\",\n")
+                            .append("  \"orderNumber\": 1,\n")
+                            .append("  \"score\": 1.0,\n")
+                            .append("  \"questionType\": \"REARRANGE\",\n")
+                            .append("  \"content\": {\n")
+                            .append("    \"instruction\": \"Put the paragraphs in logical order.\",\n")
+                            .append("    \"data\": [\n")
+                            .append("      {\"id\": \"item1\", \"value\": \"Finally, climate change is a major challenge.\", \"isCorrect\": true, \"positionId\": \"d4\"},\n")
+                            .append("      {\"id\": \"item2\", \"value\": \"Environmental issues are increasingly important.\", \"isCorrect\": true, \"positionId\": \"a1\"},\n")
+                            .append("      {\"id\": \"item3\", \"value\": \"In addition, deforestation destroys habitats.\", \"isCorrect\": true, \"positionId\": \"c3\"},\n")
+                            .append("      {\"id\": \"item4\", \"value\": \"First, pollution affects air quality.\", \"isCorrect\": true, \"positionId\": \"b2\"}\n")
+                            .append("    ]\n")
+                            .append("  }\n")
+                            .append("}\n\n");
+                }
                 break;
 
             case "DRAG_AND_DROP":
@@ -2584,16 +2695,27 @@ public class OpenAiServiceImpl implements OpenAiService {
 
         log.info("Extracted {} characters from file", fileContent.length());
 
-        // ✅ Validate input content
-        InputValidationResponse validation = validateInputContent(
-                null,  // description
-                null,  // vocabularyList
-                null,  // lessonFocus
-                null,  // customLessonFocus
-                null,  // sectionContent
-                fileContent,  // fileContent
-                null,  // ChallengeContext
-                ValidationType.FILE
+        // ✅ Start validation async - không wait kết quả
+        CompletableFuture<InputValidationResponse> validationFuture = CompletableFuture.supplyAsync(
+                () -> {
+                    try {
+                        return validateInputContent(
+                                null,  // description
+                                null,  // vocabularyList
+                                null,  // lessonFocus
+                                null,  // customLessonFocus
+                                null,  // sectionContent
+                                fileContent,  // fileContent
+                                null,  // ChallengeContext
+                                ValidationType.FILE,
+                                null
+                        );
+                    } catch (Exception e) {
+                        log.error("Validation failed: {}", e.getMessage(), e);
+                        return new InputValidationResponse(null, null, null, null, null);
+                    }
+                },
+                executorService
         );
 
         String prompt = buildParsingPrompt(fileContent, description);
@@ -2601,13 +2723,15 @@ public class OpenAiServiceImpl implements OpenAiService {
         int attempt = 0;
         Exception lastException = null;
 
+        List<SectionWithQuestionsDto> sections = null;
+
         while (attempt < maxRetries) {
             try {
                 attempt++;
                 log.info("Parsing file attempt {}/{}", attempt, maxRetries);
 
                 String aiResponse = callOpenAI(prompt);
-                List<SectionWithQuestionsDto> sections = parseMultipleSectionsResponse(aiResponse);
+                sections = parseMultipleSectionsResponse(aiResponse);
 
                 // ✅ Validate and clean sections
                 for (SectionWithQuestionsDto section : sections) {
@@ -2642,11 +2766,8 @@ public class OpenAiServiceImpl implements OpenAiService {
                         sections.size(),
                         sections.stream().mapToInt(s -> s.getQuestions().size()).sum());
 
-                return new GenerateQuestionsResponse(
-                        sections,
-                        validation.getError(),
-                        validation.getWarning()
-                );
+                // ✅ Success - break retry loop
+                break;
 
             } catch (Exception e) {
                 lastException = e;
@@ -2665,12 +2786,31 @@ public class OpenAiServiceImpl implements OpenAiService {
             }
         }
 
-        log.error("Failed to parse file after {} attempts. Last error: {}",
-                maxRetries, lastException != null ? lastException.getMessage() : "unknown");
-        throw new ApiException(
-                "Failed to parse questions from file after " + maxRetries + " attempts. " +
-                        "Please check file format and try again.",
-                HttpStatus.INTERNAL_SERVER_ERROR.value()
+        // ✅ Check if parsing failed after all retries
+        if (sections == null || sections.isEmpty()) {
+            log.error("Failed to parse file after {} attempts. Last error: {}",
+                    maxRetries, lastException != null ? lastException.getMessage() : "unknown");
+            throw new ApiException(
+                    "Failed to parse questions from file after " + maxRetries + " attempts. " +
+                            "Please check file format and try again.",
+                    HttpStatus.INTERNAL_SERVER_ERROR.value()
+            );
+        }
+
+        // ✅ Get validation result (không block vì đã chạy song song)
+        InputValidationResponse validation;
+        try {
+            validation = validationFuture.get(5, TimeUnit.SECONDS); // timeout ngắn vì đã chạy song song
+        } catch (Exception e) {
+            log.error("Failed to get validation result: {}", e.getMessage());
+            validation = new InputValidationResponse(null, null, null, null, null);
+        }
+
+        // ✅ Return với validation result
+        return new GenerateQuestionsResponse(
+                sections,
+                validation.getError(),
+                validation.getWarning()
         );
     }
 
