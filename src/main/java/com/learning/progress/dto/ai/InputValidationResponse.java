@@ -10,4 +10,7 @@ import lombok.NoArgsConstructor;
 public class InputValidationResponse {
     private String error;
     private String warning;
+    private String translatedDescription;
+    private String translatedVocabularyList;
+    private String translatedCustomLessonFocus;
 }
