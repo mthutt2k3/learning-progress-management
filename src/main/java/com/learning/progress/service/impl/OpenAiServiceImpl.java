@@ -245,6 +245,11 @@ public class OpenAiServiceImpl implements OpenAiService {
         prompt.append("- Content NOT related to English learning (e.g., math problems like '1+1=?', pure science, history facts without English context)\n");
         prompt.append("- Any content unsafe for students\n\n");
 
+        if ("CONTENT_BASED".equals(validationType.toString())) {
+            prompt.append("- [CONTENT_BASED ONLY] Section content must be at least 90% English; excessive use of any other language is not allowed\n");
+        }
+        prompt.append("\n");
+
         // ⚠️ WARNING cases (depend on validation type)
         prompt.append("⚠️ MINOR ISSUES - Set 'warning' field:\n");
 
@@ -261,7 +266,6 @@ public class OpenAiServiceImpl implements OpenAiService {
 
             case CONTENT_BASED:
                 prompt.append("FOR CONTENT-BASED QUESTIONS:\n");
-                prompt.append("- Section content must be at least 90% English; excessive use of any other language is not allowed\n");
 
                 // Độ khó & level
                 prompt.append("- Content difficulty is TOO ADVANCED or TOO BASIC for the selected student level\n");

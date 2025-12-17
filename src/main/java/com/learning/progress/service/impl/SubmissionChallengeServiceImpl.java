@@ -180,7 +180,7 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
         appValidator.validateUserAccessToClass(classId);
 
         Pageable pageable = PageRequest.of(page, size);
-        Page<ClassLesson> lessonPage = dailyChallengeRepository.findLessonsWithChallengesByClassId(classId, text, false, pageable);
+        Page<ClassLesson> lessonPage = dailyChallengeRepository.findLessonsWithChallengesByClassId(classId, text, true, pageable);
 
         List<Long> lessonIds = lessonPage.getContent().stream().map(ClassLesson::getId).collect(Collectors.toList());
         List<DailyChallenge> challenges = loadChallengesByLessonIds(lessonIds);

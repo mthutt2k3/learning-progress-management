@@ -453,7 +453,7 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
         List<Map<String, Object>> contentList = new ArrayList<>();
 
         // Add text prompt
-        contentList.add(Map.of("type", "text", "content", prompt));
+        contentList.add(Map.of("type", "text", "text", prompt));
 
         // Add image
         contentList.add(Map.of(
