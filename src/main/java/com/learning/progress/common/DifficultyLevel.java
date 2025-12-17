@@ -6,7 +6,6 @@ public enum DifficultyLevel {
     L1("Level 1 - Elementary Grade 1",
             "VOCABULARY: 300-500 words (basic nouns: apple, cat, dog, colors, numbers 1-20, family members)\n" +
                     "GRAMMAR: Present simple ('I am', 'This is'), basic pronouns (I, you, he, she)\n" +
-                    "READING: 20-30 word texts, large fonts, pictures heavily support comprehension\n" +
                     "QUESTION TYPES:\n" +
                     "  • MULTIPLE_CHOICE: Picture-based, very simple (\"What color is this?\")\n" +
                     "  • TRUE_OR_FALSE: Direct facts from text (\"The cat is red. True/False?\")\n" +
@@ -17,7 +16,6 @@ public enum DifficultyLevel {
     L2("Level 2 - Elementary Grade 2",
             "VOCABULARY: 500-800 words (school items, basic verbs: eat, play, run, simple adjectives)\n" +
                     "GRAMMAR: Present continuous ('I am eating'), can/can't, simple plurals\n" +
-                    "READING: 40-60 word texts (2-3 short sentences per paragraph)\n" +
                     "QUESTION TYPES:\n" +
                     "  • MULTIPLE_CHOICE: Simple fact recall (\"Where is Tom? A) At school B) At home\")\n" +
                     "  • TRUE_OR_FALSE: Statements directly from text\n" +
@@ -29,7 +27,6 @@ public enum DifficultyLevel {
     L3("Level 3 - Elementary Grade 3",
             "VOCABULARY: 800-1200 words (daily routines, weather, seasons, basic feelings)\n" +
                     "GRAMMAR: Past simple regular verbs, basic prepositions (in, on, at), there is/are\n" +
-                    "READING: 60-100 word texts (simple stories with clear sequence)\n" +
                     "QUESTION TYPES:\n" +
                     "  • MULTIPLE_CHOICE: Detail questions (\"What did Sarah do yesterday?\")\n" +
                     "  • TRUE_OR_FALSE: Must scan text for specific information\n" +
@@ -42,7 +39,6 @@ public enum DifficultyLevel {
     L4("Level 4 - Elementary Grade 4",
             "VOCABULARY: 1200-1800 words (hobbies, jobs, animals, habitats, basic science terms)\n" +
                     "GRAMMAR: Past simple irregular verbs, comparatives (bigger, better), going to future\n" +
-                    "READING: 100-150 word texts (short descriptive or narrative passages)\n" +
                     "QUESTION TYPES:\n" +
                     "  • MULTIPLE_CHOICE: Inference questions (\"Why did Tom feel sad?\")\n" +
                     "  • TRUE_OR_FALSE: Requires understanding, not just word matching\n" +
@@ -55,7 +51,6 @@ public enum DifficultyLevel {
     L5("Level 5 - Elementary Grade 5",
             "VOCABULARY: 1800-2500 words (geography terms, history basics, technology, health)\n" +
                     "GRAMMAR: Present perfect (have/has + past participle), modal verbs (should, must, might)\n" +
-                    "READING: 150-250 word texts (informational passages with clear structure)\n" +
                     "QUESTION TYPES:\n" +
                     "  • MULTIPLE_CHOICE: Cause-effect, comparing information\n" +
                     "  • TRUE_OR_FALSE: Requires synthesis of multiple sentences\n" +
@@ -69,7 +64,6 @@ public enum DifficultyLevel {
     L6("Level 6 - Middle School Grade 6",
             "VOCABULARY: 2500-3500 words (academic terms: environment, culture, basic economics)\n" +
                     "GRAMMAR: Passive voice (basic), relative clauses (who, which, that), conditionals (type 1)\n" +
-                    "READING: 250-350 word texts (structured essays, reports, short articles)\n" +
                     "QUESTION TYPES:\n" +
                     "  • MULTIPLE_CHOICE: Inference, author's purpose, vocabulary in context\n" +
                     "  • TRUE_OR_FALSE: Statements requiring interpretation\n" +
@@ -83,7 +77,6 @@ public enum DifficultyLevel {
     L7("Level 7 - Middle School Grade 7",
             "VOCABULARY: 3500-4500 words (scientific terms, social issues, technology, literature basics)\n" +
                     "GRAMMAR: All conditionals (type 1, 2, 3), reported speech, complex passive forms\n" +
-                    "READING: 350-450 word texts (argumentative paragraphs, descriptive essays, news articles)\n" +
                     "QUESTION TYPES:\n" +
                     "  • MULTIPLE_CHOICE: Analyzing arguments, distinguishing fact vs opinion\n" +
                     "  • TRUE_OR_FALSE: Requires understanding implied meaning\n" +
@@ -97,7 +90,6 @@ public enum DifficultyLevel {
     L8("Level 8 - Middle School Grade 8",
             "VOCABULARY: 4500-5500 words (abstract concepts: justice, democracy, technology ethics)\n" +
                     "GRAMMAR: Advanced passive (all tenses), causative verbs (have/get something done), cleft sentences\n" +
-                    "READING: 450-600 word texts (opinion pieces, research summaries, literary excerpts)\n" +
                     "QUESTION TYPES:\n" +
                     "  • MULTIPLE_CHOICE: Analyzing tone, identifying assumptions, evaluating claims\n" +
                     "  • TRUE_OR_FALSE: Nuanced statements requiring deep comprehension\n" +
@@ -111,7 +103,6 @@ public enum DifficultyLevel {
     L9("Level 9 - High School Grade 9",
             "VOCABULARY: 5500-6500 words (specialized academic vocabulary across subjects)\n" +
                     "GRAMMAR: Mastery of all tenses, advanced modals (could have, should have been), inversion for emphasis\n" +
-                    "READING: 600-800 word texts (academic articles, extended arguments, literary analysis)\n" +
                     "QUESTION TYPES:\n" +
                     "  • MULTIPLE_CHOICE: Analyzing complex arguments, identifying logical fallacies\n" +
                     "  • TRUE_OR_FALSE: Statements requiring synthesis of entire passage\n" +
@@ -125,7 +116,6 @@ public enum DifficultyLevel {
     L10("Level 10 - High School Grade 10",
             "VOCABULARY: 6500-7500 words (advanced academic: philosophical terms, scientific methodology)\n" +
                     "GRAMMAR: Sophisticated sentence structures, embedded clauses, formal register\n" +
-                    "READING: 800-1000 word texts (research papers, critical essays, policy documents)\n" +
                     "QUESTION TYPES:\n" +
                     "  • MULTIPLE_CHOICE: Analyzing methodology, evaluating evidence strength\n" +
                     "  • TRUE_OR_FALSE: Complex conditional statements, counterfactuals\n" +
@@ -139,7 +129,6 @@ public enum DifficultyLevel {
     L11("Level 11 - High School Grade 11",
             "VOCABULARY: 7500-9000 words (specialized discourse: linguistics, economics, philosophy)\n" +
                     "GRAMMAR: Near-native control, sophisticated style manipulation\n" +
-                    "READING: 1000-1200 word texts (journal articles, white papers, literary criticism)\n" +
                     "QUESTION TYPES:\n" +
                     "  • MULTIPLE_CHOICE: Distinguishing between similar arguments, identifying subtle rhetorical moves\n" +
                     "  • TRUE_OR_FALSE: Statements requiring understanding of theoretical frameworks\n" +
@@ -153,7 +142,6 @@ public enum DifficultyLevel {
     L12("Level 12 - High School Grade 12",
             "VOCABULARY: 9000+ words (advanced academic: epistemology, quantum physics, literary theory)\n" +
                     "GRAMMAR: Native-level sophistication, stylistic variation for effect\n" +
-                    "READING: 1200+ word texts (peer-reviewed articles, theoretical treatises, advanced literary works)\n" +
                     "QUESTION TYPES:\n" +
                     "  • MULTIPLE_CHOICE: Evaluating competing theories, analyzing epistemological assumptions\n" +
                     "  • TRUE_OR_FALSE: Requires deep theoretical understanding and cross-textual synthesis\n" +
@@ -169,7 +157,6 @@ public enum DifficultyLevel {
     A1("A1 - Beginner",
             "VOCABULARY: 500-800 words (survival vocabulary: greetings, numbers, basic needs)\n" +
                     "GRAMMAR: Present simple, basic questions (What/Where/Who), singular/plural\n" +
-                    "READING: 30-50 word texts (signs, simple forms, basic messages)\n" +
                     "QUESTION TYPES:\n" +
                     "  • MULTIPLE_CHOICE: Recognition of familiar words/phrases\n" +
                     "  • TRUE_OR_FALSE: Direct matching with text\n" +
@@ -180,7 +167,6 @@ public enum DifficultyLevel {
     A2("A2 - Elementary",
             "VOCABULARY: 1000-1500 words (everyday topics: shopping, family, work, local area)\n" +
                     "GRAMMAR: Past simple, basic future (going to), can/should, simple connectors (and, but, because)\n" +
-                    "READING: 100-150 word texts (short personal letters, simple ads, basic instructions)\n" +
                     "QUESTION TYPES:\n" +
                     "  • MULTIPLE_CHOICE: Simple inference from context\n" +
                     "  • TRUE_OR_FALSE: Requires basic comprehension\n" +
@@ -191,7 +177,6 @@ public enum DifficultyLevel {
     B1("B1 - Intermediate",
             "VOCABULARY: 2500-3500 words (work, school, leisure, travel, current events)\n" +
                     "GRAMMAR: All basic tenses, conditionals (type 1), passive (simple), relative clauses\n" +
-                    "READING: 250-400 word texts (newspaper articles, standard letters, routine reports)\n" +
                     "QUESTION TYPES:\n" +
                     "  • MULTIPLE_CHOICE: Main idea, supporting details, moderate inference\n" +
                     "  • TRUE_OR_FALSE: Requires understanding relationships\n" +
@@ -205,7 +190,6 @@ public enum DifficultyLevel {
     B2("B2 - Upper Intermediate",
             "VOCABULARY: 4000-5500 words (abstract topics, technical in own field, complex social issues)\n" +
                     "GRAMMAR: Advanced structures, subtle modality, complex passives, all conditionals\n" +
-                    "READING: 400-700 word texts (contemporary issues, specialized articles, literary prose)\n" +
                     "QUESTION TYPES:\n" +
                     "  • MULTIPLE_CHOICE: Implicit meaning, attitude, complex inference\n" +
                     "  • TRUE_OR_FALSE: Nuanced understanding required\n" +
@@ -219,7 +203,6 @@ public enum DifficultyLevel {
     C1("C1 - Advanced",
             "VOCABULARY: 6000-8000 words (wide range of demanding topics, specialized discourse)\n" +
                     "GRAMMAR: Full range with flexibility and precision, sophisticated stylistic control\n" +
-                    "READING: 700-1000 word texts (complex literary, technical, academic texts)\n" +
                     "QUESTION TYPES:\n" +
                     "  • MULTIPLE_CHOICE: Subtle distinctions, implied attitudes, rhetorical purpose\n" +
                     "  • TRUE_OR_FALSE: Requires synthesis and interpretation\n" +
@@ -233,7 +216,6 @@ public enum DifficultyLevel {
     C2("C2 - Proficiency",
             "VOCABULARY: 8000-10000+ words (virtually any topic with ease and precision)\n" +
                     "GRAMMAR: Native-like command, can appreciate stylistic differences\n" +
-                    "READING: 1000+ word texts (any type of text including abstract, complex literary and technical)\n" +
                     "QUESTION TYPES:\n" +
                     "  • ALL TYPES: Can handle maximum complexity in any question format\n" +
                     "  • MULTIPLE_CHOICE: Distinguishing fine shades of meaning, appreciating irony/humor\n" +
@@ -250,7 +232,6 @@ public enum DifficultyLevel {
     UNIVERSITY("University Level",
             "VOCABULARY: 10000+ words (academic register, discipline-specific terminology across fields)\n" +
                     "GRAMMAR: Complete mastery, can manipulate language for precise academic purposes\n" +
-                    "READING: 1500+ word texts (research articles, theoretical works, primary sources)\n" +
                     "QUESTION TYPES:\n" +
                     "  • ALL TYPES at maximum sophistication:\n" +
                     "  • MULTIPLE_CHOICE: Analyzing research methodology, evaluating theoretical frameworks\n" +
