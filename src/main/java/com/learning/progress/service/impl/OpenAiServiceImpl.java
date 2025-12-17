@@ -229,7 +229,6 @@ public class OpenAiServiceImpl implements OpenAiService {
         prompt.append("- Drugs, illegal activities, dangerous behavior\n");
         prompt.append("- Self-harm or psychologically harmful content\n");
         prompt.append("- Any content unsafe for students\n");
-        prompt.append("- Misleading or deceptive information\n\n");
 
         // ⚠️ WARNING cases (depend on validation type)
         prompt.append("⚠️ MINOR ISSUES - Set 'warning' field:\n");
@@ -255,6 +254,7 @@ public class OpenAiServiceImpl implements OpenAiService {
                 prompt.append("- File contains images or non-text content\n");
                 prompt.append("- Question content is NOT relevant to the lesson\n");
                 prompt.append("- Questions are not educational or appropriate for students\n");
+                prompt.append("- Misleading or deceptive information\n\n");
                 prompt.append("- File contains extra descriptive text or paragraphs outside of the questions\n\n");
                 break;
         }
@@ -2164,6 +2164,10 @@ public class OpenAiServiceImpl implements OpenAiService {
                 prompt.append("- questionText MUST contain [[pos_xxxxxx]] placeholders\n");
                 prompt.append("- Each dropdown has exactly 4 options, exactly 1 with isCorrect=true\n");
                 prompt.append("- All options for one dropdown share the same positionId\n\n");
+                prompt.append("- Option ID naming rule:\n");
+                prompt.append("  + Correct option: optN\n");
+                prompt.append("  + Other options: optN_1, optN_2, optN_3\n");
+                prompt.append("  + N increases sequentially for each dropdown in a section (opt1, opt2, ...)\n\n");
                 prompt.append("EXAMPLE:\n");
                 prompt.append("{\n")
                         .append("  \"questionText\": \"The company [[pos_k5l6m7]] expand into Asian markets next year.\",\n")
@@ -2173,9 +2177,9 @@ public class OpenAiServiceImpl implements OpenAiService {
                         .append("  \"content\": {\n")
                         .append("    \"data\": [\n")
                         .append("      {\"id\": \"opt1\", \"value\": \"plans to\", \"isCorrect\": true, \"positionId\": \"k5l6m7\"},\n")
-                        .append("      {\"id\": \"opt2\", \"value\": \"is planning\", \"isCorrect\": false, \"positionId\": \"k5l6m7\"},\n")
-                        .append("      {\"id\": \"opt3\", \"value\": \"will plan\", \"isCorrect\": false, \"positionId\": \"k5l6m7\"},\n")
-                        .append("      {\"id\": \"opt4\", \"value\": \"planned\", \"isCorrect\": false, \"positionId\": \"k5l6m7\"}\n")
+                        .append("      {\"id\": \"opt1_1\", \"value\": \"is planning\", \"isCorrect\": false, \"positionId\": \"k5l6m7\"},\n")
+                        .append("      {\"id\": \"opt1_2\", \"value\": \"will plan\", \"isCorrect\": false, \"positionId\": \"k5l6m7\"},\n")
+                        .append("      {\"id\": \"opt1_3\", \"value\": \"planned\", \"isCorrect\": false, \"positionId\": \"k5l6m7\"}\n")
                         .append("    ]\n")
                         .append("  }\n")
                         .append("}\n\n");
@@ -2210,7 +2214,9 @@ public class OpenAiServiceImpl implements OpenAiService {
                 prompt.append("- questionText contains [[pos_xxxxxx]] placeholders for drop zones\n");
                 prompt.append("- Each placeholder needs exactly 1 correct answer with matching positionId\n");
                 prompt.append("- Can include distractor answers (isCorrect=false, positionId=null) to increase difficulty\n");
-                prompt.append("- Number of correct answers = number of placeholders\n\n");
+                prompt.append("- Number of correct answers = number of placeholders\n");
+                prompt.append("- Answer length rule: EVERY answer 'value' (correct + distractor) MUST be <= 50 characters\n");
+                prompt.append("- If a value would exceed 50 characters, shorten it while keeping the meaning\n\n");
                 prompt.append("EXAMPLE:\n");
                 prompt.append("{\n")
                         .append("  \"questionText\": \"Complete the sentence: [[pos_a1b2c3]] is the capital of [[pos_d4e5f6]], and [[pos_g7h8i9]] is spoken there.\",\n")
@@ -2590,11 +2596,6 @@ public class OpenAiServiceImpl implements OpenAiService {
                 ValidationType.FILE
         );
 
-        // ✅ If validation returns error, throw immediately
-        if (validation.getError() != null) {
-            throw new ApiException(validation.getError(), HttpStatus.BAD_REQUEST.value());
-        }
-
         String prompt = buildParsingPrompt(fileContent, description);
         int maxRetries = batchRetryMaxAttempts;
         int attempt = 0;
@@ -2643,7 +2644,7 @@ public class OpenAiServiceImpl implements OpenAiService {
 
                 return new GenerateQuestionsResponse(
                         sections,
-                        null,
+                        validation.getError(),
                         validation.getWarning()
                 );
 
@@ -2694,7 +2695,12 @@ public class OpenAiServiceImpl implements OpenAiService {
         prompt.append("- DO NOT correct grammar or spelling errors\n");
         prompt.append("- DO NOT filter or remove any questions\n");
         prompt.append("- Accept Vietnamese, English, or mixed language content\n");
-        prompt.append("- Your ONLY job is to convert the content into correct JSON format\n\n");
+        prompt.append("- Your ONLY job is to convert the content into correct JSON format\n");
+        prompt.append("⚠️ IMPORTANT: ANSWER VALUE CLEANING (keep content only)\n");
+        prompt.append("- For each answer option/value, keep ONLY the answer text content.\n");
+        prompt.append("- REMOVE leading labels such as: \"A.\", \"B.\", \"C.\", \"D.\", \"A)\", \"B)\", \"1.\", \"2)\", \"(A)\", \"-\", \"•\".\n");
+        prompt.append("- Example: \"A. Paris\" -> \"Paris\"; \"B) France\" -> \"France\".\n");
+        prompt.append("- This applies to ALL question types with options/answers.\n\n");
 
         if (description != null && !description.isBlank()) {
             prompt.append("📝 ADDITIONAL PARSING INSTRUCTIONS:\n");
@@ -2723,7 +2729,7 @@ public class OpenAiServiceImpl implements OpenAiService {
         prompt.append("            \"data\": [\n");
         prompt.append("              {\n");
         prompt.append("                \"id\": \"string (required)\",\n");
-        prompt.append("                \"value\": \"string (required, keep ORIGINAL text)\",\n");
+        prompt.append("                \"value\": \"string (required, keep ORIGINAL text BUT content-only)\",\n");
         prompt.append("                \"isCorrect\": boolean (required),\n");
         prompt.append("                \"positionId\": \"string or null\"\n");
         prompt.append("              }\n");
@@ -2757,6 +2763,8 @@ public class OpenAiServiceImpl implements OpenAiService {
         prompt.append("□ Multiple choice has exactly 4 options\n");
         prompt.append("□ True/False has exactly 2 options\n");
         prompt.append("□ Fill in the blank has EXACTLY 1 correct answer\n");
+        prompt.append("□ Answer values contain ONLY content (NO leading labels like A./B)/1./(A)/-)\n");
+        prompt.append("□ If original option had labels (A,B,C,D...), labels are NOT included in value\n");
         prompt.append("□ ALL original content preserved (no translation, no modification)\n\n");
 
         prompt.append("🚨 CRITICAL REMINDERS:\n");
@@ -2765,6 +2773,7 @@ public class OpenAiServiceImpl implements OpenAiService {
         prompt.append("- Return ONLY the JSON object\n");
         prompt.append("- DO NOT translate or modify any content from the file\n");
         prompt.append("- PRESERVE original text exactly as written\n");
+        prompt.append("- Answer 'value' MUST NOT include option labels (A./B)/1./(A)/-). Keep content only.\n");
         prompt.append("- Fill in the blank: ONLY 1 correct answer allowed\n");
         prompt.append("- If a question type is unclear, use MULTIPLE_CHOICE as default\n\n");
 
@@ -2849,6 +2858,10 @@ public class OpenAiServiceImpl implements OpenAiService {
         prompt.append("- Each dropdown has exactly 1 option with isCorrect=true\n");
         prompt.append("- All options for same dropdown share the same positionId\n");
         prompt.append("- xxxxxx = random 6-character ID (lowercase a-z and 0-9 only)\n\n");
+        prompt.append("- Option ID naming rule:\n");
+        prompt.append("  + Correct option: optN\n");
+        prompt.append("  + Other options: optN_1, optN_2, optN_3\n");
+        prompt.append("  + N increases sequentially for each dropdown in a section (opt1, opt2, ...)\n\n");
         prompt.append("EXAMPLE:\n");
         prompt.append("{\n");
         prompt.append("  \"questionText\": \"The company [[pos_k5l6m7]] expand into Asian markets next year.\",\n");
@@ -2858,9 +2871,9 @@ public class OpenAiServiceImpl implements OpenAiService {
         prompt.append("  \"content\": {\n");
         prompt.append("    \"data\": [\n");
         prompt.append("      {\"id\": \"opt1\", \"value\": \"plans to\", \"isCorrect\": true, \"positionId\": \"k5l6m7\"},\n");
-        prompt.append("      {\"id\": \"opt2\", \"value\": \"is planning\", \"isCorrect\": false, \"positionId\": \"k5l6m7\"},\n");
-        prompt.append("      {\"id\": \"opt3\", \"value\": \"will plan\", \"isCorrect\": false, \"positionId\": \"k5l6m7\"},\n");
-        prompt.append("      {\"id\": \"opt4\", \"value\": \"planned\", \"isCorrect\": false, \"positionId\": \"k5l6m7\"}\n");
+        prompt.append("      {\"id\": \"opt1_1\", \"value\": \"is planning\", \"isCorrect\": false, \"positionId\": \"k5l6m7\"},\n");
+        prompt.append("      {\"id\": \"opt1_2\", \"value\": \"will plan\", \"isCorrect\": false, \"positionId\": \"k5l6m7\"},\n");
+        prompt.append("      {\"id\": \"opt1_3\", \"value\": \"planned\", \"isCorrect\": false, \"positionId\": \"k5l6m7\"}\n");
         prompt.append("    ]\n");
         prompt.append("  }\n");
         prompt.append("}\n\n");
@@ -2901,7 +2914,9 @@ public class OpenAiServiceImpl implements OpenAiService {
         prompt.append("- Correct answers have isCorrect=true and matching positionId\n");
         prompt.append("- Can include distractor answers (isCorrect=false, positionId=null)\n");
         prompt.append("- Number of correct answers = number of placeholders\n");
-        prompt.append("- xxxxxx = random 6-character ID (lowercase a-z and 0-9 only)\n\n");
+        prompt.append("- xxxxxx = random 6-character ID (lowercase a-z and 0-9 only)\n");
+        prompt.append("- Answer length rule: EVERY answer 'value' (correct + distractor) MUST be <= 50 characters\n");
+        prompt.append("- If a value would exceed 50 characters, shorten it while keeping the meaning\n\n");
         prompt.append("EXAMPLE:\n");
         prompt.append("{\n");
         prompt.append("  \"questionText\": \"Complete: [[pos_a1b2c3]] is the capital of [[pos_d4e5f6]], and [[pos_g7h8i9]] is spoken there.\",\n");
