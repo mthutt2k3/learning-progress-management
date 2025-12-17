@@ -141,7 +141,7 @@ azure:
       words-per-paragraph: 100
     batch-size: 10
     thread-pool-size: 10
-    max-question: 100
+    max-question: 50
   translator:
     endpoint: ${TRANSLATOR_ENDPOINT}
     key: ${TRANSLATOR_API_KEY}

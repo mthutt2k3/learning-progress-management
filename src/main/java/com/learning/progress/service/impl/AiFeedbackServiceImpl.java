@@ -670,7 +670,7 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
         prompt.append("     * cohesionCoherence\n");
         prompt.append("     * lexicalResource\n");
         prompt.append("     * grammaticalRangeAccuracy\n");
-        prompt.append(" - comments: 7-50 items, prioritized by impact on communication. Each comment must include:\n");
+        prompt.append(" - comments: Include ALL relevant comments found in the content. Each comment must include:\n");
         prompt.append("     startIndex (0-based char index), endIndex (exclusive),\n");
         prompt.append("     commentText (15-80 characters, in Vietnamese),\n");
         prompt.append("     severity (one of: error|warning|suggestion),\n");
