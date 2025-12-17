@@ -1,23 +1,23 @@
 package com.learning.progress.service.impl;
 
-import com.learning.progress.dto.ai.ContentAssessmentResult;
-import com.learning.progress.exception.ApiException;
-import com.learning.progress.service.AiFeedbackService;
-import com.learning.progress.service.OpenAiService;
-import lombok.extern.slf4j.Slf4j;
-import org.hibernate.Hibernate;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.learning.progress.dto.ai.ContentAssessmentResult;
 import com.learning.progress.dto.ai.*;
 import com.learning.progress.entity.*;
+import com.learning.progress.exception.ApiException;
 import com.learning.progress.repository.SubmissionQuestionRepository;
+import com.learning.progress.service.AiFeedbackService;
+import com.learning.progress.service.OpenAiService;
 import com.learning.progress.util.TraceUtil;
 import com.microsoft.cognitiveservices.speech.*;
 import com.microsoft.cognitiveservices.speech.audio.AudioConfig;
+import lombok.extern.slf4j.Slf4j;
+import org.hibernate.Hibernate;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import org.springframework.web.util.UriComponentsBuilder;
@@ -30,11 +30,15 @@ import ws.schild.jave.encode.EncodingAttributes;
 import javax.sound.sampled.AudioFormat;
 import javax.sound.sampled.AudioInputStream;
 import javax.sound.sampled.AudioSystem;
-import java.io.*;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.InputStream;
 import java.net.URL;
 import java.time.Instant;
 import java.util.*;
-import java.util.concurrent.*;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
@@ -152,6 +156,7 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
                         Thread.sleep(backoff);
                     } catch (InterruptedException ie) {
                         Thread.currentThread().interrupt();
+                        throw new ApiException("OpenAI call interrupted", HttpStatus.INTERNAL_SERVER_ERROR.value());
                     }
                 } else {
                     log.error("[{}] All {} retry attempts failed.", traceId, maxRetries);
@@ -241,7 +246,8 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
 
         } catch (Exception e) {
             log.error("Failed to extract writing content: {}", e.getMessage());
-            throw new RuntimeException("Invalid submission content format", e);
+            throw new ApiException("Invalid submission content format: " + e.getMessage(),
+                    HttpStatus.BAD_REQUEST.value());
         }
     }
 
@@ -316,6 +322,8 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
 
             return extractTextFromImage(imageFile);
 
+        } catch (ApiException e) {
+            throw e;
         } catch (Exception e) {
             log.error("[{}] Failed to extract text from image URL: {}", traceId, e.getMessage(), e);
             throw new ApiException("Failed to extract text from image: " + e.getMessage(),
@@ -336,7 +344,7 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
     /**
      * Download image from URL to temp file
      */
-    private File downloadImageFromUrl(String imageUrl) throws IOException {
+    private File downloadImageFromUrl(String imageUrl) {
         try {
             String tempDir = System.getProperty("java.io.tmpdir");
 
@@ -367,7 +375,8 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
 
         } catch (Exception e) {
             log.error("Failed to download image from URL: {}", e.getMessage());
-            throw new IOException("Failed to download image from URL", e);
+            throw new ApiException("Failed to download image from URL: " + e.getMessage(),
+                    HttpStatus.INTERNAL_SERVER_ERROR.value());
         }
     }
 
@@ -403,14 +412,17 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
                             Thread.sleep(backoff);
                         } catch (InterruptedException ie) {
                             Thread.currentThread().interrupt();
+                            throw new ApiException("OCR retry interrupted",
+                                    HttpStatus.INTERNAL_SERVER_ERROR.value());
                         }
                     }
                 }
             }
 
             if (extractedText == null) {
-                throw new RuntimeException("Failed to extract text after " + maxRetries + " attempts: "
-                        + (lastException != null ? lastException.getMessage() : "unknown error"));
+                throw new ApiException("Failed to extract text after " + maxRetries + " attempts: "
+                        + (lastException != null ? lastException.getMessage() : "unknown error"),
+                        HttpStatus.INTERNAL_SERVER_ERROR.value());
             }
 
             // Parse JSON response from AI
@@ -420,7 +432,8 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
             throw e;
         } catch (Exception e) {
             log.error("Failed to extract text from image: {}", e.getMessage(), e);
-            throw new RuntimeException("Failed to extract text from image", e);
+            throw new ApiException("Failed to extract text from image: " + e.getMessage(),
+                    HttpStatus.INTERNAL_SERVER_ERROR.value());
         }
     }
 
@@ -497,10 +510,12 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
             }
         } catch (Exception e) {
             log.error("Error calling Azure OpenAI Vision for OCR: {}", e.getMessage(), e);
-            throw new RuntimeException("Failed to call Azure OpenAI Vision: " + e.getMessage(), e);
+            throw new ApiException("Failed to call Azure OpenAI Vision: " + e.getMessage(),
+                    HttpStatus.INTERNAL_SERVER_ERROR.value());
         }
 
-        throw new RuntimeException("No response from Azure OpenAI Vision");
+        throw new ApiException("No response from Azure OpenAI Vision",
+                HttpStatus.INTERNAL_SERVER_ERROR.value());
     }
 
     /**
@@ -557,7 +572,7 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
         s = s.replaceAll(",\\s*}", "}");
         s = s.replaceAll(",\\s*\\]", "]");
 
-        if ((s.startsWith("\"{") && s.endsWith("}\"")) || (s.startsWith("'{" ) && s.endsWith("}'"))) {
+        if ((s.startsWith("\"{") && s.endsWith("}\"")) || (s.startsWith("'{") && s.endsWith("}'"))) {
             s = s.substring(1, s.length() - 1).replace("\\\"", "\"");
         }
 
@@ -623,10 +638,13 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
     /**
      * Convert image file to base64 string
      */
-    private String convertImageToBase64(File imageFile) throws IOException {
+    private String convertImageToBase64(File imageFile) {
         try (FileInputStream fis = new FileInputStream(imageFile)) {
             byte[] imageBytes = fis.readAllBytes();
             return Base64.getEncoder().encodeToString(imageBytes);
+        } catch (Exception e) {
+            throw new ApiException("Failed to convert image to base64: " + e.getMessage(),
+                    HttpStatus.INTERNAL_SERVER_ERROR.value());
         }
     }
 
@@ -788,7 +806,8 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
 
         } catch (Exception e) {
             log.error("Failed to parse grading response: {}", e.getMessage(), e);
-            throw new RuntimeException("Failed to parse AI grading response: " + e.getMessage(), e);
+            throw new ApiException("Failed to parse AI grading response: " + e.getMessage(),
+                    HttpStatus.INTERNAL_SERVER_ERROR.value());
         }
     }
 
@@ -858,7 +877,9 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
 
                         log.info("[{}] Assessment completed on attempt {}. Score: {}",
                                 traceId, attempt, response.getPronunciationScore());
-                        response.setFeedback(response.getFeedback().replaceAll("\\r?\\n", " "));
+
+                        // Set feedback to null - không cần feedback cho speaking
+                        response.setFeedback(null);
                         response.setPronunciationScore(roundToOneDecimal(response.getPronunciationScore() / 10));
                         response.setAccuracyScore(roundToOneDecimal(response.getAccuracyScore() / 10));
                         response.setFluencyScore(roundToOneDecimal(response.getFluencyScore() / 10));
@@ -883,38 +904,8 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
                 log.error("[{}] Non-retryable ApiException: {}", traceId, e.getMessage());
                 throw e;
 
-            } catch (java.io.IOException e) {
-                // Network/IO errors - retry
-                lastException = e;
-                log.warn("[{}] IO error on attempt {}/{}: {}", traceId, attempt, maxAttempts, e.getMessage());
-
-                if (attempt < maxAttempts) {
-                    log.info("[{}] Retrying pronunciation assessment after {}s delay...", traceId, attempt);
-                    try {
-                        Thread.sleep(1000L * attempt);
-                    } catch (InterruptedException ie) {
-                        Thread.currentThread().interrupt();
-                        throw new ApiException("Assessment retry interrupted", HttpStatus.INTERNAL_SERVER_ERROR.value());
-                    }
-                }
-
-            } catch (java.util.concurrent.TimeoutException e) {
-                // Timeout errors - retry
-                lastException = e;
-                log.warn("[{}] Timeout on attempt {}/{}: {}", traceId, attempt, maxAttempts, e.getMessage());
-
-                if (attempt < maxAttempts) {
-                    log.info("[{}] Retrying pronunciation assessment after {}s delay...", traceId, attempt);
-                    try {
-                        Thread.sleep(1000L * attempt);
-                    } catch (InterruptedException ie) {
-                        Thread.currentThread().interrupt();
-                        throw new ApiException("Assessment retry interrupted", HttpStatus.INTERNAL_SERVER_ERROR.value());
-                    }
-                }
-
-            }catch (RuntimeException e) {
-                // Check if it's a retryable runtime exception
+            } catch (Exception e) {
+                // All other exceptions - check if retryable
                 String message = e.getMessage() != null ? e.getMessage().toLowerCase() : "";
                 boolean isRetryable = message.contains("timeout")
                         || message.contains("network")
@@ -922,11 +913,13 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
                         || message.contains("parse")
                         || message.contains("json")
                         || message.contains("recognition failed")
-                        || message.contains("speech service");
+                        || message.contains("speech service")
+                        || message.contains("io error")
+                        || message.contains("socket");
 
                 if (isRetryable) {
                     lastException = e;
-                    log.warn("[{}] Retryable runtime error on attempt {}/{}: {}",
+                    log.warn("[{}] Retryable error on attempt {}/{}: {}",
                             traceId, attempt, maxAttempts, e.getMessage());
 
                     if (attempt < maxAttempts) {
@@ -935,35 +928,8 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
                             Thread.sleep(1000L * attempt);
                         } catch (InterruptedException ie) {
                             Thread.currentThread().interrupt();
-                            throw new ApiException("Assessment retry interrupted", HttpStatus.INTERNAL_SERVER_ERROR.value());
-                        }
-                    }
-                } else {
-                    // Non-retryable runtime exception
-                    log.error("[{}] Non-retryable runtime error: {}", traceId, e.getMessage(), e);
-                    throw new ApiException("Failed to assess pronunciation: " + e.getMessage(),
-                            HttpStatus.INTERNAL_SERVER_ERROR.value());
-                }
-
-            } catch (Exception e) {
-                // Other exceptions - check if retryable by message
-                String message = e.getMessage() != null ? e.getMessage().toLowerCase() : "";
-                boolean isRetryable = message.contains("timeout")
-                        || message.contains("network")
-                        || message.contains("connection");
-
-                if (isRetryable) {
-                    lastException = e;
-                    log.warn("[{}] Retryable exception on attempt {}/{}: {}",
-                            traceId, attempt, maxAttempts, e.getMessage());
-
-                    if (attempt < maxAttempts) {
-                        log.info("[{}] Retrying pronunciation assessment after {}s delay...", traceId, attempt);
-                        try {
-                            Thread.sleep(1000L * attempt);
-                        } catch (InterruptedException ie) {
-                            Thread.currentThread().interrupt();
-                            throw new ApiException("Assessment retry interrupted", HttpStatus.INTERNAL_SERVER_ERROR.value());
+                            throw new ApiException("Assessment retry interrupted",
+                                    HttpStatus.INTERNAL_SERVER_ERROR.value());
                         }
                     }
                 } else {
@@ -980,7 +946,7 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
         throw new ApiException(
                 String.format("Failed to assess pronunciation after %d attempts: %s",
                         maxAttempts,
-                        lastException.getMessage()),
+                        lastException != null ? lastException.getMessage() : "unknown error"),
                 HttpStatus.INTERNAL_SERVER_ERROR.value()
         );
     }
@@ -1184,16 +1150,6 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
             allWords = detectMiscues(allWords, referenceText);
         }
 
-        // Generate AI feedback
-        String feedback = generateFeedback(
-                avgPronunciation,
-                avgAccuracy,
-                avgFluency,
-                avgCompleteness,
-                avgProsody,
-                allWords
-        );
-
         return PronunciationAssessmentResponse.builder()
                 .pronunciationScore(avgPronunciation)
                 .accuracyScore(avgAccuracy)
@@ -1203,7 +1159,7 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
                 .recognizedText(result.getFullText())
                 .referenceText(referenceText)
                 .words(allWords)
-                .feedback(feedback)
+                .feedback(null) // No feedback for speaking
                 .build();
     }
 
@@ -1277,6 +1233,8 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
                             Thread.sleep(1000L * attempt);
                         } catch (InterruptedException ie) {
                             Thread.currentThread().interrupt();
+                            throw new ApiException("Content assessment interrupted",
+                                    HttpStatus.INTERNAL_SERVER_ERROR.value());
                         }
                     }
                 }
@@ -1337,24 +1295,12 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
         prompt.append("   - 7-8: Well-organized, clear flow\n");
         prompt.append("   - 9-10: Excellent structure and logic\n\n");
 
-        prompt.append("5. **contentFeedback** (string): Brief feedback in Vietnamese (100-150 words)\n");
-        prompt.append("   - What did they do well?\n");
-        prompt.append("   - What's missing or could be improved?\n");
-        prompt.append("   - 2-3 specific suggestions\n\n");
-
-        prompt.append("IMPORTANT: All feedback content MUST be in Vietnamese with HTML formatting without \\n.\n");
-        prompt.append("Use these HTML tags for formatting:\n");
-        prompt.append("- <p>paragraph text</p> for paragraphs\n");
-        prompt.append("- <ul><li>item</li></ul> for bullet lists\n");
-        prompt.append("- <strong>text</strong> for bold emphasis\n\n");
-
         prompt.append("Return ONLY valid JSON (no markdown, no extra text):\n");
         prompt.append("{\n");
         prompt.append("  \"taskAchievementScore\": 8.0,\n");
         prompt.append("  \"contentQualityScore\": 7.5,\n");
         prompt.append("  \"relevanceScore\": 9.0,\n");
-        prompt.append("  \"coherenceScore\": 8.5,\n");
-        prompt.append("  \"contentFeedback\": \"Phản hồi bằng tiếng Việt với HTML...\"\n");
+        prompt.append("  \"coherenceScore\": 8.5\n");
         prompt.append("}\n");
 
         return prompt.toString();
@@ -1376,8 +1322,6 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
                     ? root.get("relevanceScore").asDouble() : 0.0;
             double coherenceScore = root.has("coherenceScore")
                     ? root.get("coherenceScore").asDouble() : 0.0;
-            String contentFeedback = root.has("contentFeedback")
-                    ? root.get("contentFeedback").asText() : "";
 
             // Clamp scores
             taskAchievementScore = clampScore(taskAchievementScore);
@@ -1390,7 +1334,7 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
                     .contentQualityScore(contentQualityScore)
                     .relevanceScore(relevanceScore)
                     .coherenceScore(coherenceScore)
-                    .contentFeedback(contentFeedback)
+                    .contentFeedback(null) // No feedback
                     .build();
 
         } catch (Exception e) {
@@ -1404,11 +1348,11 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
      */
     private ContentAssessmentResult createDefaultContentAssessment() {
         return ContentAssessmentResult.builder()
-                .taskAchievementScore(50.0)
-                .contentQualityScore(50.0)
-                .relevanceScore(50.0)
-                .coherenceScore(50.0)
-                .contentFeedback("<p>Không thể đánh giá nội dung chi tiết.</p>")
+                .taskAchievementScore(5.0)
+                .contentQualityScore(5.0)
+                .relevanceScore(5.0)
+                .coherenceScore(5.0)
+                .contentFeedback(null)
                 .build();
     }
 
@@ -1420,54 +1364,9 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
             ContentAssessmentResult contentAssessment,
             String questionText) {
 
-        // Calculate weighted overall score: 50% technical + 50% content
-        double contentAverage = (contentAssessment.getTaskAchievementScore() +
-                contentAssessment.getContentQualityScore() +
-                contentAssessment.getRelevanceScore() +
-                contentAssessment.getCoherenceScore()) / 4.0;
-
-        double technicalAverage = (technicalAssessment.getPronunciationScore() +
-                technicalAssessment.getAccuracyScore() +
-                technicalAssessment.getFluencyScore() +
-                technicalAssessment.getCompletenessScore() +
-                (technicalAssessment.getProsodyScore() != null ? technicalAssessment.getProsodyScore() : 0)) / 5.0;
-
-        // Merge feedback: Technical first, then Content
-        String mergedFeedback = mergeFeedbackSections(
-                technicalAssessment.getFeedback(),
-                contentAssessment.getContentFeedback(),
-                questionText
-        );
-
-        // Keep technical scores, add content feedback
-        technicalAssessment.setFeedback(mergedFeedback);
-
+        // Just return technical assessment without feedback
+        technicalAssessment.setFeedback(null);
         return technicalAssessment;
-    }
-
-    /**
-     * ✅ NEW: Merge feedback sections
-     */
-    private String mergeFeedbackSections(
-            String technicalFeedback,
-            String contentFeedback,
-            String questionText) {
-
-        StringBuilder merged = new StringBuilder();
-
-        // Header about the question
-        merged.append("<h3><strong>📋 Đánh giá dựa trên câu hỏi</strong></h3>");
-        merged.append("<p><em>Câu hỏi: ").append(questionText).append("</em></p>");
-
-        // Section 1: Content Assessment
-        merged.append("<h3><strong>📝 Đánh giá nội dung</strong></h3>");
-        merged.append(contentFeedback);
-
-        // Section 2: Technical Assessment
-        merged.append("<h3><strong>🎤 Đánh giá kỹ thuật phát âm</strong></h3>");
-        merged.append(technicalFeedback);
-
-        return merged.toString();
     }
 
     /**
@@ -1495,6 +1394,8 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
                             Thread.sleep(backoff);
                         } catch (InterruptedException ie) {
                             Thread.currentThread().interrupt();
+                            throw new ApiException("Grammar correction interrupted",
+                                    HttpStatus.INTERNAL_SERVER_ERROR.value());
                         }
                     }
                 }
@@ -1607,14 +1508,8 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
         // Use the existing method for assessment with reference text
         PronunciationAssessmentResponse response = assessWithReferenceTextContinuous(wavFile, request);
 
-        // Add note in feedback that reference was auto-generated
-//        String enhancedFeedback = enhanceFeedbackWithCorrectionNote(
-//                response.getFeedback(),
-//                originalRecognizedText,
-//                correctedReferenceText
-//        );
-
-        response.setFeedback(response.getFeedback());
+        // No feedback needed
+        response.setFeedback(null);
 
         log.info("[{}] Assessment with corrected reference completed. Score: {}",
                 traceId, response.getPronunciationScore());
@@ -1644,7 +1539,7 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
     /**
      * Download audio file from Azure Blob URL
      */
-    private File downloadFromBlobUrl(String blobUrl) throws IOException {
+    private File downloadFromBlobUrl(String blobUrl) {
         try {
             String tempDir = System.getProperty("java.io.tmpdir");
             String filename = "downloaded_" + UUID.randomUUID() + ".tmp";
@@ -1666,11 +1561,12 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
 
         } catch (Exception e) {
             log.error("Failed to download from blob URL: {}", e.getMessage());
-            throw new IOException("Failed to download audio from blob URL", e);
+            throw new ApiException("Failed to download audio from blob URL: " + e.getMessage(),
+                    HttpStatus.INTERNAL_SERVER_ERROR.value());
         }
     }
 
-    private File ensureWavFormat(File audioFile) throws IOException {
+    private File ensureWavFormat(File audioFile) {
         // Check if already WAV
         if (isWavFile(audioFile)) {
             log.debug("File is already WAV format");
@@ -1705,7 +1601,8 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
 
         } catch (EncoderException e) {
             if (wavFile.exists()) wavFile.delete();
-            throw new IOException("Failed to convert audio: " + e.getMessage(), e);
+            throw new ApiException("Failed to convert audio: " + e.getMessage(),
+                    HttpStatus.INTERNAL_SERVER_ERROR.value());
         }
     }
 
@@ -1878,223 +1775,6 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
         }
 
         return finalWords;
-    }
-
-    /**
-     * Generate detailed Vietnamese feedback using AI
-     */
-    private String generateFeedback(
-            double pronunciationScore,
-            double accuracyScore,
-            double fluencyScore,
-            double completenessScore,
-            Double prosodyScore,
-            List<PronunciationAssessmentResponse.WordAssessment> words) {
-
-        try {
-            // Build prompt for AI
-            String prompt = buildAIFeedbackPrompt(
-                    pronunciationScore,
-                    accuracyScore,
-                    fluencyScore,
-                    completenessScore,
-                    prosodyScore,
-                    words
-            );
-
-            // Call OpenAI to generate feedback
-            String aiFeedback = openAiService.callOpenAI(prompt);
-
-            // Clean and return
-            return extractFeedbackFromJson(aiFeedback.trim());
-
-        } catch (Exception e) {
-            log.error("Failed to generate AI feedback, using fallback: {}", e.getMessage());
-            // Fallback to basic feedback if AI fails
-            return generateBasicFeedback(pronunciationScore, accuracyScore, fluencyScore, completenessScore, prosodyScore, words);
-        }
-    }
-
-    private String extractFeedbackFromJson(String jsonResponse) {
-        try {
-            ObjectMapper mapper = new ObjectMapper();
-            JsonNode node = mapper.readTree(jsonResponse);
-            return node.get("feedback").asText();
-        } catch (Exception e) {
-            log.warn("Failed to parse JSON feedback, returning raw response: {}", e.getMessage());
-            return jsonResponse.trim(); // fallback to original if parse fails
-        }
-    }
-
-    /**
-     * Build prompt for AI to generate detailed feedback
-     */
-    private String buildAIFeedbackPrompt(
-            double pronunciationScore,
-            double accuracyScore,
-            double fluencyScore,
-            double completenessScore,
-            Double prosodyScore,
-            List<PronunciationAssessmentResponse.WordAssessment> words) {
-
-        StringBuilder prompt = new StringBuilder();
-
-        prompt.append("You are an experienced English pronunciation coach who teaches Vietnamese learners. ");
-        prompt.append("Based on the assessment results below, write a short, natural feedback **in Vietnamese only** as if you were a real teacher speaking directly to the student.\n\n");
-
-        prompt.append("ASSESSMENT SCORES:\n");
-        prompt.append(String.format("- Pronunciation Score: %.1f/100\n", pronunciationScore));
-        prompt.append(String.format("- Accuracy Score: %.1f/100\n", accuracyScore));
-        prompt.append(String.format("- Fluency Score: %.1f/100\n", fluencyScore));
-        prompt.append(String.format("- Completeness Score: %.1f/100\n", completenessScore));
-        if (prosodyScore != null) {
-            prompt.append(String.format("- Prosody Score: %.1f/100\n", prosodyScore));
-        }
-        prompt.append("\n");
-
-        // Count errors
-        long mispronunciations = words.stream()
-                .filter(w -> "Mispronunciation".equals(w.getErrorType()))
-                .count();
-        long omissions = words.stream()
-                .filter(w -> "Omission".equals(w.getErrorType()))
-                .count();
-        long insertions = words.stream()
-                .filter(w -> "Insertion".equals(w.getErrorType()))
-                .count();
-
-        prompt.append("WORD-LEVEL ERRORS:\n");
-        prompt.append(String.format("- Mispronounced words: %d\n", mispronunciations));
-        prompt.append(String.format("- Omitted words: %d\n", omissions));
-        prompt.append(String.format("- Inserted words: %d\n", insertions));
-        prompt.append("\n");
-
-        // List problematic words (accuracy < 70)
-        List<PronunciationAssessmentResponse.WordAssessment> problematicWords = words.stream()
-                .filter(w -> !"None".equals(w.getErrorType()) || w.getAccuracyScore() < 70)
-                .collect(Collectors.toList());
-
-        if (!problematicWords.isEmpty()) {
-            prompt.append("PROBLEMATIC WORDS:\n");
-            for (PronunciationAssessmentResponse.WordAssessment word : problematicWords) {
-                prompt.append(String.format("- '%s': accuracy %.1f%%, error type: %s\n",
-                        word.getWord(), word.getAccuracyScore(), word.getErrorType()));
-            }
-            prompt.append("\n");
-        }
-
-        prompt.append("FEEDBACK INSTRUCTIONS:\n");
-        prompt.append("- Give an overall impression first (confidence, clarity, tone, etc.) with a friendly and encouraging tone.\n");
-        prompt.append("- Mention what the student did well (correct sounds, clear rhythm, natural speaking, etc.).\n");
-        prompt.append("- Briefly point out the main pronunciation or fluency issues (e.g., unclear endings, missing sounds, wrong stress, hesitation).\n");
-        prompt.append("- For each main issue, give simple, practical advice on how to fix it (don't over-explain).\n");
-        prompt.append("- End with 2–3 short, clear tips for improvement and a motivational closing.\n\n");
-
-        prompt.append("STYLE REQUIREMENTS:\n");
-        prompt.append("- Write in natural, conversational Vietnamese.\n");
-        prompt.append("- Keep it concise and to the point (around 150–200 words).\n");
-        prompt.append("- Sound like a supportive teacher, not an AI.\n");
-        prompt.append("- Avoid repetition and overly detailed phonetic descriptions.\n");
-        prompt.append("- Use short paragraphs or bullet points for readability.\n\n");
-
-        prompt.append("IMPORTANT: All feedback content MUST be in Vietnamese with HTML formatting without \\n.\n");
-        prompt.append("Use these HTML tags for formatting:\n");
-        prompt.append("- <h3><strong>Header</strong></h3> for section headers\n");
-        prompt.append("- <p>paragraph text</p> for paragraphs\n");
-        prompt.append("- <ul><li>item</li></ul> for bullet lists\n");
-        prompt.append("- <ol><li>item</li></ol> for numbered lists\n");
-        prompt.append("- <strong>text</strong> for bold emphasis\n");
-        prompt.append("- <em>text</em> for italic emphasis\n");
-        prompt.append("- Multiple spaces/newlines will be preserved as-is\n\n");
-
-        prompt.append("Now, write the feedback in Vietnamese below:\n");
-
-        return prompt.toString();
-    }
-
-    /**
-     * Generate basic fallback feedback if AI fails
-     */
-    private String generateBasicFeedback(
-            double pronunciationScore,
-            double accuracyScore,
-            double fluencyScore,
-            double completenessScore,
-            Double prosodyScore,
-            List<PronunciationAssessmentResponse.WordAssessment> words) {
-
-        StringBuilder feedback = new StringBuilder();
-
-        // Overall assessment
-        feedback.append("📊 **Đánh giá tổng quan:**\n");
-        feedback.append(String.format("Điểm phát âm tổng thể của bạn là **%.1f/100**. ", pronunciationScore));
-
-        if (pronunciationScore >= 80) {
-            feedback.append("Xuất sắc! Phát âm của bạn rất tốt.\n\n");
-        } else if (pronunciationScore >= 60) {
-            feedback.append("Tốt! Phát âm của bạn ở mức khá, cần cải thiện thêm một số điểm.\n\n");
-        } else if (pronunciationScore >= 40) {
-            feedback.append("Trung bình. Bạn cần luyện tập thêm để cải thiện phát âm.\n\n");
-        } else {
-            feedback.append("Cần cố gắng hơn. Hãy luyện tập thường xuyên để cải thiện phát âm.\n\n");
-        }
-
-        // Detailed scores
-        feedback.append("📈 **Chi tiết điểm số:**\n");
-        feedback.append(String.format("- Độ chính xác: %.1f/100\n", accuracyScore));
-        feedback.append(String.format("- Độ trôi chảy: %.1f/100\n", fluencyScore));
-        feedback.append(String.format("- Độ hoàn chỉnh: %.1f/100\n", completenessScore));
-        if (prosodyScore != null) {
-            feedback.append(String.format("- Ngữ điệu: %.1f/100\n", prosodyScore));
-        }
-        feedback.append("\n");
-
-        // Word errors
-        List<PronunciationAssessmentResponse.WordAssessment> errorWords = words.stream()
-                .filter(w -> !"None".equals(w.getErrorType()) || w.getAccuracyScore() < 70)
-                .collect(Collectors.toList());
-
-        if (!errorWords.isEmpty()) {
-            feedback.append(String.format("⚠️ **Phát hiện %d từ cần cải thiện:**\n", errorWords.size()));
-
-            // Group by error type
-            Map<String, List<String>> errorsByType = new HashMap<>();
-            for (PronunciationAssessmentResponse.WordAssessment word : errorWords) {
-                errorsByType.computeIfAbsent(word.getErrorType(), k -> new ArrayList<>()).add(word.getWord());
-            }
-
-            if (errorsByType.containsKey("Mispronunciation")) {
-                feedback.append("- Phát âm chưa chuẩn: ").append(String.join(", ", errorsByType.get("Mispronunciation"))).append("\n");
-            }
-            if (errorsByType.containsKey("Omission")) {
-                feedback.append("- Thiếu các từ: ").append(String.join(", ", errorsByType.get("Omission"))).append("\n");
-            }
-            if (errorsByType.containsKey("Insertion")) {
-                feedback.append("- Từ thừa: ").append(String.join(", ", errorsByType.get("Insertion"))).append("\n");
-            }
-            feedback.append("\n");
-        }
-
-        // Recommendations
-        feedback.append("💡 **Gợi ý cải thiện:**\n");
-        if (accuracyScore < 70) {
-            feedback.append("- Tập trung luyện phát âm các âm chuẩn xác hơn\n");
-        }
-        if (fluencyScore < 70) {
-            feedback.append("- Luyện nói trôi chảy hơn, giảm ngập ngừng\n");
-        }
-        if (completenessScore < 70) {
-            feedback.append("- Đọc đầy đủ tất cả các từ trong câu\n");
-        }
-        if (prosodyScore != null && prosodyScore < 70) {
-            feedback.append("- Chú ý đến ngữ điệu, trọng âm và nhịp điệu\n");
-        }
-        if (!errorWords.isEmpty()) {
-            feedback.append(String.format("- Luyện tập lại các từ: %s\n",
-                    errorWords.stream().limit(5).map(w -> w.getWord()).collect(Collectors.joining(", "))));
-        }
-
-        return feedback.toString();
     }
 
     /**
@@ -2319,7 +1999,8 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
 
         } catch (Exception e) {
             log.error("Failed to parse recognition results: {}", e.getMessage(), e);
-            throw new RuntimeException("Failed to parse speech recognition results", e);
+            throw new ApiException("Failed to parse speech recognition results: " + e.getMessage(),
+                    HttpStatus.INTERNAL_SERVER_ERROR.value());
         }
     }
 
@@ -2346,194 +2027,12 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
     }
 
     /**
-     * Build comprehensive prompt for AI assessment
-     */
-    private String buildAIAssessmentPrompt(SpeechAnalysisResult analysis) {
-        StringBuilder prompt = new StringBuilder();
-
-        prompt.append("You are an expert English pronunciation coach. Analyze the following speech recognition results and provide a comprehensive pronunciation assessment.\n\n");
-
-        prompt.append("SPEECH ANALYSIS DATA:\n");
-        prompt.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
-        prompt.append(String.format("Recognized Text: \"%s\"\n", analysis.getRecognizedText()));
-        prompt.append(String.format("Word Count: %d words\n", analysis.getWordCount()));
-        prompt.append(String.format("Total Audio Duration: %.1f seconds\n", analysis.getTotalDurationMs() / 1000.0));
-        prompt.append(String.format("Actual Speech Duration: %.1f seconds\n", analysis.getSpeechDurationMs() / 1000.0));
-        prompt.append(String.format("Speaking Rate: %.1f words/minute\n", analysis.getSpeakingRate()));
-        prompt.append(String.format("Pause Ratio: %.1f%% (silence/total time)\n", analysis.getPauseRatio() * 100));
-        prompt.append(String.format("Overall Confidence: %.1f%%\n", analysis.getOverallConfidence()));
-        prompt.append(String.format("Average Word Confidence: %.1f%%\n", analysis.getAvgConfidence()));
-        prompt.append(String.format("Low-Confidence Words: %d\n", analysis.getLowConfidenceWordCount()));
-        prompt.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n");
-
-        // Word-level details
-        if (!analysis.getWords().isEmpty()) {
-            prompt.append("WORD-LEVEL ANALYSIS:\n");
-            for (WordAnalysis word : analysis.getWords()) {
-                prompt.append(String.format("- '%s': confidence %.1f%%, duration %.0fms\n",
-                        word.getWord(), word.getConfidence(), word.getDurationMs()));
-            }
-            prompt.append("\n");
-        }
-
-        prompt.append("ASSESSMENT TASK:\n");
-        prompt.append("Based on the above data, provide a pronunciation assessment in JSON format with these scores (0-100):\n\n");
-
-        prompt.append("1. **pronunciationScore** (0-100): Overall pronunciation quality\n");
-        prompt.append("   - Consider: confidence scores, clarity, word recognition accuracy\n");
-        prompt.append("   - High confidence (>80%) = better pronunciation\n");
-        prompt.append("   - Low confidence (<60%) = unclear/mispronounced words\n\n");
-
-        prompt.append("2. **fluencyScore** (0-100): Speaking fluency and rhythm\n");
-        prompt.append("   - Ideal speaking rate: 120-160 words/minute\n");
-        prompt.append("   - Too fast (>180) or too slow (<100) = lower score\n");
-        prompt.append("   - Excessive pauses (>40%) = hesitation, lower score\n");
-        prompt.append("   - Natural pauses (15-30%) = good fluency\n\n");
-
-        prompt.append("3. **clarityScore** (0-100): Speech clarity and articulation\n");
-        prompt.append("   - Based on overall and average confidence scores\n");
-        prompt.append("   - Few low-confidence words = clear articulation\n\n");
-
-        prompt.append("4. **confidenceScore** (0-100): Speaker confidence and delivery\n");
-        prompt.append("   - Steady pace + normal pauses = confident\n");
-        prompt.append("   - Too many pauses or very slow = hesitant\n\n");
-
-        prompt.append("5. **prosodyScore** (0-100): Intonation, stress, and rhythm quality\n");
-        prompt.append("   - Measures how natural and expressive the speaker's voice sounds\n");
-        prompt.append("   - Considers pitch variation, stress patterns, and sentence rhythm\n");
-        prompt.append("   - Monotone delivery (flat pitch, no stress) = lower score\n");
-        prompt.append("   - Natural intonation and balanced rhythm = higher score\n\n");
-
-        prompt.append("6. **feedback** (string): Detailed feedback in Vietnamese\n");
-        prompt.append("   - Start with overall impression\n");
-        prompt.append("   - Mention specific strengths (clear words, good pace, etc.)\n");
-        prompt.append("   - Point out specific issues (unclear words, too fast/slow, hesitation)\n");
-        prompt.append("   - Give 2-3 actionable improvement tips\n");
-        prompt.append("   - Keep it natural, encouraging, and concise (150-200 words)\n\n");
-
-        prompt.append("OUTPUT FORMAT (JSON only, no markdown, no extra text):\n");
-        prompt.append("{\n");
-        prompt.append("  \"pronunciationScore\": 75.0,\n");
-        prompt.append("  \"fluencyScore\": 80.0,\n");
-        prompt.append("  \"clarityScore\": 70.0,\n");
-        prompt.append("  \"confidenceScore\": 85.0,\n");
-        prompt.append("  \"prosodyScore\": 85.0,\n");
-        prompt.append("  \"feedback\": \"Phản hồi chi tiết bằng tiếng Việt...\"\n");
-        prompt.append("}\n");
-
-        return prompt.toString();
-    }
-
-    /**
-     * Parse AI assessment response
-     */
-    private PronunciationAssessmentResponse parseAIAssessmentResponse(
-            String jsonResponse,
-            SpeechAnalysisResult analysis) {
-
-        try {
-            String cleaned = cleanJsonResponse(jsonResponse);
-            JsonNode root = objectMapper.readTree(cleaned);
-
-            double pronunciationScore = root.has("pronunciationScore")
-                    ? root.get("pronunciationScore").asDouble() : 0.0;
-            double fluencyScore = root.has("fluencyScore")
-                    ? root.get("fluencyScore").asDouble() : 0.0;
-            double clarityScore = root.has("clarityScore")
-                    ? root.get("clarityScore").asDouble() : 0.0;
-            double confidenceScore = root.has("confidenceScore")
-                    ? root.get("confidenceScore").asDouble() : 0.0;
-            double prosodyScore = root.has("prosodyScore")
-                    ? root.get("prosodyScore").asDouble() : 0.0;
-            String feedback = root.has("feedback")
-                    ? root.get("feedback").asText() : "";
-
-            // Clamp scores
-            pronunciationScore = clampScore(pronunciationScore);
-            fluencyScore = clampScore(fluencyScore);
-            clarityScore = clampScore(clarityScore);
-            confidenceScore = clampScore(confidenceScore);
-            prosodyScore = clampScore(prosodyScore);
-
-
-            return PronunciationAssessmentResponse.builder()
-                    .pronunciationScore(pronunciationScore)
-                    .accuracyScore(clarityScore) // Map clarity to accuracy
-                    .fluencyScore(fluencyScore)
-                    .completenessScore(confidenceScore) // Map confidence to completeness
-                    .prosodyScore(prosodyScore) // Not available in free-form
-                    .recognizedText(analysis.getRecognizedText())
-                    .referenceText(null) // No reference text
-                    .feedback(feedback)
-                    .build();
-
-        } catch (Exception e) {
-            log.error("Failed to parse AI assessment: {}", e.getMessage(), e);
-            // Return fallback based on raw metrics
-            return createFallbackAssessment(analysis);
-        }
-    }
-
-    /**
      * Clamp score to 0-100 range
      */
     private double clampScore(double score) {
         if (Double.isNaN(score) || score < 0) return 0.0;
         if (score > 100) return 100.0;
         return score;
-    }
-
-    /**
-     * Create fallback assessment from metrics
-     */
-    private PronunciationAssessmentResponse createFallbackAssessment(SpeechAnalysisResult analysis) {
-        // Simple scoring based on metrics
-        double pronunciationScore = analysis.getAvgConfidence();
-        double fluencyScore = calculateFluencyScore(analysis.getSpeakingRate(), analysis.getPauseRatio());
-        double clarityScore = analysis.getOverallConfidence();
-        double confidenceScore = 100.0 - (analysis.getPauseRatio() * 100);
-
-        String feedback = String.format(
-                "Bạn đã nói %d từ với tốc độ %.1f từ/phút. " +
-                        "Độ tự tin trung bình: %.1f%%. " +
-                        "Hãy luyện tập thêm để cải thiện độ rõ ràng và tự tin khi nói.",
-                analysis.getWordCount(),
-                analysis.getSpeakingRate(),
-                analysis.getAvgConfidence()
-        );
-
-        return PronunciationAssessmentResponse.builder()
-                .pronunciationScore(pronunciationScore)
-                .accuracyScore(clarityScore)
-                .fluencyScore(fluencyScore)
-                .completenessScore(confidenceScore)
-                .recognizedText(analysis.getRecognizedText())
-                .feedback(feedback)
-                .build();
-    }
-
-    /**
-     * Calculate fluency score from speaking rate and pause ratio
-     */
-    private double calculateFluencyScore(double speakingRate, double pauseRatio) {
-        double rateScore = 100.0;
-
-        // Ideal rate: 120-160 WPM
-        if (speakingRate < 100) {
-            rateScore = speakingRate * 0.8; // Too slow
-        } else if (speakingRate > 180) {
-            rateScore = Math.max(60, 100 - (speakingRate - 180) * 0.5); // Too fast
-        }
-
-        // Ideal pause ratio: 15-30%
-        double pauseScore = 100.0;
-        if (pauseRatio > 0.40) {
-            pauseScore = Math.max(50, 100 - (pauseRatio - 0.30) * 200); // Too many pauses
-        } else if (pauseRatio < 0.10) {
-            pauseScore = Math.max(70, pauseRatio * 500); // Too few pauses
-        }
-
-        return (rateScore + pauseScore) / 2.0;
     }
 
     private void validateEnglishOnly(String text) {
@@ -2558,11 +2057,11 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
             }
         }
 
-        // If more than 30% of letters are Vietnamese, reject
+        // If more than 10% of letters are Vietnamese, reject
         if (totalLetters > 0) {
             double vietnameseRatio = (double) vietnameseCount / totalLetters;
 
-            if (vietnameseRatio > 0.30) {
+            if (vietnameseRatio > 0.10) {
                 log.warn("Detected Vietnamese content: {} Vietnamese chars out of {} total letters ({:.1f}%)",
                         vietnameseCount, totalLetters, vietnameseRatio * 100);
                 throw new ApiException(
@@ -2576,88 +2075,6 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
     @Override
     @Transactional(readOnly = true)
     public SseEmitter gradeWritingStream(GradingWritingRequest request) {
-//        String traceId = TraceUtil.getTraceId();
-//        log.info("[{}] Starting streaming AI grading for submissionQuestionId: {}",
-//                traceId, request.getSubmissionQuestionId());
-//
-//        // ✅ CRITICAL: Load TẤT CẢ data TRONG transaction, TRƯỚC khi tạo async task
-//
-//        // 1. Load submission question
-//        SubmissionQuestion submissionQuestion = submissionQuestionRepository
-//                .findById(request.getSubmissionQuestionId())
-//                .orElseThrow(() -> new ApiException("Submission question not found",
-//                        HttpStatus.NOT_FOUND.value()));
-//
-//        // 2. Extract student writing
-//        String studentWriting = extractWritingFromSubmission(
-//                submissionQuestion.getSubmissionContentJson());
-//
-//        if (studentWriting == null || studentWriting.trim().isEmpty()) {
-//            throw new ApiException("No writing content found in submission",
-//                    HttpStatus.BAD_REQUEST.value());
-//        }
-//
-//        // 3. ✅ FORCE LOAD lazy fields - QUAN TRỌNG!
-//        Question question = submissionQuestion.getQuestion();
-//        String questionText = question.getQuestionText(); // Load text
-//
-//        ChallengeSection section = question.getSection(); // Force load proxy
-//        section.getSectionTitle(); // Touch để Hibernate load
-//
-//        DailyChallenge challenge = section.getChallenge(); // Force load proxy
-//        challenge.getChallengeName(); // Touch để Hibernate load
-//
-//        // 4. Load context (phải load trong transaction)
-//        OpenAiServiceImpl.ChallengeContext context =
-//                openAiServiceImpl.eagerLoadChallengeContext(challenge);
-//
-//        // 5. Build prompt (sử dụng data đã load)
-//        String prompt = buildWritingGradingPrompt(context, questionText, studentWriting);
-//
-//        // 6. Tạo emitter
-//        SseEmitter emitter = new SseEmitter(300_000L);
-//
-//        // 7. ✅ Pass data vào async - KHÔNG access lazy fields trong async
-//        CompletableFuture.runAsync(() -> {
-//            try {
-//                // Các stage không cần load DB nữa
-//                sendProgress(emitter, "load_submission", 10, "Đang tải bài làm...");
-//                sendProgress(emitter, "extract_writing", 20, "Đang trích xuất nội dung...");
-//                sendProgress(emitter, "load_context", 30, "Đang tải ngữ cảnh...");
-//                sendProgress(emitter, "build_prompt", 40, "Đang chuẩn bị prompt...");
-//
-//                // Call OpenAI (50-80%)
-//                sendProgress(emitter, "ai_analysis", 50, "Đang phân tích bài viết với AI...");
-//                String aiResponse = callOpenAIWithProgress(prompt, emitter);
-//
-//                // Parse response (90%)
-//                sendProgress(emitter, "parse_result", 90, "Đang xử lý kết quả...");
-//                GradingWritingResponse result = parseGradingResponse(aiResponse, studentWriting);
-//
-//                // Complete (100%)
-//                sendProgress(emitter, "done", 100, "Hoàn thành!");
-//                sendComplete(emitter, result);
-//
-//                log.info("[{}] Streaming grading completed. Score: {}", traceId, result.getSuggestedScore());
-//
-//            } catch (Exception e) {
-//                log.error("[{}] Error during streaming grading: {}", traceId, e.getMessage(), e);
-//                sendError(emitter, e.getMessage());
-//            }
-//        });
-//
-//        // Handle emitter lifecycle
-//        emitter.onCompletion(() -> log.info("[{}] SSE emitter completed", traceId));
-//        emitter.onTimeout(() -> {
-//            log.warn("[{}] SSE emitter timeout", traceId);
-//            emitter.complete();
-//        });
-//        emitter.onError(e -> {
-//            log.error("[{}] SSE emitter error: {}", traceId, e.getMessage());
-//            emitter.completeWithError(e);
-//        });
-//
-//        return emitter;
         return null;
     }
 }

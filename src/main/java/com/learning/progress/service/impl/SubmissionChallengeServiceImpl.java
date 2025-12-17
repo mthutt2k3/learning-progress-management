@@ -377,7 +377,6 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
         }
 
         List<SubmissionDailyChallenge> toSave = submissions.stream()
-                .filter(s -> s.getSubmissionStatus() == SubmissionStatus.PENDING || s.getSubmissionStatus() == SubmissionStatus.DRAFT)
                 .map(s -> {
                     boolean changed = false;
                     if (newStart != null && !Objects.equals(s.getStartedAt(), newStart)) {

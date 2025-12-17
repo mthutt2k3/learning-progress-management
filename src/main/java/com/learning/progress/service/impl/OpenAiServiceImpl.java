@@ -171,7 +171,7 @@ public class OpenAiServiceImpl implements OpenAiService {
 
             // If nothing to check, return valid
             if (contentToCheck.length() == 0) {
-                return new InputValidationResponse(null, null);
+                return new InputValidationResponse(null, null, null ,null, null);
             }
 
             // Build lesson context
@@ -201,13 +201,10 @@ public class OpenAiServiceImpl implements OpenAiService {
             log.error("Error validating input content: {}", e.getMessage(), e);
             // In case of error, return warning
             return new InputValidationResponse(null,
-                    "Could not validate content. Please review manually.");
+                    "Could not validate content. Please review manually.", null, null, null);
         }
     }
 
-    /**
-     * ✅ UPDATED: Build prompt for input content validation with context-specific rules
-     */
     private String buildInputValidationPrompt(String content, String lessonContext, ValidationType validationType) {
         StringBuilder prompt = new StringBuilder();
 
@@ -220,7 +217,8 @@ public class OpenAiServiceImpl implements OpenAiService {
         }
 
         prompt.append("YOUR TASK:\n");
-        prompt.append("Check the provided content for safety and appropriateness.\n\n");
+        prompt.append("1. Check the provided content for safety and appropriateness.\n");
+        prompt.append("2. Process content to English for better AI generation.\n\n");
 
         // ❌ ERROR cases (apply to ALL types)
         prompt.append("❌ SEVERE ISSUES - Set 'error' field (MUST REJECT):\n");
@@ -231,7 +229,6 @@ public class OpenAiServiceImpl implements OpenAiService {
         prompt.append("- Drugs, illegal activities, dangerous behavior\n");
         prompt.append("- Self-harm or psychologically harmful content\n");
         prompt.append("- Any content unsafe for students\n");
-        prompt.append("- Misleading or deceptive information\n\n");
 
         // ⚠️ WARNING cases (depend on validation type)
         prompt.append("⚠️ MINOR ISSUES - Set 'warning' field:\n");
@@ -256,7 +253,8 @@ public class OpenAiServiceImpl implements OpenAiService {
                 prompt.append("- File contains duplicate questions (same or very similar)\n");
                 prompt.append("- File contains images or non-text content\n");
                 prompt.append("- Question content is NOT relevant to the lesson\n");
-                prompt.append("- Questions are not educational or appropriate for students\n\n");
+                prompt.append("- Questions are not educational or appropriate for students\n");
+                prompt.append("- Misleading or deceptive information\n\n");
                 prompt.append("- File contains extra descriptive text or paragraphs outside of the questions\n\n");
                 break;
         }
@@ -266,26 +264,81 @@ public class OpenAiServiceImpl implements OpenAiService {
         prompt.append(content).append("\n");
         prompt.append("--------------------------------------------------\n\n");
 
+        // ✅ UPDATED: Processing instructions
+        prompt.append("🌐 CONTENT PROCESSING TASK:\n\n");
+
+        prompt.append("1️⃣ DESCRIPTION:\n");
+        prompt.append("   - Translate from Vietnamese to English if needed\n");
+        prompt.append("   - If already in English, return unchanged\n");
+        prompt.append("   - If not present, set to null\n\n");
+
+        prompt.append("2️⃣ VOCABULARY LIST (SPECIAL HANDLING):\n");
+        prompt.append("   - Format is usually: \"word: Vietnamese meaning\" (e.g., \"bug: lỗi\", \"feature: tính năng\")\n");
+        prompt.append("   - EXTRACT ONLY THE ENGLISH WORDS, separated by commas\n");
+        prompt.append("   - REMOVE Vietnamese meanings completely\n");
+        prompt.append("   - Example input: \"bug: lỗi, feature: tính năng, developer: lập trình viên\"\n");
+        prompt.append("   - Example output: \"bug, feature, developer\"\n");
+        prompt.append("   - If vocabulary is a simple list without meanings, return as-is\n");
+        prompt.append("   - If not present, set to null\n\n");
+
+        prompt.append("3️⃣ CUSTOM LESSON FOCUS:\n");
+        prompt.append("   - Translate from Vietnamese to English if needed\n");
+        prompt.append("   - If already in English, return unchanged\n");
+        prompt.append("   - If not present, set to null\n\n");
+
         prompt.append("OUTPUT FORMAT (JSON ONLY):\n");
         prompt.append("{\n");
         prompt.append("  \"error\": \"short message in English or null\",\n");
-        prompt.append("  \"warning\": \"short message in English or null\"\n");
+        prompt.append("  \"warning\": \"short message in English or null\",\n");
+        prompt.append("  \"translatedDescription\": \"translated text or null\",\n");
+        prompt.append("  \"translatedVocabularyList\": \"English words only, comma-separated, or null\",\n");
+        prompt.append("  \"translatedCustomLessonFocus\": \"translated text or null\"\n");
         prompt.append("}\n\n");
 
         prompt.append("RULES:\n");
-        prompt.append("- Messages must be SHORT (max 1 sentence)\n");
+        prompt.append("- Error/warning messages must be SHORT (max 1 sentence)\n");
         prompt.append("- Use clear, user-friendly language\n");
         prompt.append("- Set ONLY ONE of error or warning if applicable\n");
-        prompt.append("- Both must be null if content is acceptable\n");
+        prompt.append("- Both error and warning must be null if content is acceptable\n");
+        prompt.append("- For vocabulary: ONLY extract English words, NO Vietnamese meanings\n");
         prompt.append("- Return valid JSON only\n\n");
 
-        prompt.append("Examples of good messages:\n");
-        prompt.append("- error: \"Content contains inappropriate material for students.\"\n");
-        prompt.append("- warning: \"Content may not be relevant to the lesson topic.\"\n");
-        prompt.append("- warning: \"Section contains significant Vietnamese text.\"\n");
-        prompt.append("- warning: \"File contains duplicate questions.\"\n\n");
+        prompt.append("EXAMPLES:\n\n");
 
-        prompt.append("Analyze now.\n");
+        prompt.append("Example 1 (vocabulary with meanings):\n");
+        prompt.append("Input: \"Vocabulary: bug: lỗi, feature: tính năng, developer: lập trình viên\"\n");
+        prompt.append("{\n");
+        prompt.append("  \"error\": null,\n");
+        prompt.append("  \"warning\": null,\n");
+        prompt.append("  \"translatedDescription\": null,\n");
+        prompt.append("  \"translatedVocabularyList\": \"bug, feature, developer\",\n");
+        prompt.append("  \"translatedCustomLessonFocus\": null\n");
+        prompt.append("}\n\n");
+
+        prompt.append("Example 2 (Vietnamese description):\n");
+        prompt.append("Input: \"Description: Tạo câu hỏi về thì quá khứ đơn\"\n");
+        prompt.append("{\n");
+        prompt.append("  \"error\": null,\n");
+        prompt.append("  \"warning\": null,\n");
+        prompt.append("  \"translatedDescription\": \"Create questions about past simple tense\",\n");
+        prompt.append("  \"translatedVocabularyList\": null,\n");
+        prompt.append("  \"translatedCustomLessonFocus\": null\n");
+        prompt.append("}\n\n");
+
+        prompt.append("Example 3 (full content):\n");
+        prompt.append("Input:\n");
+        prompt.append("\"Description: Tập trung vào động từ bất quy tắc\n");
+        prompt.append("Vocabulary: go: đi, went: đã đi, gone: đã đi (hoàn thành), see: nhìn, saw: đã nhìn\n");
+        prompt.append("Custom Focus: Học sinh cần phân biệt giữa quá khứ đơn và hiện tại hoàn thành\"\n");
+        prompt.append("{\n");
+        prompt.append("  \"error\": null,\n");
+        prompt.append("  \"warning\": null,\n");
+        prompt.append("  \"translatedDescription\": \"Focus on irregular verbs\",\n");
+        prompt.append("  \"translatedVocabularyList\": \"go, went, gone, see, saw\",\n");
+        prompt.append("  \"translatedCustomLessonFocus\": \"Students need to distinguish between past simple and present perfect\"\n");
+        prompt.append("}\n\n");
+
+        prompt.append("Analyze and process now.\n");
 
         return prompt.toString();
     }
@@ -313,12 +366,31 @@ public class OpenAiServiceImpl implements OpenAiService {
             String warning = root.has("warning") && !root.get("warning").isNull()
                     ? root.get("warning").asText() : null;
 
-            return new InputValidationResponse(error, warning);
+            // ✅ NEW: Parse translated fields
+            String translatedDescription = root.has("translatedDescription") && !root.get("translatedDescription").isNull()
+                    ? root.get("translatedDescription").asText() : null;
+            String translatedVocabularyList = root.has("translatedVocabularyList") && !root.get("translatedVocabularyList").isNull()
+                    ? root.get("translatedVocabularyList").asText() : null;
+            String translatedCustomLessonFocus = root.has("translatedCustomLessonFocus") && !root.get("translatedCustomLessonFocus").isNull()
+                    ? root.get("translatedCustomLessonFocus").asText() : null;
+
+            return new InputValidationResponse(
+                    error,
+                    warning,
+                    translatedDescription,
+                    translatedVocabularyList,
+                    translatedCustomLessonFocus
+            );
 
         } catch (Exception e) {
             log.error("Failed to parse input validation response: {}", e.getMessage(), e);
-            return new InputValidationResponse(null,
-                    "Could not parse validation result. Please review content manually.");
+            return new InputValidationResponse(
+                    null,
+                    "Could not parse validation result. Please review content manually.",
+                    null,
+                    null,
+                    null
+            );
         }
     }
 
@@ -683,6 +755,23 @@ public class OpenAiServiceImpl implements OpenAiService {
                 ValidationType.GV
         );
 
+        String descriptionToUse = validation.getTranslatedDescription() != null
+                ? validation.getTranslatedDescription()
+                : request.getDescription();
+
+        String vocabularyToUse = validation.getTranslatedVocabularyList() != null
+                ? validation.getTranslatedVocabularyList()
+                : request.getVocabularyList();
+
+        String customFocusToUse = validation.getTranslatedCustomLessonFocus() != null
+                ? validation.getTranslatedCustomLessonFocus()
+                : request.getCustomLessonFocus();
+
+        log.info("Using translated inputs - Description: {}, Vocabulary: {}, Custom Focus: {}",
+                validation.getTranslatedDescription() != null ? "✓" : "✗",
+                validation.getTranslatedVocabularyList() != null ? "✓" : "✗",
+                validation.getTranslatedCustomLessonFocus() != null ? "✓" : "✗");
+
         log.info("Level info - Name: {}, Description: {}", levelInfo.levelName, levelInfo.levelDescription);
 
         List<QuestionGenerationTask> allTasks = new ArrayList<>();
@@ -699,13 +788,13 @@ public class OpenAiServiceImpl implements OpenAiService {
                 allTasks.add(new QuestionGenerationTask(
                         context,
                         questionType,
-                        request.getDescription(),
+                        descriptionToUse,
                         contextInfo,
                         sectionOrder++,
                         levelInfo,
                         request.getLessonFocus(),
-                        request.getCustomLessonFocus(),
-                        request.getVocabularyList()
+                        customFocusToUse,
+                        vocabularyToUse
                 ));
             }
         }
@@ -2075,6 +2164,10 @@ public class OpenAiServiceImpl implements OpenAiService {
                 prompt.append("- questionText MUST contain [[pos_xxxxxx]] placeholders\n");
                 prompt.append("- Each dropdown has exactly 4 options, exactly 1 with isCorrect=true\n");
                 prompt.append("- All options for one dropdown share the same positionId\n\n");
+                prompt.append("- Option ID naming rule:\n");
+                prompt.append("  + Correct option: optN\n");
+                prompt.append("  + Other options: optN_1, optN_2, optN_3\n");
+                prompt.append("  + N increases sequentially for each dropdown in a section (opt1, opt2, ...)\n\n");
                 prompt.append("EXAMPLE:\n");
                 prompt.append("{\n")
                         .append("  \"questionText\": \"The company [[pos_k5l6m7]] expand into Asian markets next year.\",\n")
@@ -2084,9 +2177,9 @@ public class OpenAiServiceImpl implements OpenAiService {
                         .append("  \"content\": {\n")
                         .append("    \"data\": [\n")
                         .append("      {\"id\": \"opt1\", \"value\": \"plans to\", \"isCorrect\": true, \"positionId\": \"k5l6m7\"},\n")
-                        .append("      {\"id\": \"opt2\", \"value\": \"is planning\", \"isCorrect\": false, \"positionId\": \"k5l6m7\"},\n")
-                        .append("      {\"id\": \"opt3\", \"value\": \"will plan\", \"isCorrect\": false, \"positionId\": \"k5l6m7\"},\n")
-                        .append("      {\"id\": \"opt4\", \"value\": \"planned\", \"isCorrect\": false, \"positionId\": \"k5l6m7\"}\n")
+                        .append("      {\"id\": \"opt1_1\", \"value\": \"is planning\", \"isCorrect\": false, \"positionId\": \"k5l6m7\"},\n")
+                        .append("      {\"id\": \"opt1_2\", \"value\": \"will plan\", \"isCorrect\": false, \"positionId\": \"k5l6m7\"},\n")
+                        .append("      {\"id\": \"opt1_3\", \"value\": \"planned\", \"isCorrect\": false, \"positionId\": \"k5l6m7\"}\n")
                         .append("    ]\n")
                         .append("  }\n")
                         .append("}\n\n");
@@ -2121,7 +2214,9 @@ public class OpenAiServiceImpl implements OpenAiService {
                 prompt.append("- questionText contains [[pos_xxxxxx]] placeholders for drop zones\n");
                 prompt.append("- Each placeholder needs exactly 1 correct answer with matching positionId\n");
                 prompt.append("- Can include distractor answers (isCorrect=false, positionId=null) to increase difficulty\n");
-                prompt.append("- Number of correct answers = number of placeholders\n\n");
+                prompt.append("- Number of correct answers = number of placeholders\n");
+                prompt.append("- Answer length rule: EVERY answer 'value' (correct + distractor) MUST be <= 50 characters\n");
+                prompt.append("- If a value would exceed 50 characters, shorten it while keeping the meaning\n\n");
                 prompt.append("EXAMPLE:\n");
                 prompt.append("{\n")
                         .append("  \"questionText\": \"Complete the sentence: [[pos_a1b2c3]] is the capital of [[pos_d4e5f6]], and [[pos_g7h8i9]] is spoken there.\",\n")
@@ -2501,11 +2596,6 @@ public class OpenAiServiceImpl implements OpenAiService {
                 ValidationType.FILE
         );
 
-        // ✅ If validation returns error, throw immediately
-        if (validation.getError() != null) {
-            throw new ApiException(validation.getError(), HttpStatus.BAD_REQUEST.value());
-        }
-
         String prompt = buildParsingPrompt(fileContent, description);
         int maxRetries = batchRetryMaxAttempts;
         int attempt = 0;
@@ -2554,7 +2644,7 @@ public class OpenAiServiceImpl implements OpenAiService {
 
                 return new GenerateQuestionsResponse(
                         sections,
-                        null,
+                        validation.getError(),
                         validation.getWarning()
                 );
 
@@ -2605,7 +2695,12 @@ public class OpenAiServiceImpl implements OpenAiService {
         prompt.append("- DO NOT correct grammar or spelling errors\n");
         prompt.append("- DO NOT filter or remove any questions\n");
         prompt.append("- Accept Vietnamese, English, or mixed language content\n");
-        prompt.append("- Your ONLY job is to convert the content into correct JSON format\n\n");
+        prompt.append("- Your ONLY job is to convert the content into correct JSON format\n");
+        prompt.append("⚠️ IMPORTANT: ANSWER VALUE CLEANING (keep content only)\n");
+        prompt.append("- For each answer option/value, keep ONLY the answer text content.\n");
+        prompt.append("- REMOVE leading labels such as: \"A.\", \"B.\", \"C.\", \"D.\", \"A)\", \"B)\", \"1.\", \"2)\", \"(A)\", \"-\", \"•\".\n");
+        prompt.append("- Example: \"A. Paris\" -> \"Paris\"; \"B) France\" -> \"France\".\n");
+        prompt.append("- This applies to ALL question types with options/answers.\n\n");
 
         if (description != null && !description.isBlank()) {
             prompt.append("📝 ADDITIONAL PARSING INSTRUCTIONS:\n");
@@ -2634,7 +2729,7 @@ public class OpenAiServiceImpl implements OpenAiService {
         prompt.append("            \"data\": [\n");
         prompt.append("              {\n");
         prompt.append("                \"id\": \"string (required)\",\n");
-        prompt.append("                \"value\": \"string (required, keep ORIGINAL text)\",\n");
+        prompt.append("                \"value\": \"string (required, keep ORIGINAL text BUT content-only)\",\n");
         prompt.append("                \"isCorrect\": boolean (required),\n");
         prompt.append("                \"positionId\": \"string or null\"\n");
         prompt.append("              }\n");
@@ -2668,6 +2763,8 @@ public class OpenAiServiceImpl implements OpenAiService {
         prompt.append("□ Multiple choice has exactly 4 options\n");
         prompt.append("□ True/False has exactly 2 options\n");
         prompt.append("□ Fill in the blank has EXACTLY 1 correct answer\n");
+        prompt.append("□ Answer values contain ONLY content (NO leading labels like A./B)/1./(A)/-)\n");
+        prompt.append("□ If original option had labels (A,B,C,D...), labels are NOT included in value\n");
         prompt.append("□ ALL original content preserved (no translation, no modification)\n\n");
 
         prompt.append("🚨 CRITICAL REMINDERS:\n");
@@ -2676,6 +2773,7 @@ public class OpenAiServiceImpl implements OpenAiService {
         prompt.append("- Return ONLY the JSON object\n");
         prompt.append("- DO NOT translate or modify any content from the file\n");
         prompt.append("- PRESERVE original text exactly as written\n");
+        prompt.append("- Answer 'value' MUST NOT include option labels (A./B)/1./(A)/-). Keep content only.\n");
         prompt.append("- Fill in the blank: ONLY 1 correct answer allowed\n");
         prompt.append("- If a question type is unclear, use MULTIPLE_CHOICE as default\n\n");
 
@@ -2760,6 +2858,10 @@ public class OpenAiServiceImpl implements OpenAiService {
         prompt.append("- Each dropdown has exactly 1 option with isCorrect=true\n");
         prompt.append("- All options for same dropdown share the same positionId\n");
         prompt.append("- xxxxxx = random 6-character ID (lowercase a-z and 0-9 only)\n\n");
+        prompt.append("- Option ID naming rule:\n");
+        prompt.append("  + Correct option: optN\n");
+        prompt.append("  + Other options: optN_1, optN_2, optN_3\n");
+        prompt.append("  + N increases sequentially for each dropdown in a section (opt1, opt2, ...)\n\n");
         prompt.append("EXAMPLE:\n");
         prompt.append("{\n");
         prompt.append("  \"questionText\": \"The company [[pos_k5l6m7]] expand into Asian markets next year.\",\n");
@@ -2769,9 +2871,9 @@ public class OpenAiServiceImpl implements OpenAiService {
         prompt.append("  \"content\": {\n");
         prompt.append("    \"data\": [\n");
         prompt.append("      {\"id\": \"opt1\", \"value\": \"plans to\", \"isCorrect\": true, \"positionId\": \"k5l6m7\"},\n");
-        prompt.append("      {\"id\": \"opt2\", \"value\": \"is planning\", \"isCorrect\": false, \"positionId\": \"k5l6m7\"},\n");
-        prompt.append("      {\"id\": \"opt3\", \"value\": \"will plan\", \"isCorrect\": false, \"positionId\": \"k5l6m7\"},\n");
-        prompt.append("      {\"id\": \"opt4\", \"value\": \"planned\", \"isCorrect\": false, \"positionId\": \"k5l6m7\"}\n");
+        prompt.append("      {\"id\": \"opt1_1\", \"value\": \"is planning\", \"isCorrect\": false, \"positionId\": \"k5l6m7\"},\n");
+        prompt.append("      {\"id\": \"opt1_2\", \"value\": \"will plan\", \"isCorrect\": false, \"positionId\": \"k5l6m7\"},\n");
+        prompt.append("      {\"id\": \"opt1_3\", \"value\": \"planned\", \"isCorrect\": false, \"positionId\": \"k5l6m7\"}\n");
         prompt.append("    ]\n");
         prompt.append("  }\n");
         prompt.append("}\n\n");
@@ -2812,7 +2914,9 @@ public class OpenAiServiceImpl implements OpenAiService {
         prompt.append("- Correct answers have isCorrect=true and matching positionId\n");
         prompt.append("- Can include distractor answers (isCorrect=false, positionId=null)\n");
         prompt.append("- Number of correct answers = number of placeholders\n");
-        prompt.append("- xxxxxx = random 6-character ID (lowercase a-z and 0-9 only)\n\n");
+        prompt.append("- xxxxxx = random 6-character ID (lowercase a-z and 0-9 only)\n");
+        prompt.append("- Answer length rule: EVERY answer 'value' (correct + distractor) MUST be <= 50 characters\n");
+        prompt.append("- If a value would exceed 50 characters, shorten it while keeping the meaning\n\n");
         prompt.append("EXAMPLE:\n");
         prompt.append("{\n");
         prompt.append("  \"questionText\": \"Complete: [[pos_a1b2c3]] is the capital of [[pos_d4e5f6]], and [[pos_g7h8i9]] is spoken there.\",\n");
