@@ -215,7 +215,7 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
         // - Once CLOSED, teacher cannot change endDate.
         // ✅ Start date must be >= now
         OffsetDateTime now = OffsetDateTime.now();
-        if (challenge.getChallengeStatus() == ChallengeStatus.DRAFT && challenge.getStartDate().toInstant().isBefore(now.toInstant())) {
+        if (challenge.getChallengeStatus() == ChallengeStatus.DRAFT && dto.getStartDate().isBefore(now)) {
             throw badRequest(Const.CHALLENGE.START_DATE_MUST_BE_FUTURE);
         }
         if ((challenge.getChallengeStatus() == ChallengeStatus.IN_PROGRESS
