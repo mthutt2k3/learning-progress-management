@@ -4,6 +4,7 @@ import com.learning.progress.common.Const;
 import com.learning.progress.dto.DataResponse;
 import com.learning.progress.dto.ai.*;
 import com.learning.progress.dto.challenge.section.SectionWithQuestionsDto;
+import com.learning.progress.exception.ApiException;
 import com.learning.progress.service.OpenAiService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -80,7 +81,7 @@ public class OpenAiController {
             return ResponseEntity.ok(result);
 
         } catch (Exception e) {
-            throw new RuntimeException("Failed to parse questions from file: " + e.getMessage(), e);
+            throw new ApiException("Failed to parse questions from file: " + e.getMessage(), HttpStatus.BAD_REQUEST.value());
         }
     }
 

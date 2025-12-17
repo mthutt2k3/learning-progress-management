@@ -62,6 +62,9 @@ public class OpenAiServiceImpl implements OpenAiService {
     @Value("${azure.openai.api-key}")
     private String apiKey;
 
+    @Value("${azure.openai.reading-passage.words-per-paragraph}")
+    private int wordsPerParagraphDefault;
+
     @Value("${azure.openai.connect-timeout-ms:5000}")
     private int connectTimeoutMs;
 
@@ -324,7 +327,7 @@ public class OpenAiServiceImpl implements OpenAiService {
      */
     private void validateOutputFormat(List<QuestionDto> questions) {
         if (questions == null || questions.isEmpty()) {
-            throw new RuntimeException("No questions generated");
+            throw new ApiException("No questions generated", HttpStatus.BAD_REQUEST.value());
         }
 
         for (int i = 0; i < questions.size(); i++) {
@@ -333,16 +336,19 @@ public class OpenAiServiceImpl implements OpenAiService {
 
             // Basic field validation
             if (question.getQuestionText() == null || question.getQuestionText().trim().isEmpty()) {
-                throw new RuntimeException("Question " + questionNumber + ": questionText is required");
+                throw new ApiException("Question " + questionNumber + ": questionText is required",
+                        HttpStatus.BAD_REQUEST.value());
             }
 
             if (question.getQuestionType() == null || question.getQuestionType().trim().isEmpty()) {
-                throw new RuntimeException("Question " + questionNumber + ": questionType is required");
+                throw new ApiException("Question " + questionNumber + ": questionType is required",
+                        HttpStatus.BAD_REQUEST.value());
             }
 
             if (question.getContent() == null || question.getContent().getData() == null ||
                     question.getContent().getData().isEmpty()) {
-                throw new RuntimeException("Question " + questionNumber + ": content.data is required and cannot be empty");
+                throw new ApiException("Question " + questionNumber + ": content.data is required and cannot be empty",
+                        HttpStatus.BAD_REQUEST.value());
             }
 
             // Validate based on question type
@@ -375,7 +381,8 @@ public class OpenAiServiceImpl implements OpenAiService {
                     validateRewriteFormat(question, dataItems, questionNumber);
                     break;
                 default:
-                    throw new RuntimeException("Question " + questionNumber + ": Unknown question type '" + questionType + "'");
+                    throw new ApiException("Question " + questionNumber + ": Unknown question type '" + questionType + "'",
+                            HttpStatus.BAD_REQUEST.value());
             }
         }
 
@@ -384,37 +391,44 @@ public class OpenAiServiceImpl implements OpenAiService {
 
     private void validateMultipleChoiceFormat(QuestionDto question, List<DataItem> dataItems, int questionNumber) {
         if (dataItems.size() != 4) {
-            throw new RuntimeException("Question " + questionNumber + " (MULTIPLE_CHOICE): Must have exactly 4 options, found " + dataItems.size());
+            throw new ApiException("Question " + questionNumber + " (MULTIPLE_CHOICE): Must have exactly 4 options, found " + dataItems.size(),
+                    HttpStatus.BAD_REQUEST.value());
         }
 
         long correctCount = dataItems.stream().filter(DataItem::isCorrect).count();
         if (correctCount != 1) {
-            throw new RuntimeException("Question " + questionNumber + " (MULTIPLE_CHOICE): Must have exactly 1 correct answer, found " + correctCount);
+            throw new ApiException("Question " + questionNumber + " (MULTIPLE_CHOICE): Must have exactly 1 correct answer, found " + correctCount,
+                    HttpStatus.BAD_REQUEST.value());
         }
 
         for (DataItem item : dataItems) {
             if (item.getPositionId() != null) {
-                throw new RuntimeException("Question " + questionNumber + " (MULTIPLE_CHOICE): Options must have positionId=null");
+                throw new ApiException("Question " + questionNumber + " (MULTIPLE_CHOICE): Options must have positionId=null",
+                        HttpStatus.BAD_REQUEST.value());
             }
             if (item.getValue() == null || item.getValue().trim().isEmpty()) {
-                throw new RuntimeException("Question " + questionNumber + " (MULTIPLE_CHOICE): Option value cannot be empty");
+                throw new ApiException("Question " + questionNumber + " (MULTIPLE_CHOICE): Option value cannot be empty",
+                        HttpStatus.BAD_REQUEST.value());
             }
         }
     }
 
     private void validateTrueOrFalseFormat(QuestionDto question, List<DataItem> dataItems, int questionNumber) {
         if (dataItems.size() != 2) {
-            throw new RuntimeException("Question " + questionNumber + " (TRUE_OR_FALSE): Must have exactly 2 options, found " + dataItems.size());
+            throw new ApiException("Question " + questionNumber + " (TRUE_OR_FALSE): Must have exactly 2 options, found " + dataItems.size(),
+                    HttpStatus.BAD_REQUEST.value());
         }
 
         long correctCount = dataItems.stream().filter(DataItem::isCorrect).count();
         if (correctCount != 1) {
-            throw new RuntimeException("Question " + questionNumber + " (TRUE_OR_FALSE): Must have exactly 1 correct answer, found " + correctCount);
+            throw new ApiException("Question " + questionNumber + " (TRUE_OR_FALSE): Must have exactly 1 correct answer, found " + correctCount,
+                    HttpStatus.BAD_REQUEST.value());
         }
 
         for (DataItem item : dataItems) {
             if (item.getPositionId() != null) {
-                throw new RuntimeException("Question " + questionNumber + " (TRUE_OR_FALSE): Options must have positionId=null");
+                throw new ApiException("Question " + questionNumber + " (TRUE_OR_FALSE): Options must have positionId=null",
+                        HttpStatus.BAD_REQUEST.value());
             }
         }
     }
@@ -430,32 +444,38 @@ public class OpenAiServiceImpl implements OpenAiService {
         }
 
         if (positionsInText.isEmpty()) {
-            throw new RuntimeException("Question " + questionNumber + " (FILL_IN_THE_BLANK): Must contain [[pos_xxx]] placeholders");
+            throw new ApiException("Question " + questionNumber + " (FILL_IN_THE_BLANK): Must contain [[pos_xxx]] placeholders",
+                    HttpStatus.BAD_REQUEST.value());
         }
 
         // ✅ CRITICAL: Only 1 correct answer allowed
         long correctCount = dataItems.stream().filter(DataItem::isCorrect).count();
         if (correctCount != 1) {
-            throw new RuntimeException("Question " + questionNumber + " (FILL_IN_THE_BLANK): Must have exactly 1 correct answer, found " + correctCount);
+            throw new ApiException("Question " + questionNumber + " (FILL_IN_THE_BLANK): Must have exactly 1 correct answer, found " + correctCount,
+                    HttpStatus.BAD_REQUEST.value());
         }
 
         if (dataItems.size() != 1) {
-            throw new RuntimeException("Question " + questionNumber + " (FILL_IN_THE_BLANK): Can only have 1 answer, found " + dataItems.size());
+            throw new ApiException("Question " + questionNumber + " (FILL_IN_THE_BLANK): Can only have 1 answer, found " + dataItems.size(),
+                    HttpStatus.BAD_REQUEST.value());
         }
 
         // All answers must be correct (isCorrect=true)
         for (DataItem item : dataItems) {
             if (!item.isCorrect()) {
-                throw new RuntimeException("Question " + questionNumber + " (FILL_IN_THE_BLANK): All answers must have isCorrect=true");
+                throw new ApiException("Question " + questionNumber + " (FILL_IN_THE_BLANK): All answers must have isCorrect=true",
+                        HttpStatus.BAD_REQUEST.value());
             }
 
             if (item.getPositionId() == null || item.getPositionId().trim().isEmpty()) {
-                throw new RuntimeException("Question " + questionNumber + " (FILL_IN_THE_BLANK): Answers must have valid positionId");
+                throw new ApiException("Question " + questionNumber + " (FILL_IN_THE_BLANK): Answers must have valid positionId",
+                        HttpStatus.BAD_REQUEST.value());
             }
 
             if (!positionsInText.contains(item.getPositionId())) {
-                throw new RuntimeException("Question " + questionNumber + " (FILL_IN_THE_BLANK): Answer positionId '" +
-                        item.getPositionId() + "' not found in question text");
+                throw new ApiException("Question " + questionNumber + " (FILL_IN_THE_BLANK): Answer positionId '" +
+                        item.getPositionId() + "' not found in question text",
+                        HttpStatus.BAD_REQUEST.value());
             }
         }
     }
@@ -470,7 +490,8 @@ public class OpenAiServiceImpl implements OpenAiService {
         }
 
         if (positionsInText.isEmpty()) {
-            throw new RuntimeException("Question " + questionNumber + " (DROPDOWN): Must contain [[pos_xxx]] placeholders");
+            throw new ApiException("Question " + questionNumber + " (DROPDOWN): Must contain [[pos_xxx]] placeholders",
+                    HttpStatus.BAD_REQUEST.value());
         }
 
         Map<String, List<DataItem>> itemsByPosition = dataItems.stream()
@@ -480,14 +501,16 @@ public class OpenAiServiceImpl implements OpenAiService {
         for (String posId : positionsInText) {
             List<DataItem> options = itemsByPosition.get(posId);
             if (options == null || options.size() != 4) {
-                throw new RuntimeException("Question " + questionNumber + " (DROPDOWN): Position '" + posId +
-                        "' must have exactly 4 options, found " + (options == null ? 0 : options.size()));
+                throw new ApiException("Question " + questionNumber + " (DROPDOWN): Position '" + posId +
+                        "' must have exactly 4 options, found " + (options == null ? 0 : options.size()),
+                        HttpStatus.BAD_REQUEST.value());
             }
 
             long correctCount = options.stream().filter(DataItem::isCorrect).count();
             if (correctCount != 1) {
-                throw new RuntimeException("Question " + questionNumber + " (DROPDOWN): Position '" + posId +
-                        "' must have exactly 1 correct answer, found " + correctCount);
+                throw new ApiException("Question " + questionNumber + " (DROPDOWN): Position '" + posId +
+                        "' must have exactly 1 correct answer, found " + correctCount,
+                        HttpStatus.BAD_REQUEST.value());
             }
         }
     }
@@ -502,26 +525,31 @@ public class OpenAiServiceImpl implements OpenAiService {
         }
 
         if (positionsInText.isEmpty()) {
-            throw new RuntimeException("Question " + questionNumber + " (REARRANGE): Must contain [[pos_xxx]] placeholders");
+            throw new ApiException("Question " + questionNumber + " (REARRANGE): Must contain [[pos_xxx]] placeholders",
+                    HttpStatus.BAD_REQUEST.value());
         }
 
         if (positionsInText.size() < 5 || positionsInText.size() > 8) {
-            throw new RuntimeException("Question " + questionNumber + " (REARRANGE): Must have 5-8 items, found " + positionsInText.size());
+            throw new ApiException("Question " + questionNumber + " (REARRANGE): Must have 5-8 items, found " + positionsInText.size(),
+                    HttpStatus.BAD_REQUEST.value());
         }
 
         long correctCount = dataItems.stream().filter(DataItem::isCorrect).count();
         if (correctCount != dataItems.size()) {
-            throw new RuntimeException("Question " + questionNumber + " (REARRANGE): All items must have isCorrect=true, found " +
-                    (dataItems.size() - correctCount) + " incorrect items");
+            throw new ApiException("Question " + questionNumber + " (REARRANGE): All items must have isCorrect=true, found " +
+                    (dataItems.size() - correctCount) + " incorrect items",
+                    HttpStatus.BAD_REQUEST.value());
         }
 
         for (DataItem item : dataItems) {
             if (item.getPositionId() == null || item.getPositionId().trim().isEmpty()) {
-                throw new RuntimeException("Question " + questionNumber + " (REARRANGE): Items must have valid positionId");
+                throw new ApiException("Question " + questionNumber + " (REARRANGE): Items must have valid positionId",
+                        HttpStatus.BAD_REQUEST.value());
             }
             if (!positionsInText.contains(item.getPositionId())) {
-                throw new RuntimeException("Question " + questionNumber + " (REARRANGE): Item positionId '" +
-                        item.getPositionId() + "' not found in question text");
+                throw new ApiException("Question " + questionNumber + " (REARRANGE): Item positionId '" +
+                        item.getPositionId() + "' not found in question text",
+                        HttpStatus.BAD_REQUEST.value());
             }
         }
     }
@@ -536,23 +564,27 @@ public class OpenAiServiceImpl implements OpenAiService {
         }
 
         if (positionsInText.isEmpty()) {
-            throw new RuntimeException("Question " + questionNumber + " (DRAG_AND_DROP): Must contain [[pos_xxx]] placeholders");
+            throw new ApiException("Question " + questionNumber + " (DRAG_AND_DROP): Must contain [[pos_xxx]] placeholders",
+                    HttpStatus.BAD_REQUEST.value());
         }
 
         long correctCount = dataItems.stream().filter(DataItem::isCorrect).count();
         if (correctCount != positionsInText.size()) {
-            throw new RuntimeException("Question " + questionNumber + " (DRAG_AND_DROP): Must have " + positionsInText.size() +
-                    " correct answers (matching placeholders), found " + correctCount);
+            throw new ApiException("Question " + questionNumber + " (DRAG_AND_DROP): Must have " + positionsInText.size() +
+                    " correct answers (matching placeholders), found " + correctCount,
+                    HttpStatus.BAD_REQUEST.value());
         }
 
         for (DataItem item : dataItems) {
             if (item.isCorrect()) {
                 if (item.getPositionId() == null || item.getPositionId().trim().isEmpty()) {
-                    throw new RuntimeException("Question " + questionNumber + " (DRAG_AND_DROP): Correct answers must have valid positionId");
+                    throw new ApiException("Question " + questionNumber + " (DRAG_AND_DROP): Correct answers must have valid positionId",
+                            HttpStatus.BAD_REQUEST.value());
                 }
                 if (!positionsInText.contains(item.getPositionId())) {
-                    throw new RuntimeException("Question " + questionNumber + " (DRAG_AND_DROP): Answer positionId '" +
-                            item.getPositionId() + "' not found in question text");
+                    throw new ApiException("Question " + questionNumber + " (DRAG_AND_DROP): Answer positionId '" +
+                            item.getPositionId() + "' not found in question text",
+                            HttpStatus.BAD_REQUEST.value());
                 }
             }
         }
@@ -560,17 +592,20 @@ public class OpenAiServiceImpl implements OpenAiService {
 
     private void validateMultipleSelectFormat(QuestionDto question, List<DataItem> dataItems, int questionNumber) {
         if (dataItems.size() < 4 || dataItems.size() > 6) {
-            throw new RuntimeException("Question " + questionNumber + " (MULTIPLE_SELECT): Must have 4-6 options, found " + dataItems.size());
+            throw new ApiException("Question " + questionNumber + " (MULTIPLE_SELECT): Must have 4-6 options, found " + dataItems.size(),
+                    HttpStatus.BAD_REQUEST.value());
         }
 
         long correctCount = dataItems.stream().filter(DataItem::isCorrect).count();
         if (correctCount < 2 || correctCount > 3) {
-            throw new RuntimeException("Question " + questionNumber + " (MULTIPLE_SELECT): Must have 2-3 correct answers, found " + correctCount);
+            throw new ApiException("Question " + questionNumber + " (MULTIPLE_SELECT): Must have 2-3 correct answers, found " + correctCount,
+                    HttpStatus.BAD_REQUEST.value());
         }
 
         for (DataItem item : dataItems) {
             if (item.getPositionId() != null) {
-                throw new RuntimeException("Question " + questionNumber + " (MULTIPLE_SELECT): Options must have positionId=null");
+                throw new ApiException("Question " + questionNumber + " (MULTIPLE_SELECT): Options must have positionId=null",
+                        HttpStatus.BAD_REQUEST.value());
             }
         }
     }
@@ -578,13 +613,15 @@ public class OpenAiServiceImpl implements OpenAiService {
     private void validateRewriteFormat(QuestionDto question, List<DataItem> dataItems, int questionNumber) {
         long correctCount = dataItems.stream().filter(DataItem::isCorrect).count();
         if (correctCount != dataItems.size()) {
-            throw new RuntimeException("Question " + questionNumber + " (REWRITE): All answers must have isCorrect=true, found " +
-                    (dataItems.size() - correctCount) + " incorrect answers");
+            throw new ApiException("Question " + questionNumber + " (REWRITE): All answers must have isCorrect=true, found " +
+                    (dataItems.size() - correctCount) + " incorrect answers",
+                    HttpStatus.BAD_REQUEST.value());
         }
 
         for (DataItem item : dataItems) {
             if (item.getPositionId() != null) {
-                throw new RuntimeException("Question " + questionNumber + " (REWRITE): Answers must have positionId=null");
+                throw new ApiException("Question " + questionNumber + " (REWRITE): Answers must have positionId=null",
+                        HttpStatus.BAD_REQUEST.value());
             }
         }
     }
@@ -603,7 +640,7 @@ public class OpenAiServiceImpl implements OpenAiService {
                 });
 
         int existingQuestionsCount = countExistingQuestions(challenge);
-        int remainingQuota = maxQuestion - existingQuestionsCount;
+        int remainingQuota = 100 - existingQuestionsCount;
 
         log.info("Existing questions: {}, Remaining quota: {}/{}",
                 existingQuestionsCount, remainingQuota, maxQuestion);
@@ -617,6 +654,12 @@ public class OpenAiServiceImpl implements OpenAiService {
         int totalQuestions = request.getQuestionTypeConfigs().stream()
                 .mapToInt(GenerateGVQuestionsRequest.QuestionTypeConfig::getNumberOfQuestions)
                 .sum();
+
+        if (totalQuestions > maxQuestion) {
+            log.error("Total questions exceeds remaining quota: {} > {}", totalQuestions, maxQuestion);
+            throw new ApiException("You can only generate up to " + maxQuestion +  " questions per request",
+                    HttpStatus.BAD_REQUEST.value());
+        }
 
         if (totalQuestions > remainingQuota) {
             log.error("Total questions exceeds remaining quota: {} > {}", totalQuestions, remainingQuota);
@@ -699,7 +742,8 @@ public class OpenAiServiceImpl implements OpenAiService {
             allOf.get(generationTimeoutMinutes, TimeUnit.MINUTES);
         } catch (Exception e) {
             log.error("Error waiting for parallel batch completion: {}", e.getMessage(), e);
-            throw new RuntimeException("Failed to generate questions in parallel: " + e.getMessage(), e);
+            throw new ApiException("Failed to generate questions in parallel: " + e.getMessage(),
+                    HttpStatus.INTERNAL_SERVER_ERROR.value());
         }
 
         List<QuestionWithOrderDto> allGeneratedQuestions = futures.stream()
@@ -744,7 +788,8 @@ public class OpenAiServiceImpl implements OpenAiService {
             validateOutputFormat(allQuestions);
         } catch (Exception e) {
             log.error("Output validation failed: {}", e.getMessage());
-            throw new RuntimeException("Generated questions have invalid format: " + e.getMessage());
+            throw new ApiException("Generated questions have invalid format: " + e.getMessage(),
+                    HttpStatus.INTERNAL_SERVER_ERROR.value());
         }
 
         log.info("Successfully generated {} sections with {} total questions",
@@ -772,7 +817,7 @@ public class OpenAiServiceImpl implements OpenAiService {
                 });
 
         int existingQuestionsCount = countExistingQuestions(challenge);
-        int remainingQuota = maxQuestion - existingQuestionsCount;
+        int remainingQuota = 100 - existingQuestionsCount;
 
         log.info("Existing questions: {}, Remaining quota: {}/{}",
                 existingQuestionsCount, remainingQuota, maxQuestion);
@@ -787,6 +832,12 @@ public class OpenAiServiceImpl implements OpenAiService {
                 .flatMap(section -> section.getQuestionTypeConfigs().stream())
                 .mapToInt(GenerateContentBasedQuestionsRequest.QuestionTypeConfig::getNumberOfQuestions)
                 .sum();
+
+        if (totalQuestions > maxQuestion) {
+            log.error("Total questions exceeds remaining quota: {} > {}", totalQuestions, maxQuestion);
+            throw new ApiException("You can only generate up to " + maxQuestion +  " questions per request",
+                    HttpStatus.BAD_REQUEST.value());
+        }
 
         if (totalQuestions > remainingQuota) {
             log.error("Total questions exceeds remaining quota: {} > {}", totalQuestions, remainingQuota);
@@ -830,7 +881,7 @@ public class OpenAiServiceImpl implements OpenAiService {
 
             try {
                 if (section.getSectionsContent() == null || section.getSectionsContent().isBlank()) {
-                    throw new IllegalArgumentException("Section content is required");
+                    throw new ApiException("Section content is required", HttpStatus.BAD_REQUEST.value());
                 }
 
                 // ✅ CRITICAL: Validate section content is English only
@@ -1278,20 +1329,20 @@ public class OpenAiServiceImpl implements OpenAiService {
      */
     private void validateQuestion(QuestionDto question) {
         if (question == null) {
-            throw new RuntimeException("Question cannot be null");
+            throw new ApiException("Question cannot be null", HttpStatus.BAD_REQUEST.value());
         }
 
         if (question.getQuestionText() == null || question.getQuestionText().trim().isEmpty()) {
-            throw new RuntimeException("Question text cannot be empty");
+            throw new ApiException("Question text cannot be empty", HttpStatus.BAD_REQUEST.value());
         }
 
         if (question.getQuestionType() == null || question.getQuestionType().trim().isEmpty()) {
-            throw new RuntimeException("Question type cannot be empty");
+            throw new ApiException("Question type cannot be empty", HttpStatus.BAD_REQUEST.value());
         }
 
         if (question.getContent() == null || question.getContent().getData() == null ||
                 question.getContent().getData().isEmpty()) {
-            throw new RuntimeException("Question must have content data");
+            throw new ApiException("Question must have content data", HttpStatus.BAD_REQUEST.value());
         }
 
         String questionType = question.getQuestionType();
@@ -1332,34 +1383,40 @@ public class OpenAiServiceImpl implements OpenAiService {
 
     private void validateMultipleChoice(QuestionDto question, List<DataItem> dataItems) {
         if (dataItems.size() != 4) {
-            throw new RuntimeException("MULTIPLE_CHOICE must have exactly 4 options. Found: " + dataItems.size());
+            throw new ApiException("MULTIPLE_CHOICE must have exactly 4 options. Found: " + dataItems.size(),
+                    HttpStatus.BAD_REQUEST.value());
         }
 
         long correctCount = dataItems.stream().filter(DataItem::isCorrect).count();
         if (correctCount != 1) {
-            throw new RuntimeException("MULTIPLE_CHOICE must have exactly 1 correct answer. Found: " + correctCount);
+            throw new ApiException("MULTIPLE_CHOICE must have exactly 1 correct answer. Found: " + correctCount,
+                    HttpStatus.BAD_REQUEST.value());
         }
 
         for (DataItem item : dataItems) {
             if (item.getPositionId() != null) {
-                throw new RuntimeException("MULTIPLE_CHOICE options must have positionId=null");
+                throw new ApiException("MULTIPLE_CHOICE options must have positionId=null",
+                        HttpStatus.BAD_REQUEST.value());
             }
         }
     }
 
     private void validateTrueOrFalse(QuestionDto question, List<DataItem> dataItems) {
         if (dataItems.size() != 2) {
-            throw new RuntimeException("TRUE_OR_FALSE must have exactly 2 options. Found: " + dataItems.size());
+            throw new ApiException("TRUE_OR_FALSE must have exactly 2 options. Found: " + dataItems.size(),
+                    HttpStatus.BAD_REQUEST.value());
         }
 
         long correctCount = dataItems.stream().filter(DataItem::isCorrect).count();
         if (correctCount != 1) {
-            throw new RuntimeException("TRUE_OR_FALSE must have exactly 1 correct answer. Found: " + correctCount);
+            throw new ApiException("TRUE_OR_FALSE must have exactly 1 correct answer. Found: " + correctCount,
+                    HttpStatus.BAD_REQUEST.value());
         }
 
         for (DataItem item : dataItems) {
             if (item.getPositionId() != null) {
-                throw new RuntimeException("TRUE_OR_FALSE options must have positionId=null");
+                throw new ApiException("TRUE_OR_FALSE options must have positionId=null",
+                        HttpStatus.BAD_REQUEST.value());
             }
         }
     }
@@ -1375,31 +1432,36 @@ public class OpenAiServiceImpl implements OpenAiService {
         }
 
         if (positionsInText.isEmpty()) {
-            throw new RuntimeException("FILL_IN_THE_BLANK must contain [[pos_xxx]] placeholders");
+            throw new ApiException("FILL_IN_THE_BLANK must contain [[pos_xxx]] placeholders",
+                    HttpStatus.BAD_REQUEST.value());
         }
 
         // ✅ CRITICAL: All answers must be correct AND only 1 answer allowed
         long correctCount = dataItems.stream().filter(DataItem::isCorrect).count();
         if (correctCount != 1) {
-            throw new RuntimeException("FILL_IN_THE_BLANK must have exactly 1 correct answer. Found: " + correctCount);
+            throw new ApiException("FILL_IN_THE_BLANK must have exactly 1 correct answer. Found: " + correctCount,
+                    HttpStatus.BAD_REQUEST.value());
         }
 
         if (dataItems.size() != 1) {
-            throw new RuntimeException("FILL_IN_THE_BLANK can only have 1 answer. Found: " + dataItems.size());
+            throw new ApiException("FILL_IN_THE_BLANK can only have 1 answer. Found: " + dataItems.size(),
+                    HttpStatus.BAD_REQUEST.value());
         }
 
         // Each answer must have positionId matching placeholder
         for (DataItem item : dataItems) {
             if (!item.isCorrect()) {
-                throw new RuntimeException("FILL_IN_THE_BLANK all answers must have isCorrect=true");
+                throw new ApiException("FILL_IN_THE_BLANK all answers must have isCorrect=true",
+                        HttpStatus.BAD_REQUEST.value());
             }
 
             if (item.getPositionId() == null || item.getPositionId().trim().isEmpty()) {
-                throw new RuntimeException("FILL_IN_THE_BLANK answers must have valid positionId");
+                throw new ApiException("FILL_IN_THE_BLANK answers must have valid positionId",
+                        HttpStatus.BAD_REQUEST.value());
             }
             if (!positionsInText.contains(item.getPositionId())) {
-                throw new RuntimeException("FILL_IN_THE_BLANK answer positionId '" + item.getPositionId() +
-                        "' not found in question text");
+                throw new ApiException("FILL_IN_THE_BLANK answer positionId '" + item.getPositionId() +
+                        "' not found in question text", HttpStatus.BAD_REQUEST.value());
             }
         }
     }
@@ -1414,7 +1476,8 @@ public class OpenAiServiceImpl implements OpenAiService {
         }
 
         if (positionsInText.isEmpty()) {
-            throw new RuntimeException("DROPDOWN must contain [[pos_xxx]] placeholders");
+            throw new ApiException("DROPDOWN must contain [[pos_xxx]] placeholders",
+                    HttpStatus.BAD_REQUEST.value());
         }
 
         // Group by positionId
@@ -1425,14 +1488,15 @@ public class OpenAiServiceImpl implements OpenAiService {
         for (String posId : positionsInText) {
             List<DataItem> options = itemsByPosition.get(posId);
             if (options == null || options.size() != 4) {
-                throw new RuntimeException("DROPDOWN position '" + posId + "' must have exactly 4 options. Found: " +
-                        (options == null ? 0 : options.size()));
+                throw new ApiException("DROPDOWN position '" + posId + "' must have exactly 4 options. Found: " +
+                        (options == null ? 0 : options.size()), HttpStatus.BAD_REQUEST.value());
             }
 
             long correctCount = options.stream().filter(DataItem::isCorrect).count();
             if (correctCount != 1) {
-                throw new RuntimeException("DROPDOWN position '" + posId +
-                        "' must have exactly 1 correct answer. Found: " + correctCount);
+                throw new ApiException("DROPDOWN position '" + posId +
+                        "' must have exactly 1 correct answer. Found: " + correctCount,
+                        HttpStatus.BAD_REQUEST.value());
             }
         }
     }
@@ -1447,28 +1511,32 @@ public class OpenAiServiceImpl implements OpenAiService {
         }
 
         if (positionsInText.isEmpty()) {
-            throw new RuntimeException("REARRANGE must contain [[pos_xxx]] placeholders");
+            throw new ApiException("REARRANGE must contain [[pos_xxx]] placeholders",
+                    HttpStatus.BAD_REQUEST.value());
         }
 
         if (positionsInText.size() < 5 || positionsInText.size() > 8) {
-            throw new RuntimeException("REARRANGE must have 5-8 items. Found: " + positionsInText.size());
+            throw new ApiException("REARRANGE must have 5-8 items. Found: " + positionsInText.size(),
+                    HttpStatus.BAD_REQUEST.value());
         }
 
         // All items must be correct
         long correctCount = dataItems.stream().filter(DataItem::isCorrect).count();
         if (correctCount != dataItems.size()) {
-            throw new RuntimeException("REARRANGE all items must have isCorrect=true. Found " +
-                    (dataItems.size() - correctCount) + " incorrect items");
+            throw new ApiException("REARRANGE all items must have isCorrect=true. Found " +
+                    (dataItems.size() - correctCount) + " incorrect items",
+                    HttpStatus.BAD_REQUEST.value());
         }
 
         // Each item must have unique positionId
         for (DataItem item : dataItems) {
             if (item.getPositionId() == null || item.getPositionId().trim().isEmpty()) {
-                throw new RuntimeException("REARRANGE items must have valid positionId");
+                throw new ApiException("REARRANGE items must have valid positionId",
+                        HttpStatus.BAD_REQUEST.value());
             }
             if (!positionsInText.contains(item.getPositionId())) {
-                throw new RuntimeException("REARRANGE item positionId '" + item.getPositionId() +
-                        "' not found in question text");
+                throw new ApiException("REARRANGE item positionId '" + item.getPositionId() +
+                        "' not found in question text", HttpStatus.BAD_REQUEST.value());
             }
         }
     }
@@ -1483,23 +1551,26 @@ public class OpenAiServiceImpl implements OpenAiService {
         }
 
         if (positionsInText.isEmpty()) {
-            throw new RuntimeException("DRAG_AND_DROP must contain [[pos_xxx]] placeholders");
+            throw new ApiException("DRAG_AND_DROP must contain [[pos_xxx]] placeholders",
+                    HttpStatus.BAD_REQUEST.value());
         }
 
         long correctCount = dataItems.stream().filter(DataItem::isCorrect).count();
         if (correctCount != positionsInText.size()) {
-            throw new RuntimeException("DRAG_AND_DROP must have " + positionsInText.size() +
-                    " correct answers (matching placeholders). Found: " + correctCount);
+            throw new ApiException("DRAG_AND_DROP must have " + positionsInText.size() +
+                    " correct answers (matching placeholders). Found: " + correctCount,
+                    HttpStatus.BAD_REQUEST.value());
         }
 
         for (DataItem item : dataItems) {
             if (item.isCorrect()) {
                 if (item.getPositionId() == null || item.getPositionId().trim().isEmpty()) {
-                    throw new RuntimeException("DRAG_AND_DROP correct answers must have valid positionId");
+                    throw new ApiException("DRAG_AND_DROP correct answers must have valid positionId",
+                            HttpStatus.BAD_REQUEST.value());
                 }
                 if (!positionsInText.contains(item.getPositionId())) {
-                    throw new RuntimeException("DRAG_AND_DROP answer positionId '" + item.getPositionId() +
-                            "' not found in question text");
+                    throw new ApiException("DRAG_AND_DROP answer positionId '" + item.getPositionId() +
+                            "' not found in question text", HttpStatus.BAD_REQUEST.value());
                 }
             } else {
                 // Distractors should have positionId=null
@@ -1512,17 +1583,20 @@ public class OpenAiServiceImpl implements OpenAiService {
 
     private void validateMultipleSelect(QuestionDto question, List<DataItem> dataItems) {
         if (dataItems.size() < 4 || dataItems.size() > 6) {
-            throw new RuntimeException("MULTIPLE_SELECT must have 4-6 options. Found: " + dataItems.size());
+            throw new ApiException("MULTIPLE_SELECT must have 4-6 options. Found: " + dataItems.size(),
+                    HttpStatus.BAD_REQUEST.value());
         }
 
         long correctCount = dataItems.stream().filter(DataItem::isCorrect).count();
         if (correctCount < 2 || correctCount > 3) {
-            throw new RuntimeException("MULTIPLE_SELECT must have 2-3 correct answers. Found: " + correctCount);
+            throw new ApiException("MULTIPLE_SELECT must have 2-3 correct answers. Found: " + correctCount,
+                    HttpStatus.BAD_REQUEST.value());
         }
 
         for (DataItem item : dataItems) {
             if (item.getPositionId() != null) {
-                throw new RuntimeException("MULTIPLE_SELECT options must have positionId=null");
+                throw new ApiException("MULTIPLE_SELECT options must have positionId=null",
+                        HttpStatus.BAD_REQUEST.value());
             }
         }
     }
@@ -1531,13 +1605,15 @@ public class OpenAiServiceImpl implements OpenAiService {
         // All answers must be correct
         long correctCount = dataItems.stream().filter(DataItem::isCorrect).count();
         if (correctCount != dataItems.size()) {
-            throw new RuntimeException("REWRITE can only have correct answers (isCorrect=true). Found " +
-                    (dataItems.size() - correctCount) + " incorrect answers");
+            throw new ApiException("REWRITE can only have correct answers (isCorrect=true). Found " +
+                    (dataItems.size() - correctCount) + " incorrect answers",
+                    HttpStatus.BAD_REQUEST.value());
         }
 
         for (DataItem item : dataItems) {
             if (item.getPositionId() != null) {
-                throw new RuntimeException("REWRITE answers must have positionId=null");
+                throw new ApiException("REWRITE answers must have positionId=null",
+                        HttpStatus.BAD_REQUEST.value());
             }
         }
     }
@@ -1867,10 +1943,10 @@ public class OpenAiServiceImpl implements OpenAiService {
                         .append("  \"questionType\": \"MULTIPLE_CHOICE\",\n")
                         .append("  \"content\": {\n")
                         .append("    \"data\": [\n")
-                        .append("      {\"id\": \"opt1\", \"value\": \"lived\", \"isCorrect\": false, \"positionId\": null},\n")
-                        .append("      {\"id\": \"opt2\", \"value\": \"was living\", \"isCorrect\": false, \"positionId\": null},\n")
-                        .append("      {\"id\": \"opt3\", \"value\": \"had lived\", \"isCorrect\": true, \"positionId\": null},\n")
-                        .append("      {\"id\": \"opt4\", \"value\": \"has lived\", \"isCorrect\": false, \"positionId\": null}\n")
+                        .append("      {\"id\": \"null\", \"value\": \"lived\", \"isCorrect\": false, \"positionId\": null},\n")
+                        .append("      {\"id\": \"null\", \"value\": \"was living\", \"isCorrect\": false, \"positionId\": null},\n")
+                        .append("      {\"id\": \"null\", \"value\": \"had lived\", \"isCorrect\": true, \"positionId\": null},\n")
+                        .append("      {\"id\": \"null\", \"value\": \"has lived\", \"isCorrect\": false, \"positionId\": null}\n")
                         .append("    ]\n")
                         .append("  }\n")
                         .append("}\n\n");
@@ -1889,8 +1965,8 @@ public class OpenAiServiceImpl implements OpenAiService {
                         .append("  \"questionType\": \"TRUE_OR_FALSE\",\n")
                         .append("  \"content\": {\n")
                         .append("    \"data\": [\n")
-                        .append("      {\"id\": \"opt1\", \"value\": \"True\", \"isCorrect\": true, \"positionId\": null},\n")
-                        .append("      {\"id\": \"opt2\", \"value\": \"False\", \"isCorrect\": false, \"positionId\": null}\n")
+                        .append("      {\"id\": \"null\", \"value\": \"True\", \"isCorrect\": true, \"positionId\": null},\n")
+                        .append("      {\"id\": \"null\", \"value\": \"False\", \"isCorrect\": false, \"positionId\": null}\n")
                         .append("    ]\n")
                         .append("  }\n")
                         .append("}\n\n");
@@ -2102,9 +2178,9 @@ public class OpenAiServiceImpl implements OpenAiService {
                         .append("  \"questionType\": \"REWRITE\",\n")
                         .append("  \"content\": {\n")
                         .append("    \"data\": [\n")
-                        .append("      {\"id\": \"ans1\", \"value\": \"The lesson was explained by the teacher.\", \"isCorrect\": true, \"positionId\": null},\n")
-                        .append("      {\"id\": \"ans2\", \"value\": \"The lesson was explained by the teacher yesterday.\", \"isCorrect\": true, \"positionId\": null},\n")
-                        .append("      {\"id\": \"ans3\", \"value\": \"The lesson has been explained by the teacher.\", \"isCorrect\": true, \"positionId\": null}\n")
+                        .append("      {\"id\": \"null\", \"value\": \"The lesson was explained by the teacher.\", \"isCorrect\": true, \"positionId\": null},\n")
+                        .append("      {\"id\": \"null\", \"value\": \"The lesson was explained by the teacher yesterday.\", \"isCorrect\": true, \"positionId\": null},\n")
+                        .append("      {\"id\": \"null\", \"value\": \"The lesson has been explained by the teacher.\", \"isCorrect\": true, \"positionId\": null}\n")
                         .append("    ]\n")
                         .append("  }\n")
                         .append("}\n\n");
@@ -2184,10 +2260,11 @@ public class OpenAiServiceImpl implements OpenAiService {
             }
         } catch (Exception e) {
             log.error("Error calling OpenAI: {}", e.getMessage(), e);
-            throw new RuntimeException("Failed to call OpenAI: " + e.getMessage(), e);
+            throw new ApiException("Failed to call OpenAI: " + e.getMessage(),
+                    HttpStatus.INTERNAL_SERVER_ERROR.value());
         }
 
-        throw new RuntimeException("No response from OpenAI");
+        throw new ApiException("No response from OpenAI", HttpStatus.INTERNAL_SERVER_ERROR.value());
     }
 
     public String cleanJsonResponse(String content) {
@@ -2220,12 +2297,14 @@ public class OpenAiServiceImpl implements OpenAiService {
                 rootNode = objectMapper.readTree(cleaned);
             } catch (Exception parseEx) {
                 log.error("Failed to parse JSON. Full response: {}", cleaned);
-                throw new RuntimeException("Invalid JSON format from AI: " + parseEx.getMessage(), parseEx);
+                throw new ApiException("Invalid JSON format from AI: " + parseEx.getMessage(),
+                        HttpStatus.INTERNAL_SERVER_ERROR.value());
             }
 
             JsonNode questionsNode = rootNode.get("questions");
             if (questionsNode == null || !questionsNode.isArray()) {
-                throw new RuntimeException("Invalid response: missing or invalid 'questions' array");
+                throw new ApiException("Invalid response: missing or invalid 'questions' array",
+                        HttpStatus.INTERNAL_SERVER_ERROR.value());
             }
 
             List<QuestionDto> questions = new ArrayList<>();
@@ -2242,7 +2321,8 @@ public class OpenAiServiceImpl implements OpenAiService {
             }
 
             if (questions.isEmpty()) {
-                throw new RuntimeException("No questions were successfully parsed");
+                throw new ApiException("No questions were successfully parsed",
+                        HttpStatus.INTERNAL_SERVER_ERROR.value());
             }
 
             ensureUniquePositionIds(questions);
@@ -2250,9 +2330,12 @@ public class OpenAiServiceImpl implements OpenAiService {
             log.info("Successfully parsed {} questions", questions.size());
             return questions;
 
+        } catch (ApiException e) {
+            throw e;
         } catch (Exception e) {
             log.error("Error parsing questions response: {}", e.getMessage(), e);
-            throw new RuntimeException("Failed to parse questions: " + e.getMessage(), e);
+            throw new ApiException("Failed to parse questions: " + e.getMessage(),
+                    HttpStatus.INTERNAL_SERVER_ERROR.value());
         }
     }
 
@@ -2261,7 +2344,8 @@ public class OpenAiServiceImpl implements OpenAiService {
 
         JsonNode textNode = questionNode.get("questionText");
         if (textNode == null || textNode.isNull()) {
-            throw new RuntimeException("Missing questionText for question " + index);
+            throw new ApiException("Missing questionText for question " + index,
+                    HttpStatus.BAD_REQUEST.value());
         }
         question.setQuestionText(textNode.asText());
 
@@ -2276,12 +2360,14 @@ public class OpenAiServiceImpl implements OpenAiService {
 
         JsonNode contentNode = questionNode.get("content");
         if (contentNode == null || contentNode.isNull()) {
-            throw new RuntimeException("Missing content for question " + index);
+            throw new ApiException("Missing content for question " + index,
+                    HttpStatus.BAD_REQUEST.value());
         }
 
         JsonNode dataNode = contentNode.get("data");
         if (dataNode == null || !dataNode.isArray()) {
-            throw new RuntimeException("Missing or invalid data array for question " + index);
+            throw new ApiException("Missing or invalid data array for question " + index,
+                    HttpStatus.BAD_REQUEST.value());
         }
 
         List<DataItem> dataItems = new ArrayList<>();
@@ -2290,7 +2376,8 @@ public class OpenAiServiceImpl implements OpenAiService {
         }
 
         if (dataItems.isEmpty()) {
-            throw new RuntimeException("No data items found for question " + index);
+            throw new ApiException("No data items found for question " + index,
+                    HttpStatus.BAD_REQUEST.value());
         }
 
         DataContent dataContent = new DataContent();
@@ -2305,19 +2392,19 @@ public class OpenAiServiceImpl implements OpenAiService {
 
         JsonNode idNode = itemNode.get("id");
         if (idNode == null || idNode.isNull()) {
-            throw new RuntimeException("Missing 'id' in data item");
+            throw new ApiException("Missing 'id' in data item", HttpStatus.BAD_REQUEST.value());
         }
         dataItem.setId(idNode.asText());
 
         JsonNode valueNode = itemNode.get("value");
         if (valueNode == null || valueNode.isNull()) {
-            throw new RuntimeException("Missing 'value' in data item");
+            throw new ApiException("Missing 'value' in data item", HttpStatus.BAD_REQUEST.value());
         }
         dataItem.setValue(valueNode.asText());
 
         JsonNode correctNode = itemNode.get("isCorrect");
         if (correctNode == null || correctNode.isNull()) {
-            throw new RuntimeException("Missing 'isCorrect' in data item");
+            throw new ApiException("Missing 'isCorrect' in data item", HttpStatus.BAD_REQUEST.value());
         }
         dataItem.setCorrect(correctNode.asBoolean());
 
@@ -2397,11 +2484,12 @@ public class OpenAiServiceImpl implements OpenAiService {
 
         String fileContent = FileContentExtractor.extractContent(file);
         if (fileContent.isEmpty()) {
-            throw new RuntimeException("No content extracted from file");
+            throw new ApiException("No content extracted from file", HttpStatus.BAD_REQUEST.value());
         }
 
         log.info("Extracted {} characters from file", fileContent.length());
 
+        // ✅ Validate input content
         InputValidationResponse validation = validateInputContent(
                 null,  // description
                 null,  // vocabularyList
@@ -2409,58 +2497,94 @@ public class OpenAiServiceImpl implements OpenAiService {
                 null,  // customLessonFocus
                 null,  // sectionContent
                 fileContent,  // fileContent
-                null,  // ChallengeContext (cần load từ challengeId)
+                null,  // ChallengeContext
                 ValidationType.FILE
         );
 
+        // ✅ If validation returns error, throw immediately
+        if (validation.getError() != null) {
+            throw new ApiException(validation.getError(), HttpStatus.BAD_REQUEST.value());
+        }
+
         String prompt = buildParsingPrompt(fileContent, description);
-        String aiResponse = callOpenAI(prompt);
+        int maxRetries = batchRetryMaxAttempts;
+        int attempt = 0;
+        Exception lastException = null;
 
-        List<SectionWithQuestionsDto> sections = parseMultipleSectionsResponse(aiResponse);
+        while (attempt < maxRetries) {
+            try {
+                attempt++;
+                log.info("Parsing file attempt {}/{}", attempt, maxRetries);
 
-        for (SectionWithQuestionsDto section : sections) {
-            section.getSection().setId(null);
+                String aiResponse = callOpenAI(prompt);
+                List<SectionWithQuestionsDto> sections = parseMultipleSectionsResponse(aiResponse);
 
-            List<QuestionDto> validQuestions = new ArrayList<>();
-            for (QuestionDto question : section.getQuestions()) {
-                question.setId(null);
+                // ✅ Validate and clean sections
+                for (SectionWithQuestionsDto section : sections) {
+                    section.getSection().setId(null);
 
-                try {
-                    // Validate each question
-                    validateQuestion(question);
-                    validQuestions.add(question);
-                } catch (Exception e) {
-                    log.warn("Skipping invalid question from file: {}", e.getMessage());
-                    // Skip invalid questions instead of failing entire file
+                    List<QuestionDto> validQuestions = new ArrayList<>();
+                    for (QuestionDto question : section.getQuestions()) {
+                        question.setId(null);
+
+                        try {
+                            // Validate each question
+                            validateQuestion(question);
+                            validQuestions.add(question);
+                        } catch (Exception e) {
+                            log.warn("Skipping invalid question from file: {}", e.getMessage());
+                        }
+                    }
+
+                    if (!validQuestions.isEmpty()) {
+                        validateOutputFormat(validQuestions);
+                        section.setQuestions(validQuestions);
+                    }
+                }
+
+                sections.removeIf(s -> s.getQuestions().isEmpty());
+
+                if (sections.isEmpty()) {
+                    throw new RuntimeException("No valid questions found in file");
+                }
+
+                log.info("Successfully parsed {} sections with {} total questions",
+                        sections.size(),
+                        sections.stream().mapToInt(s -> s.getQuestions().size()).sum());
+
+                return new GenerateQuestionsResponse(
+                        sections,
+                        null,
+                        validation.getWarning()
+                );
+
+            } catch (Exception e) {
+                lastException = e;
+                log.error("Parse file attempt {}/{} failed: {}", attempt, maxRetries, e.getMessage());
+
+                if (attempt < maxRetries) {
+                    log.info("Retrying file parsing after {} ms...", batchRetryDelayMs);
+                    try {
+                        Thread.sleep(batchRetryDelayMs);
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        throw new ApiException("File parsing interrupted: " + ie.getMessage(),
+                                HttpStatus.INTERNAL_SERVER_ERROR.value());
+                    }
                 }
             }
-
-            // ✅ Validate output format for valid questions
-            if (!validQuestions.isEmpty()) {
-                validateOutputFormat(validQuestions);
-                section.setQuestions(validQuestions);
-            }
         }
 
-        // Filter out sections with no valid questions
-        sections.removeIf(s -> s.getQuestions().isEmpty());
-
-        if (sections.isEmpty()) {
-            throw new RuntimeException("No valid questions found in file");
-        }
-
-        log.info("Successfully generated {} sections with {} total questions",
-                sections.size(), sections.size());
-
-        // ✅ NEW: Return GenerateQuestionsResponse with error and warning
-        return new GenerateQuestionsResponse(
-                sections,
-                validation.getError(),
-                validation.getWarning()
+        log.error("Failed to parse file after {} attempts. Last error: {}",
+                maxRetries, lastException != null ? lastException.getMessage() : "unknown");
+        throw new ApiException(
+                "Failed to parse questions from file after " + maxRetries + " attempts. " +
+                        "Please check file format and try again.",
+                HttpStatus.INTERNAL_SERVER_ERROR.value()
         );
     }
 
-    @Override
+        @Override
     @Transactional(readOnly = true)
     public GenerateReadingPassageResponse generateReadingPassage(GenerateReadingPassageRequest request) {
         return null;
@@ -2471,24 +2595,17 @@ public class OpenAiServiceImpl implements OpenAiService {
 
         prompt.append("You are an expert at parsing educational content into structured JSON format.\n\n");
 
-        // Content moderation
-        prompt.append(getContentModerationInstructions());
-
-        prompt.append("🌍 LANGUAGE TRANSLATION REQUIREMENT:\n");
-        prompt.append("- If the input contains Vietnamese questions → TRANSLATE them to English\n");
-        prompt.append("- ALL output questions MUST be in English ONLY\n");
-        prompt.append("- Vietnamese answer options → TRANSLATE to English\n");
-        prompt.append("- Preserve the original meaning and difficulty level when translating\n\n");
-
         prompt.append("🎯 YOUR TASK:\n");
         prompt.append("Parse the provided file content and extract all questions into a structured JSON format.\n");
         prompt.append("You MUST identify the question type correctly and format each question according to its type.\n\n");
 
-        prompt.append("⚠️ CONTENT FILTERING (CRITICAL):\n");
-        prompt.append("- REJECT and DO NOT include any questions with inappropriate content\n");
-        prompt.append("- Skip questions that contain offensive, harmful, or non-educational material\n");
-        prompt.append("- Only include questions that are safe and appropriate for students\n");
-        prompt.append("- If a question is educational but contains minor inappropriate elements, clean it up\n\n");
+        prompt.append("⚠️ CRITICAL: PRESERVE ORIGINAL CONTENT\n");
+        prompt.append("- Keep ALL original text EXACTLY as written in the file\n");
+        prompt.append("- DO NOT translate or modify any content\n");
+        prompt.append("- DO NOT correct grammar or spelling errors\n");
+        prompt.append("- DO NOT filter or remove any questions\n");
+        prompt.append("- Accept Vietnamese, English, or mixed language content\n");
+        prompt.append("- Your ONLY job is to convert the content into correct JSON format\n\n");
 
         if (description != null && !description.isBlank()) {
             prompt.append("📝 ADDITIONAL PARSING INSTRUCTIONS:\n");
@@ -2500,8 +2617,6 @@ public class OpenAiServiceImpl implements OpenAiService {
         prompt.append(fileContent).append("\n");
         prompt.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n");
 
-        prompt.append(getGrammarAndFormattingInstructions());
-
         prompt.append("⚠️ CRITICAL: You MUST respond with ONLY valid JSON in this EXACT format:\n\n");
         prompt.append("{\n");
         prompt.append("  \"sections\": [\n");
@@ -2511,7 +2626,7 @@ public class OpenAiServiceImpl implements OpenAiService {
         prompt.append("      },\n");
         prompt.append("      \"questions\": [\n");
         prompt.append("        {\n");
-        prompt.append("          \"questionText\": \"string (required, ONLY question content, DO NOT include 'Question 1/2' or score)\",\n");
+        prompt.append("          \"questionText\": \"string (required, keep ORIGINAL text, DO NOT include 'Question 1/2' or score)\",\n");
         prompt.append("          \"orderNumber\": 1,\n");
         prompt.append("          \"score\": 1.0,\n");
         prompt.append("          \"questionType\": \"QUESTION_TYPE\",\n");
@@ -2519,7 +2634,7 @@ public class OpenAiServiceImpl implements OpenAiService {
         prompt.append("            \"data\": [\n");
         prompt.append("              {\n");
         prompt.append("                \"id\": \"string (required)\",\n");
-        prompt.append("                \"value\": \"string (required)\",\n");
+        prompt.append("                \"value\": \"string (required, keep ORIGINAL text)\",\n");
         prompt.append("                \"isCorrect\": boolean (required),\n");
         prompt.append("                \"positionId\": \"string or null\"\n");
         prompt.append("              }\n");
@@ -2553,18 +2668,15 @@ public class OpenAiServiceImpl implements OpenAiService {
         prompt.append("□ Multiple choice has exactly 4 options\n");
         prompt.append("□ True/False has exactly 2 options\n");
         prompt.append("□ Fill in the blank has EXACTLY 1 correct answer\n");
-        prompt.append("□ All questions follow grammar rules (capitalize first letter, capitalize 'I')\n");
-        prompt.append("□ ALL content is in English (Vietnamese translated)\n");
-        prompt.append("□ No inappropriate content included\n\n");
+        prompt.append("□ ALL original content preserved (no translation, no modification)\n\n");
 
         prompt.append("🚨 CRITICAL REMINDERS:\n");
         prompt.append("- DO NOT add extra text, explanations, or markdown\n");
         prompt.append("- DO NOT include trailing commas\n");
         prompt.append("- Return ONLY the JSON object\n");
-        prompt.append("- Translate Vietnamese to English\n");
-        prompt.append("- Filter out ALL inappropriate content\n");
+        prompt.append("- DO NOT translate or modify any content from the file\n");
+        prompt.append("- PRESERVE original text exactly as written\n");
         prompt.append("- Fill in the blank: ONLY 1 correct answer allowed\n");
-        prompt.append("- Preserve original question content while ensuring proper formatting\n");
         prompt.append("- If a question type is unclear, use MULTIPLE_CHOICE as default\n\n");
 
         prompt.append("Parse the content now and return ONLY valid JSON:\n");
@@ -2782,7 +2894,8 @@ public class OpenAiServiceImpl implements OpenAiService {
 
             JsonNode sectionsNode = rootNode.get("sections");
             if (sectionsNode == null || !sectionsNode.isArray()) {
-                throw new RuntimeException("Invalid response: missing sections array");
+                throw new ApiException("Invalid response: missing sections array",
+                        HttpStatus.INTERNAL_SERVER_ERROR.value());
             }
 
             List<SectionWithQuestionsDto> sections = new ArrayList<>();
@@ -2819,9 +2932,12 @@ public class OpenAiServiceImpl implements OpenAiService {
 
             return sections;
 
+        } catch (ApiException e) {
+            throw e;
         } catch (Exception e) {
             log.error("Error parsing sections: {}", e.getMessage(), e);
-            throw new RuntimeException("Failed to parse sections: " + e.getMessage(), e);
+            throw new ApiException("Failed to parse sections: " + e.getMessage(),
+                    HttpStatus.INTERNAL_SERVER_ERROR.value());
         }
     }
 
@@ -2842,15 +2958,17 @@ public class OpenAiServiceImpl implements OpenAiService {
 
             return new GenerateDistractorsResponse(distractors);
 
+        } catch (ApiException e) {
+            throw e;
         } catch (Exception e) {
             log.error("Failed to generate distractors: {}", e.getMessage(), e);
-            throw new RuntimeException("Failed to generate distractors: " + e.getMessage(), e);
+            throw new ApiException("Failed to generate distractors: " + e.getMessage(),
+                    HttpStatus.INTERNAL_SERVER_ERROR.value());
         }
     }
 
     private String buildDistractorsPrompt(GenerateDistractorsRequest request, int numberOfDistractors) {
         StringBuilder prompt = new StringBuilder();
-
         prompt.append("Generate ").append(numberOfDistractors).append(" wrong answer(s).\n\n");
 
         prompt.append("Question: ").append(request.getQuestionText()).append("\n");
@@ -2883,51 +3001,52 @@ public class OpenAiServiceImpl implements OpenAiService {
 
         } catch (Exception e) {
             log.error("Error parsing distractors: {}", e.getMessage());
-            throw new RuntimeException("Failed to parse distractors: " + e.getMessage(), e);
+            throw new ApiException("Failed to parse distractors: " + e.getMessage(),
+                    HttpStatus.INTERNAL_SERVER_ERROR.value());
         }
     }
 
     @Override
     public List<SectionWithQuestionsDto> parseQuestionsFromText(String textContent, String description) {
-        if (textContent == null || textContent.trim().isEmpty()) {
-            throw new RuntimeException("Text content cannot be empty");
-        }
+//        if (textContent == null || textContent.trim().isEmpty()) {
+//            throw new ApiException("Text content cannot be empty", HttpStatus.BAD_REQUEST.value());
+//        }
+//
+//        String prompt = buildParsingPrompt(textContent, description);
+//        String aiResponse = callOpenAI(prompt);
+//
+//        List<SectionWithQuestionsDto> sections = parseMultipleSectionsResponse(aiResponse);
+//
+//        for (SectionWithQuestionsDto section : sections) {
+//            section.getSection().setId(null);
+//
+//            List<QuestionDto> validQuestions = new ArrayList<>();
+//            for (QuestionDto question : section.getQuestions()) {
+//                question.setId(null);
+//
+//                try {
+//                    // Validate each question
+//                    validateQuestion(question);
+//                    validQuestions.add(question);
+//                } catch (Exception e) {
+//                    log.warn("Skipping invalid question from text: {}", e.getMessage());
+//                }
+//            }
+//
+//            if (!validQuestions.isEmpty()) {
+//                validateOutputFormat(validQuestions);
+//                section.setQuestions(validQuestions);
+//            }
+//        }
+//
+//        // Filter out sections with no valid questions
+//        sections.removeIf(s -> s.getQuestions().isEmpty());
+//
+//        if (sections.isEmpty()) {
+//            throw new ApiException("No valid questions found in text", HttpStatus.BAD_REQUEST.value());
+//        }
 
-        String prompt = buildParsingPrompt(textContent, description);
-        String aiResponse = callOpenAI(prompt);
-
-        List<SectionWithQuestionsDto> sections = parseMultipleSectionsResponse(aiResponse);
-
-        for (SectionWithQuestionsDto section : sections) {
-            section.getSection().setId(null);
-
-            List<QuestionDto> validQuestions = new ArrayList<>();
-            for (QuestionDto question : section.getQuestions()) {
-                question.setId(null);
-
-                try {
-                    // Validate each question
-                    validateQuestion(question);
-                    validQuestions.add(question);
-                } catch (Exception e) {
-                    log.warn("Skipping invalid question from text: {}", e.getMessage());
-                }
-            }
-
-            if (!validQuestions.isEmpty()) {
-                validateOutputFormat(validQuestions);
-                section.setQuestions(validQuestions);
-            }
-        }
-
-        // Filter out sections with no valid questions
-        sections.removeIf(s -> s.getQuestions().isEmpty());
-
-        if (sections.isEmpty()) {
-            throw new RuntimeException("No valid questions found in text");
-        }
-
-        return sections;
+        return null;
     }
 
     private LevelInfo parseLevelInfo(String level) {
@@ -2966,4 +3085,5 @@ public class OpenAiServiceImpl implements OpenAiService {
         instructions.append("- Follow standard English capitalization and punctuation rules\n\n");
         return instructions.toString();
     }
+
 }
