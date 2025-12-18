@@ -147,13 +147,14 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
         prompt.append("- Content NOT related to English learning\n");
         prompt.append("- Any content unsafe for educational environment\n");
         prompt.append("- Section content must be at least 90% English; excessive use of any other language is not allowed\n");
+        prompt.append("- Exception: Proper nouns, names, or direct quotations can be in other languages\n");
 
         if ("Speaking".equals(contentType)) {
             prompt.append("- Content contains significant amount of non-English language (Vietnamese, Chinese, etc.)\n");
         }
 
         prompt.append("- Spam or nonsensical content (excessive repetition, random characters)\n");
-        prompt.append("- Content is TOO SHORT to assess meaningfully (less than 3 words)\n\n");
+        prompt.append("- Content is TOO SHORT to assess meaningfully (less than 50 words)\n\n");
 
         // ⚠️ WARNING cases
         prompt.append("⚠️ MINOR ISSUES - Always set 'warning' as null:\n");
@@ -188,7 +189,7 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
         prompt.append("Example 2 (too short):\n");
         prompt.append("Content: \"I like it\"\n");
         prompt.append("{\n");
-        prompt.append("  \"error\": \"Content is too short to assess meaningfully. Please provide at least 3 words.\",\n");
+        prompt.append("  \"error\": \"Content is too short to assess meaningfully. Please provide at least 50 words.\",\n");
         prompt.append("  \"warning\": null\n");
         prompt.append("}\n\n");
 
@@ -274,10 +275,11 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
 
         // 5.1 ✅ Start validation async (chạy ngầm)
         Question question = submissionQuestion.getQuestion();
+        String questionText = question.getQuestionText();
         CompletableFuture<InputValidationResponse> validationFuture = CompletableFuture.supplyAsync(
                 () -> {
                     try {
-                        return validateContentForAssessment(studentWriting, "Writing", question.getQuestionText());
+                        return validateContentForAssessment(studentWriting, "Writing", questionText);
                     } catch (Exception e) {
                         log.error("Validation failed: {}", e.getMessage(), e);
                         return new InputValidationResponse(null, null, null, null, null);
@@ -840,6 +842,7 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
 
         prompt.append("IMPORTANT: All human-readable feedback content MUST be written in Vietnamese. ")
                 .append("JSON field names remain in English. ")
+                .append("All numbers MUST be numeric. ")
                 .append("Return ONLY valid JSON, no markdown, no explanations, no extra text.\n\n");
 
         prompt.append("You are an experienced English writing teacher following IELTS criteria.\n\n");
@@ -860,6 +863,40 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
         prompt.append("2. suggestedScore: Overall score (0.0-10.0)\n\n");
 
         prompt.append("3. criteriaFeedback: 4 IELTS criteria (taskResponse, cohesionCoherence, lexicalResource, grammaticalRangeAccuracy)\n");
+
+        // Task Response
+        prompt.append("   A. taskResponse (0-10 points):\n");
+        prompt.append("      - Fully addresses all parts of the task?\n");
+        prompt.append("      - Stays on topic without going off-track?\n");
+        prompt.append("      - Clear position stated (if required)?\n");
+        prompt.append("      - Appropriate length and depth?\n");
+        prompt.append("      - Ideas well-developed with examples/explanations?\n\n");
+
+// Coherence and Cohesion
+        prompt.append("   B. cohesionCoherence (0-10 points):\n");
+        prompt.append("      - Clear essay structure (intro, body, conclusion)?\n");
+        prompt.append("      - Well-organized paragraphs (one main idea each)?\n");
+        prompt.append("      - Effective use of linking words?\n");
+        prompt.append("      - Smooth flow between sentences?\n");
+        prompt.append("      - Logical progression of ideas?\n\n");
+
+// Lexical Resource
+        prompt.append("   C. lexicalResource (0-10 points):\n");
+        prompt.append("      - Wide range of vocabulary used?\n");
+        prompt.append("      - Topic-specific/academic words appropriately used?\n");
+        prompt.append("      - Avoids repetition?\n");
+        prompt.append("      - Correct word choice and collocations?\n");
+        prompt.append("      - Spelling accuracy?\n\n");
+
+// Grammatical Range and Accuracy
+        prompt.append("   D. grammaticalRangeAccuracy (0-10 points):\n");
+        prompt.append("      - Variety of sentence structures?\n");
+        prompt.append("      - Correct verb tenses?\n");
+        prompt.append("      - Subject-verb agreement correct?\n");
+        prompt.append("      - Proper use of prepositions and articles?\n");
+        prompt.append("      - No run-on sentences or fragments?\n");
+        prompt.append("      - Errors don't impede understanding?\n\n");
+
         prompt.append("   Each criterion MUST have:\n");
         prompt.append("   - score: 0-10\n");
         prompt.append("   - feedback: Vietnamese text with HTML formatting following EXACTLY 3 steps(100-200 words):\n");
@@ -874,30 +911,30 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
         prompt.append(studentWriting).append("\n");
         prompt.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n");
 
-        prompt.append("OUTPUT EXAMPLE:\n");
+        prompt.append("OUTPUT EXAMPLE (Reference only - DO NOT copy exactly):\n");
         prompt.append("{\n");
-        prompt.append("  \"overallFeedback\": \"<h4><strong>📋 Nhận xét chung</strong></h4><p>Bài viết của bạn có cấu trúc rõ ràng và đã trả lời được yêu cầu đề bài. Tuy nhiên, còn một số điểm cần cải thiện về từ vựng và ngữ pháp.</p><h4><strong>⚠️ Lỗi sai/Cần cải thiện</strong></h4><ul><li>Thiếu ví dụ cụ thể để minh họa ý kiến</li><li>Một số lỗi ngữ pháp cơ bản ảnh hưởng đến ý nghĩa</li><li>Từ vựng còn đơn giản, chưa đa dạng</li></ul><h4><strong>💡 Cách cải thiện</strong></h4><ul><li>Thêm 1-2 ví dụ thực tế cho mỗi luận điểm chính</li><li>Ôn lại các thì cơ bản và cấu trúc câu phức</li><li>Học thêm từ vựng học thuật liên quan đến chủ đề</li></ul>\",\n");
+        prompt.append("  \"overallFeedback\": \"<h4><strong>📋 Nhận xét chung</strong></h4><p>Tổng quan ngắn gọn về bài viết</p><h4><strong>⚠️ Lỗi sai/Cần cải thiện</strong></h4><ul><li>Vấn đề 1</li><li>Vấn đề 2</li></ul><h4><strong>💡 Cách cải thiện</strong></h4><ul><li>Gợi ý 1</li><li>Gợi ý 2</li></ul>\",\n");
         prompt.append("  \"suggestedScore\": 7.5,\n");
         prompt.append("  \"criteriaFeedback\": {\n");
         prompt.append("    \"taskResponse\": {\n");
         prompt.append("      \"score\": 7.0,\n");
-        prompt.append("      \"feedback\": \"<h4><strong>📋 Nhận xét chung</strong></h4><p>Bài viết trả lời được câu hỏi nhưng còn thiếu chi tiết ở một số phần.</p><h4><strong>⚠️ Lỗi sai/Cần cải thiện</strong></h4><ul><li>Thiếu ví dụ cụ thể</li><li>Chưa phân tích sâu</li></ul><h4><strong>💡 Cách cải thiện</strong></h4><ul><li>Thêm ví dụ thực tế</li><li>Giải thích rõ hơn từng ý</li></ul>\"\n");
+        prompt.append("      \"feedback\": \"<h4><strong>📋 Nhận xét chung</strong></h4><p>...</p><h4><strong>⚠️ Lỗi sai/Cần cải thiện</strong></h4><ul><li>...</li></ul><h4><strong>💡 Cách cải thiện</strong></h4><ul><li>...</li></ul>\"\n");
         prompt.append("    },\n");
-        prompt.append("    \"cohesionCoherence\": {\"score\": 7.5, \"feedback\": \"...(3 steps)\"},\n");
-        prompt.append("    \"lexicalResource\": {\"score\": 7.0, \"feedback\": \"...(3 steps)\"},\n");
-        prompt.append("    \"grammaticalRangeAccuracy\": {\"score\": 6.5, \"feedback\": \"...(3 steps)\"}\n");
+        prompt.append("    \"cohesionCoherence\": {\"score\": 7.5, \"feedback\": \"...\"},\n");
+        prompt.append("    \"lexicalResource\": {\"score\": 7.0, \"feedback\": \"...\"},\n");
+        prompt.append("    \"grammaticalRangeAccuracy\": {\"score\": 6.5, \"feedback\": \"...\"}\n");
         prompt.append("  },\n");
         prompt.append("  \"comments\": [\n");
-        prompt.append("    {\n");
-        prompt.append("      \"startIndex\": 0,\n");
-        prompt.append("      \"endIndex\": 5,\n");
-        prompt.append("      \"commentText\": \"Nhận xét ngắn (tiếng Việt, 15-80 ký tự)\",\n");
-        prompt.append("      \"severity\": \"error\",\n");
-        prompt.append("      \"category\": \"grammar\",\n");
-        prompt.append("      \"correction\": \"Sửa ngắn gọn bằng tiếng Việt\"\n");
-        prompt.append("    }\n");
+        prompt.append("    {\"startIndex\": 0, \"endIndex\": 5, \"commentText\": \"...\", \"severity\": \"error\", \"category\": \"grammar\", \"correction\": \"...\"}\n");
         prompt.append("  ]\n");
         prompt.append("}\n\n");
+
+        prompt.append("IMPORTANT NOTES:\n");
+        prompt.append("- The example above shows FORMAT ONLY - DO NOT copy the content\n");
+        prompt.append("- Write ORIGINAL feedback based on the ACTUAL student writing\n");
+        prompt.append("- Be SPECIFIC with examples from the student's work\n");
+        prompt.append("- Adjust tone and depth based on student's level: ").append(context.studentLevel).append("\n");
+        prompt.append("- Make feedback HELPFUL and CONSTRUCTIVE, not generic\n\n");
 
         prompt.append("CRITICAL: Both overallFeedback and ALL criteriaFeedback MUST follow the exact 3-step structure with proper HTML tags and icons. Do not skip any step.\n");
 
@@ -1418,136 +1455,136 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
     /**
      * ✅ NEW: Assess content quality against the question
      */
-    private ContentAssessmentResult assessContentQuality(String recognizedText, String questionText) {
-        try {
-            String prompt = buildContentAssessmentPrompt(recognizedText, questionText);
-
-            // Call OpenAI with retry logic
-            String aiResponse = null;
-            int maxRetries = 3;
-
-            for (int attempt = 1; attempt <= maxRetries; attempt++) {
-                try {
-                    log.info("Calling OpenAI for content assessment (attempt {}/{})...", attempt, maxRetries);
-                    aiResponse = openAiService.callOpenAI(prompt);
-                    break;
-                } catch (Exception e) {
-                    log.warn("Content assessment failed on attempt {}/{}: {}", attempt, maxRetries, e.getMessage());
-
-                    if (attempt < maxRetries) {
-                        try {
-                            Thread.sleep(1000L * attempt);
-                        } catch (InterruptedException ie) {
-                            Thread.currentThread().interrupt();
-                            throw new ApiException("Content assessment interrupted",
-                                    HttpStatus.INTERNAL_SERVER_ERROR.value());
-                        }
-                    }
-                }
-            }
-
-            if (aiResponse == null) {
-                log.warn("Failed to assess content after {} attempts, using default", maxRetries);
-                return createDefaultContentAssessment();
-            }
-
-            return parseContentAssessmentResponse(aiResponse);
-
-        } catch (Exception e) {
-            log.error("Error in content assessment: {}", e.getMessage(), e);
-            return createDefaultContentAssessment();
-        }
-    }
+//    private ContentAssessmentResult assessContentQuality(String recognizedText, String questionText) {
+//        try {
+//            String prompt = buildContentAssessmentPrompt(recognizedText, questionText);
+//
+//            // Call OpenAI with retry logic
+//            String aiResponse = null;
+//            int maxRetries = 3;
+//
+//            for (int attempt = 1; attempt <= maxRetries; attempt++) {
+//                try {
+//                    log.info("Calling OpenAI for content assessment (attempt {}/{})...", attempt, maxRetries);
+//                    aiResponse = openAiService.callOpenAI(prompt);
+//                    break;
+//                } catch (Exception e) {
+//                    log.warn("Content assessment failed on attempt {}/{}: {}", attempt, maxRetries, e.getMessage());
+//
+//                    if (attempt < maxRetries) {
+//                        try {
+//                            Thread.sleep(1000L * attempt);
+//                        } catch (InterruptedException ie) {
+//                            Thread.currentThread().interrupt();
+//                            throw new ApiException("Content assessment interrupted",
+//                                    HttpStatus.INTERNAL_SERVER_ERROR.value());
+//                        }
+//                    }
+//                }
+//            }
+//
+//            if (aiResponse == null) {
+//                log.warn("Failed to assess content after {} attempts, using default", maxRetries);
+//                return createDefaultContentAssessment();
+//            }
+//
+//            return parseContentAssessmentResponse(aiResponse);
+//
+//        } catch (Exception e) {
+//            log.error("Error in content assessment: {}", e.getMessage(), e);
+//            return createDefaultContentAssessment();
+//        }
+//    }
 
     /**
      * ✅ NEW: Build prompt for content assessment
      */
-    private String buildContentAssessmentPrompt(String recognizedText, String questionText) {
-        StringBuilder prompt = new StringBuilder();
-
-        prompt.append("You are an expert English speaking assessment coach. ");
-        prompt.append("Evaluate how well the student's spoken response answers the given question/topic.\n\n");
-
-        prompt.append("QUESTION/TOPIC:\n");
-        prompt.append(questionText).append("\n\n");
-
-        prompt.append("STUDENT'S RESPONSE:\n");
-        prompt.append(recognizedText).append("\n\n");
-
-        prompt.append("ASSESSMENT TASK:\n");
-        prompt.append("Evaluate the content quality on these criteria (0-10 scale):\n\n");
-
-        prompt.append("1. **taskAchievementScore** (0-10): Did they answer the question?\n");
-        prompt.append("   - 0-3: Completely off-topic or irrelevant\n");
-        prompt.append("   - 4-6: Partially answers, missing key points\n");
-        prompt.append("   - 7-8: Answers well, minor gaps\n");
-        prompt.append("   - 9-10: Fully addresses all aspects\n\n");
-
-        prompt.append("2. **contentQualityScore** (0-10): Is the content detailed and well-developed?\n");
-        prompt.append("   - 0-3: Very brief, lacks detail\n");
-        prompt.append("   - 4-6: Some details but underdeveloped\n");
-        prompt.append("   - 7-8: Good details and examples\n");
-        prompt.append("   - 9-10: Rich, well-developed content\n\n");
-
-        prompt.append("3. **relevanceScore** (0-10): Is everything said relevant to the topic?\n");
-        prompt.append("   - 0-3: Mostly irrelevant or confused\n");
-        prompt.append("   - 4-6: Some relevant, some off-track\n");
-        prompt.append("   - 7-8: Mostly relevant\n");
-        prompt.append("   - 9-10: Everything is on-topic\n\n");
-
-        prompt.append("4. **coherenceScore** (0-10): Is the response logical and organized?\n");
-        prompt.append("   - 0-3: Disorganized, hard to follow\n");
-        prompt.append("   - 4-6: Some organization, but jumpy\n");
-        prompt.append("   - 7-8: Well-organized, clear flow\n");
-        prompt.append("   - 9-10: Excellent structure and logic\n\n");
-
-        prompt.append("Return ONLY valid JSON (no markdown, no extra text):\n");
-        prompt.append("{\n");
-        prompt.append("  \"taskAchievementScore\": 8.0,\n");
-        prompt.append("  \"contentQualityScore\": 7.5,\n");
-        prompt.append("  \"relevanceScore\": 9.0,\n");
-        prompt.append("  \"coherenceScore\": 8.5\n");
-        prompt.append("}\n");
-
-        return prompt.toString();
-    }
+//    private String buildContentAssessmentPrompt(String recognizedText, String questionText) {
+//        StringBuilder prompt = new StringBuilder();
+//
+//        prompt.append("You are an expert English speaking assessment coach. ");
+//        prompt.append("Evaluate how well the student's spoken response answers the given question/topic.\n\n");
+//
+//        prompt.append("QUESTION/TOPIC:\n");
+//        prompt.append(questionText).append("\n\n");
+//
+//        prompt.append("STUDENT'S RESPONSE:\n");
+//        prompt.append(recognizedText).append("\n\n");
+//
+//        prompt.append("ASSESSMENT TASK:\n");
+//        prompt.append("Evaluate the content quality on these criteria (0-10 scale):\n\n");
+//
+//        prompt.append("1. **taskAchievementScore** (0-10): Did they answer the question?\n");
+//        prompt.append("   - 0-3: Completely off-topic or irrelevant\n");
+//        prompt.append("   - 4-6: Partially answers, missing key points\n");
+//        prompt.append("   - 7-8: Answers well, minor gaps\n");
+//        prompt.append("   - 9-10: Fully addresses all aspects\n\n");
+//
+//        prompt.append("2. **contentQualityScore** (0-10): Is the content detailed and well-developed?\n");
+//        prompt.append("   - 0-3: Very brief, lacks detail\n");
+//        prompt.append("   - 4-6: Some details but underdeveloped\n");
+//        prompt.append("   - 7-8: Good details and examples\n");
+//        prompt.append("   - 9-10: Rich, well-developed content\n\n");
+//
+//        prompt.append("3. **relevanceScore** (0-10): Is everything said relevant to the topic?\n");
+//        prompt.append("   - 0-3: Mostly irrelevant or confused\n");
+//        prompt.append("   - 4-6: Some relevant, some off-track\n");
+//        prompt.append("   - 7-8: Mostly relevant\n");
+//        prompt.append("   - 9-10: Everything is on-topic\n\n");
+//
+//        prompt.append("4. **coherenceScore** (0-10): Is the response logical and organized?\n");
+//        prompt.append("   - 0-3: Disorganized, hard to follow\n");
+//        prompt.append("   - 4-6: Some organization, but jumpy\n");
+//        prompt.append("   - 7-8: Well-organized, clear flow\n");
+//        prompt.append("   - 9-10: Excellent structure and logic\n\n");
+//
+//        prompt.append("Return ONLY valid JSON (no markdown, no extra text):\n");
+//        prompt.append("{\n");
+//        prompt.append("  \"taskAchievementScore\": 8.0,\n");
+//        prompt.append("  \"contentQualityScore\": 7.5,\n");
+//        prompt.append("  \"relevanceScore\": 9.0,\n");
+//        prompt.append("  \"coherenceScore\": 8.5\n");
+//        prompt.append("}\n");
+//
+//        return prompt.toString();
+//    }
 
     /**
      * ✅ NEW: Parse content assessment response
      */
-    private ContentAssessmentResult parseContentAssessmentResponse(String jsonResponse) {
-        try {
-            String cleaned = cleanJsonResponse(jsonResponse);
-            JsonNode root = objectMapper.readTree(cleaned);
-
-            double taskAchievementScore = root.has("taskAchievementScore")
-                    ? root.get("taskAchievementScore").asDouble() : 0.0;
-            double contentQualityScore = root.has("contentQualityScore")
-                    ? root.get("contentQualityScore").asDouble() : 0.0;
-            double relevanceScore = root.has("relevanceScore")
-                    ? root.get("relevanceScore").asDouble() : 0.0;
-            double coherenceScore = root.has("coherenceScore")
-                    ? root.get("coherenceScore").asDouble() : 0.0;
-
-            // Clamp scores
-            taskAchievementScore = clampScore(taskAchievementScore);
-            contentQualityScore = clampScore(contentQualityScore);
-            relevanceScore = clampScore(relevanceScore);
-            coherenceScore = clampScore(coherenceScore);
-
-            return ContentAssessmentResult.builder()
-                    .taskAchievementScore(taskAchievementScore)
-                    .contentQualityScore(contentQualityScore)
-                    .relevanceScore(relevanceScore)
-                    .coherenceScore(coherenceScore)
-                    .contentFeedback(null) // No feedback
-                    .build();
-
-        } catch (Exception e) {
-            log.error("Failed to parse content assessment: {}", e.getMessage());
-            return createDefaultContentAssessment();
-        }
-    }
+//    private ContentAssessmentResult parseContentAssessmentResponse(String jsonResponse) {
+//        try {
+//            String cleaned = cleanJsonResponse(jsonResponse);
+//            JsonNode root = objectMapper.readTree(cleaned);
+//
+//            double taskAchievementScore = root.has("taskAchievementScore")
+//                    ? root.get("taskAchievementScore").asDouble() : 0.0;
+//            double contentQualityScore = root.has("contentQualityScore")
+//                    ? root.get("contentQualityScore").asDouble() : 0.0;
+//            double relevanceScore = root.has("relevanceScore")
+//                    ? root.get("relevanceScore").asDouble() : 0.0;
+//            double coherenceScore = root.has("coherenceScore")
+//                    ? root.get("coherenceScore").asDouble() : 0.0;
+//
+//            // Clamp scores
+//            taskAchievementScore = clampScore(taskAchievementScore);
+//            contentQualityScore = clampScore(contentQualityScore);
+//            relevanceScore = clampScore(relevanceScore);
+//            coherenceScore = clampScore(coherenceScore);
+//
+//            return ContentAssessmentResult.builder()
+//                    .taskAchievementScore(taskAchievementScore)
+//                    .contentQualityScore(contentQualityScore)
+//                    .relevanceScore(relevanceScore)
+//                    .coherenceScore(coherenceScore)
+//                    .contentFeedback(null) // No feedback
+//                    .build();
+//
+//        } catch (Exception e) {
+//            log.error("Failed to parse content assessment: {}", e.getMessage());
+//            return createDefaultContentAssessment();
+//        }
+//    }
 
     /**
      * ✅ NEW: Create default content assessment on failure
@@ -1565,15 +1602,15 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
     /**
      * ✅ NEW: Merge technical and content assessments
      */
-    private PronunciationAssessmentResponse mergeAssessments(
-            PronunciationAssessmentResponse technicalAssessment,
-            ContentAssessmentResult contentAssessment,
-            String questionText) {
-
-        // Just return technical assessment without feedback
-        technicalAssessment.setFeedback(null);
-        return technicalAssessment;
-    }
+//    private PronunciationAssessmentResponse mergeAssessments(
+//            PronunciationAssessmentResponse technicalAssessment,
+//            ContentAssessmentResult contentAssessment,
+//            String questionText) {
+//
+//        // Just return technical assessment without feedback
+//        technicalAssessment.setFeedback(null);
+//        return technicalAssessment;
+//    }
 
     /**
      * Correct grammar using GPT while preserving original meaning
