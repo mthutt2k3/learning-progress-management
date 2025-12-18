@@ -300,8 +300,19 @@ public class OpenAiServiceImpl implements OpenAiService {
                 prompt.append("- File contains images or non-text content\n");
                 prompt.append("- Question content is NOT relevant to the lesson\n");
                 prompt.append("- Questions are not educational or appropriate for students\n");
-                prompt.append("- Misleading or deceptive information\n\n");
-                prompt.append("- File contains extra descriptive text or paragraphs outside of the questions\n\n");
+                prompt.append("- Misleading or deceptive information\n");
+                prompt.append("- File contains extra descriptive text or paragraphs outside of the questions\n");
+
+                prompt.append("- Questions missing answer options or correct answers\n");
+                prompt.append("- Incomplete questions (missing question text or stem)\n");
+                prompt.append("- File contains content in Vietnamese or other non-English languages\n");
+                prompt.append("- Mixed language content (combination of English and Vietnamese)\n");
+                prompt.append("- Questions with incorrect format or structure\n");
+                prompt.append("- Answer choices are not properly labeled (A, B, C, D)\n");
+                prompt.append("- Multiple correct answers marked when only one should be correct\n");
+                prompt.append("- No correct answer marked for any question\n");
+                prompt.append("- File contains URLs, links, or references to external resources\n");
+                prompt.append("- Questions contain special characters that may cause parsing errors\n\n");
                 break;
         }
 
@@ -2920,6 +2931,14 @@ public class OpenAiServiceImpl implements OpenAiService {
         prompt.append("- Answer 'value' MUST NOT include option labels (A./B)/1./(A)/-). Keep content only.\n");
         prompt.append("- Fill in the blank: ONLY 1 correct answer allowed\n");
         prompt.append("- If a question type is unclear, use MULTIPLE_CHOICE as default\n\n");
+
+        prompt.append("🧩 MISSING ANSWER / OPTION HANDLING (CRITICAL):\n");
+        prompt.append("- If a question in the file does NOT provide any answer or answer options:\n");
+        prompt.append("  + You MUST generate appropriate answer(s) or option(s) for that question\n");
+        prompt.append("  + Generated answers must be logically correct and suitable for the question\n");
+        prompt.append("  + Generated options MUST strictly follow the identified questionType rules\n");
+        prompt.append("  + At least one generated answer MUST have isCorrect=true\n");
+        prompt.append("- NEVER leave content.data empty\n\n");
 
         prompt.append("Parse the content now and return ONLY valid JSON:\n");
 
