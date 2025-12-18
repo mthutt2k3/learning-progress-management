@@ -58,6 +58,10 @@ public class PronunciationAssessmentResponse {
      */
     private String feedback;
 
+    private String error;
+
+    private String warning;
+
     @Data
     @Builder
     @NoArgsConstructor

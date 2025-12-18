@@ -12,6 +12,8 @@ public class GradingWritingResponse {
     private Double suggestedScore;   // Điểm đề xuất
     private CriteriaFeedback criteriaFeedback;  // 4 tiêu chí chấm điểm
     private List<WritingComment> comments;  // Comments chi tiết
+    private String error;
+    private String warning;
 
     @Data
     @Builder
