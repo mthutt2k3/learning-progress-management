@@ -172,7 +172,7 @@ public class OpenAiServiceImpl implements OpenAiService {
 
             // If nothing to check, return valid
             if (contentToCheck.length() == 0) {
-                return new InputValidationResponse(null, null, null ,null, null);
+                return new InputValidationResponse(null, null, null, null, null);
             }
 
             // Build lesson context
@@ -775,7 +775,7 @@ public class OpenAiServiceImpl implements OpenAiService {
 
         if (totalQuestions > maxQuestion) {
             log.error("Total questions exceeds remaining quota: {} > {}", totalQuestions, maxQuestion);
-            throw new ApiException("You can only generate up to " + maxQuestion +  " questions per request",
+            throw new ApiException("You can only generate up to " + maxQuestion + " questions per request",
                     HttpStatus.BAD_REQUEST.value());
         }
 
@@ -971,7 +971,7 @@ public class OpenAiServiceImpl implements OpenAiService {
 
         if (totalQuestions > maxQuestion) {
             log.error("Total questions exceeds remaining quota: {} > {}", totalQuestions, maxQuestion);
-            throw new ApiException("You can only generate up to " + maxQuestion +  " questions per request",
+            throw new ApiException("You can only generate up to " + maxQuestion + " questions per request",
                     HttpStatus.BAD_REQUEST.value());
         }
 
@@ -2818,7 +2818,7 @@ public class OpenAiServiceImpl implements OpenAiService {
         );
     }
 
-        @Override
+    @Override
     @Transactional(readOnly = true)
     public GenerateReadingPassageResponse generateReadingPassage(GenerateReadingPassageRequest request) {
         return null;

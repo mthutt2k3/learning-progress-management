@@ -12,6 +12,7 @@ import com.learning.progress.service.OpenAiService;
 import com.learning.progress.util.TraceUtil;
 import com.microsoft.cognitiveservices.speech.*;
 import com.microsoft.cognitiveservices.speech.audio.AudioConfig;
+import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import org.hibernate.Hibernate;
 import org.springframework.beans.factory.annotation.Value;
@@ -37,8 +38,7 @@ import java.io.InputStream;
 import java.net.URL;
 import java.time.Instant;
 import java.util.*;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
@@ -49,7 +49,7 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final SubmissionQuestionRepository submissionQuestionRepository;
-
+    private final ExecutorService executorService;
     private final RestTemplate restTemplate;
 
     @Value("${azure.openai.endpoint}")
@@ -77,6 +77,152 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
         this.submissionQuestionRepository = submissionQuestionRepository;
         this.openAiService = openAiService;
         this.restTemplate = restTemplate;
+
+        this.executorService = Executors.newFixedThreadPool(10, r -> {
+            Thread t = new Thread(r);
+            t.setName("ai-feedback-worker-" + t.getId());
+            t.setDaemon(true);
+            return t;
+        });
+    }
+
+    @PreDestroy
+    public void cleanup() {
+        log.info("Shutting down AI feedback executor service...");
+        executorService.shutdown();
+        try {
+            if (!executorService.awaitTermination(30, TimeUnit.SECONDS)) {
+                executorService.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            executorService.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    private InputValidationResponse validateContentForAssessment(String content, String contentType, String questionContext) {
+        try {
+            log.info("Validating {} content using AI", contentType);
+
+            String prompt = buildContentValidationPrompt(content, contentType, questionContext);
+            String aiResponse = openAiService.callOpenAI(prompt);
+
+            return parseContentValidationResponse(aiResponse);
+
+        } catch (Exception e) {
+            log.error("Error validating {} content: {}", contentType, e.getMessage(), e);
+            // In case of error, return warning
+            return new InputValidationResponse(null,
+                    null, null, null, null);
+        }
+    }
+
+    /**
+     * Build prompt for content validation
+     */
+    private String buildContentValidationPrompt(String content, String contentType, String questionContext) {
+        StringBuilder prompt = new StringBuilder();
+
+        prompt.append("You are a content safety and quality checker for an educational English learning platform.\n\n");
+
+        prompt.append("CONTENT TYPE: ").append(contentType).append(" Assessment\n\n");
+
+        if (questionContext != null && !questionContext.isBlank()) {
+            prompt.append("QUESTION/TOPIC:\n");
+            prompt.append(questionContext).append("\n\n");
+        }
+
+        prompt.append("YOUR TASK:\n");
+        prompt.append("Check if the student's ").append(contentType.toLowerCase())
+                .append(" content is safe, appropriate, and suitable for assessment.\n\n");
+
+        // ❌ ERROR cases (MUST REJECT)
+        prompt.append("❌ SEVERE ISSUES - Set 'error' field (MUST REJECT):\n");
+        prompt.append("- Violence, hate speech, discrimination, racism\n");
+        prompt.append("- Sexual, adult, or inappropriate content\n");
+        prompt.append("- Profanity or offensive language\n");
+        prompt.append("- Political propaganda or extremist ideology\n");
+        prompt.append("- Drugs, illegal activities, dangerous behavior\n");
+        prompt.append("- Self-harm or psychologically harmful content\n");
+        prompt.append("- Content NOT related to English learning\n");
+        prompt.append("- Any content unsafe for educational environment\n");
+        prompt.append("- Section content must be at least 90% English; excessive use of any other language is not allowed\n");
+
+        if ("Speaking".equals(contentType)) {
+            prompt.append("- Content contains significant amount of non-English language (Vietnamese, Chinese, etc.)\n");
+        }
+
+        prompt.append("- Spam or nonsensical content (excessive repetition, random characters)\n");
+        prompt.append("- Content is TOO SHORT to assess meaningfully (less than 3 words)\n\n");
+
+        // ⚠️ WARNING cases
+        prompt.append("⚠️ MINOR ISSUES - Always set 'warning' as null:\n");
+
+        prompt.append("STUDENT'S CONTENT TO CHECK:\n");
+        prompt.append("--------------------------------------------------\n");
+        prompt.append(content).append("\n");
+        prompt.append("--------------------------------------------------\n\n");
+
+        prompt.append("OUTPUT FORMAT (JSON ONLY):\n");
+        prompt.append("{\n");
+        prompt.append("  \"error\": \"short message in English explaining why content is rejected, or null\",\n");
+        prompt.append("  \"warning\": \"null\"\n");
+        prompt.append("}\n\n");
+
+        prompt.append("RULES:\n");
+        prompt.append("- Error messages must be SHORT and user-friendly (max 1-2 sentences)\n");
+        prompt.append("- Set ONLY error if content MUST be rejected\n");
+        prompt.append("- Set warning is null\n");
+        prompt.append("- Both must be null if content is good\n");
+        prompt.append("- Return valid JSON only, no markdown, no extra text\n\n");
+
+        prompt.append("EXAMPLES:\n\n");
+
+        prompt.append("Example 1 (inappropriate):\n");
+        prompt.append("Content: \"I hate this stupid test\"\n");
+        prompt.append("{\n");
+        prompt.append("  \"error\": \"Content contains inappropriate language not suitable for assessment.\",\n");
+        prompt.append("  \"warning\": null\n");
+        prompt.append("}\n\n");
+
+        prompt.append("Example 2 (too short):\n");
+        prompt.append("Content: \"I like it\"\n");
+        prompt.append("{\n");
+        prompt.append("  \"error\": \"Content is too short to assess meaningfully. Please provide at least 3 words.\",\n");
+        prompt.append("  \"warning\": null\n");
+        prompt.append("}\n\n");
+
+        prompt.append("Example 4 (good content):\n");
+        prompt.append("Content: \"In my opinion, technology has greatly improved our lives. For example, smartphones allow us to communicate instantly with people around the world.\"\n");
+        prompt.append("{\n");
+        prompt.append("  \"error\": null,\n");
+        prompt.append("  \"warning\": null\n");
+        prompt.append("}\n\n");
+
+        prompt.append("Analyze and return JSON now.\n");
+
+        return prompt.toString();
+    }
+
+    /**
+     * Parse content validation response
+     */
+    private InputValidationResponse parseContentValidationResponse(String jsonResponse) {
+        try {
+            String cleaned = cleanJsonResponse(jsonResponse);
+            JsonNode root = objectMapper.readTree(cleaned);
+
+            String error = root.has("error") && !root.get("error").isNull()
+                    ? root.get("error").asText() : null;
+            String warning = null;
+
+            return new InputValidationResponse(error, warning, null, null, null);
+
+        } catch (Exception e) {
+            log.error("Failed to parse content validation response: {}", e.getMessage(), e);
+            return new InputValidationResponse(null,
+                    "Could not parse validation result. Please review content manually.", null, null, null);
+        }
     }
 
     @Override
@@ -126,8 +272,21 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
         log.info("[{}] Successfully extracted text (from {} images + {} text blocks): {}",
                 traceId, imageUrls.size(), textContents.size() - (imageUrls.isEmpty() ? 0 : 1), studentWriting);
 
-        // 6. Load context
+        // 5.1 ✅ Start validation async (chạy ngầm)
         Question question = submissionQuestion.getQuestion();
+        CompletableFuture<InputValidationResponse> validationFuture = CompletableFuture.supplyAsync(
+                () -> {
+                    try {
+                        return validateContentForAssessment(studentWriting, "Writing", question.getQuestionText());
+                    } catch (Exception e) {
+                        log.error("Validation failed: {}", e.getMessage(), e);
+                        return new InputValidationResponse(null, null, null, null, null);
+                    }
+                },
+                executorService
+        );
+
+        // 6. Load context
         ChallengeSection section = question.getSection();
         DailyChallenge challenge = section.getChallenge();
         OpenAiServiceImpl.ChallengeContext context = eagerLoadChallengeContext(challenge);
@@ -165,14 +324,24 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
         }
 
         if (aiResponse == null) {
-            throw new ApiException("Failed to get AI response after " + maxRetries + " attempts: "
-                    + (lastException != null ? lastException.getMessage() : "unknown error"),
+            throw new ApiException("Failed to get AI response after " + maxRetries + " attempts",
                     HttpStatus.INTERNAL_SERVER_ERROR.value());
         }
 
         // 9. Parse response
         GradingWritingResponse result = parseGradingResponse(aiResponse, studentWriting);
         log.info("[{}] Successfully graded writing. Overall score: {}", traceId, result.getSuggestedScore());
+
+        InputValidationResponse validation;
+        try {
+            validation = validationFuture.get(5, TimeUnit.SECONDS); // timeout ngắn vì đã chạy song song
+        } catch (Exception e) {
+            log.error("Failed to get validation result: {}", e.getMessage());
+            validation = new InputValidationResponse(null, null, null, null, null);
+        }
+
+        result.setError(validation.getError());
+        result.setWarning(validation.getWarning());
 
         return result;
     }
@@ -246,8 +415,8 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
 
         } catch (Exception e) {
             log.error("Failed to extract writing content: {}", e.getMessage());
-            throw new ApiException("Invalid submission content format: " + e.getMessage(),
-                    HttpStatus.BAD_REQUEST.value());
+            throw new ApiException("An error occurred while generating feedback with AI.",
+                    HttpStatus.INTERNAL_SERVER_ERROR.value());
         }
     }
 
@@ -326,7 +495,7 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
             throw e;
         } catch (Exception e) {
             log.error("[{}] Failed to extract text from image URL: {}", traceId, e.getMessage(), e);
-            throw new ApiException("Failed to extract text from image: " + e.getMessage(),
+            throw new ApiException("An error occurred while generating feedback with AI.",
                     HttpStatus.INTERNAL_SERVER_ERROR.value());
         } finally {
             // Cleanup temp file
@@ -375,7 +544,7 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
 
         } catch (Exception e) {
             log.error("Failed to download image from URL: {}", e.getMessage());
-            throw new ApiException("Failed to download image from URL: " + e.getMessage(),
+            throw new ApiException("An error occurred while generating feedback with AI.",
                     HttpStatus.INTERNAL_SERVER_ERROR.value());
         }
     }
@@ -420,8 +589,7 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
             }
 
             if (extractedText == null) {
-                throw new ApiException("Failed to extract text after " + maxRetries + " attempts: "
-                        + (lastException != null ? lastException.getMessage() : "unknown error"),
+                throw new ApiException("Failed to extract text after " + maxRetries + " attempts",
                         HttpStatus.INTERNAL_SERVER_ERROR.value());
             }
 
@@ -432,7 +600,7 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
             throw e;
         } catch (Exception e) {
             log.error("Failed to extract text from image: {}", e.getMessage(), e);
-            throw new ApiException("Failed to extract text from image: " + e.getMessage(),
+            throw new ApiException("An error occurred while generating feedback with AI.",
                     HttpStatus.INTERNAL_SERVER_ERROR.value());
         }
     }
@@ -510,7 +678,7 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
             }
         } catch (Exception e) {
             log.error("Error calling Azure OpenAI Vision for OCR: {}", e.getMessage(), e);
-            throw new ApiException("Failed to call Azure OpenAI Vision: " + e.getMessage(),
+            throw new ApiException("An error occurred while generating feedback with AI.",
                     HttpStatus.INTERNAL_SERVER_ERROR.value());
         }
 
@@ -533,29 +701,41 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
                     // Trả về text nguyên văn, giữ nguyên mọi lỗi chính tả, ngữ pháp
                     String extractedText = root.hasNonNull("text") ? root.get("text").asText() : "";
                     if (extractedText.isEmpty()) {
-                        throw new ApiException("OCR returned empty text", HttpStatus.BAD_REQUEST.value());
+                        throw new ApiException("No text was found in the image.", HttpStatus.BAD_REQUEST.value());
                     }
                     return extractedText;
 
                 case "ILLEGIBLE_HANDWRITING":
-                    throw new ApiException("Chữ viết tay không rõ ràng, không thể đọc được", HttpStatus.BAD_REQUEST.value());
+                    throw new ApiException(
+                            "The handwriting is unclear and cannot be recognized.",
+                            HttpStatus.BAD_REQUEST.value()
+                    );
 
                 case "NO_TEXT_FOUND":
-                    throw new ApiException("Không tìm thấy văn bản trong ảnh", HttpStatus.BAD_REQUEST.value());
+                    throw new ApiException(
+                            "No text was found in the image.",
+                            HttpStatus.BAD_REQUEST.value()
+                    );
 
                 case "BLANK_IMAGE":
-                    throw new ApiException("Ảnh trống hoặc không hợp lệ", HttpStatus.BAD_REQUEST.value());
+                    throw new ApiException(
+                            "The image is blank or invalid.",
+                            HttpStatus.BAD_REQUEST.value()
+                    );
 
                 default:
-                    throw new ApiException("Lỗi OCR: Trạng thái không xác định - " + status, HttpStatus.INTERNAL_SERVER_ERROR.value());
+                    throw new ApiException(
+                            "An unknown OCR error occurred.",
+                            HttpStatus.INTERNAL_SERVER_ERROR.value()
+                    );
             }
-
         } catch (ApiException e) {
             // Re-throw ApiException as is
             throw e;
         } catch (Exception e) {
             log.error("Failed to parse OCR response: {}", e.getMessage(), e);
-            throw new ApiException("Không thể xử lý kết quả OCR: " + e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR.value());
+            throw new ApiException("An error occurred while generating feedback with AI.",
+                    HttpStatus.INTERNAL_SERVER_ERROR.value());
         }
     }
 
@@ -643,7 +823,7 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
             byte[] imageBytes = fis.readAllBytes();
             return Base64.getEncoder().encodeToString(imageBytes);
         } catch (Exception e) {
-            throw new ApiException("Failed to convert image to base64: " + e.getMessage(),
+            throw new ApiException("An error occurred while generating feedback with AI.",
                     HttpStatus.INTERNAL_SERVER_ERROR.value());
         }
     }
@@ -806,7 +986,7 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
 
         } catch (Exception e) {
             log.error("Failed to parse grading response: {}", e.getMessage(), e);
-            throw new ApiException("Failed to parse AI grading response: " + e.getMessage(),
+            throw new ApiException("An error occurred while generating feedback with AI.",
                     HttpStatus.INTERNAL_SERVER_ERROR.value());
         }
     }
@@ -868,7 +1048,7 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
                         if (hasReferenceText) {
                             // Use continuous recognition WITH pronunciation assessment
                             log.info("[{}] Scripted assessment with reference text", traceId);
-                            response = assessWithReferenceTextContinuous(wavFile, request);
+                            response = assessWithReferenceTextContinuous(wavFile, request, questionText);
                         } else {
                             // Use continuous recognition WITHOUT pronunciation assessment
                             log.info("[{}] Free-form assessment", traceId);
@@ -935,7 +1115,7 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
                 } else {
                     // Non-retryable exception
                     log.error("[{}] Non-retryable error: {}", traceId, e.getMessage(), e);
-                    throw new ApiException("Failed to assess pronunciation: " + e.getMessage(),
+                    throw new ApiException("An error occurred while generating the AI question.",
                             HttpStatus.INTERNAL_SERVER_ERROR.value());
                 }
             }
@@ -944,9 +1124,8 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
         // All attempts failed
         log.error("[{}] All {} attempts for pronunciation assessment failed", traceId, maxAttempts);
         throw new ApiException(
-                String.format("Failed to assess pronunciation after %d attempts: %s",
-                        maxAttempts,
-                        lastException != null ? lastException.getMessage() : "unknown error"),
+                String.format("Failed to assess pronunciation after %d attempts",
+                        maxAttempts),
                 HttpStatus.INTERNAL_SERVER_ERROR.value()
         );
     }
@@ -960,7 +1139,8 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
      */
     private PronunciationAssessmentResponse assessWithReferenceTextContinuous(
             File wavFile,
-            PronunciationAssessmentRequest request) throws Exception {
+            PronunciationAssessmentRequest request,
+            String questionText) throws Exception {
 
         SpeechConfig speechConfig = SpeechConfig.fromSubscription(speechKey, speechRegion);
         speechConfig.setSpeechRecognitionLanguage("en-US");
@@ -999,12 +1179,38 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
 
         validateEnglishOnly(result.getFullText());
 
-        // Aggregate pronunciation assessment results
-        return aggregatePronunciationResults(
+        CompletableFuture<InputValidationResponse> validationFuture = CompletableFuture.supplyAsync(
+                () -> {
+                    try {
+                        return validateContentForAssessment(result.getFullText(), "Writing", questionText);
+                    } catch (Exception e) {
+                        log.error("Validation failed: {}", e.getMessage(), e);
+                        return new InputValidationResponse(null, null, null, null, null);
+                    }
+                },
+                executorService
+        );
+
+// Aggregate pronunciation assessment results
+        PronunciationAssessmentResponse response = aggregatePronunciationResults(
                 result,
                 request.getReferenceText(),
                 request.getEnableMiscue()
         );
+
+        InputValidationResponse validation;
+        try {
+            validation = validationFuture.get(5, TimeUnit.SECONDS);
+        } catch (Exception e) {
+            log.error("Failed to get validation result: {}", e.getMessage());
+            validation = new InputValidationResponse(null, null, null, null, null);
+        }
+
+        response.setError(validation.getError());
+        response.setWarning(validation.getWarning());
+
+
+        return response;
     }
 
     /**
@@ -1088,7 +1294,7 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
         }
 
         if (hasError.get()) {
-            throw new ApiException("Recognition failed: " + errorMessage.get(),
+            throw new ApiException("Recognition failed",
                     HttpStatus.INTERNAL_SERVER_ERROR.value());
         }
 
@@ -1189,21 +1395,21 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
         PronunciationAssessmentResponse technicalAssessment = assessWithCorrectedReference(
                 wavFile,
                 correctedText,
-                analysis.getRecognizedText()
+                questionText
         );
 
         // Step 4: ✅ NEW - Assess content quality if questionText provided
-        if (questionText != null && !questionText.trim().isEmpty()) {
-            log.info("[{}] Step 4: Assessing content quality against question...", traceId);
-            ContentAssessmentResult contentAssessment = assessContentQuality(
-                    analysis.getRecognizedText(),
-                    questionText
-            );
-
-            // Step 5: Merge technical + content assessments
-            log.info("[{}] Step 5: Merging technical and content assessments...", traceId);
-            return mergeAssessments(technicalAssessment, contentAssessment, questionText);
-        }
+//        if (questionText != null && !questionText.trim().isEmpty()) {
+//            log.info("[{}] Step 4: Assessing content quality against question...", traceId);
+//            ContentAssessmentResult contentAssessment = assessContentQuality(
+//                    analysis.getRecognizedText(),
+//                    questionText
+//            );
+//
+//            // Step 5: Merge technical + content assessments
+//            log.info("[{}] Step 5: Merging technical and content assessments...", traceId);
+//            return mergeAssessments(technicalAssessment, contentAssessment, questionText);
+//        }
 
         // No questionText → return technical assessment only
         return technicalAssessment;
@@ -1493,7 +1699,7 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
     private PronunciationAssessmentResponse assessWithCorrectedReference(
             File wavFile,
             String correctedReferenceText,
-            String originalRecognizedText) throws Exception {
+            String questionText) throws Exception {
 
         String traceId = TraceUtil.getTraceId();
 
@@ -1506,7 +1712,7 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
         request.setEnableProsody(true);
 
         // Use the existing method for assessment with reference text
-        PronunciationAssessmentResponse response = assessWithReferenceTextContinuous(wavFile, request);
+        PronunciationAssessmentResponse response = assessWithReferenceTextContinuous(wavFile, request, questionText);
 
         // No feedback needed
         response.setFeedback(null);
@@ -1561,7 +1767,7 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
 
         } catch (Exception e) {
             log.error("Failed to download from blob URL: {}", e.getMessage());
-            throw new ApiException("Failed to download audio from blob URL: " + e.getMessage(),
+            throw new ApiException("An error occurred while generating feedback with AI.",
                     HttpStatus.INTERNAL_SERVER_ERROR.value());
         }
     }
@@ -1601,7 +1807,7 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
 
         } catch (EncoderException e) {
             if (wavFile.exists()) wavFile.delete();
-            throw new ApiException("Failed to convert audio: " + e.getMessage(),
+            throw new ApiException("An error occurred while generating feedback with AI.",
                     HttpStatus.INTERNAL_SERVER_ERROR.value());
         }
     }
@@ -1878,7 +2084,7 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
         }
 
         if (hasError.get()) {
-            throw new ApiException("Recognition failed: " + errorMessage.get(),
+            throw new ApiException("Recognition failed",
                     HttpStatus.INTERNAL_SERVER_ERROR.value());
         }
 
@@ -1999,7 +2205,7 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
 
         } catch (Exception e) {
             log.error("Failed to parse recognition results: {}", e.getMessage(), e);
-            throw new ApiException("Failed to parse speech recognition results: " + e.getMessage(),
+            throw new ApiException("An error occurred while generating feedback with AI.",
                     HttpStatus.INTERNAL_SERVER_ERROR.value());
         }
     }
