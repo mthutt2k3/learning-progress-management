@@ -1,7 +1,11 @@
 package com.learning.progress.service.impl;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.learning.progress.common.*;
+import com.learning.progress.cache.CacheService;
+import com.learning.progress.common.ChallengeType;
+import com.learning.progress.common.Const;
+import com.learning.progress.common.QuestionType;
+import com.learning.progress.common.SubmissionStatus;
 import com.learning.progress.dto.challenge.section.DataContent;
 import com.learning.progress.dto.challenge.section.DataItem;
 import com.learning.progress.dto.grading.*;
@@ -10,7 +14,6 @@ import com.learning.progress.dto.submission.AnswerItem;
 import com.learning.progress.entity.*;
 import com.learning.progress.exception.ApiException;
 import com.learning.progress.repository.*;
-import com.learning.progress.cache.CacheService;
 import com.learning.progress.service.GradingDailyChallengeService;
 import com.learning.progress.service.NotificationService;
 import com.learning.progress.util.*;
@@ -23,7 +26,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.time.OffsetDateTime;
 import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -482,7 +484,6 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
         log.debug("[{}] [{}] saved grading header id={}", traceId, method, grading.getId());
 
         submission.setSubmissionStatus(SubmissionStatus.GRADED);
-        submission.setSubmittedAt(OffsetDateTime.now());
         submissionRepo.save(submission);
         log.debug("[{}] [{}] updated submission id={} status=GRADED", traceId, method, submissionId);
 
@@ -492,17 +493,17 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
         log.info("[{}] [{}] exit submissionId={} durationMs={}", traceId, method, submissionId, durationMs);
 
         // notify student
-        try {
-            if (submission.getUser() != null && submission.getUser().getId() != null) {
-                String title = Const.GRADING.MANUAL_GRADE_NOTIFICATION_TITLE;
-                String message = String.format(Const.GRADING.MANUAL_GRADE_NOTIFICATION_TEMPLATE,
-                        challenge != null ? challenge.getChallengeName() : "", request.getRawScore());
-                notificationService.createNotifications(submission.getUser().getId(), null, title, message, null, null);
-                log.debug("[{}] [{}] sent manual-grade notification userId={} submissionId={}", traceId, method, submission.getUser().getId(), submissionId);
-            }
-        } catch (Exception ex) {
-            log.debug("[{}] [{}] Failed to send manual grade notification for submissionId={} error={}", traceId, method, submissionId, ex.getMessage());
-        }
+//        try {
+//            if (submission.getUser() != null && submission.getUser().getId() != null) {
+//                String title = Const.GRADING.MANUAL_GRADE_NOTIFICATION_TITLE;
+//                String message = String.format(Const.GRADING.MANUAL_GRADE_NOTIFICATION_TEMPLATE,
+//                        challenge != null ? challenge.getChallengeName() : "", request.getRawScore());
+//                notificationService.createNotifications(submission.getUser().getId(), null, title, message, null, null);
+//                log.debug("[{}] [{}] sent manual-grade notification userId={} submissionId={}", traceId, method, submission.getUser().getId(), submissionId);
+//            }
+//        } catch (Exception ex) {
+//            log.debug("[{}] [{}] Failed to send manual grade notification for submissionId={} error={}", traceId, method, submissionId, ex.getMessage());
+//        }
     }
 
     // ========================================================================
@@ -577,16 +578,16 @@ public class GradingDailyChallengeServiceImpl implements GradingDailyChallengeSe
         log.info("[{}] [{}] exit submissionQuestionId={} durationMs={} gradingQuestionId={}", traceId, method, submissionQuestionId, durationMs, gradingQuestion.getId());
 
         // notify student about per-question grading
-        try {
-            if (submission.getUser() != null && submission.getUser().getId() != null) {
-                String title = Const.GRADING.PER_QUESTION_GRADE_NOTIFICATION_TITLE;
-                String message = String.format(Const.GRADING.PER_QUESTION_GRADE_NOTIFICATION_TEMPLATE, submission.getChallenge().getChallengeName());
-                notificationService.createNotifications(submission.getUser().getId(), null, title, message, null, null);
-                log.debug("[{}] [{}] sent per-question notification userId={} submissionId={} sqId={}", traceId, method, submission.getUser().getId(), submission.getId(), submissionQuestionId);
-            }
-        } catch (Exception ex) {
-            log.debug("[{}] [{}] Failed to send per-question grade notification for sqId={} error={}", traceId, method, submissionQuestionId, ex.getMessage());
-        }
+//        try {
+//            if (submission.getUser() != null && submission.getUser().getId() != null) {
+//                String title = Const.GRADING.PER_QUESTION_GRADE_NOTIFICATION_TITLE;
+//                String message = String.format(Const.GRADING.PER_QUESTION_GRADE_NOTIFICATION_TEMPLATE, submission.getChallenge().getChallengeName());
+//                notificationService.createNotifications(submission.getUser().getId(), null, title, message, null, null);
+//                log.debug("[{}] [{}] sent per-question notification userId={} submissionId={} sqId={}", traceId, method, submission.getUser().getId(), submission.getId(), submissionQuestionId);
+//            }
+//        } catch (Exception ex) {
+//            log.debug("[{}] [{}] Failed to send per-question grade notification for sqId={} error={}", traceId, method, submissionQuestionId, ex.getMessage());
+//        }
     }
 
     // ========================================================================

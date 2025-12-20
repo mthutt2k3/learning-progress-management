@@ -23,7 +23,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
-import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.context.request.RequestContextHolder;
@@ -194,7 +193,7 @@ public class AuthServiceImpl implements AuthService {
             // 3. Prepare notification content
             String studentName = user.getFullName() != null ? user.getFullName() : user.getUserName();
             String title = "Password Reset Request";
-            String message = studentName + " requested password reset.";
+            String message = "Student " + studentName + " requested password reset.";
             String avatarUrl = user.getAvatarUrl();
 
             // 4. Send to teachers with teacher URL
@@ -202,7 +201,7 @@ public class AuthServiceImpl implements AuthService {
                 String teacherUrl = "/teacher/student/" + user.getId() + "/profile";
                 notificationService.createNotifications(
                         teacherIds,
-                        user.getId(),  // creatorId = student
+                        user.getId(),
                         title,
                         message,
                         teacherUrl,

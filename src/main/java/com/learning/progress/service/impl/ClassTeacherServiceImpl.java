@@ -349,8 +349,8 @@ public class ClassTeacherServiceImpl implements ClassTeacherService {
 
             // notify newly added teachers
             for (User u : newTeachers) {
-                String title = String.format(Const.CLASS_TEACHER.NOTIFY_ADDED_AS_TEACHER_TITLE, clazz.getClassName());
-                String message = String.format(Const.CLASS_TEACHER.NOTIFY_ADDED_AS_TEACHER_MESSAGE, jwtUtil.extractUsernameFromCurrentRequest(), clazz.getClassName());
+                String title = String.format(Const.CLASS_TEACHER.NOTIFY_ADDED_AS_TEACHER_TITLE);
+                String message = String.format(Const.CLASS_TEACHER.NOTIFY_ADDED_AS_TEACHER_MESSAGE, clazz.getClassName());
                 String url = "/teacher/classes/menu/" + clazz.getId();
                 try {
                     notificationService.createNotifications(u.getId(), clazz.getId(), title, message, url, null);
@@ -382,8 +382,8 @@ public class ClassTeacherServiceImpl implements ClassTeacherService {
             );
 
             for (User u : newTAs) {
-                String title = String.format(Const.CLASS_TEACHER.NOTIFY_ADDED_AS_TA_TITLE, clazz.getClassName());
-                String message = String.format(Const.CLASS_TEACHER.NOTIFY_ADDED_AS_TA_MESSAGE, jwtUtil.extractUsernameFromCurrentRequest(), clazz.getClassName());
+                String title = String.format(Const.CLASS_TEACHER.NOTIFY_ADDED_AS_TA_TITLE);
+                String message = String.format(Const.CLASS_TEACHER.NOTIFY_ADDED_AS_TA_MESSAGE, clazz.getClassName());
                 String url = "/teaching-assistant/classes/menu/" + clazz.getId();
                 try {
                     notificationService.createNotifications(u.getId(), clazz.getId(), title, message, url, null);
@@ -539,12 +539,12 @@ public class ClassTeacherServiceImpl implements ClassTeacherService {
 
         // notify removed teacher/TA
         try {
-            String title = String.format(Const.CLASS_TEACHER.NOTIFY_REMOVED_TITLE, clazz.getClassName());
-            String message = String.format(Const.CLASS_TEACHER.NOTIFY_REMOVED_MESSAGE, jwtUtil.extractUsernameFromCurrentRequest(), clazz.getClassName());
+            String title = String.format(Const.CLASS_TEACHER.NOTIFY_REMOVED_TITLE);
+            String message = String.format(Const.CLASS_TEACHER.NOTIFY_REMOVED_MESSAGE, clazz.getClassName());
 
             String url = RoleInClass.TEACHER.equals(classTeacher.getRoleInClass())
-                    ? "/teacher/classes/menu/" + clazz.getId()
-                    : "/teaching-assistant/classes/menu/" + clazz.getId();
+                    ? "/teacher/classes"
+                    : "/teaching-assistant/classes";
 
             notificationService.createNotifications(user.getId(), null, title, message, url, null);
         } catch (Exception ex) {
