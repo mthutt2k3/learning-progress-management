@@ -279,8 +279,8 @@ public class ClassStudentServiceImpl implements ClassStudentService {
                     url = "/test-taker/classes/menu/" + clazz.getId();
                 }
 
-                String title = String.format(Const.CLASS_STUDENT.NOTIFY_ADDED_TITLE, clazz.getClassName());
-                String message = String.format(Const.CLASS_STUDENT.NOTIFY_ADDED_MESSAGE, jwtUtil.extractUsernameFromCurrentRequest(), clazz.getClassName());
+                String title = String.format(Const.CLASS_STUDENT.NOTIFY_ADDED_TITLE);
+                String message = String.format(Const.CLASS_STUDENT.NOTIFY_ADDED_MESSAGE, clazz.getClassName());
                 try {
                     notificationService.createNotifications(u.getId(), null, title, message, url, null);
                 } catch (Exception ex) {
@@ -387,10 +387,17 @@ public class ClassStudentServiceImpl implements ClassStudentService {
 
         // send notification to removed student
         try {
-            String title = String.format(Const.CLASS_STUDENT.NOTIFY_REMOVED_TITLE, clazz.getClassName());
-            String message = String.format(Const.CLASS_STUDENT.NOTIFY_REMOVED_MESSAGE, jwtUtil.extractUsernameFromCurrentRequest(), clazz.getClassName());
+            String title = String.format(Const.CLASS_STUDENT.NOTIFY_REMOVED_TITLE);
+            String message = String.format(Const.CLASS_STUDENT.NOTIFY_REMOVED_MESSAGE, clazz.getClassName());
 
-            notificationService.createNotifications(user.getId(), clazz.getId(), title, message, null, null);
+            String url;
+            if ("STUDENT".equals(user.getRole().toString())) {
+                url = "/student/dashboard";
+            } else {
+                url = "/test-taker/classes";
+            }
+
+            notificationService.createNotifications(user.getId(), clazz.getId(), title, message, url, null);
         } catch (Exception ex) {
             log.warn("[{}] traceId={} Failed to send notification to removed student userId={} error={}", method, traceId, userId, ex.getMessage());
         }
