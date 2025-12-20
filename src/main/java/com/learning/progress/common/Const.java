@@ -241,7 +241,7 @@ public class Const {
         public static final String NOTIFY_DELETE_TITLE = "Delete challenge success";
         public static final String NOTIFY_DELETE_MESSAGE = "You deleted challenge \"%s\".";
         public static final String NOTIFY_NEW_CHALLENGE_TITLE = "New challenge: %s";
-        public static final String NOTIFY_NEW_CHALLENGE_MESSAGE = "A new challenge has been published in the class.";
+        public static final String NOTIFY_NEW_CHALLENGE_MESSAGE = "New daily challenge: \"%s\" has Publish.";
 
         // Export error
         public static final String EXPORT_WORKSHEET_FAILED = "Failed to export worksheet: %s";
@@ -631,7 +631,7 @@ public class Const {
         // Notification templates (used by schedulers / controllers / services)
         public static final String NOTIFY_CLASS_ACTIVATED_TITLE = "Class activated";
         public static final String NOTIFY_CLASS_DEACTIVATED_TITLE = "Class deactivated";
-        public static final String NOTIFY_CLASS_STATUS_MESSAGE = "Class %s has been %s by manager";
+        public static final String NOTIFY_CLASS_STATUS_MESSAGE = "Class %s has been %s";
 
     }
     public static class SYLLABUS {
@@ -701,14 +701,14 @@ public class Const {
         // New: centralized validation / notification templates for ClassStudentServiceImpl
         public static final String VALIDATION_ERRORS = "Validation errors: %s";
 
-        public static final String NOTIFY_ADDED_TITLE = "You have been added to class %s";
-        public static final String NOTIFY_ADDED_MESSAGE = "%s added you to class %s";
+        public static final String NOTIFY_ADDED_TITLE = "Class Assignment";
+        public static final String NOTIFY_ADDED_MESSAGE = "You have been assigned to class %s";
 
         public static final String NOTIFY_REACTIVATED_TITLE = "Your account has been reactivated in class %s";
         public static final String NOTIFY_REACTIVATED_MESSAGE = "%s reactivated your account in class %s";
 
-        public static final String NOTIFY_REMOVED_TITLE = "You have been removed from class %s";
-        public static final String NOTIFY_REMOVED_MESSAGE = "%s removed you from class %s";
+        public static final String NOTIFY_REMOVED_TITLE = "Removed from Class";
+        public static final String NOTIFY_REMOVED_MESSAGE = "You have been removed from class %s";
 
         public static final String USER_IDS_REQUIRED = "User IDs list cannot be empty";
         public static final String USER_ID_REQUIRED = "User ID cannot be null";
@@ -764,8 +764,8 @@ public class Const {
         public static final String SUBMISSION_MESSAGE_TEMPLATE = "You submitted \"%s\". Your submission has been received and will be graded soon.";
 
         // New notification constants used by SubmissionChallengeServiceImpl
-        public static final String NEW_TEMP_SUBMISSION_TITLE = "Bạn có bài tập mới";
-        public static final String NEW_TEMP_SUBMISSION_MESSAGE_TEMPLATE = "Một bài tập mới đã được tạo: %s";
+        public static final String NEW_TEMP_SUBMISSION_TITLE = "You have a new assignment";
+        public static final String NEW_TEMP_SUBMISSION_MESSAGE_TEMPLATE = "A new assignment has been created: %s";
 
         public static final String RESTORED_SUBMISSION_TITLE = "Submission phục hồi";
         public static final String RESTORED_SUBMISSION_MESSAGE_TEMPLATE = "Submission của bạn đã được phục hồi cho bài %s";
@@ -779,10 +779,10 @@ public class Const {
         public static final String EXTEND_DEADLINE_TITLE = "Thời hạn nộp bài đã được gia hạn";
         public static final String EXTEND_DEADLINE_MESSAGE_TEMPLATE = "Thời hạn nộp bài cho \"%s\" đã được gia hạn tới %s";
 
-        public static final String RESET_SUBMISSION_TITLE = "Bài đã được reset";
-        public static final String RESET_SUBMISSION_MESSAGE_TEMPLATE = "Bài \"%s\" đã được reset. Thời gian mới: %s → %s";
+        public static final String RESET_SUBMISSION_TITLE = "Daily Challenge has been reset";
+        public static final String RESET_SUBMISSION_MESSAGE_TEMPLATE = "Daily Challenge \"%s\" has been reset. New time: %s → %s";
 
-        public static final String SUBMISSION_STATUS_UPDATE_TITLE = "Cập nhật nộp bài";
+        public static final String SUBMISSION_STATUS_UPDATE_TITLE = "Submission status update";
         public static final String SUBMISSION_STATUS_UPDATE_MESSAGE_TEMPLATE = "Submissions: %d/%d students";
 
         // Device mismatch notifications
@@ -813,14 +813,14 @@ public class Const {
         public static final String VALIDATION_ROLE_IN_CLASS = "Role in class is required";
 
         // Notification templates
-        public static final String NOTIFY_ADDED_AS_TEACHER_TITLE = "You have been added as teacher to class %s";
-        public static final String NOTIFY_ADDED_AS_TEACHER_MESSAGE = "%s assigned you as teacher in class %s";
-        public static final String NOTIFY_ADDED_AS_TA_TITLE = "You have been added as teaching assistant to class %s";
-        public static final String NOTIFY_ADDED_AS_TA_MESSAGE = "%s assigned you as teaching assistant in class %s";
+        public static final String NOTIFY_ADDED_AS_TEACHER_TITLE = "Class Assignment";
+        public static final String NOTIFY_ADDED_AS_TEACHER_MESSAGE = "You have been assigned to class %s";
+        public static final String NOTIFY_ADDED_AS_TA_TITLE = "Class Assignment";
+        public static final String NOTIFY_ADDED_AS_TA_MESSAGE = "You have been assigned to class %s";
         public static final String NOTIFY_REACTIVATED_TITLE = "Your role in class %s has been reactivated";
         public static final String NOTIFY_REACTIVATED_MESSAGE = "%s reactivated your role in class %s";
-        public static final String NOTIFY_REMOVED_TITLE = "You have been removed from class %s";
-        public static final String NOTIFY_REMOVED_MESSAGE = "%s removed your role from class %s";
+        public static final String NOTIFY_REMOVED_TITLE = "Removed from Class";
+        public static final String NOTIFY_REMOVED_MESSAGE = "You have been removed from class %s";
 
         // New: canonical role strings and user-ids-not-found message
         public static final String ROLE_TYPE_TEACHER = "teacher";

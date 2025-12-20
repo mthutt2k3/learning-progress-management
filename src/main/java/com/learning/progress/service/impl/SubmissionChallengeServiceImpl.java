@@ -305,29 +305,29 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
         log.info("[{}] exit {} started submissionId={} userId={}", traceId, action, submissionId, userId);
 
         // === SAU KHI SAVE SUBMISSION + CLEAR CACHE ===
-        Long challengeId = submission.getChallenge().getId();
-        Long classId = submission.getChallenge().getClassLesson().getClassChapter().getClazz().getId();
+//        Long challengeId = submission.getChallenge().getId();
+//        Long classId = submission.getChallenge().getClassLesson().getClassChapter().getClazz().getId();
 
 // Lấy danh sách giáo viên + trợ giảng
-        List<ClassTeacher> teachers = classTeacherRepository
-                .findByClazzIdAndStatusIn(classId, List.of(CommonStatus.ACTIVE));
-
-        long submittedCount = submissionDailyChallengeRepository
-                .countByChallengeIdAndSubmittedAtIsNotNullAndDeletedAtIsNull(challengeId);
-        long totalStudents = classStudentRepository
-                .countByClassIdAndStatus(classId, CommonStatus.ACTIVE);
-
-        for (ClassTeacher ct : teachers) {
-            String basePath = RoleInClass.TEACHER.equals(ct.getRoleInClass())
-                    ? "/teacher/daily-challenges/detail/"
-                    : "/teaching-assistant/daily-challenges/detail/";
-            String teacherUrl = basePath + challengeId + "/submissions";
-
-            String title = Const.NOTIFICATION.SUBMISSION_STATUS_UPDATE_TITLE;
-            String message = String.format(Const.NOTIFICATION.SUBMISSION_STATUS_UPDATE_MESSAGE_TEMPLATE, submittedCount, totalStudents);
-
-            notificationService.createNotifications(ct.getUser().getId(), challengeId, title, message, teacherUrl, null);
-        }
+//        List<ClassTeacher> teachers = classTeacherRepository
+//                .findByClazzIdAndStatusIn(classId, List.of(CommonStatus.ACTIVE));
+//
+//        long submittedCount = submissionDailyChallengeRepository
+//                .countByChallengeIdAndSubmittedAtIsNotNullAndDeletedAtIsNull(challengeId);
+//        long totalStudents = classStudentRepository
+//                .countByClassIdAndStatus(classId, CommonStatus.ACTIVE);
+//
+//        for (ClassTeacher ct : teachers) {
+//            String basePath = RoleInClass.TEACHER.equals(ct.getRoleInClass())
+//                    ? "/teacher/daily-challenges/detail/"
+//                    : "/teaching-assistant/daily-challenges/detail/";
+//            String teacherUrl = basePath + challengeId + "/submissions";
+//
+//            String title = Const.NOTIFICATION.SUBMISSION_STATUS_UPDATE_TITLE;
+//            String message = String.format(Const.NOTIFICATION.SUBMISSION_STATUS_UPDATE_MESSAGE_TEMPLATE, submittedCount, totalStudents);
+//
+//            notificationService.createNotifications(ct.getUser().getId(), challengeId, title, message, teacherUrl, null);
+//        }
 // === KẾT THÚC ===
     }
 
@@ -646,9 +646,19 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
         // notify affected students
         for (SubmissionDailyChallenge s : toUpdate) {
             try {
-                String title = "Thời hạn nộp bài đã được gia hạn";
-                String message = "Thời hạn nộp bài cho \"" + s.getChallenge().getChallengeName() + "\" đã được gia hạn tới " + request.getNewExpiredAt();
-                notificationService.createNotifications(s.getUser().getId(), null, title, message, null, null);
+                Long actor = jwtUtil.extractUserIdFromCurrentRequest();
+                String title = "Submission deadline extended";
+                String message = "Your deadline for \"" + s.getChallenge().getChallengeName() + "\" has been extended to " + request.getNewExpiredAt();
+
+                User user = userRepository.findById(actor).orElse(null);
+                String url;
+                if (user != null && "STUDENT".equals(user.getRole().toString())) {
+                    url = "/student/classes/daily-challenges/" + s.getChallenge().getId();
+                } else {
+                    url = "/test-taker/classes/daily-challenges/" + s.getChallenge().getId();
+                }
+
+                notificationService.createNotifications(s.getUser().getId(), null, title, message, url, null);
             } catch (Exception ex) {
                 log.debug("Failed to send extend deadline notification userId={} error={}", s.getUser().getId(), ex.getMessage());
             }
@@ -761,7 +771,15 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
             try {
                 String title = Const.NOTIFICATION.RESET_SUBMISSION_TITLE;
                 String message = String.format(Const.NOTIFICATION.RESET_SUBMISSION_MESSAGE_TEMPLATE, s.getChallenge().getChallengeName(), newStart, newEnd);
-                notificationService.createNotifications(s.getUser().getId(), null, title, message, null, null);
+
+                String url;
+                if ("STUDENT".equals(s.getUser().getRole().toString())) {
+                    url = "/student/classes/daily-challenges/" + s.getChallenge().getId();
+                } else {
+                    url = "/test-taker/classes/daily-challenges/" + s.getChallenge().getId();
+                }
+
+                notificationService.createNotifications(s.getUser().getId(), null, title, message, url, null);
             } catch (Exception ex) {
                 log.debug("[{}] {} Failed to send reset notification userId={} error={}", traceId, action, s.getUser().getId(), ex.getMessage());
             }
@@ -1027,7 +1045,17 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
 
     private Map<Long, List<DailyChallenge>> groupChallengesByLesson(List<DailyChallenge> challenges) {
         if (challenges == null || challenges.isEmpty()) return Collections.emptyMap();
-        return challenges.stream().collect(Collectors.groupingBy(c -> c.getClassLesson().getId()));
+        return challenges.stream()
+                .collect(Collectors.groupingBy(
+                        c -> c.getClassLesson().getId(),
+                        Collectors.collectingAndThen(
+                                Collectors.toList(),
+                                list -> list.stream()
+                                        .sorted(Comparator.comparing(DailyChallenge::getCreatedAt,
+                                                Comparator.nullsLast(Comparator.naturalOrder())))
+                                        .collect(Collectors.toList())
+                        )
+                ));
     }
 
     private List<SubmissionDailyChallenge> loadSubmissionsForStudent(Long studentId, List<Long> challengeIds) {
