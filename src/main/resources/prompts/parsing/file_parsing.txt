@@ -1,0 +1,101 @@
+You are an expert at parsing educational content into structured JSON format.
+
+🎯 YOUR TASK:
+Parse the provided file content and extract all questions into a structured JSON format.
+You MUST identify the question type correctly and format each question according to its type.
+
+⚠️ CRITICAL: PRESERVE ORIGINAL CONTENT
+- Keep ALL original text EXACTLY as written in the file
+- DO NOT translate or modify any content
+- DO NOT correct grammar or spelling errors
+- DO NOT filter or remove any questions
+- Accept Vietnamese, English, or mixed language content
+- Your ONLY job is to convert the content into correct JSON format
+⚠️ IMPORTANT: ANSWER VALUE CLEANING (keep content only)
+- For each answer option/value, keep ONLY the answer text content.
+- REMOVE leading labels such as: "A.", "B.", "C.", "D.", "A)", "B)", "1.", "2)", "(A)", "-", "•".
+- Example: "A. Paris" -> "Paris"; "B) France" -> "France".
+- This applies to ALL question types with options/answers.
+
+{user_description}
+
+📄 FILE CONTENT TO PARSE:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+{file_content}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+⚠️ CRITICAL: You MUST respond with ONLY valid JSON in this EXACT format:
+
+{
+  "sections": [
+    {
+      "section": {
+        "sectionTitle": "string or null"
+      },
+      "questions": [
+        {
+          "questionText": "string (required, keep ORIGINAL text, DO NOT include 'Question 1/2' or score)",
+          "orderNumber": 1,
+          "score": 1.0,
+          "questionType": "QUESTION_TYPE",
+          "content": {
+            "data": [
+              {
+                "id": "string (required)",
+                "value": "string (required, keep ORIGINAL text BUT content-only)",
+                "isCorrect": boolean (required),
+                "positionId": "string or null"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
+
+🔍 QUESTION TYPE IDENTIFICATION:
+Carefully analyze each question and identify its type from these options:
+- MULTIPLE_CHOICE: Question with 4 options, only 1 correct
+- TRUE_OR_FALSE: Question with True/False options
+- FILL_IN_THE_BLANK: Question with blanks to fill in (ONLY 1 correct answer)
+- DROPDOWN: Question with dropdown selections
+- DRAG_AND_DROP: Matching or drag-and-drop questions
+- REARRANGE: Sentence ordering questions
+- MULTIPLE_SELECT: Question with multiple correct answers
+- REWRITE: Sentence transformation questions
+
+{question_type_parsing_rules}
+
+✅ VALIDATION CHECKLIST:
+□ Valid JSON format (no markdown, no comments)
+□ All questions have correct questionType
+□ All required fields present (questionText, orderNumber, score, questionType, content.data)
+□ Each data item has: id, value, isCorrect, positionId
+□ Position IDs use only lowercase letters (a-z) and numbers (0-9)
+□ Multiple choice has exactly 4 options
+□ True/False has exactly 2 options
+□ Fill in the blank has EXACTLY 1 correct answer
+□ Answer values contain ONLY content (NO leading labels like A./B)/1./(A)/-)
+□ If original option had labels (A,B,C,D...), labels are NOT included in value
+□ ALL original content preserved (no translation, no modification)
+
+🚨 CRITICAL REMINDERS:
+- DO NOT add extra text, explanations, or markdown
+- DO NOT include trailing commas
+- Return ONLY the JSON object
+- DO NOT translate or modify any content from the file
+- PRESERVE original text exactly as written
+- Answer 'value' MUST NOT include option labels (A./B)/1./(A)/-). Keep content only.
+- Fill in the blank: ONLY 1 correct answer allowed
+- If a question type is unclear, use MULTIPLE_CHOICE as default
+
+🧩 MISSING ANSWER / OPTION HANDLING (CRITICAL):
+- If a question in the file does NOT provide any answer or answer options:
+  + You MUST generate appropriate answer(s) or option(s) for that question
+  + Generated answers must be logically correct and suitable for the question
+  + Generated options MUST strictly follow the identified questionType rules
+  + At least one generated answer MUST have isCorrect=true
+- NEVER leave content.data empty
+
+Parse the content now and return ONLY valid JSON:

@@ -1,0 +1,207 @@
+1️⃣ MULTIPLE_CHOICE
+IDENTIFICATION: Question with 4 answer options (A, B, C, D)
+FORMAT REQUIREMENTS:
+- Exactly 4 options in data array
+- Exactly 1 option with isCorrect=true
+- All options have positionId=null
+
+EXAMPLE:
+{
+  "questionText": "What is the capital of France?",
+  "orderNumber": 1,
+  "score": 1.0,
+  "questionType": "MULTIPLE_CHOICE",
+  "content": {
+    "data": [
+      {"id": "opt1", "value": "London", "isCorrect": false, "positionId": null},
+      {"id": "opt2", "value": "Paris", "isCorrect": true, "positionId": null},
+      {"id": "opt3", "value": "Berlin", "isCorrect": false, "positionId": null},
+      {"id": "opt4", "value": "Madrid", "isCorrect": false, "positionId": null}
+    ]
+  }
+}
+
+2️⃣ TRUE_OR_FALSE
+IDENTIFICATION: Statement that can be marked as True or False
+FORMAT REQUIREMENTS:
+- Exactly 2 options: "True" and "False"
+- Exactly 1 option with isCorrect=true
+- Both options have positionId=null
+
+EXAMPLE:
+{
+  "questionText": "The Earth is flat.",
+  "orderNumber": 1,
+  "score": 1.0,
+  "questionType": "TRUE_OR_FALSE",
+  "content": {
+    "data": [
+      {"id": "opt1", "value": "True", "isCorrect": false, "positionId": null},
+      {"id": "opt2", "value": "False", "isCorrect": true, "positionId": null}
+    ]
+  }
+}
+
+3️⃣ FILL_IN_THE_BLANK
+IDENTIFICATION: Sentence with blank(s) to complete
+FORMAT REQUIREMENTS:
+- questionText MUST contain [[pos_xxxxxx]] placeholder(s)
+- xxxxxx = random 6-character ID (lowercase a-z and 0-9 only)
+- Each answer has matching positionId
+- ⚠️ CRITICAL: EXACTLY 1 correct answer ONLY (NOT multiple)
+- The single answer MUST have isCorrect=true
+- Multiple blanks = multiple data items with different positionIds
+
+EXAMPLE:
+{
+  "questionText": "If I [[pos_a7k3m2]] her address, I would visit her.",
+  "orderNumber": 1,
+  "score": 1.0,
+  "questionType": "FILL_IN_THE_BLANK",
+  "content": {
+    "data": [
+      {"id": "ans1", "value": "knew", "isCorrect": true, "positionId": "a7k3m2"}
+    ]
+  }
+}
+
+4️⃣ DROPDOWN
+IDENTIFICATION: Sentence with dropdown selection(s)
+FORMAT REQUIREMENTS:
+- questionText MUST contain [[pos_xxxxxx]] placeholder(s)
+- Each dropdown has exactly 4 options
+- Each dropdown has exactly 1 option with isCorrect=true
+- All options for same dropdown share the same positionId
+- xxxxxx = random 6-character ID (lowercase a-z and 0-9 only)
+- Option ID naming rule:
+  + Correct option: optN
+  + Other options: optN_1, optN_2, optN_3
+  + N increases sequentially for each dropdown in a section (opt1, opt2, ...)
+
+EXAMPLE:
+{
+  "questionText": "The company [[pos_k5l6m7]] expand into Asian markets next year.",
+  "orderNumber": 1,
+  "score": 1.0,
+  "questionType": "DROPDOWN",
+  "content": {
+    "data": [
+      {"id": "opt1", "value": "plans to", "isCorrect": true, "positionId": "k5l6m7"},
+      {"id": "opt1_1", "value": "is planning", "isCorrect": false, "positionId": "k5l6m7"},
+      {"id": "opt1_2", "value": "will plan", "isCorrect": false, "positionId": "k5l6m7"},
+      {"id": "opt1_3", "value": "planned", "isCorrect": false, "positionId": "k5l6m7"}
+    ]
+  }
+}
+
+5️⃣ REARRANGE
+IDENTIFICATION: Words/phrases to arrange in correct order
+FORMAT REQUIREMENTS:
+- questionText MUST contain [[pos_xxxxxx]] placeholders for EACH word/phrase
+- Must be a COMPLETE sentence (5-8 words/phrases)
+- ALL items have isCorrect=true
+- Each item has unique positionId matching placeholder
+- xxxxxx = random 6-character ID (lowercase a-z and 0-9 only)
+
+EXAMPLE:
+{
+  "questionText": "[[pos_a1b2c3]] [[pos_d4e5f6]] [[pos_g7h8i9]] [[pos_j1k2l3]] [[pos_m4n5o6]] [[pos_p7q8r9]]",
+  "orderNumber": 1,
+  "score": 1.0,
+  "questionType": "REARRANGE",
+  "content": {
+    "data": [
+      {"id": "item1", "value": "She", "isCorrect": true, "positionId": "a1b2c3"},
+      {"id": "item2", "value": "has", "isCorrect": true, "positionId": "d4e5f6"},
+      {"id": "item3", "value": "been", "isCorrect": true, "positionId": "g7h8i9"},
+      {"id": "item4", "value": "studying", "isCorrect": true, "positionId": "j1k2l3"},
+      {"id": "item5", "value": "English", "isCorrect": true, "positionId": "m4n5o6"},
+      {"id": "item6", "value": "recently", "isCorrect": true, "positionId": "p7q8r9"}
+    ]
+  }
+}
+
+6️⃣ DRAG_AND_DROP
+IDENTIFICATION: Match items to correct positions
+FORMAT REQUIREMENTS:
+- questionText contains [[pos_xxxxxx]] placeholders for drop zones
+- Each placeholder needs exactly 1 correct answer with matching positionId
+- Correct answers have isCorrect=true and matching positionId
+- Can include distractor answers (isCorrect=false, positionId=null)
+- Number of correct answers = number of placeholders
+- xxxxxx = random 6-character ID (lowercase a-z and 0-9 only)
+- Answer length rule: EVERY answer 'value' (correct + distractor) MUST be <= 50 characters
+
+EXAMPLE:
+{
+  "questionText": "Complete: [[pos_a1b2c3]] is the capital of [[pos_d4e5f6]], and [[pos_g7h8i9]] is spoken there.",
+  "orderNumber": 1,
+  "score": 1.0,
+  "questionType": "DRAG_AND_DROP",
+  "content": {
+    "data": [
+      {"id": "ans1", "value": "Paris", "isCorrect": true, "positionId": "a1b2c3"},
+      {"id": "ans2", "value": "France", "isCorrect": true, "positionId": "d4e5f6"},
+      {"id": "ans3", "value": "French", "isCorrect": true, "positionId": "g7h8i9"},
+      {"id": "dist1", "value": "Berlin", "isCorrect": false, "positionId": null},
+      {"id": "dist2", "value": "Spain", "isCorrect": false, "positionId": null},
+      {"id": "dist3", "value": "German", "isCorrect": false, "positionId": null}
+    ]
+  }
+}
+
+7️⃣ MULTIPLE_SELECT
+IDENTIFICATION: Question with multiple correct answers
+FORMAT REQUIREMENTS:
+- 4-6 options total
+- 2-3 options with isCorrect=true
+- All options have positionId=null
+
+EXAMPLE:
+{
+  "questionText": "Which of the following are correct uses of the present perfect tense?",
+  "orderNumber": 1,
+  "score": 1.0,
+  "questionType": "MULTIPLE_SELECT",
+  "content": {
+    "data": [
+      {"id": "opt1", "value": "I have lived here for 5 years.", "isCorrect": true, "positionId": null},
+      {"id": "opt2", "value": "She has just finished her homework.", "isCorrect": true, "positionId": null},
+      {"id": "opt3", "value": "They went to Paris last year.", "isCorrect": false, "positionId": null},
+      {"id": "opt4", "value": "We are studying now.", "isCorrect": false, "positionId": null},
+      {"id": "opt5", "value": "He has visited London twice.", "isCorrect": true, "positionId": null}
+    ]
+  }
+}
+
+8️⃣ REWRITE
+IDENTIFICATION: Sentence transformation or rewriting task
+FORMAT REQUIREMENTS:
+- Can have MULTIPLE correct answers (all with isCorrect=true)
+- No incorrect answers (no isCorrect=false)
+- All answers have positionId=null
+- Each answer is an acceptable rewrite/transformation
+
+EXAMPLE:
+{
+  "questionText": "Rewrite this sentence in the passive voice: 'The teacher explained the lesson.'",
+  "orderNumber": 1,
+  "score": 1.0,
+  "questionType": "REWRITE",
+  "content": {
+    "data": [
+      {"id": "ans1", "value": "The lesson was explained by the teacher.", "isCorrect": true, "positionId": null},
+      {"id": "ans2", "value": "The lesson has been explained by the teacher.", "isCorrect": true, "positionId": null}
+    ]
+  }
+}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+⚠️ IMPORTANT NOTES:
+- Position IDs MUST use ONLY lowercase letters (a-z) and numbers (0-9)
+- Each position ID must be exactly 6 characters
+- Each position ID must be UNIQUE across all questions
+- For FILL_IN_THE_BLANK: EXACTLY 1 correct answer (NOT multiple)
+- For REWRITE: Can have multiple correct answers (all isCorrect=true)
+- For MULTIPLE_SELECT: Must have 2-3 correct answers

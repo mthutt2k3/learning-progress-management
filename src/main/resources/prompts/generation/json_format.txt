@@ -1,0 +1,21 @@
+📋 JSON FORMAT:
+{
+  "questions": [
+    {
+      "questionText": "string (required)",
+      "orderNumber": 1,
+      "score": 1.0,
+      "questionType": "{question_type}",
+      "content": {
+        "data": [
+          {
+            "id": "string (required)",
+            "value": "string (required)",
+            "isCorrect": boolean (required),
+            "positionId": "string or null"
+          }
+        ]
+      }
+    }
+  ]
+}
