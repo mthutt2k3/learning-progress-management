@@ -57,6 +57,8 @@ public class SubmissionQuestionServiceImpl implements SubmissionQuestionService 
     private ClassStudentRepository classStudentRepository;
     @Autowired
     private ClassTeacherRepository classTeacherRepository;
+    @Autowired
+    private UserRepository userRepository;
 
     @Override
     @Transactional(readOnly = true)
@@ -371,42 +373,31 @@ public class SubmissionQuestionServiceImpl implements SubmissionQuestionService 
 
             cacheService.clearSubmissionsCacheForChallenge(dailyChallenge.getId());
             log.debug("[{}] {} cleared submissions cache for challengeId={}", traceId, action, dailyChallenge.getId());
+
+
+            // === SAU KHI SAVE SUBMISSION + CLEAR CACHE ===
+            Long challengeId = dailyChallenge.getId();
+            Long classId = dailyChallenge.getClassLesson().getClassChapter().getClazz().getId();
+
+            // Lấy danh sách giáo viên + trợ giảng
+            List<ClassTeacher> teachers = classTeacherRepository
+                    .findByClazzIdAndStatusIn(classId, List.of(CommonStatus.ACTIVE));
+            log.debug("[{}] {} notifying {} teachers for challengeId={}", traceId, action, teachers.size(), challengeId);
+            notificationService.createNotifications(teachers.stream().map(ct -> ct.getUser().getId()).toList(),
+                    null,
+                    title,
+                    userRepository.findByIdAndDeletedAtIsNull(userId).get().getFullName(),
+                    String.format(
+                            "/student/daily-challenges/detail/%d/submissions/%d",
+                            challengeId,
+                            submissionChallengeId
+                    ),
+                    null);
+
         }
         // XÓA CACHE
         cacheService.clearSubmissionCache(userId, submissionChallengeId);
         log.debug("[{}] {} cleared submission cache userId={} submissionId={}", traceId, action, userId, submissionChallengeId);
-
-        // === SAU KHI SAVE SUBMISSION + CLEAR CACHE ===
-        Long challengeId = dailyChallenge.getId();
-        Long classId = dailyChallenge.getClassLesson().getClassChapter().getClazz().getId();
-
-        // Lấy danh sách giáo viên + trợ giảng
-        List<ClassTeacher> teachers = classTeacherRepository
-                .findByClazzIdAndStatusIn(classId, List.of(CommonStatus.ACTIVE));
-        log.debug("[{}] {} notifying {} teachers for challengeId={}", traceId, action, teachers.size(), challengeId);
-
-        long submittedCount = submissionDailyChallengeRepository
-                .countByChallengeIdAndSubmittedAtIsNotNullAndDeletedAtIsNull(challengeId);
-        long totalStudents = classStudentRepository
-                .countByClassIdAndStatus(classId, CommonStatus.ACTIVE);
-
-        for (ClassTeacher ct : teachers) {
-            String basePath = RoleInClass.TEACHER.equals(ct.getRoleInClass())
-                    ? "/teacher/daily-challenges/detail/"
-                    : "/teaching-assistant/daily-challenges/detail/";
-            String url = basePath + challengeId + "/submissions";
-
-            String title = Const.NOTIFICATION.SUBMISSION_STATUS_UPDATE_TITLE;
-            String message = String.format(Const.NOTIFICATION.SUBMISSION_STATUS_UPDATE_MESSAGE_TEMPLATE, submittedCount, totalStudents);
-
-            try {
-                notificationService.createNotifications(ct.getUser().getId(), challengeId, title, message, url, null);
-                log.debug("[{}] {} teacher notified userId={} url={}", traceId, action, ct.getUser().getId(), url);
-            } catch (Exception ex) {
-                log.warn("[{}] {} failed to notify teacherId={} error={}", traceId, action, ct.getUser().getId(), ex.getMessage());
-            }
-        }
-        log.info("[{}] exit {} submissionChallengeId={}", traceId, action, submissionChallengeId);
     }
 
     @Override
