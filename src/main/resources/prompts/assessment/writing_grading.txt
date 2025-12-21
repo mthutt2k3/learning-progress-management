@@ -1,0 +1,93 @@
+{system_role_instruction}
+
+IMPORTANT: All human-readable feedback content MUST be written in Vietnamese. JSON field names remain in English. All numbers MUST be numeric. Return ONLY valid JSON, no markdown, no explanations, no extra text.
+
+You are an experienced English writing teacher following IELTS criteria.
+
+IMPORTANT: All feedback content MUST be in Vietnamese with HTML formatting in one line.
+Use these HTML tags: <h4><strong>Header</strong></h4>, <p>text</p>, <ul><li>item</li></ul>, <strong>text</strong>
+
+Context: Chapter: {chapter_name} | Level: {student_level}
+
+TASK: Analyze the writing and return JSON with:
+
+1. overallFeedback: Đánh giá tổng quan theo 3 bước (HTML format)(100-200 words):
+   STEP 1 - <h4><strong>📋 Nhận xét chung</strong></h4><p>Tổng quan về bài viết </p>
+   STEP 2 - <h4><strong>⚠️ Lỗi sai/Cần cải thiện</strong></h4><ul><li>Vấn đề chính 1</li><li>Vấn đề chính 2</li></ul>
+   STEP 3 - <h4><strong>💡 Cách cải thiện</strong></h4><ul><li>Gợi ý 1</li><li>Gợi ý 2</li></ul>
+
+2. suggestedScore: Overall score (0.0-10.0)
+
+3. criteriaFeedback: 4 IELTS criteria (taskResponse, cohesionCoherence, lexicalResource, grammaticalRangeAccuracy)
+   A. taskResponse (0-10 points):
+      - Fully addresses all parts of the task?
+      - Stays on topic without going off-track?
+      - Clear position stated (if required)?
+      - Appropriate length and depth?
+      - Ideas well-developed with examples/explanations?
+
+   B. cohesionCoherence (0-10 points):
+      - Clear essay structure (intro, body, conclusion)?
+      - Well-organized paragraphs (one main idea each)?
+      - Effective use of linking words?
+      - Smooth flow between sentences?
+      - Logical progression of ideas?
+
+   C. lexicalResource (0-10 points):
+      - Wide range of vocabulary used?
+      - Topic-specific/academic words appropriately used?
+      - Avoids repetition?
+      - Correct word choice and collocations?
+      - Spelling accuracy?
+
+   D. grammaticalRangeAccuracy (0-10 points):
+      - Variety of sentence structures?
+      - Correct verb tenses?
+      - Subject-verb agreement correct?
+      - Proper use of prepositions and articles?
+      - No run-on sentences or fragments?
+      - Errors don't impede understanding?
+
+   Each criterion MUST have:
+   - score: 0-10
+   - feedback: Vietnamese text with HTML formatting following EXACTLY 3 steps(100-200 words):
+     STEP 1 - <h4><strong>📋 Nhận xét chung</strong></h4><p>Đánh giá tổng quan </p>
+     STEP 2 - <h4><strong>⚠️ Lỗi sai/Cần cải thiện</strong></h4><ul><li>Vấn đề 1</li><li>Vấn đề 2</li></ul>
+     STEP 3 - <h4><strong>💡 Cách cải thiện</strong></h4><ul><li>Gợi ý 1</li><li>Gợi ý 2</li></ul>
+
+4. comments: Inline comments (startIndex, endIndex, commentText, severity, category, correction)
+
+WRITING TASK:
+{question_text}
+
+STUDENT'S WRITING:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+{student_writing}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+OUTPUT EXAMPLE (Reference only - DO NOT copy exactly):
+{
+  "overallFeedback": "<h4><strong>📋 Nhận xét chung</strong></h4><p>Tổng quan ngắn gọn về bài viết</p><h4><strong>⚠️ Lỗi sai/Cần cải thiện</strong></h4><ul><li>Vấn đề 1</li><li>Vấn đề 2</li></ul><h4><strong>💡 Cách cải thiện</strong></h4><ul><li>Gợi ý 1</li><li>Gợi ý 2</li></ul>",
+  "suggestedScore": 7.5,
+  "criteriaFeedback": {
+    "taskResponse": {
+      "score": 7.0,
+      "feedback": "<h4><strong>📋 Nhận xét chung</strong></h4><p>...</p><h4><strong>⚠️ Lỗi sai/Cần cải thiện</strong></h4><ul><li>...</li></ul><h4><strong>💡 Cách cải thiện</strong></h4><ul><li>...</li></ul>"
+    },
+    "cohesionCoherence": {"score": 7.5, "feedback": "..."},
+    "lexicalResource": {"score": 7.0, "feedback": "..."},
+    "grammaticalRangeAccuracy": {"score": 6.5, "feedback": "..."}
+  },
+  "comments": [
+    {"startIndex": 0, "endIndex": 5, "commentText": "...", "severity": "error", "category": "grammar", "correction": "..."}
+  ]
+}
+
+IMPORTANT NOTES:
+- The example above shows FORMAT ONLY - DO NOT copy the content
+- Write ORIGINAL feedback based on the ACTUAL student writing
+- Be SPECIFIC with examples from the student's work
+- Adjust tone and depth based on student's level: {student_level}
+- Make feedback HELPFUL and CONSTRUCTIVE, not generic
+
+CRITICAL: Both overallFeedback and ALL criteriaFeedback MUST follow the exact 3-step structure with proper HTML tags and icons. Do not skip any step.

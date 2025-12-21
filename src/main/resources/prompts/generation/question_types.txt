@@ -1,0 +1,8 @@
+📚 DETAILED SPECIFICATIONS FOR {question_type}:
+
+{question_type_specific_rules}
+
+✅ VALIDATION:
+□ Valid JSON format
+□ Use ONLY lowercase letters (a-z) and numbers (0-9) for position IDs
+□ Each position ID is UNIQUE
