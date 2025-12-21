@@ -2395,7 +2395,7 @@ public class FileServiceImpl implements FileService {
     private void addRewriteQuestion(XWPFDocument document, String questionText) {
         // Remove HTML tags và placeholders
         String cleanText = cleanHtmlTags(questionText);
-        cleanText = cleanText.replaceAll("\\\\[\\\\[[^\\\\]]*\\\\]\\\\]", "").trim();
+        cleanText = cleanText.replaceAll("\\[\\[[^\\]]*\\]\\]", "").trim();
 
         XWPFParagraph qPara = document.createParagraph();
         qPara.setIndentationLeft(720);
