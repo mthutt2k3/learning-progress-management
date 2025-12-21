@@ -603,24 +603,28 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
             appValidator.validateUserAccessToClass(classId);
         }
 
-        // Chỉ gia hạn nếu chưa SUBMITTED/GRADED/MISSED
+        // ✅ Cho phép extend: PENDING, DRAFT, MISSED
         List<SubmissionDailyChallenge> toUpdate = submissions.stream()
                 .filter(s -> {
                     SubmissionStatus status = s.getSubmissionStatus();
                     return status == SubmissionStatus.PENDING ||
-                            status == SubmissionStatus.DRAFT;
+                            status == SubmissionStatus.DRAFT ||
+                            status == SubmissionStatus.MISSED;
                 })
                 .peek(s -> {
                     s.setExpiredAt(newExpiredAt);
                     s.setIsLate(false);
+                    // ✅ Nếu MISSED thì chuyển về PENDING để cho làm lại
+                    if (s.getSubmissionStatus() == SubmissionStatus.MISSED) {
+                        s.setSubmissionStatus(SubmissionStatus.PENDING);
+                    }
                 })
                 .collect(Collectors.toList());
 
-        // Kiểm tra nếu có submission không eligible
+        // ✅ Kiểm tra nếu có submission không eligible (chỉ SUBMITTED/GRADED)
         List<SubmissionDailyChallenge> notEligible = submissions.stream()
                 .filter(s -> s.getSubmissionStatus() == SubmissionStatus.SUBMITTED ||
-                        s.getSubmissionStatus() == SubmissionStatus.GRADED ||
-                        s.getSubmissionStatus() == SubmissionStatus.MISSED)
+                        s.getSubmissionStatus() == SubmissionStatus.GRADED)
                 .collect(Collectors.toList());
 
         if (!notEligible.isEmpty()) {
@@ -708,10 +712,11 @@ public class SubmissionChallengeServiceImpl implements SubmissionChallengeServic
         // Validate quyền truy cập
         request.getSubmissionIds().forEach(appValidator::validateUserAccessToSubmission);
 
-        // **Validation trạng thái submission**
+        // ✅ **Validation trạng thái submission: chỉ cho SUBMITTED/GRADED reset**
         List<SubmissionDailyChallenge> notEligible = oldSubmissions.stream()
                 .filter(s -> s.getSubmissionStatus() == SubmissionStatus.PENDING ||
-                        s.getSubmissionStatus() == SubmissionStatus.DRAFT)
+                        s.getSubmissionStatus() == SubmissionStatus.DRAFT ||
+                        s.getSubmissionStatus() == SubmissionStatus.MISSED)
                 .collect(Collectors.toList());
 
         if (!notEligible.isEmpty()) {

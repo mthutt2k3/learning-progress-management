@@ -55,8 +55,6 @@ TASK: Analyze the writing and return JSON with:
      STEP 2 - <h4><strong>⚠️ Lỗi sai/Cần cải thiện</strong></h4><ul><li>Vấn đề 1</li><li>Vấn đề 2</li></ul>
      STEP 3 - <h4><strong>💡 Cách cải thiện</strong></h4><ul><li>Gợi ý 1</li><li>Gợi ý 2</li></ul>
 
-4. comments: Inline comments (startIndex, endIndex, commentText, severity, category, correction)
-
 WRITING TASK:
 {question_text}
 
@@ -77,10 +75,7 @@ OUTPUT EXAMPLE (Reference only - DO NOT copy exactly):
     "cohesionCoherence": {"score": 7.5, "feedback": "..."},
     "lexicalResource": {"score": 7.0, "feedback": "..."},
     "grammaticalRangeAccuracy": {"score": 6.5, "feedback": "..."}
-  },
-  "comments": [
-    {"startIndex": 0, "endIndex": 5, "commentText": "...", "severity": "error", "category": "grammar", "correction": "..."}
-  ]
+  }
 }
 
 IMPORTANT NOTES:
