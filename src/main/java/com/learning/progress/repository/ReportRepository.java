@@ -674,7 +674,10 @@ WHERE cc.class_id = :classId
     // Lấy stats của student trong class - FIX: BỎ filter FINISHED, lấy TOÀN BỘ DC
     @Query(value = """
 SELECT 
-    COUNT(DISTINCT dc.id) as total_challenges,
+    COUNT(DISTINCT CASE 
+        WHEN sdc.submission_status IN ('PENDING', 'DRAFT', 'MISSED', 'SUBMITTED', 'GRADED') 
+        THEN sdc.id 
+    END) as total_challenges,
     COUNT(DISTINCT CASE 
         WHEN sdc.submission_status IN ('SUBMITTED', 'GRADED') 
         THEN sdc.id 
