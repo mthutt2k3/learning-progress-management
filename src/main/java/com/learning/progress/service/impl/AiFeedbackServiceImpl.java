@@ -1195,7 +1195,7 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
 
         // Detect miscues if enabled
         if (enableMiscue != null && enableMiscue && !allWords.isEmpty()) {
-            allWords = detectMiscues(allWords, referenceText);
+//            allWords = detectMiscues(allWords, referenceText);
         }
 
         return PronunciationAssessmentResponse.builder()
@@ -1702,7 +1702,7 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
 
             // If miscue detection enabled, compare with reference text
             if (enableMiscue && !wordAssessments.isEmpty()) {
-                wordAssessments = detectMiscues(wordAssessments, referenceText);
+//                wordAssessments = detectMiscues(wordAssessments, referenceText);
             }
 
         } catch (Exception e) {
