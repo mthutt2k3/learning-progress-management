@@ -558,8 +558,8 @@ public class OpenAiServiceImpl implements OpenAiService {
                     HttpStatus.BAD_REQUEST.value());
         }
 
-        if (positionsInText.size() < 5 || positionsInText.size() > 8) {
-            throw new ApiException("Question " + questionNumber + " (REARRANGE): Must have 5-8 items, found " + positionsInText.size(),
+        if (positionsInText.size() < 2 || positionsInText.size() > 10) {
+            throw new ApiException("Question " + questionNumber + " (REARRANGE): Must have 2-10 items, found " + positionsInText.size(),
                     HttpStatus.BAD_REQUEST.value());
         }
 
@@ -1539,8 +1539,8 @@ public class OpenAiServiceImpl implements OpenAiService {
                     HttpStatus.BAD_REQUEST.value());
         }
 
-        if (positionsInText.size() < 5 || positionsInText.size() > 8) {
-            throw new ApiException("REARRANGE must have 5-8 items. Found: " + positionsInText.size(),
+        if (positionsInText.size() < 2 || positionsInText.size() > 10) {
+            throw new ApiException("REARRANGE must have 2-10 items. Found: " + positionsInText.size(),
                     HttpStatus.BAD_REQUEST.value());
         }
 
@@ -2093,8 +2093,6 @@ public class OpenAiServiceImpl implements OpenAiService {
                 break;
 
             case "REARRANGE":
-                if ("GV".equalsIgnoreCase(dailyChallengeType)) {
-                    // Grammar: Sắp xếp từ thành câu
                     prompt.append("⚠️ REARRANGE TYPE: GRAMMAR - Sắp xếp TỪ/CỤM TỪ thành CÂU đúng\n\n");
                     prompt.append("CRITICAL FORMAT:\n");
                     prompt.append("- questionText MUST contain [[pos_xxxxxx]] placeholders for EACH word/phrase\n");
@@ -2120,50 +2118,6 @@ public class OpenAiServiceImpl implements OpenAiService {
                             .append("  }\n")
                             .append("}\n");
                     prompt.append("Correct answer: She has been studying English recently\n\n");
-                } else {
-                    // Reading/Listening: Sắp xếp events/paragraphs
-                    prompt.append("⚠️ REARRANGE TYPE: READING/LISTENING - Sắp xếp SỰ KIỆN hoặc ĐOẠN VĂN theo thứ tự logic\n\n");
-                    prompt.append("CRITICAL FORMAT:\n");
-                    prompt.append("- questionText MUST contain [[pos_xxxxxx]] placeholders for EACH event/paragraph\n");
-                    prompt.append("- Each item in data[] is a COMPLETE SENTENCE or PARAGRAPH\n");
-                    prompt.append("- Use 4-6 items total\n");
-                    prompt.append("- For LISTENING: Events in chronological order from the audio\n");
-                    prompt.append("- For READING: Paragraphs in logical order (use discourse markers: First, However, Finally)\n");
-                    prompt.append("- Items in data[] should be SHUFFLED (not in correct order)\n");
-                    prompt.append("- Placeholders in questionText must be in CORRECT order\n\n");
-                    prompt.append("EXAMPLE (Listening - Events):\n");
-                    prompt.append("{\n")
-                            .append("  \"questionText\": \"Listen and arrange events: [[pos_a1b2]] [[pos_c3d4]] [[pos_e5f6]] [[pos_g7h8]]\",\n")
-                            .append("  \"orderNumber\": 1,\n")
-                            .append("  \"score\": 1.0,\n")
-                            .append("  \"questionType\": \"REARRANGE\",\n")
-                            .append("  \"content\": {\n")
-                            .append("    \"instruction\": \"Put the events in chronological order.\",\n")
-                            .append("    \"data\": [\n")
-                            .append("      {\"id\": \"item1\", \"value\": \"They arrived at the airport\", \"isCorrect\": true, \"positionId\": \"c3d4\"},\n")
-                            .append("      {\"id\": \"item2\", \"value\": \"Sarah checked in online\", \"isCorrect\": true, \"positionId\": \"a1b2\"},\n")
-                            .append("      {\"id\": \"item3\", \"value\": \"The flight was delayed\", \"isCorrect\": true, \"positionId\": \"e5f6\"},\n")
-                            .append("      {\"id\": \"item4\", \"value\": \"They boarded at 3 PM\", \"isCorrect\": true, \"positionId\": \"g7h8\"}\n")
-                            .append("    ]\n")
-                            .append("  }\n")
-                            .append("}\n\n");
-                    prompt.append("EXAMPLE (Reading - Paragraphs):\n");
-                    prompt.append("{\n")
-                            .append("  \"questionText\": \"Arrange paragraphs: [[pos_a1]] [[pos_b2]] [[pos_c3]] [[pos_d4]]\",\n")
-                            .append("  \"orderNumber\": 1,\n")
-                            .append("  \"score\": 1.0,\n")
-                            .append("  \"questionType\": \"REARRANGE\",\n")
-                            .append("  \"content\": {\n")
-                            .append("    \"instruction\": \"Put the paragraphs in logical order.\",\n")
-                            .append("    \"data\": [\n")
-                            .append("      {\"id\": \"item1\", \"value\": \"Finally, climate change is a major challenge.\", \"isCorrect\": true, \"positionId\": \"d4\"},\n")
-                            .append("      {\"id\": \"item2\", \"value\": \"Environmental issues are increasingly important.\", \"isCorrect\": true, \"positionId\": \"a1\"},\n")
-                            .append("      {\"id\": \"item3\", \"value\": \"In addition, deforestation destroys habitats.\", \"isCorrect\": true, \"positionId\": \"c3\"},\n")
-                            .append("      {\"id\": \"item4\", \"value\": \"First, pollution affects air quality.\", \"isCorrect\": true, \"positionId\": \"b2\"}\n")
-                            .append("    ]\n")
-                            .append("  }\n")
-                            .append("}\n\n");
-                }
                 break;
 
             case "DRAG_AND_DROP":

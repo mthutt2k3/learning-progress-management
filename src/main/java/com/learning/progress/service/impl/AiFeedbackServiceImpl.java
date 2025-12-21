@@ -139,14 +139,17 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
             variables.put("question_context", "");
         }
 
-        // Content type specific errors
-        StringBuilder specificErrors = new StringBuilder();
+        // Select template based on content type
+        String templatePath;
         if ("Speaking".equals(contentType)) {
-            specificErrors.append("- Content contains significant amount of non-English language (Vietnamese, Chinese, etc.)\n");
+            templatePath = "assessment/speaking_content_validation.txt";
+        } else if ("Writing".equals(contentType)) {
+            templatePath = "assessment/writing_content_validation.txt";
+        } else {
+            throw new IllegalArgumentException("Unsupported content type for validation: " + contentType);
         }
-        variables.put("content_type_specific_errors", specificErrors.toString());
 
-        return promptTemplateLoader.render("assessment/content_validation.txt", variables);
+        return promptTemplateLoader.render(templatePath, variables);
     }
 
 
@@ -1021,7 +1024,7 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
         CompletableFuture<InputValidationResponse> validationFuture = CompletableFuture.supplyAsync(
                 () -> {
                     try {
-                        return validateContentForAssessment(result.getFullText(), "Writing", questionText);
+                        return validateContentForAssessment(result.getFullText(), "Speaking", questionText);
                     } catch (Exception e) {
                         log.error("Validation failed: {}", e.getMessage(), e);
                         return new InputValidationResponse(null, null, null, null, null);
