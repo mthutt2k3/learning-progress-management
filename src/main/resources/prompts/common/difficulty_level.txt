@@ -1,0 +1,12 @@
+📊 STUDENT LEVEL INFORMATION:
+
+Level: {level_name}
+Description: {level_description}
+{learning_objective}
+
+🎯 LEVEL-APPROPRIATE REQUIREMENTS:
+All questions must be appropriate for this level:
+- Vocabulary should match student proficiency
+- Grammar complexity should be suitable
+- Question difficulty should be challenging but achievable
+- Content should be age and level appropriate

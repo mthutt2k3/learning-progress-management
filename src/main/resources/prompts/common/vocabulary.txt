@@ -1,0 +1,5 @@
+📚 REQUIRED VOCABULARY - Prioritize using these words in questions:
+{vocabulary_list}
+
+IMPORTANT: Incorporate these vocabulary words naturally into questions where appropriate.
+Use them in context to test student understanding of word usage and meaning.

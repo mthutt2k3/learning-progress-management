@@ -1,0 +1,7 @@
+🎯 LESSON FOCUS - Questions must target these specific learning points:
+
+{lesson_focus_items}
+{custom_lesson_focus}
+
+CRITICAL: All questions MUST directly test the lesson focus areas listed above.
+Questions should be designed specifically to assess student understanding of these points.

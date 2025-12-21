@@ -9,6 +9,7 @@ import com.learning.progress.exception.ApiException;
 import com.learning.progress.repository.SubmissionQuestionRepository;
 import com.learning.progress.service.AiFeedbackService;
 import com.learning.progress.service.OpenAiService;
+import com.learning.progress.util.PromptTemplateLoader;
 import com.learning.progress.util.TraceUtil;
 import com.microsoft.cognitiveservices.speech.*;
 import com.microsoft.cognitiveservices.speech.audio.AudioConfig;
@@ -51,6 +52,7 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
     private final SubmissionQuestionRepository submissionQuestionRepository;
     private final ExecutorService executorService;
     private final RestTemplate restTemplate;
+    private final PromptTemplateLoader promptTemplateLoader;
 
     @Value("${azure.openai.endpoint}")
     private String endpoint;
@@ -73,10 +75,12 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
 
     private final OpenAiService openAiService;
 
-    public AiFeedbackServiceImpl(OpenAiService openAiService, SubmissionQuestionRepository submissionQuestionRepository, RestTemplate restTemplate) {
+    public AiFeedbackServiceImpl(OpenAiService openAiService, SubmissionQuestionRepository submissionQuestionRepository
+            , RestTemplate restTemplate, PromptTemplateLoader promptTemplateLoader) {
         this.submissionQuestionRepository = submissionQuestionRepository;
         this.openAiService = openAiService;
         this.restTemplate = restTemplate;
+        this.promptTemplateLoader = promptTemplateLoader;
 
         this.executorService = Executors.newFixedThreadPool(10, r -> {
             Thread t = new Thread(r);
@@ -121,89 +125,30 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
      * Build prompt for content validation
      */
     private String buildContentValidationPrompt(String content, String contentType, String questionContext) {
-        StringBuilder prompt = new StringBuilder();
+        Map<String, String> variables = new HashMap<>();
 
-        prompt.append("You are a content safety and quality checker for an educational English learning platform.\n\n");
+        variables.put("content_type", contentType);
+        variables.put("content_type_lower", contentType.toLowerCase());
+        variables.put("student_content", content);
 
-        prompt.append("CONTENT TYPE: ").append(contentType).append(" Assessment\n\n");
-
+        // Question context (optional)
         if (questionContext != null && !questionContext.isBlank()) {
-            prompt.append("QUESTION/TOPIC:\n");
-            prompt.append(questionContext).append("\n\n");
+            variables.put("question_context",
+                    "QUESTION/TOPIC:\n" + questionContext + "\n\n");
+        } else {
+            variables.put("question_context", "");
         }
 
-        prompt.append("YOUR TASK:\n");
-        prompt.append("Check if the student's ").append(contentType.toLowerCase())
-                .append(" content is safe, appropriate, and suitable for assessment.\n\n");
-
-        // ❌ ERROR cases (MUST REJECT)
-        prompt.append("❌ SEVERE ISSUES - Set 'error' field (MUST REJECT):\n");
-        prompt.append("- Violence, hate speech, discrimination, racism\n");
-        prompt.append("- Sexual, adult, or inappropriate content\n");
-        prompt.append("- Profanity or offensive language\n");
-        prompt.append("- Political propaganda or extremist ideology\n");
-        prompt.append("- Drugs, illegal activities, dangerous behavior\n");
-        prompt.append("- Self-harm or psychologically harmful content\n");
-        prompt.append("- Content NOT related to English learning\n");
-        prompt.append("- Any content unsafe for educational environment\n");
-        prompt.append("- Section content must be at least 90% English; excessive use of any other language is not allowed\n");
-        prompt.append("- Exception: Proper nouns, names, or direct quotations can be in other languages\n");
-
+        // Content type specific errors
+        StringBuilder specificErrors = new StringBuilder();
         if ("Speaking".equals(contentType)) {
-            prompt.append("- Content contains significant amount of non-English language (Vietnamese, Chinese, etc.)\n");
+            specificErrors.append("- Content contains significant amount of non-English language (Vietnamese, Chinese, etc.)\n");
         }
+        variables.put("content_type_specific_errors", specificErrors.toString());
 
-        prompt.append("- Spam or nonsensical content (excessive repetition, random characters)\n");
-        prompt.append("- Content is TOO SHORT to assess meaningfully (less than 50 words)\n\n");
-
-        // ⚠️ WARNING cases
-        prompt.append("⚠️ MINOR ISSUES - Always set 'warning' as null:\n");
-
-        prompt.append("STUDENT'S CONTENT TO CHECK:\n");
-        prompt.append("--------------------------------------------------\n");
-        prompt.append(content).append("\n");
-        prompt.append("--------------------------------------------------\n\n");
-
-        prompt.append("OUTPUT FORMAT (JSON ONLY):\n");
-        prompt.append("{\n");
-        prompt.append("  \"error\": \"short message in English explaining why content is rejected, or null\",\n");
-        prompt.append("  \"warning\": \"null\"\n");
-        prompt.append("}\n\n");
-
-        prompt.append("RULES:\n");
-        prompt.append("- Error messages must be SHORT and user-friendly (max 1-2 sentences)\n");
-        prompt.append("- Set ONLY error if content MUST be rejected\n");
-        prompt.append("- Set warning is null\n");
-        prompt.append("- Both must be null if content is good\n");
-        prompt.append("- Return valid JSON only, no markdown, no extra text\n\n");
-
-        prompt.append("EXAMPLES:\n\n");
-
-        prompt.append("Example 1 (inappropriate):\n");
-        prompt.append("Content: \"I hate this stupid test\"\n");
-        prompt.append("{\n");
-        prompt.append("  \"error\": \"Content contains inappropriate language not suitable for assessment.\",\n");
-        prompt.append("  \"warning\": null\n");
-        prompt.append("}\n\n");
-
-        prompt.append("Example 2 (too short):\n");
-        prompt.append("Content: \"I like it\"\n");
-        prompt.append("{\n");
-        prompt.append("  \"error\": \"Content is too short to assess meaningfully. Please provide at least 50 words.\",\n");
-        prompt.append("  \"warning\": null\n");
-        prompt.append("}\n\n");
-
-        prompt.append("Example 4 (good content):\n");
-        prompt.append("Content: \"In my opinion, technology has greatly improved our lives. For example, smartphones allow us to communicate instantly with people around the world.\"\n");
-        prompt.append("{\n");
-        prompt.append("  \"error\": null,\n");
-        prompt.append("  \"warning\": null\n");
-        prompt.append("}\n\n");
-
-        prompt.append("Analyze and return JSON now.\n");
-
-        return prompt.toString();
+        return promptTemplateLoader.render("assessment/content_validation.txt", variables);
     }
+
 
     /**
      * Parse content validation response
@@ -765,56 +710,7 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
      * Build prompt for OCR extraction - instructs AI to return JSON
      */
     private String buildOCRPrompt() {
-        StringBuilder prompt = new StringBuilder();
-
-        prompt.append("You are an expert OCR system specialized in reading handwritten English text.\n\n");
-
-        prompt.append("CRITICAL: You MUST respond with ONLY valid JSON in this exact format, no markdown, no extra text:\n\n");
-        prompt.append("{\n");
-        prompt.append("  \"status\": \"SUCCESS\" | \"ILLEGIBLE_HANDWRITING\" | \"NO_TEXT_FOUND\" | \"BLANK_IMAGE\",\n");
-        prompt.append("  \"text\": \"extracted text here (only if status is SUCCESS)\"\n");
-        prompt.append("}\n\n");
-
-        prompt.append("TASK: Extract ALL text from the handwritten image with high accuracy.\n\n");
-
-        prompt.append("DECISION RULES:\n");
-        prompt.append("1. If the image is blank or contains no content:\n");
-        prompt.append("   → Return: {\"status\": \"BLANK_IMAGE\"}\n\n");
-
-        prompt.append("2. If the image has no text or is not a handwriting sample:\n");
-        prompt.append("   → Return: {\"status\": \"NO_TEXT_FOUND\"}\n\n");
-
-        prompt.append("3. If the handwriting is too messy, unclear, or illegible (you can't confidently read at least 70% of the text):\n");
-        prompt.append("   → Return: {\"status\": \"ILLEGIBLE_HANDWRITING\"}\n\n");
-
-        prompt.append("4. If the handwriting is readable (even if not perfect):\n");
-        prompt.append("   → Return: {\"status\": \"SUCCESS\", \"text\": \"exact transcription\"}\n\n");
-
-        prompt.append("TRANSCRIPTION RULES (when status is SUCCESS):\n");
-        prompt.append("- Transcribe EXACTLY what is written, character by character\n");
-        prompt.append("- DO NOT correct any spelling mistakes\n");
-        prompt.append("- DO NOT correct any grammar errors\n");
-        prompt.append("- DO NOT add punctuation that isn't in the original\n");
-        prompt.append("- DO NOT add or remove spaces\n");
-        prompt.append("- Preserve line breaks with \\n\n");
-        prompt.append("- Preserve paragraph structure\n");
-        prompt.append("- If a word is unclear but readable, transcribe your best interpretation\n");
-        prompt.append("- Keep everything as written, including mistakes\n\n");
-
-        prompt.append("EXAMPLES OF ILLEGIBLE:\n");
-        prompt.append("- Extremely messy scribbles where most words are unreadable\n");
-        prompt.append("- Blurry or low-quality images where text cannot be distinguished\n");
-        prompt.append("- Overlapping text that makes it impossible to separate words\n");
-        prompt.append("- Handwriting so poor that fewer than 70% of words can be confidently identified\n\n");
-
-        prompt.append("REMEMBER: Return ONLY the JSON object, nothing else. No markdown code blocks, no explanations.\n");
-
-        prompt.append("IMPORTANT: You MUST respond with ONLY valid JSON in this exact format, no markdown, no extra text:\n\n");
-        prompt.append("{\n");
-        prompt.append("  \"status\": \"SUCCESS\" | \"ILLEGIBLE_HANDWRITING\" | \"NO_TEXT_FOUND\" | \"BLANK_IMAGE\",\n");
-        prompt.append("  \"text\": \"extracted text here (only if status is SUCCESS)\"\n");
-        prompt.append("}\n\n");
-        return prompt.toString();
+        return promptTemplateLoader.loadTemplate("assessment/ocr_extraction.txt");
     }
 
     /**
@@ -836,109 +732,15 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
             String questionText,
             String studentWriting) {
 
-        StringBuilder prompt = new StringBuilder();
+        Map<String, String> variables = new HashMap<>();
 
-        prompt.append(SYSTEM_ROLE_JSON_INSTRUCTION).append("\n\n");
+        variables.put("system_role_instruction", SYSTEM_ROLE_JSON_INSTRUCTION);
+        variables.put("chapter_name", context.classChapterName);
+        variables.put("student_level", context.studentLevel);
+        variables.put("question_text", questionText);
+        variables.put("student_writing", studentWriting);
 
-        prompt.append("IMPORTANT: All human-readable feedback content MUST be written in Vietnamese. ")
-                .append("JSON field names remain in English. ")
-                .append("All numbers MUST be numeric. ")
-                .append("Return ONLY valid JSON, no markdown, no explanations, no extra text.\n\n");
-
-        prompt.append("You are an experienced English writing teacher following IELTS criteria.\n\n");
-
-        prompt.append("IMPORTANT: All feedback content MUST be in Vietnamese with HTML formatting in one line.\n");
-        prompt.append("Use these HTML tags: <h4><strong>Header</strong></h4>, <p>text</p>, <ul><li>item</li></ul>, <strong>text</strong>\n\n");
-
-        prompt.append("Context: Chapter: ").append(context.classChapterName)
-                .append(" | Level: ").append(context.studentLevel).append("\n\n");
-
-        prompt.append("TASK: Analyze the writing and return JSON with:\n\n");
-
-        prompt.append("1. overallFeedback: Đánh giá tổng quan theo 3 bước (HTML format)(100-200 words):\n");
-        prompt.append("   STEP 1 - <h4><strong>📋 Nhận xét chung</strong></h4><p>Tổng quan về bài viết </p>\n");
-        prompt.append("   STEP 2 - <h4><strong>⚠️ Lỗi sai/Cần cải thiện</strong></h4><ul><li>Vấn đề chính 1</li><li>Vấn đề chính 2</li></ul>\n");
-        prompt.append("   STEP 3 - <h4><strong>💡 Cách cải thiện</strong></h4><ul><li>Gợi ý 1</li><li>Gợi ý 2</li></ul>\n\n");
-
-        prompt.append("2. suggestedScore: Overall score (0.0-10.0)\n\n");
-
-        prompt.append("3. criteriaFeedback: 4 IELTS criteria (taskResponse, cohesionCoherence, lexicalResource, grammaticalRangeAccuracy)\n");
-
-        // Task Response
-        prompt.append("   A. taskResponse (0-10 points):\n");
-        prompt.append("      - Fully addresses all parts of the task?\n");
-        prompt.append("      - Stays on topic without going off-track?\n");
-        prompt.append("      - Clear position stated (if required)?\n");
-        prompt.append("      - Appropriate length and depth?\n");
-        prompt.append("      - Ideas well-developed with examples/explanations?\n\n");
-
-// Coherence and Cohesion
-        prompt.append("   B. cohesionCoherence (0-10 points):\n");
-        prompt.append("      - Clear essay structure (intro, body, conclusion)?\n");
-        prompt.append("      - Well-organized paragraphs (one main idea each)?\n");
-        prompt.append("      - Effective use of linking words?\n");
-        prompt.append("      - Smooth flow between sentences?\n");
-        prompt.append("      - Logical progression of ideas?\n\n");
-
-// Lexical Resource
-        prompt.append("   C. lexicalResource (0-10 points):\n");
-        prompt.append("      - Wide range of vocabulary used?\n");
-        prompt.append("      - Topic-specific/academic words appropriately used?\n");
-        prompt.append("      - Avoids repetition?\n");
-        prompt.append("      - Correct word choice and collocations?\n");
-        prompt.append("      - Spelling accuracy?\n\n");
-
-// Grammatical Range and Accuracy
-        prompt.append("   D. grammaticalRangeAccuracy (0-10 points):\n");
-        prompt.append("      - Variety of sentence structures?\n");
-        prompt.append("      - Correct verb tenses?\n");
-        prompt.append("      - Subject-verb agreement correct?\n");
-        prompt.append("      - Proper use of prepositions and articles?\n");
-        prompt.append("      - No run-on sentences or fragments?\n");
-        prompt.append("      - Errors don't impede understanding?\n\n");
-
-        prompt.append("   Each criterion MUST have:\n");
-        prompt.append("   - score: 0-10\n");
-        prompt.append("   - feedback: Vietnamese text with HTML formatting following EXACTLY 3 steps(100-200 words):\n");
-        prompt.append("     STEP 1 - <h4><strong>📋 Nhận xét chung</strong></h4><p>Đánh giá tổng quan </p>\n");
-        prompt.append("     STEP 2 - <h4><strong>⚠️ Lỗi sai/Cần cải thiện</strong></h4><ul><li>Vấn đề 1</li><li>Vấn đề 2</li></ul>\n");
-        prompt.append("     STEP 3 - <h4><strong>💡 Cách cải thiện</strong></h4><ul><li>Gợi ý 1</li><li>Gợi ý 2</li></ul>\n\n");
-
-        prompt.append("4. comments: Inline comments (startIndex, endIndex, commentText, severity, category, correction)\n\n");
-
-        prompt.append("WRITING TASK:\n").append(questionText).append("\n\n");
-        prompt.append("STUDENT'S WRITING:\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
-        prompt.append(studentWriting).append("\n");
-        prompt.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n");
-
-        prompt.append("OUTPUT EXAMPLE (Reference only - DO NOT copy exactly):\n");
-        prompt.append("{\n");
-        prompt.append("  \"overallFeedback\": \"<h4><strong>📋 Nhận xét chung</strong></h4><p>Tổng quan ngắn gọn về bài viết</p><h4><strong>⚠️ Lỗi sai/Cần cải thiện</strong></h4><ul><li>Vấn đề 1</li><li>Vấn đề 2</li></ul><h4><strong>💡 Cách cải thiện</strong></h4><ul><li>Gợi ý 1</li><li>Gợi ý 2</li></ul>\",\n");
-        prompt.append("  \"suggestedScore\": 7.5,\n");
-        prompt.append("  \"criteriaFeedback\": {\n");
-        prompt.append("    \"taskResponse\": {\n");
-        prompt.append("      \"score\": 7.0,\n");
-        prompt.append("      \"feedback\": \"<h4><strong>📋 Nhận xét chung</strong></h4><p>...</p><h4><strong>⚠️ Lỗi sai/Cần cải thiện</strong></h4><ul><li>...</li></ul><h4><strong>💡 Cách cải thiện</strong></h4><ul><li>...</li></ul>\"\n");
-        prompt.append("    },\n");
-        prompt.append("    \"cohesionCoherence\": {\"score\": 7.5, \"feedback\": \"...\"},\n");
-        prompt.append("    \"lexicalResource\": {\"score\": 7.0, \"feedback\": \"...\"},\n");
-        prompt.append("    \"grammaticalRangeAccuracy\": {\"score\": 6.5, \"feedback\": \"...\"}\n");
-        prompt.append("  },\n");
-        prompt.append("  \"comments\": [\n");
-        prompt.append("    {\"startIndex\": 0, \"endIndex\": 5, \"commentText\": \"...\", \"severity\": \"error\", \"category\": \"grammar\", \"correction\": \"...\"}\n");
-        prompt.append("  ]\n");
-        prompt.append("}\n\n");
-
-        prompt.append("IMPORTANT NOTES:\n");
-        prompt.append("- The example above shows FORMAT ONLY - DO NOT copy the content\n");
-        prompt.append("- Write ORIGINAL feedback based on the ACTUAL student writing\n");
-        prompt.append("- Be SPECIFIC with examples from the student's work\n");
-        prompt.append("- Adjust tone and depth based on student's level: ").append(context.studentLevel).append("\n");
-        prompt.append("- Make feedback HELPFUL and CONSTRUCTIVE, not generic\n\n");
-
-        prompt.append("CRITICAL: Both overallFeedback and ALL criteriaFeedback MUST follow the exact 3-step structure with proper HTML tags and icons. Do not skip any step.\n");
-
-        return prompt.toString();
+        return promptTemplateLoader.render("assessment/writing_grading.txt", variables);
     }
 
 
@@ -1671,43 +1473,10 @@ public class AiFeedbackServiceImpl implements AiFeedbackService {
      * Build prompt for grammar correction
      */
     private String buildGrammarCorrectionPrompt(String recognizedText) {
-        StringBuilder prompt = new StringBuilder();
+        Map<String, String> variables = new HashMap<>();
+        variables.put("recognized_text", recognizedText);
 
-        prompt.append("You are an expert English grammar teacher. Your task is to correct grammatical errors in the student's speech while preserving the original meaning and speaking style as much as possible.\n\n");
-
-        prompt.append("IMPORTANT RULES:\n");
-        prompt.append("1. Fix ONLY grammar, spelling, and punctuation errors\n");
-        prompt.append("2. DO NOT change the meaning or add new content\n");
-        prompt.append("3. DO NOT make the sentence more formal or complex\n");
-        prompt.append("4. Keep the same vocabulary level and speaking style\n");
-        prompt.append("5. If the sentence is already grammatically correct, return it unchanged\n");
-        prompt.append("6. Preserve contractions (don't → don't, not → do not)\n");
-        prompt.append("7. Keep informal language if appropriate\n\n");
-
-        prompt.append("EXAMPLES:\n");
-        prompt.append("Input: \"I go to school yesterday\"\n");
-        prompt.append("Output: \"I went to school yesterday\"\n\n");
-
-        prompt.append("Input: \"She don't like apples\"\n");
-        prompt.append("Output: \"She doesn't like apples\"\n\n");
-
-        prompt.append("Input: \"They was very happy\"\n");
-        prompt.append("Output: \"They were very happy\"\n\n");
-
-        prompt.append("Input: \"I have three friend\"\n");
-        prompt.append("Output: \"I have three friends\"\n\n");
-
-        prompt.append("STUDENT'S SPEECH:\n");
-        prompt.append(recognizedText).append("\n\n");
-
-        prompt.append("Return ONLY valid JSON (no markdown, no extra text):\n");
-        prompt.append("{\n");
-        prompt.append("  \"correctedText\": \"The grammatically correct version\",\n");
-        prompt.append("  \"hasChanges\": true,\n");
-        prompt.append("  \"changes\": [\"went instead of go\", \"yesterday requires past tense\"]\n");
-        prompt.append("}\n");
-
-        return prompt.toString();
+        return promptTemplateLoader.render("assessment/grammar_correction.txt", variables);
     }
 
     /**

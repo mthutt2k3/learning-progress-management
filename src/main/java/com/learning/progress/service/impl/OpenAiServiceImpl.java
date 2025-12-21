@@ -15,6 +15,7 @@ import com.learning.progress.repository.DailyChallengeRepository;
 import com.learning.progress.repository.LevelRepository;
 import com.learning.progress.service.OpenAiService;
 import com.learning.progress.util.FileContentExtractor;
+import com.learning.progress.util.PromptTemplateLoader;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
@@ -46,6 +47,7 @@ public class OpenAiServiceImpl implements OpenAiService {
     private final DailyChallengeRepository dailyChallengeRepository;
     private final LevelRepository levelRepository;
     private ExecutorService executorService;
+    private final PromptTemplateLoader promptTemplateLoader;
 
     @Value("${azure.openai.batch-size}")
     private int batchSize;
@@ -88,9 +90,11 @@ public class OpenAiServiceImpl implements OpenAiService {
             "Do NOT include trailing commas or non-standard JSON syntax.";
 
     public OpenAiServiceImpl(DailyChallengeRepository dailyChallengeRepository,
-                             LevelRepository levelRepository) {
+                             LevelRepository levelRepository,
+                             PromptTemplateLoader promptTemplateLoader) {
         this.dailyChallengeRepository = dailyChallengeRepository;
         this.levelRepository = levelRepository;
+        this.promptTemplateLoader = promptTemplateLoader;
     }
 
     @PostConstruct
@@ -208,196 +212,92 @@ public class OpenAiServiceImpl implements OpenAiService {
     }
 
     private String buildInputValidationPrompt(String content, String lessonContext, ValidationType validationType, LevelInfo levelInfo) {
-        StringBuilder prompt = new StringBuilder();
-
-        prompt.append("You are a content safety and quality checker for an educational English learning platform.\n\n");
+        Map<String, String> variables = new HashMap<>();
 
         if (levelInfo != null) {
-            prompt.append("STUDENT LEVEL:\n");
-            prompt.append("Level: ").append(levelInfo.levelName).append("\n");
-            if (levelInfo.levelDescription != null && !levelInfo.levelDescription.isBlank()) {
-                prompt.append("Description: ").append(levelInfo.levelDescription).append("\n");
-            }
-            if (levelInfo.learningObjective != null && !levelInfo.learningObjective.isBlank()) {
-                prompt.append("Learning Objective: ").append(levelInfo.learningObjective).append("\n");
-            }
-            prompt.append("\n");
+            variables.put("level_info", String.format(
+                    "STUDENT LEVEL:\nLevel: %s\nDescription: %s\n%s\n",
+                    levelInfo.levelName,
+                    levelInfo.levelDescription != null ? levelInfo.levelDescription : "",
+                    levelInfo.learningObjective != null && !levelInfo.learningObjective.isBlank()
+                            ? "Learning Objective: " + levelInfo.learningObjective + "\n"
+                            : ""
+            ));
+        } else {
+            variables.put("level_info", "");
         }
 
-        // Lesson context
+        // Build lesson context
         if (!lessonContext.isBlank()) {
-            prompt.append("LESSON CONTEXT:\n");
-            prompt.append(lessonContext).append("\n");
+            variables.put("lesson_context", "LESSON CONTEXT:\n" + lessonContext + "\n");
+        } else {
+            variables.put("lesson_context", "");
         }
 
-        prompt.append("YOUR TASK:\n");
-        prompt.append("1. Check the provided content for safety and appropriateness.\n");
-        prompt.append("2. Process content to English for better AI generation.\n\n");
-
-        // ❌ ERROR cases (apply to ALL types)
-        prompt.append("❌ SEVERE ISSUES - Set 'error' field (MUST REJECT):\n");
-        prompt.append("- Violence, hate speech, discrimination, racism\n");
-        prompt.append("- Sexual, adult, or inappropriate content\n");
-        prompt.append("- Profanity or offensive language\n");
-        prompt.append("- Political propaganda or extremist ideology\n");
-        prompt.append("- Drugs, illegal activities, dangerous behavior\n");
-        prompt.append("- Self-harm or psychologically harmful content\n");
-        prompt.append("- Content NOT related to English learning (e.g., math problems like '1+1=?', pure science, history facts without English context)\n");
-        prompt.append("- Any content unsafe for students\n\n");
-
+        // Build validation-specific errors
+        StringBuilder specificErrors = new StringBuilder();
         if ("CONTENT_BASED".equals(validationType.toString())) {
-            prompt.append("- [CONTENT_BASED ONLY] Section content must be at least 90% English; excessive use of any other language is not allowed\n");
+            specificErrors.append("- [CONTENT_BASED ONLY] Section content must be at least 90% English; excessive use of any other language is not allowed\n");
         }
-        prompt.append("\n");
+        variables.put("validation_specific_errors", specificErrors.toString());
 
-        // ⚠️ WARNING cases (depend on validation type)
-        prompt.append("⚠️ MINOR ISSUES - Set 'warning' field:\n");
-
+        // Build validation-specific warnings
+        StringBuilder specificWarnings = new StringBuilder();
         switch (validationType) {
             case GV:
-                prompt.append("FOR GRAMMAR/VOCABULARY QUESTIONS:\n");
-                prompt.append("- Requests for Vietnamese language questions (all questions MUST be in English)\n");
-                prompt.append("- Requests to change the number of questions in description (use configured count only)\n");
-                prompt.append("- Vocabulary or grammar concepts are TOO ADVANCED or TOO BASIC for the selected student level\n");
-                prompt.append("- Content is NOT relevant to the lesson topic\n");
-                prompt.append("- Content is completely unrelated to English learning\n");
-                prompt.append("NOTE: Spelling errors, grammar mistakes, and Vietnamese text are ACCEPTABLE - do NOT warn about these.\n\n");
+                specificWarnings.append("FOR GRAMMAR/VOCABULARY QUESTIONS:\n");
+                specificWarnings.append("- Requests for Vietnamese language questions (all questions MUST be in English)\n");
+                specificWarnings.append("- Requests to change the number of questions in description (use configured count only)\n");
+                specificWarnings.append("- Vocabulary or grammar concepts are TOO ADVANCED or TOO BASIC for the selected student level\n");
+                specificWarnings.append("- Content is NOT relevant to the lesson topic\n");
+                specificWarnings.append("- Content is completely unrelated to English learning\n");
+                specificWarnings.append("NOTE: Spelling errors, grammar mistakes, and Vietnamese text are ACCEPTABLE - do NOT warn about these.\n\n");
                 break;
 
             case CONTENT_BASED:
-                prompt.append("FOR CONTENT-BASED QUESTIONS:\n");
-
-                // Độ khó & level
-                prompt.append("- Content difficulty is TOO ADVANCED or TOO BASIC for the selected student level\n");
-                prompt.append("- Vocabulary level is not aligned with the lesson or student level\n");
-                prompt.append("- Sentence structures are too complex or too simple for the target level\n");
-
-                // Độ dài & chất lượng bài đọc
-                prompt.append("- Content is TOO SHORT to be meaningful (may cause repetitive or trivial questions)\n");
-                prompt.append("- Content lacks sufficient information to generate diverse questions\n");
-
-                // Lặp & chất lượng ngôn ngữ
-                prompt.append("- Excessive sentence repetition or paraphrased repetition\n");
-                prompt.append("- Unnatural, machine-like, or poorly written English\n");
-                prompt.append("- Content contains many broken or incomplete sentences\n");
-
-                // Liên quan & tính giáo dục
-                prompt.append("- Content is NOT relevant to the lesson topic\n");
-                prompt.append("- Content is not educational or suitable for students\n");
-                prompt.append("- Content focuses on opinions, ads, or storytelling unrelated to learning goals\n");
-
-                // Logic & nhất quán
-                prompt.append("- Description does not match the section content\n");
-                prompt.append("- Content lacks a clear topic, context, or logical flow\n");
-
-                prompt.append("- Content is NOT relevant or appropriate for the lesson\n");
-                prompt.append("- Description does not match section content\n\n");
+                specificWarnings.append("FOR CONTENT-BASED QUESTIONS:\n");
+                specificWarnings.append("- Content difficulty is TOO ADVANCED or TOO BASIC for the selected student level\n");
+                specificWarnings.append("- Vocabulary level is not aligned with the lesson or student level\n");
+                specificWarnings.append("- Sentence structures are too complex or too simple for the target level\n");
+                specificWarnings.append("- Content is TOO SHORT to be meaningful (may cause repetitive or trivial questions)\n");
+                specificWarnings.append("- Content lacks sufficient information to generate diverse questions\n");
+                specificWarnings.append("- Excessive sentence repetition or paraphrased repetition\n");
+                specificWarnings.append("- Unnatural, machine-like, or poorly written English\n");
+                specificWarnings.append("- Content contains many broken or incomplete sentences\n");
+                specificWarnings.append("- Content is NOT relevant to the lesson topic\n");
+                specificWarnings.append("- Content is not educational or suitable for students\n");
+                specificWarnings.append("- Content focuses on opinions, ads, or storytelling unrelated to learning goals\n");
+                specificWarnings.append("- Description does not match the section content\n");
+                specificWarnings.append("- Content lacks a clear topic, context, or logical flow\n");
+                specificWarnings.append("- Content is NOT relevant or appropriate for the lesson\n");
+                specificWarnings.append("- Description does not match section content\n\n");
                 break;
 
             case FILE:
-                prompt.append("FOR FILE UPLOAD:\n");
-                prompt.append("- File contains duplicate questions (same or very similar)\n");
-                prompt.append("- File contains images or non-text content\n");
-                prompt.append("- Question content is NOT relevant to the lesson\n");
-                prompt.append("- Questions are not educational or appropriate for students\n");
-                prompt.append("- Misleading or deceptive information\n");
-                prompt.append("- File contains extra descriptive text or paragraphs outside of the questions\n");
-
-                prompt.append("- Questions missing answer options or correct answers\n");
-                prompt.append("- Incomplete questions (missing question text or stem)\n");
-                prompt.append("- File contains content in Vietnamese or other non-English languages\n");
-                prompt.append("- Mixed language content (combination of English and Vietnamese)\n");
-                prompt.append("- Questions with incorrect format or structure\n");
-                prompt.append("- Answer choices are not properly labeled (A, B, C, D)\n");
-                prompt.append("- Multiple correct answers marked when only one should be correct\n");
-                prompt.append("- No correct answer marked for any question\n");
-                prompt.append("- File contains URLs, links, or references to external resources\n");
-                prompt.append("- Questions contain special characters that may cause parsing errors\n\n");
+                specificWarnings.append("FOR FILE UPLOAD:\n");
+                specificWarnings.append("- File contains duplicate questions (same or very similar)\n");
+                specificWarnings.append("- File contains images or non-text content\n");
+                specificWarnings.append("- Question content is NOT relevant to the lesson\n");
+                specificWarnings.append("- Questions are not educational or appropriate for students\n");
+                specificWarnings.append("- Misleading or deceptive information\n");
+                specificWarnings.append("- File contains extra descriptive text or paragraphs outside of the questions\n");
+                specificWarnings.append("- Questions missing answer options or correct answers\n");
+                specificWarnings.append("- Incomplete questions (missing question text or stem)\n");
+                specificWarnings.append("- File contains content in Vietnamese or other non-English languages\n");
+                specificWarnings.append("- Mixed language content (combination of English and Vietnamese)\n");
+                specificWarnings.append("- Questions with incorrect format or structure\n");
+                specificWarnings.append("- Answer choices are not properly labeled (A, B, C, D)\n");
+                specificWarnings.append("- Multiple correct answers marked when only one should be correct\n");
+                specificWarnings.append("- No correct answer marked for any question\n");
+                specificWarnings.append("- File contains URLs, links, or references to external resources\n");
+                specificWarnings.append("- Questions contain special characters that may cause parsing errors\n\n");
                 break;
         }
+        variables.put("validation_specific_warnings", specificWarnings.toString());
 
-        prompt.append("CONTENT TO CHECK:\n");
-        prompt.append("--------------------------------------------------\n");
-        prompt.append(content).append("\n");
-        prompt.append("--------------------------------------------------\n\n");
+        variables.put("content_to_check", content);
 
-        // ✅ UPDATED: Processing instructions
-        prompt.append("🌐 CONTENT PROCESSING TASK:\n\n");
-
-        prompt.append("1️⃣ DESCRIPTION:\n");
-        prompt.append("   - Translate from Vietnamese to English if needed\n");
-        prompt.append("   - If already in English, return unchanged\n");
-        prompt.append("   - If not present, set to null\n\n");
-
-        prompt.append("2️⃣ VOCABULARY LIST (SPECIAL HANDLING):\n");
-        prompt.append("   - Format is usually: \"word: Vietnamese meaning\" (e.g., \"bug: lỗi\", \"feature: tính năng\")\n");
-        prompt.append("   - EXTRACT ONLY THE ENGLISH WORDS, separated by commas\n");
-        prompt.append("   - REMOVE Vietnamese meanings completely\n");
-        prompt.append("   - Example input: \"bug: lỗi, feature: tính năng, developer: lập trình viên\"\n");
-        prompt.append("   - Example output: \"bug, feature, developer\"\n");
-        prompt.append("   - If vocabulary is a simple list without meanings, return as-is\n");
-        prompt.append("   - If not present, set to null\n\n");
-
-        prompt.append("3️⃣ CUSTOM LESSON FOCUS:\n");
-        prompt.append("   - Translate from Vietnamese to English if needed\n");
-        prompt.append("   - If already in English, return unchanged\n");
-        prompt.append("   - If not present, set to null\n\n");
-
-        prompt.append("OUTPUT FORMAT (JSON ONLY):\n");
-        prompt.append("{\n");
-        prompt.append("  \"error\": \"short message in English or null\",\n");
-        prompt.append("  \"warning\": \"short message in English or null\",\n");
-        prompt.append("  \"translatedDescription\": \"translated text or null\",\n");
-        prompt.append("  \"translatedVocabularyList\": \"English words only, comma-separated, or null\",\n");
-        prompt.append("  \"translatedCustomLessonFocus\": \"translated text or null\"\n");
-        prompt.append("}\n\n");
-
-        prompt.append("RULES:\n");
-        prompt.append("- Error/warning messages must be SHORT (max 1 sentence)\n");
-        prompt.append("- Use clear, user-friendly language\n");
-        prompt.append("- Set ONLY ONE of error or warning if applicable\n");
-        prompt.append("- Both error and warning must be null if content is acceptable\n");
-        prompt.append("- For vocabulary: ONLY extract English words, NO Vietnamese meanings\n");
-        prompt.append("- Return valid JSON only\n\n");
-
-        prompt.append("EXAMPLES:\n\n");
-
-        prompt.append("Example 1 (vocabulary with meanings):\n");
-        prompt.append("Input: \"Vocabulary: bug: lỗi, feature: tính năng, developer: lập trình viên\"\n");
-        prompt.append("{\n");
-        prompt.append("  \"error\": null,\n");
-        prompt.append("  \"warning\": null,\n");
-        prompt.append("  \"translatedDescription\": null,\n");
-        prompt.append("  \"translatedVocabularyList\": \"bug, feature, developer\",\n");
-        prompt.append("  \"translatedCustomLessonFocus\": null\n");
-        prompt.append("}\n\n");
-
-        prompt.append("Example 2 (Vietnamese description):\n");
-        prompt.append("Input: \"Description: Tạo câu hỏi về thì quá khứ đơn\"\n");
-        prompt.append("{\n");
-        prompt.append("  \"error\": null,\n");
-        prompt.append("  \"warning\": null,\n");
-        prompt.append("  \"translatedDescription\": \"Create questions about past simple tense\",\n");
-        prompt.append("  \"translatedVocabularyList\": null,\n");
-        prompt.append("  \"translatedCustomLessonFocus\": null\n");
-        prompt.append("}\n\n");
-
-        prompt.append("Example 3 (full content):\n");
-        prompt.append("Input:\n");
-        prompt.append("\"Description: Tập trung vào động từ bất quy tắc\n");
-        prompt.append("Vocabulary: go: đi, went: đã đi, gone: đã đi (hoàn thành), see: nhìn, saw: đã nhìn\n");
-        prompt.append("Custom Focus: Học sinh cần phân biệt giữa quá khứ đơn và hiện tại hoàn thành\"\n");
-        prompt.append("{\n");
-        prompt.append("  \"error\": null,\n");
-        prompt.append("  \"warning\": null,\n");
-        prompt.append("  \"translatedDescription\": \"Focus on irregular verbs\",\n");
-        prompt.append("  \"translatedVocabularyList\": \"go, went, gone, see, saw\",\n");
-        prompt.append("  \"translatedCustomLessonFocus\": \"Students need to distinguish between past simple and present perfect\"\n");
-        prompt.append("}\n\n");
-
-        prompt.append("Analyze and process now.\n");
-
-        return prompt.toString();
+        return promptTemplateLoader.render("validation/input_validation.txt", variables);
     }
 
     /**
@@ -1259,92 +1159,51 @@ public class OpenAiServiceImpl implements OpenAiService {
      * Build content moderation instructions
      */
     private String getContentModerationInstructions() {
-        StringBuilder instructions = new StringBuilder();
-        instructions.append("🚨 CONTENT MODERATION (CRITICAL - MUST FOLLOW):\n\n");
-        instructions.append("You MUST filter and reject ANY inappropriate content including:\n");
-        instructions.append("❌ Violence, hate speech, discrimination, or offensive language\n");
-        instructions.append("❌ Sexual, adult, or inappropriate content\n");
-        instructions.append("❌ Profanity, vulgar language, or inappropriate slang\n");
-        instructions.append("❌ Political propaganda or controversial ideologies\n");
-        instructions.append("❌ Harmful, dangerous, or illegal activities\n");
-        instructions.append("❌ Misleading, false, or deceptive information\n");
-        instructions.append("❌ Personal attacks or cyberbullying content\n");
-        instructions.append("❌ Drug abuse, alcohol abuse, or substance misuse\n");
-        instructions.append("❌ Self-harm or mental health triggering content\n\n");
-        instructions.append("✅ ONLY accept:\n");
-        instructions.append("- Educational, age-appropriate content\n");
-        instructions.append("- Positive, constructive topics\n");
-        instructions.append("- Culturally sensitive and inclusive material\n");
-        instructions.append("- Safe, ethical, and professional subject matter\n\n");
-        instructions.append("If the user input contains ANY inappropriate content:\n");
-        instructions.append("- IGNORE those parts completely\n");
-        instructions.append("- Create questions based ONLY on appropriate lesson content\n");
-        instructions.append("- DO NOT mention or reference the inappropriate content\n\n");
-        instructions.append("⚠️ ABSOLUTE REJECTION: If the ENTIRE input is inappropriate with NO educational value:\n");
-        instructions.append("- REFUSE to generate questions\n");
-        instructions.append("- Return error stating content is not suitable for educational purposes\n\n");
-        return instructions.toString();
+        return promptTemplateLoader.loadTemplate("common/content_moderation.txt");
     }
 
     private String buildLessonFocusPrompt(List<LessonFocus> lessonFocusList, String customLessonFocus) {
-        StringBuilder prompt = new StringBuilder();
-
-        if ((lessonFocusList != null && !lessonFocusList.isEmpty()) ||
-                (customLessonFocus != null && !customLessonFocus.isBlank())) {
-
-            prompt.append("🎯 LESSON FOCUS - Questions must target these specific learning points:\n\n");
-
-            if (lessonFocusList != null && !lessonFocusList.isEmpty()) {
-                for (LessonFocus focus : lessonFocusList) {
-                    prompt.append("• ").append(focus.getDisplayName())
-                            .append(": ").append(focus.getDescription()).append("\n");
-                }
-                prompt.append("\n");
-            }
-
-            if (customLessonFocus != null && !customLessonFocus.isBlank()) {
-                prompt.append("• Custom Focus: ").append(customLessonFocus).append("\n\n");
-            }
-
-            prompt.append("CRITICAL: All questions MUST directly test the lesson focus areas listed above.\n");
-            prompt.append("Questions should be designed specifically to assess student understanding of these points.\n\n");
+        if ((lessonFocusList == null || lessonFocusList.isEmpty()) &&
+                (customLessonFocus == null || customLessonFocus.isBlank())) {
+            return "";
         }
 
-        return prompt.toString();
+        StringBuilder lessonFocusItems = new StringBuilder();
+        if (lessonFocusList != null && !lessonFocusList.isEmpty()) {
+            for (LessonFocus focus : lessonFocusList) {
+                lessonFocusItems.append("• ").append(focus.getDisplayName())
+                        .append(": ").append(focus.getDescription()).append("\n");
+            }
+        }
+
+        String customFocus = "";
+        if (customLessonFocus != null && !customLessonFocus.isBlank()) {
+            customFocus = "• Custom Focus: " + customLessonFocus + "\n";
+        }
+
+        Map<String, String> variables = new HashMap<>();
+        variables.put("lesson_focus_items", lessonFocusItems.toString());
+        variables.put("custom_lesson_focus", customFocus);
+
+        return promptTemplateLoader.render("common/lesson_focus.txt", variables);
     }
 
     private String buildVocabularyPrompt(String vocabularyList) {
         if (vocabularyList != null && !vocabularyList.isBlank()) {
-            StringBuilder prompt = new StringBuilder();
-            prompt.append("📚 REQUIRED VOCABULARY - Prioritize using these words in questions:\n");
-            prompt.append(vocabularyList).append("\n\n");
-            prompt.append("IMPORTANT: Incorporate these vocabulary words naturally into questions where appropriate.\n");
-            prompt.append("Use them in context to test student understanding of word usage and meaning.\n\n");
-            return prompt.toString();
+            Map<String, String> variables = new HashMap<>();
+            variables.put("vocabulary_list", vocabularyList);
+            return promptTemplateLoader.render("common/vocabulary.txt", variables);
         }
         return "";
     }
 
     private String getDifficultyLevelInstructions(LevelInfo levelInfo) {
-        StringBuilder instructions = new StringBuilder();
-
-        instructions.append("📊 STUDENT LEVEL INFORMATION:\n\n");
-        instructions.append("Level: ").append(levelInfo.levelName).append("\n");
-        instructions.append("Description: ").append(levelInfo.levelDescription).append("\n");
-
-        if (levelInfo.learningObjective != null && !levelInfo.learningObjective.isBlank()) {
-            instructions.append("Learning Objective: ").append(levelInfo.learningObjective).append("\n");
-        }
-
-        instructions.append("\n");
-        instructions.append("🎯 LEVEL-APPROPRIATE REQUIREMENTS:\n");
-        instructions.append("All questions must be appropriate for this level:\n");
-        instructions.append("- Vocabulary should match student proficiency\n");
-        instructions.append("- Grammar complexity should be suitable\n");
-        instructions.append("- Question difficulty should be challenging but achievable\n");
-        instructions.append("- Content should be age and level appropriate\n\n");
-
-        return instructions.toString();
+        Map<String, String> variables = PromptTemplateLoader.buildLevelVariables(
+                levelInfo.levelName,
+                levelInfo.levelDescription,
+                levelInfo.learningObjective
+        );
+        return promptTemplateLoader.render("common/difficulty_level.txt", variables);
     }
 
     public static class ChallengeContext {
@@ -1863,76 +1722,66 @@ public class OpenAiServiceImpl implements OpenAiService {
             String customLessonFocus,
             String vocabularyList) {
 
-        StringBuilder prompt = new StringBuilder();
+        Map<String, String> variables = new HashMap<>();
 
-        prompt.append("You are an experienced English teacher working at a reputable English language center.\n\n");
+        // Load common templates
+        variables.put("content_moderation", getContentModerationInstructions());
+        variables.put("difficulty_level", getDifficultyLevelInstructions(levelInfo));
+        variables.put("grammar_formatting", promptTemplateLoader.loadTemplate("common/grammar_formatting.txt"));
 
-        // Content moderation
-        prompt.append(getContentModerationInstructions());
+        // Context
+        variables.put("lesson_name", context.classLessonName);
+        variables.put("chapter_name", context.classChapterName);
+        variables.put("lesson_content", context.classLessonContent);
+        variables.put("level_name", levelInfo.levelName);
 
-        prompt.append(getDifficultyLevelInstructions(levelInfo));
+        // Optional sections
+        variables.put("lesson_focus", buildLessonFocusPrompt(lessonFocus, customLessonFocus));
+        variables.put("vocabulary", buildVocabularyPrompt(vocabularyList));
 
-        prompt.append("📖 LESSON CONTEXT:\n");
-        prompt.append("Lesson Name: ").append(context.classLessonName).append("\n");
-        prompt.append("Chapter: ").append(context.classChapterName).append("\n");
-        prompt.append("Lesson Content:\n").append(context.classLessonContent).append("\n\n");
-
-        prompt.append(buildLessonFocusPrompt(lessonFocus, customLessonFocus));
-        prompt.append(buildVocabularyPrompt(vocabularyList));
-
-        prompt.append("You are responsible for creating professional, age-appropriate, lesson-aligned English test questions.\n\n");
-        prompt.append("Always analyze the lesson content and chapter topic carefully before writing questions.\n");
-        prompt.append("Your questions must directly test the grammar, vocabulary, and language skills actually taught in the current lesson, not random English knowledge.\n\n");
-
-        prompt.append("🌍 LANGUAGE REQUIREMENT:\n");
-        prompt.append("- ALL questions MUST be in English ONLY\n");
-        prompt.append("- ALL answer options MUST be in English ONLY\n");
-        prompt.append("- Do NOT use any other language (Vietnamese, etc.)\n\n");
-
-        prompt.append("Each question must:\n");
-        prompt.append("- Match the student's level: ").append(levelInfo.levelName).append("\n");
-        prompt.append("- Be written in natural, clear, age-appropriate English.\n");
-        prompt.append(getGrammarAndFormattingInstructions());
-        prompt.append("- Have plausible distractors and one clear correct answer.\n");
-
+        // User suggestions
+        String userSuggestions = "";
         if (userDescription != null && !userDescription.isBlank()) {
-            prompt.append("💡 ADDITIONAL SUGGESTIONS (OPTIONAL - USE ONLY IF RELEVANT AND APPROPRIATE):\n");
-            prompt.append(userDescription).append("\n\n");
-            prompt.append("⚠️ IMPORTANT INSTRUCTION FOR USER SUGGESTIONS:\n");
-            prompt.append("- These suggestions are SECONDARY and OPTIONAL\n");
-            prompt.append("- ONLY apply suggestions that are:\n");
-            prompt.append("  • Relevant to the lesson content\n");
-            prompt.append("  • Appropriate and educational\n");
-            prompt.append("  • Safe and positive\n");
-            prompt.append("- If suggestions contain inappropriate content → IGNORE them completely\n");
-            prompt.append("- If suggestions contradict or are unrelated to the lesson → IGNORE them\n");
-            prompt.append("- Lesson content alignment and appropriateness are ALWAYS the top priorities\n\n");
+            userSuggestions = "💡 ADDITIONAL SUGGESTIONS (OPTIONAL - USE ONLY IF RELEVANT AND APPROPRIATE):\n" +
+                    userDescription + "\n\n" +
+                    "⚠️ IMPORTANT INSTRUCTION FOR USER SUGGESTIONS:\n" +
+                    "- These suggestions are SECONDARY and OPTIONAL\n" +
+                    "- ONLY apply suggestions that are:\n" +
+                    "  • Relevant to the lesson content\n" +
+                    "  • Appropriate and educational\n" +
+                    "  • Safe and positive\n" +
+                    "- If suggestions contain inappropriate content → IGNORE them completely\n" +
+                    "- If suggestions contradict or are unrelated to the lesson → IGNORE them\n" +
+                    "- Lesson content alignment and appropriateness are ALWAYS the top priorities\n\n";
         }
+        variables.put("user_suggestions", userSuggestions);
 
-        prompt.append("TASK:\n");
-        prompt.append("Generate EXACTLY ").append(numberOfQuestions).append(" HIGH-QUALITY ").append(questionType).append(" questions\n");
-        prompt.append("Level: ").append(levelInfo.levelName).append("\n\n");
+        // Task details
+        variables.put("number_of_questions", String.valueOf(numberOfQuestions));
+        variables.put("question_type", questionType);
 
-        appendJSONFormat(prompt, questionType);
-        appendQuestionTypeRules(prompt, questionType, "GV");
+        // JSON format
+        Map<String, String> jsonFormatVars = new HashMap<>();
+        jsonFormatVars.put("question_type", questionType);
+        variables.put("json_format", promptTemplateLoader.render("generation/json_format.txt", jsonFormatVars));
 
-        prompt.append("\n✅ FINAL CHECKLIST:\n");
-        prompt.append("□ Questions aligned with lesson content\n");
-        prompt.append("□ Appropriate for level: ").append(levelInfo.levelName).append("\n");
+        // Question type rules
+        variables.put("question_type_rules", getQuestionTypeRules(questionType, "GV"));
+
+        // Checklist
+        String checklistFocus = "";
         if (lessonFocus != null && !lessonFocus.isEmpty()) {
-            prompt.append("□ Tests specified lesson focus areas\n");
+            checklistFocus = "□ Tests specified lesson focus areas\n";
         }
-        if (vocabularyList != null && !vocabularyList.isBlank()) {
-            prompt.append("□ Incorporates required vocabulary\n");
-        }
-        prompt.append("□ Professional THPT QG standard\n");
-        prompt.append("□ ALL content in English only\n");
-        prompt.append("□ No inappropriate content\n");
-        prompt.append("□ Valid JSON format\n");
-        prompt.append("□ Exactly ").append(numberOfQuestions);
-        prompt.append("Generate professional exam-quality questions now:\n");
+        variables.put("checklist_focus", checklistFocus);
 
-        return prompt.toString();
+        String checklistVocab = "";
+        if (vocabularyList != null && !vocabularyList.isBlank()) {
+            checklistVocab = "□ Incorporates required vocabulary\n";
+        }
+        variables.put("checklist_vocabulary", checklistVocab);
+
+        return promptTemplateLoader.render("generation/gv_questions.txt", variables);
     }
 
     private String buildBatchContentBasedQuestionPrompt(
@@ -1945,104 +1794,86 @@ public class OpenAiServiceImpl implements OpenAiService {
             String dailyChallengeType,
             LevelInfo levelInfo) {
 
-        StringBuilder prompt = new StringBuilder();
+        Map<String, String> variables = new HashMap<>();
 
-        prompt.append("You are an experienced English teacher working at a reputable English language center.\n\n");
+        // Load common templates
+        variables.put("content_moderation", getContentModerationInstructions());
+        variables.put("difficulty_level", getDifficultyLevelInstructions(levelInfo));
+        variables.put("grammar_formatting", promptTemplateLoader.loadTemplate("common/grammar_formatting.txt"));
 
-        // Content moderation
-        prompt.append(getContentModerationInstructions());
+        // Context
+        variables.put("lesson_name", context.classLessonName);
+        variables.put("chapter_name", context.classChapterName);
+        variables.put("level_name", levelInfo.levelName);
+        variables.put("dc_type", dailyChallengeType);
 
-        prompt.append(getDifficultyLevelInstructions(levelInfo));
+        // DC type instructions
+        variables.put("dc_type_instructions", getDCTypeInstructions(dailyChallengeType));
 
-        prompt.append("📖 LESSON CONTEXT:\n");
-        prompt.append("Lesson Name: ").append(context.classLessonName).append("\n");
-        prompt.append("Chapter: ").append(context.classChapterName).append("\n\n");
+        // Section content
+        variables.put("section_content", section.getSectionsContent());
 
-        prompt.append("CHALLENGE TYPE: ").append(dailyChallengeType).append("\n");
-        appendDCTypeInstructions(prompt, dailyChallengeType);
-
-        prompt.append("PASSAGE TO CREATE QUESTIONS FROM:\n");
-        prompt.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
-        prompt.append(section.getSectionsContent()).append("\n");
-        prompt.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n");
-
-        prompt.append("🌍 LANGUAGE REQUIREMENT:\n");
-        prompt.append("- The passage above MUST be in English\n");
-        prompt.append("- ALL questions MUST be in English ONLY\n");
-        prompt.append("- ALL answer options MUST be in English ONLY\n");
-        prompt.append("- Do NOT use any other language\n\n");
-
-        prompt.append("🚨 CRITICAL CONTENT-BASED REQUIREMENTS (MUST FOLLOW):\n");
-        prompt.append("- ALL questions MUST be answerable ONLY from the passage above\n");
-        prompt.append("- ONLY ask about information, facts, details, or vocabulary that EXISTS in the passage\n");
-        prompt.append("- DO NOT ask about general English grammar rules\n");
-        prompt.append("- DO NOT ask about knowledge not mentioned in the passage\n");
-        prompt.append("- DO NOT create questions testing skills beyond passage comprehension\n\n");
-
-        prompt.append("Each question must:\n");
-        prompt.append("- Match the student's level: ").append(levelInfo.levelName).append("\n");
-        prompt.append("- Be written in natural, clear, age-appropriate English.\n");
-        prompt.append(getGrammarAndFormattingInstructions());
-        prompt.append("- Have plausible distractors and one clear correct answer.\n");
-
-        prompt.append("✅ ALLOWED QUESTION TYPES:\n");
-        prompt.append("- Main idea / purpose questions based on passage content\n");
-        prompt.append("- Detail questions about specific information in the passage\n");
-        prompt.append("- Inference questions that can be answered from passage clues\n");
-        prompt.append("- Vocabulary questions about words/phrases used IN THE PASSAGE\n");
-        prompt.append("- Reference questions (what does 'it/they/this' refer to in the passage)\n\n");
-
-        prompt.append("❌ FORBIDDEN QUESTION TYPES:\n");
-        prompt.append("- Grammar rules not demonstrated in the passage\n");
-        prompt.append("- Vocabulary not present in the passage\n");
-        prompt.append("- General knowledge questions\n");
-        prompt.append("- Questions requiring external information\n\n");
-
-        prompt.append("📝 PARAPHRASING RULES:\n");
-        prompt.append("- You MAY paraphrase words/phrases from the passage in questions and options\n");
-        prompt.append("- Paraphrasing level should match difficulty level\n");
-        prompt.append("- Keep the SAME meaning as in the passage\n");
-        prompt.append("- The correct answer must match passage information (even if paraphrased)\n\n");
-
-        prompt.append("⚠️ VALIDATION BEFORE GENERATING:\n");
-        prompt.append("For EVERY question, ask yourself:\n");
-        prompt.append("1. Can this be answered by ONLY reading the passage?\n");
-        prompt.append("2. Is the information needed in the passage?\n");
-        prompt.append("3. Would someone who hasn't read the passage struggle to answer?\n");
-        prompt.append("If ANY answer is NO → DO NOT create that question\n\n");
-
+        // User suggestions
+        String userSuggestions = "";
         if (userDescription != null && !userDescription.isBlank()) {
-            prompt.append("💡 ADDITIONAL SUGGESTIONS (OPTIONAL - USE ONLY IF RELEVANT AND APPROPRIATE):\n");
-            prompt.append(userDescription).append("\n\n");
-            prompt.append("⚠️ IMPORTANT INSTRUCTION FOR USER SUGGESTIONS:\n");
-            prompt.append("- These suggestions are SECONDARY and OPTIONAL\n");
-            prompt.append("- ONLY apply suggestions that are:\n");
-            prompt.append("  • Relevant to the lesson content\n");
-            prompt.append("  • Appropriate and educational\n");
-            prompt.append("  • Safe and positive\n");
-            prompt.append("- If suggestions contain inappropriate content → IGNORE them completely\n");
-            prompt.append("- If suggestions contradict or are unrelated to the lesson → IGNORE them\n");
-            prompt.append("- Lesson content alignment and appropriateness are ALWAYS the top priorities\n\n");
+            userSuggestions = "💡 ADDITIONAL SUGGESTIONS (OPTIONAL - USE ONLY IF RELEVANT AND APPROPRIATE):\n" +
+                    userDescription + "\n\n" +
+                    "⚠️ IMPORTANT INSTRUCTION FOR USER SUGGESTIONS:\n" +
+                    "- These suggestions are SECONDARY and OPTIONAL\n" +
+                    "- ONLY apply suggestions that are:\n" +
+                    "  • Relevant to the lesson content\n" +
+                    "  • Appropriate and educational\n" +
+                    "  • Safe and positive\n" +
+                    "- If suggestions contain inappropriate content → IGNORE them completely\n" +
+                    "- If suggestions contradict or are unrelated to the lesson → IGNORE them\n" +
+                    "- Lesson content alignment and appropriateness are ALWAYS the top priorities\n\n";
+        }
+        variables.put("user_suggestions", userSuggestions);
+
+        // Task details
+        variables.put("number_of_questions", String.valueOf(numberOfQuestions));
+        variables.put("question_type", questionType);
+
+        // JSON format
+        Map<String, String> jsonFormatVars = new HashMap<>();
+        jsonFormatVars.put("question_type", questionType);
+        variables.put("json_format", promptTemplateLoader.render("generation/json_format.txt", jsonFormatVars));
+
+        // Question type rules
+        variables.put("question_type_rules", getQuestionTypeRules(questionType, "BASED"));
+
+        return promptTemplateLoader.render("generation/content_based_questions.txt", variables);
+    }
+
+    private String getQuestionTypeRules(String questionType, String context) {
+        // Load the full rules library
+        String rulesLibrary = promptTemplateLoader.loadTemplate("generation/question_type_rules_library.txt");
+
+        // Extract the specific section for this question type
+        String marker = "=== " + questionType + " ===";
+        int startIndex = rulesLibrary.indexOf(marker);
+
+        if (startIndex == -1) {
+            log.warn("Question type rules not found for: {}", questionType);
+            return "Follow standard question format with all required fields.\n";
         }
 
-        prompt.append("TASK:\n");
-        prompt.append("Generate EXACTLY ").append(numberOfQuestions).append(" ").append(questionType).append(" questions about the passage\n");
-        prompt.append("Level: ").append(levelInfo.levelName).append("\n\n");
+        // Find the next section marker or end of file
+        int endIndex = rulesLibrary.indexOf("\n=== ", startIndex + 1);
+        if (endIndex == -1) {
+            endIndex = rulesLibrary.length();
+        }
 
-        appendJSONFormat(prompt, questionType);
-        appendQuestionTypeRules(prompt, questionType, "BASED");
+        String rules = rulesLibrary.substring(startIndex, endIndex).trim();
 
-        prompt.append("\n✅ FINAL CHECKLIST:\n");
-        prompt.append("□ Questions based on passage content\n");
-        prompt.append("□ Appropriate for level: ").append(levelInfo.levelName).append("\n");
-        prompt.append("□ ALL content in English only\n");
-        prompt.append("□ No inappropriate content\n");
-        prompt.append("□ Valid JSON format\n");
-        prompt.append("□ Exactly ").append(numberOfQuestions).append(" questions\n\n");
+        // Replace context-specific placeholders if needed
+        if ("GV".equals(context)) {
+            rules = rules.replace("{daily_challenge_type}", "GV");
+        } else if ("BASED".equals(context)) {
+            rules = rules.replace("{daily_challenge_type}", "CONTENT_BASED");
+        }
 
-        prompt.append("Generate professional exam-quality questions now:\n");
-
-        return prompt.toString();
+        return rules;
     }
 
     private void appendDCTypeInstructions(StringBuilder prompt, String dcType) {
@@ -2836,113 +2667,40 @@ public class OpenAiServiceImpl implements OpenAiService {
     }
 
     private String buildParsingPrompt(String fileContent, String description) {
-        StringBuilder prompt = new StringBuilder();
+        Map<String, String> variables = new HashMap<>();
 
-        prompt.append("You are an expert at parsing educational content into structured JSON format.\n\n");
+        variables.put("file_content", fileContent);
 
-        prompt.append("🎯 YOUR TASK:\n");
-        prompt.append("Parse the provided file content and extract all questions into a structured JSON format.\n");
-        prompt.append("You MUST identify the question type correctly and format each question according to its type.\n\n");
-
-        prompt.append("⚠️ CRITICAL: PRESERVE ORIGINAL CONTENT\n");
-        prompt.append("- Keep ALL original text EXACTLY as written in the file\n");
-        prompt.append("- DO NOT translate or modify any content\n");
-        prompt.append("- DO NOT correct grammar or spelling errors\n");
-        prompt.append("- DO NOT filter or remove any questions\n");
-        prompt.append("- Accept Vietnamese, English, or mixed language content\n");
-        prompt.append("- Your ONLY job is to convert the content into correct JSON format\n");
-        prompt.append("⚠️ IMPORTANT: ANSWER VALUE CLEANING (keep content only)\n");
-        prompt.append("- For each answer option/value, keep ONLY the answer text content.\n");
-        prompt.append("- REMOVE leading labels such as: \"A.\", \"B.\", \"C.\", \"D.\", \"A)\", \"B)\", \"1.\", \"2)\", \"(A)\", \"-\", \"•\".\n");
-        prompt.append("- Example: \"A. Paris\" -> \"Paris\"; \"B) France\" -> \"France\".\n");
-        prompt.append("- This applies to ALL question types with options/answers.\n\n");
-
+        String userDesc = "";
         if (description != null && !description.isBlank()) {
-            prompt.append("📝 ADDITIONAL PARSING INSTRUCTIONS:\n");
-            prompt.append(description).append("\n\n");
+            userDesc = "📝 ADDITIONAL PARSING INSTRUCTIONS:\n" + description + "\n\n";
         }
+        variables.put("user_description", userDesc);
 
-        prompt.append("📄 FILE CONTENT TO PARSE:\n");
-        prompt.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
-        prompt.append(fileContent).append("\n");
-        prompt.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n");
+        // Load detailed question type parsing rules
+        String parsingRules = getQuestionTypeParsingRules();
+        variables.put("question_type_parsing_rules", parsingRules);
 
-        prompt.append("⚠️ CRITICAL: You MUST respond with ONLY valid JSON in this EXACT format:\n\n");
-        prompt.append("{\n");
-        prompt.append("  \"sections\": [\n");
-        prompt.append("    {\n");
-        prompt.append("      \"section\": {\n");
-        prompt.append("        \"sectionTitle\": \"string or null\"\n");
-        prompt.append("      },\n");
-        prompt.append("      \"questions\": [\n");
-        prompt.append("        {\n");
-        prompt.append("          \"questionText\": \"string (required, keep ORIGINAL text, DO NOT include 'Question 1/2' or score)\",\n");
-        prompt.append("          \"orderNumber\": 1,\n");
-        prompt.append("          \"score\": 1.0,\n");
-        prompt.append("          \"questionType\": \"QUESTION_TYPE\",\n");
-        prompt.append("          \"content\": {\n");
-        prompt.append("            \"data\": [\n");
-        prompt.append("              {\n");
-        prompt.append("                \"id\": \"string (required)\",\n");
-        prompt.append("                \"value\": \"string (required, keep ORIGINAL text BUT content-only)\",\n");
-        prompt.append("                \"isCorrect\": boolean (required),\n");
-        prompt.append("                \"positionId\": \"string or null\"\n");
-        prompt.append("              }\n");
-        prompt.append("            ]\n");
-        prompt.append("          }\n");
-        prompt.append("        }\n");
-        prompt.append("      ]\n");
-        prompt.append("    }\n");
-        prompt.append("  ]\n");
-        prompt.append("}\n\n");
+        return promptTemplateLoader.render("parsing/file_parsing.txt", variables);
+    }
 
-        prompt.append("🔍 QUESTION TYPE IDENTIFICATION:\n");
-        prompt.append("Carefully analyze each question and identify its type from these options:\n");
-        prompt.append("- MULTIPLE_CHOICE: Question with 4 options, only 1 correct\n");
-        prompt.append("- TRUE_OR_FALSE: Question with True/False options\n");
-        prompt.append("- FILL_IN_THE_BLANK: Question with blanks to fill in (ONLY 1 correct answer)\n");
-        prompt.append("- DROPDOWN: Question with dropdown selections\n");
-        prompt.append("- DRAG_AND_DROP: Matching or drag-and-drop questions\n");
-        prompt.append("- REARRANGE: Sentence ordering questions\n");
-        prompt.append("- MULTIPLE_SELECT: Question with multiple correct answers\n");
-        prompt.append("- REWRITE: Sentence transformation questions\n\n");
-
-        appendDetailedQuestionTypeRulesForParsing(prompt);
-
-        prompt.append("\n✅ VALIDATION CHECKLIST:\n");
-        prompt.append("□ Valid JSON format (no markdown, no comments)\n");
-        prompt.append("□ All questions have correct questionType\n");
-        prompt.append("□ All required fields present (questionText, orderNumber, score, questionType, content.data)\n");
-        prompt.append("□ Each data item has: id, value, isCorrect, positionId\n");
-        prompt.append("□ Position IDs use only lowercase letters (a-z) and numbers (0-9)\n");
-        prompt.append("□ Multiple choice has exactly 4 options\n");
-        prompt.append("□ True/False has exactly 2 options\n");
-        prompt.append("□ Fill in the blank has EXACTLY 1 correct answer\n");
-        prompt.append("□ Answer values contain ONLY content (NO leading labels like A./B)/1./(A)/-)\n");
-        prompt.append("□ If original option had labels (A,B,C,D...), labels are NOT included in value\n");
-        prompt.append("□ ALL original content preserved (no translation, no modification)\n\n");
-
-        prompt.append("🚨 CRITICAL REMINDERS:\n");
-        prompt.append("- DO NOT add extra text, explanations, or markdown\n");
-        prompt.append("- DO NOT include trailing commas\n");
-        prompt.append("- Return ONLY the JSON object\n");
-        prompt.append("- DO NOT translate or modify any content from the file\n");
-        prompt.append("- PRESERVE original text exactly as written\n");
-        prompt.append("- Answer 'value' MUST NOT include option labels (A./B)/1./(A)/-). Keep content only.\n");
-        prompt.append("- Fill in the blank: ONLY 1 correct answer allowed\n");
-        prompt.append("- If a question type is unclear, use MULTIPLE_CHOICE as default\n\n");
-
-        prompt.append("🧩 MISSING ANSWER / OPTION HANDLING (CRITICAL):\n");
-        prompt.append("- If a question in the file does NOT provide any answer or answer options:\n");
-        prompt.append("  + You MUST generate appropriate answer(s) or option(s) for that question\n");
-        prompt.append("  + Generated answers must be logically correct and suitable for the question\n");
-        prompt.append("  + Generated options MUST strictly follow the identified questionType rules\n");
-        prompt.append("  + At least one generated answer MUST have isCorrect=true\n");
-        prompt.append("- NEVER leave content.data empty\n\n");
-
-        prompt.append("Parse the content now and return ONLY valid JSON:\n");
-
-        return prompt.toString();
+    private String getDCTypeInstructions(String dcType) {
+        switch (dcType) {
+            case "RE":
+                return "📖 READING COMPREHENSION:\n" +
+                        "- Base ALL questions on the section content (reading passage)\n" +
+                        "- Test comprehension, inference, vocabulary in context\n" +
+                        "- Questions should reference specific parts of the passage\n" +
+                        "- Ensure questions can ONLY be answered by reading the passage\n\n";
+            case "LI":
+                return "🎧 LISTENING COMPREHENSION:\n" +
+                        "- Base ALL questions on the section content (transcript)\n" +
+                        "- Test listening comprehension and understanding\n" +
+                        "- Questions should reference specific information from the transcript\n" +
+                        "- Ensure questions can ONLY be answered by understanding the transcript\n\n";
+            default:
+                return "- Generate questions based on the section content\n\n";
+        }
     }
 
     private void appendDetailedQuestionTypeRulesForParsing(StringBuilder prompt) {
@@ -3342,15 +3100,11 @@ public class OpenAiServiceImpl implements OpenAiService {
      * Standard grammar and formatting instructions for all AI-generated content
      */
     private String getGrammarAndFormattingInstructions() {
-        StringBuilder instructions = new StringBuilder();
-        instructions.append("✍️ GRAMMAR & FORMATTING RULES (MANDATORY FOR ALL CONTENT):\n");
-        instructions.append("- ALWAYS capitalize the first letter of EVERY sentence\n");
-        instructions.append("- ALWAYS capitalize the pronoun 'I' (NEVER write lowercase 'i')\n");
-        instructions.append("- Capitalize proper nouns (names, places, etc.)\n");
-        instructions.append("- Use proper punctuation (periods, commas, question marks, apostrophes)\n");
-        instructions.append("- Write complete, grammatically correct sentences\n");
-        instructions.append("- Follow standard English capitalization and punctuation rules\n\n");
-        return instructions.toString();
+        return promptTemplateLoader.loadTemplate("common/grammar_formatting.txt");
     }
 
+    private String getQuestionTypeParsingRules() {
+        // Load from a separate detailed rules file for parsing
+        return promptTemplateLoader.loadTemplate("parsing/question_type_parsing_rules.txt");
+    }
 }
