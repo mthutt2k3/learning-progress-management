@@ -34,10 +34,8 @@ public class UpdateDailyChallengeDTO {
 
     private Boolean translateOnScreen = false;
 
-    @NotNull(message = Const.CHALLENGE.START_DATE_REQUIRED)
     private OffsetDateTime startDate;
 
-    @NotNull(message = Const.CHALLENGE.END_DATE_REQUIRED)
     private OffsetDateTime endDate;
 
 }
