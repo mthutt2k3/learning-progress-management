@@ -245,6 +245,7 @@ public class Const {
 
         // Export error
         public static final String EXPORT_WORKSHEET_FAILED = "Failed to export worksheet: %s";
+        public static final String START_AFTER_END = "Start date must be earlier than end date.";
     }
     public static class DOB {
         public static final String DOB_IN_FUTURE = "Date of birth cannot be in the future.";

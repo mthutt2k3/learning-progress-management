@@ -210,59 +210,96 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
         if (exists) {
             throw badRequest(String.format(Const.CHALLENGE.NAME_ALREADY_EXISTS_WITH_NAME, dto.getChallengeName()));
         }
+        // =========================
+        // 2. Validate date rules
+        // =========================
+        ChallengeStatus status = challenge.getChallengeStatus();
 
-        // Business rules:
-        // - Once IN_PROGRESS or CLOSED, teacher cannot change startDate.
-        // - Once CLOSED, teacher cannot change endDate.
-        // ✅ Start date must be >= now
-        if ((challenge.getChallengeStatus() == ChallengeStatus.IN_PROGRESS
-                || challenge.getChallengeStatus() == ChallengeStatus.FINISHED)
-                && dto.getStartDate() != null
-                && !dto.getStartDate().equals(challenge.getStartDate())) {
+        OffsetDateTime newStart = dto.getStartDate();
+        OffsetDateTime newEnd = dto.getEndDate();
+
+        if (newStart != null && newStart.isBefore(OffsetDateTime.now().minusSeconds(5))) {
+            throw badRequest(Const.CHALLENGE.START_DATE_MUST_BE_FUTURE);
+        }
+
+        if (newStart != null && newEnd != null && newStart.isAfter(newEnd)) {
+            throw badRequest(Const.CHALLENGE.START_AFTER_END);
+        }
+
+        if ((status == ChallengeStatus.IN_PROGRESS || status == ChallengeStatus.FINISHED)
+                && newStart != null
+                && !newStart.equals(challenge.getStartDate())) {
             throw badRequest(Const.CHALLENGE.CANNOT_CHANGE_START_DATE);
         }
 
-        if (challenge.getChallengeStatus() == ChallengeStatus.FINISHED
-                && dto.getEndDate() != null
-                && !dto.getEndDate().equals(challenge.getEndDate())) {
+        if (status == ChallengeStatus.FINISHED
+                && newEnd != null
+                && !newEnd.equals(challenge.getEndDate())) {
             throw badRequest(Const.CHALLENGE.CANNOT_CHANGE_END_DATE);
         }
+        // =========================
+        // 3. Detect date changes
+        // =========================
+        boolean startChanged = newStart != null && !Objects.equals(newStart, challenge.getStartDate());
+        boolean endChanged = newEnd != null && !Objects.equals(newEnd, challenge.getEndDate());
+        // =========================
+        // 4. Apply updates (SAFE)
+        // =========================
+        if (dto.getChallengeName() != null)
+            challenge.setChallengeName(dto.getChallengeName());
 
-        // detect whether dates will change
-        OffsetDateTime oldStart = challenge.getStartDate();
-        OffsetDateTime oldEnd = challenge.getEndDate();
-        boolean startChanged = dto.getStartDate() != null && !Objects.equals(dto.getStartDate(), oldStart);
-        boolean endChanged = dto.getEndDate() != null && !Objects.equals(dto.getEndDate(), oldEnd);
+        if (dto.getDescription() != null)
+            challenge.setDescription(dto.getDescription());
 
-        // instead of copy all
-        challenge.setChallengeName(dto.getChallengeName());
-        challenge.setDescription(dto.getDescription());
-        challenge.setChallengeMethod(dto.getChallengeMethod());
-        challenge.setDurationMinutes(dto.getDurationMinutes());
-        challenge.setHasAntiCheat(dto.getHasAntiCheat());
-        challenge.setShuffleQuestion(dto.getShuffleQuestion());
-        challenge.setTranslateOnScreen(dto.getTranslateOnScreen());
-        challenge.setStartDate(dto.getStartDate());
-        challenge.setEndDate(dto.getEndDate());
+        if (dto.getChallengeMethod() != null)
+            challenge.setChallengeMethod(dto.getChallengeMethod());
 
-        // propagate date changes to related submissions if needed
+        if (dto.getDurationMinutes() != null)
+            challenge.setDurationMinutes(dto.getDurationMinutes());
+
+        if (dto.getHasAntiCheat() != null)
+            challenge.setHasAntiCheat(dto.getHasAntiCheat());
+
+        if (dto.getShuffleQuestion() != null)
+            challenge.setShuffleQuestion(dto.getShuffleQuestion());
+
+        if (dto.getTranslateOnScreen() != null)
+            challenge.setTranslateOnScreen(dto.getTranslateOnScreen());
+
+        if (newStart != null)
+            challenge.setStartDate(newStart);
+
+        if (newEnd != null)
+            challenge.setEndDate(newEnd);
+
+        // =========================
+        // 5. Propagate date changes
+        // =========================
         if (startChanged || endChanged) {
-            // call service to update submissions' startedAt/expiredAt accordingly
-            submissionChallengeService.updateSubmissionsDatesForChallenge(challenge.getId(), dto.getStartDate(), dto.getEndDate());
+            submissionChallengeService.updateSubmissionsDatesForChallenge(
+                    challenge.getId(),
+                    newStart,
+                    newEnd
+            );
         }
 
         log.info("[{}] Updated challenge id={} traceId={}", method, id, traceId);
 
-        // notify actor
+        // =========================
+        // 6. Notify
+        // =========================
         try {
             Long actor = jwtUtil.extractUserIdFromCurrentRequest();
-            String title = Const.CHALLENGE.NOTIFY_UPDATE_TITLE;
-            String message = String.format(Const.CHALLENGE.NOTIFY_UPDATE_MESSAGE, challenge.getChallengeName());
-            String url = "/teacher/classes/daily-challenges/" + challenge.getId() + "/detail/" + challenge.getId();
-            notificationService.createNotifications(actor, null, title, message, url, null);
-            log.debug("[{}] traceId={} sent update notification actor={}", method, traceId, actor);
+            notificationService.createNotifications(
+                    actor,
+                    null,
+                    Const.CHALLENGE.NOTIFY_UPDATE_TITLE,
+                    String.format(Const.CHALLENGE.NOTIFY_UPDATE_MESSAGE, challenge.getChallengeName()),
+                    "/teacher/classes/daily-challenges/" + challenge.getId() + "/detail/" + challenge.getId(),
+                    null
+            );
         } catch (Exception ex) {
-            log.debug("[{}] traceId={} Failed to send updateChallenge notification: {}", method, traceId, ex.getMessage());
+            log.debug("[{}] traceId={} notify failed: {}", method, traceId, ex.getMessage());
         }
 
         log.info("[{}] exit traceId={} id={}", method, traceId, id);
