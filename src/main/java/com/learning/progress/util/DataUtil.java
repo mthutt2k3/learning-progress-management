@@ -340,6 +340,9 @@ public class DataUtil {
         double penalty = Math.max(0.0, Math.min(1.0, penaltyApplied));
 
         // Tính điểm cuối
-        return rawScore * (1.0 - penalty);
+        double finalScore = rawScore * (1.0 - penalty);
+
+        // Làm tròn 2 chữ số sau dấu phẩy
+        return Math.round(finalScore * 100.0) / 100.0;
     }
 }
