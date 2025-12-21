@@ -728,7 +728,7 @@ public class Const {
 
         // Moved/centralized messages used by SubmissionChallengeServiceImpl
         public static final String CANNOT_EXTEND_ELIGIBLE = "Submissions with ids [%s] cannot be extended because they are already submitted/graded/missed";
-        public static final String CANNOT_RESET_PENDING_DRAFT = "Submissions with ids [%s] cannot be reset because they are PENDING or DRAFT";
+        public static final String CANNOT_RESET_PENDING_DRAFT = "Submissions with ids [%s] cannot be reset because they are MISSED, PENDING or DRAFT";
         public static final String EXTEND_SUCCESS = "Extended deadline for %d submissions.";
         public static final String RESET_SUCCESS = "Reset %d submissions.";
 
