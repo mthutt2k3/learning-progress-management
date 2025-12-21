@@ -216,32 +216,47 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
         ChallengeStatus status = challenge.getChallengeStatus();
 
         OffsetDateTime newStart = dto.getStartDate();
-        OffsetDateTime newEnd = dto.getEndDate();
+        OffsetDateTime newEnd   = dto.getEndDate();
 
-        if (newStart != null && newStart.isBefore(OffsetDateTime.now().minusSeconds(5))) {
-            throw badRequest(Const.CHALLENGE.START_DATE_MUST_BE_FUTURE);
-        }
+        OffsetDateTime oldStart = challenge.getStartDate();
+        OffsetDateTime oldEnd   = challenge.getEndDate();
 
-        if (newStart != null && newEnd != null && newStart.isAfter(newEnd)) {
+        // 1. Logical order
+        if (newStart.isAfter(newEnd)) {
             throw badRequest(Const.CHALLENGE.START_AFTER_END);
         }
 
-        if ((status == ChallengeStatus.IN_PROGRESS || status == ChallengeStatus.FINISHED)
-                && newStart != null
-                && !newStart.equals(challenge.getStartDate())) {
-            throw badRequest(Const.CHALLENGE.CANNOT_CHANGE_START_DATE);
+        boolean sameStartInstant = newStart.isEqual(oldStart);
+        boolean sameEndInstant   = newEnd.isEqual(oldEnd);
+
+        // 2. Status-based rules
+        switch (status) {
+            case IN_PROGRESS -> {
+                if (!sameStartInstant) {
+                    log.debug(
+                            "[{}] Challenge IN_PROGRESS cannot change start date (old={} new={})",
+                            method, oldStart, newStart
+                    );
+                    throw badRequest(Const.CHALLENGE.CANNOT_CHANGE_START_DATE);
+                }
+            }
+            case FINISHED -> {
+                if (!sameStartInstant) {
+                    throw badRequest(Const.CHALLENGE.CANNOT_CHANGE_START_DATE);
+                }
+                if (!sameEndInstant) {
+                    throw badRequest(Const.CHALLENGE.CANNOT_CHANGE_END_DATE);
+                }
+            }
         }
 
-        if (status == ChallengeStatus.FINISHED
-                && newEnd != null
-                && !newEnd.equals(challenge.getEndDate())) {
-            throw badRequest(Const.CHALLENGE.CANNOT_CHANGE_END_DATE);
-        }
+
         // =========================
         // 3. Detect date changes
         // =========================
-        boolean startChanged = newStart != null && !Objects.equals(newStart, challenge.getStartDate());
-        boolean endChanged = newEnd != null && !Objects.equals(newEnd, challenge.getEndDate());
+        boolean startChanged = !newStart.equals(oldStart);
+        boolean endChanged   = !newEnd.equals(oldEnd);
+
         // =========================
         // 4. Apply updates (SAFE)
         // =========================
@@ -266,11 +281,9 @@ public class DailyChallengeServiceImpl implements DailyChallengeService {
         if (dto.getTranslateOnScreen() != null)
             challenge.setTranslateOnScreen(dto.getTranslateOnScreen());
 
-        if (newStart != null)
-            challenge.setStartDate(newStart);
+        challenge.setStartDate(newStart);
 
-        if (newEnd != null)
-            challenge.setEndDate(newEnd);
+        challenge.setEndDate(newEnd);
 
         // =========================
         // 5. Propagate date changes
