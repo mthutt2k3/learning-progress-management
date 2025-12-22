@@ -13,7 +13,17 @@ import java.util.List;
 import java.util.Optional;
 
 public interface ClassStudentRepository extends JpaRepository<ClassStudent, Long> {
-    Optional<ClassStudent> findByUserIdAndStatus(Long userId, CommonStatus status);
+    @Query("""
+    SELECT cs
+    FROM ClassStudent cs
+    WHERE cs.user.id = :userId
+      AND cs.status = :status
+""")
+    List<ClassStudent> findByUserIdAndStatus(
+            @Param("userId") Long userId,
+            @Param("status") CommonStatus status
+    );
+
 
     @Query("SELECT cs FROM ClassStudent cs WHERE cs.clazz.id = :classId AND cs.status IN :statuses AND cs.deletedAt IS NULL " +
             "AND (LOWER(cs.user.fullName) LIKE LOWER(CONCAT('%', :text, '%')) " +
